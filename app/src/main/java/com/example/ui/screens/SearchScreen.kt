@@ -180,7 +180,7 @@ fun SearchScreen(
                         color = MaterialTheme.colorScheme.onSurface
                       )
                       Text(
-                        text = "Analyze URL, choose format & save to AURIX",
+                        text = "Analyze URL, choose full audio format & save to AURIX",
                         style = MaterialTheme.typography.bodySmall,
                         color = MaterialTheme.colorScheme.onSurfaceVariant
                       )
@@ -629,13 +629,20 @@ private fun YoutubeAnalysisResultCard(
           )
           Surface(
             shape = CircleShape,
-            color = Color.Black.copy(alpha = 0.65f),
+            color = Color.Black.copy(alpha = 0.68f),
             modifier = Modifier
               .align(Alignment.TopStart)
               .padding(10.dp)
           ) {
+            val durBadge = if (analysis.durationSeconds > 0L) {
+              val min = analysis.durationSeconds / 60L
+              val sec = analysis.durationSeconds % 60L
+              String.format(Locale.US, "FULL SONG • %d:%02d", min, sec)
+            } else {
+              "FULL SONG AUDIO"
+            }
             Text(
-              text = "VIDEO ANALYZED",
+              text = durBadge,
               style = MaterialTheme.typography.labelSmall.copy(fontWeight = FontWeight.Bold, fontSize = 10.sp),
               color = Color.White,
               modifier = Modifier.padding(horizontal = 10.dp, vertical = 4.dp)

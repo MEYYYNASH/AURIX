@@ -8,6 +8,7 @@ import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.animation.*
 import androidx.compose.animation.core.CubicBezierEasing
+import androidx.compose.animation.core.animateDpAsState
 import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.animation.core.snap
 import androidx.compose.animation.core.tween
@@ -24,11 +25,9 @@ import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.draw.alpha
-import androidx.compose.ui.draw.clip
-import androidx.compose.ui.draw.scale
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.unit.dp
@@ -170,15 +169,25 @@ fun AurixApp(viewModel: AurixViewModel) {
   }
 
   val pageScale by animateFloatAsState(
-    targetValue = if (isNowPlayingOpen) 0.93f else 1.0f,
-    animationSpec = if (reducedMotion) snap() else tween(450, easing = AurixEase),
+    targetValue = if (isNowPlayingOpen) 0.94f else 1.0f,
+    animationSpec = if (reducedMotion) snap() else tween(380, easing = AurixEase),
     label = "page_scale"
   )
   val pageAlpha by animateFloatAsState(
-    targetValue = if (isNowPlayingOpen) 0.45f else 1.0f,
-    animationSpec = if (reducedMotion) snap() else tween(450, easing = AurixEase),
+    targetValue = if (isNowPlayingOpen) 0.50f else 1.0f,
+    animationSpec = if (reducedMotion) snap() else tween(380, easing = AurixEase),
     label = "page_alpha"
   )
+  val pageCornerRadius by animateDpAsState(
+    targetValue = if (isNowPlayingOpen) 28.dp else 0.dp,
+    animationSpec = if (reducedMotion) snap() else tween(380, easing = AurixEase),
+    label = "page_corner"
+  )
+
+  var retainedSheetSong by remember { mutableStateOf(currentSong) }
+  if (currentSong != null) {
+    retainedSheetSong = currentSong
+  }
 
   AurixTheme(darkTheme = darkTheme, accentColor = accentColor) {
     Box(
@@ -186,13 +195,19 @@ fun AurixApp(viewModel: AurixViewModel) {
         .fillMaxSize()
         .background(Color.Black)
     ) {
-      // Main App Shell
+      // Main App Shell (GPU graphicsLayer prevents clipping/alpha relayout flicker)
       Box(
         modifier = Modifier
           .fillMaxSize()
-          .scale(pageScale)
-          .alpha(pageAlpha)
-          .clip(RoundedCornerShape(if (isNowPlayingOpen) 28.dp else 0.dp))
+          .graphicsLayer {
+            scaleX = pageScale
+            scaleY = pageScale
+            alpha = pageAlpha
+            if (pageCornerRadius > 0.5.dp) {
+              shape = RoundedCornerShape(pageCornerRadius)
+              clip = true
+            }
+          }
           .background(MaterialTheme.colorScheme.background)
       ) {
         DynamicArtworkBackdrop(
@@ -321,23 +336,28 @@ fun AurixApp(viewModel: AurixViewModel) {
 
         // Subtle atmospheric gradient scrim so scrolling list rows fade gracefully behind the floating dock
         val dockScrimBase = if (darkTheme) Color(0xFF0A0E1A) else Color(0xFFEAF0FF)
+        val dockScrimHeight by animateDpAsState(
+          targetValue = if (currentSong != null) 216.dp else 140.dp,
+          animationSpec = if (reducedMotion) snap() else tween(300, easing = AurixEase),
+          label = "dock_scrim_height"
+        )
         Box(
           modifier = Modifier
             .align(Alignment.BottomCenter)
             .fillMaxWidth()
-            .height(if (currentSong != null && !isNowPlayingOpen) 210.dp else 135.dp)
+            .height(dockScrimHeight)
             .background(
               Brush.verticalGradient(
                 colors = listOf(
                   Color.Transparent,
-                  dockScrimBase.copy(alpha = 0.58f),
-                  dockScrimBase.copy(alpha = 0.90f)
+                  dockScrimBase.copy(alpha = 0.68f),
+                  dockScrimBase.copy(alpha = 0.94f)
                 )
               )
             )
         )
 
-        // Bottom Floating MiniPlayer + Liquid Glass Navigation Bar
+        // Bottom Floating MiniPlayer + Liquid Glass Navigation Bar (steady during NowPlaying sheet slide)
         val screens = remember { listOf(Screen.Home, Screen.Search, Screen.Library, Screen.Settings) }
         val navTabs = remember { screens.map { TabItem(it.title, it.icon) } }
         val selectedIndex = screens.indexOf(currentScreen).coerceAtLeast(0)
@@ -350,25 +370,24 @@ fun AurixApp(viewModel: AurixViewModel) {
           horizontalAlignment = Alignment.CenterHorizontally
         ) {
           AnimatedVisibility(
-            visible = currentSong != null && !isNowPlayingOpen,
-            enter = if (reducedMotion) fadeIn(snap()) else slideInVertically(tween(380, easing = AurixEase)) { it } + fadeIn(tween(260)),
-            exit = if (reducedMotion) fadeOut(snap()) else slideOutVertically(tween(300, easing = AurixEase)) { it } + fadeOut(tween(200))
+            visible = currentSong != null,
+            enter = if (reducedMotion) fadeIn(snap()) else slideInVertically(tween(340, easing = AurixEase)) { it / 2 } + fadeIn(tween(240)),
+            exit = if (reducedMotion) fadeOut(snap()) else slideOutVertically(tween(260, easing = AurixEase)) { it / 2 } + fadeOut(tween(180))
           ) {
-            MiniPlayer(
-              song = currentSong,
-              isPlaying = isPlaying,
-              currentPositionMs = currentPosition,
-              durationMs = durationMs,
-              darkTheme = darkTheme,
-              reducedMotion = reducedMotion,
-              onPlayPauseClick = { viewModel.togglePlayPause() },
-              onFavoriteClick = { currentSong?.let { viewModel.toggleFavorite(it) } },
-              onClick = { showNowPlaying = true }
-            )
-          }
-
-          if (currentSong != null && !isNowPlayingOpen) {
-            Spacer(modifier = Modifier.height(10.dp))
+            Column(horizontalAlignment = Alignment.CenterHorizontally) {
+              MiniPlayer(
+                song = currentSong,
+                isPlaying = isPlaying,
+                currentPositionMs = currentPosition,
+                durationMs = durationMs,
+                darkTheme = darkTheme,
+                reducedMotion = reducedMotion,
+                onPlayPauseClick = { viewModel.togglePlayPause() },
+                onFavoriteClick = { currentSong?.let { viewModel.toggleFavorite(it) } },
+                onClick = { showNowPlaying = true }
+              )
+              Spacer(modifier = Modifier.height(10.dp))
+            }
           }
 
           LiquidGlassTabBar(
@@ -383,10 +402,10 @@ fun AurixApp(viewModel: AurixViewModel) {
       // Now Playing Full-Screen Sheet
       AnimatedVisibility(
         visible = isNowPlayingOpen,
-        enter = if (reducedMotion) fadeIn(snap()) else slideInVertically(tween(480, easing = AurixEase)) { it },
-        exit = if (reducedMotion) fadeOut(snap()) else slideOutVertically(tween(420, easing = AurixEase)) { it }
+        enter = if (reducedMotion) fadeIn(snap()) else slideInVertically(tween(380, easing = AurixEase)) { it } + fadeIn(tween(220)),
+        exit = if (reducedMotion) fadeOut(snap()) else slideOutVertically(tween(340, easing = AurixEase)) { it } + fadeOut(tween(200))
       ) {
-        currentSong?.let { song ->
+        retainedSheetSong?.let { song ->
           NowPlayingSheet(
             song = song,
             isPlaying = isPlaying,

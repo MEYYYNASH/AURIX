@@ -248,7 +248,24 @@ class AurixViewModel(application: Application) : AndroidViewModel(application) {
     override fun onPlaybackStateChanged(playbackState: Int) {
       val controller = mediaController ?: return
       if (playbackState == Player.STATE_READY && controller.duration > 0L) {
-        _durationMs.value = controller.duration
+        val realDurMs = controller.duration
+        _durationMs.value = realDurMs
+        val realDurSec = realDurMs / 1000L
+        val cur = _rawCurrentSong.value
+        val activeMediaId = controller.currentMediaItem?.mediaId
+        if (cur != null && activeMediaId == cur.id && realDurSec > 35L) {
+          val prevFull = cur.fullDurationSeconds.coerceAtLeast(cur.durationSeconds)
+          if (cur.durationSeconds <= 35L || kotlin.math.abs(prevFull - realDurSec) >= 5L) {
+            val updated = cur.copy(
+              durationSeconds = realDurSec,
+              fullDurationSeconds = realDurSec
+            )
+            _rawCurrentSong.value = updated
+            if (_lyrics.value == null || kotlin.math.abs(prevFull - realDurSec) >= 5L) {
+              fetchLyrics(updated)
+            }
+          }
+        }
       }
       _currentPosition.value = controller.currentPosition.coerceAtLeast(0L)
     }
@@ -383,16 +400,43 @@ class AurixViewModel(application: Application) : AndroidViewModel(application) {
     }
   }
 
-  private fun extractYoutubeVideoId(rawUrl: String): String? {
-    val uri = runCatching { Uri.parse(rawUrl.trim()) }.getOrNull() ?: return null
-    val host = uri.host.orEmpty().lowercase(Locale.US)
-    val segments = uri.pathSegments.orEmpty()
-    return when {
-      host.contains("youtu.be") -> segments.firstOrNull()?.takeIf { it.isNotBlank() }
-      uri.getQueryParameter("v")?.isNotBlank() == true -> uri.getQueryParameter("v")
-      segments.size >= 2 && segments[0] in listOf("shorts", "embed", "live", "v") -> segments[1]
-      else -> null
-    }?.substringBefore('?')?.substringBefore('&')?.takeIf { it.length in 8..16 }
+  private fun cleanChannelAuthor(rawAuthor: String): String {
+    return rawAuthor
+      .replace(Regex("""\s*-\s*Topic$""", RegexOption.IGNORE_CASE), "")
+      .replace(Regex("""VEVO$""", RegexOption.IGNORE_CASE), "")
+      .replace(Regex("""Official$""", RegexOption.IGNORE_CASE), "")
+      .trim()
+  }
+
+  private fun stripYoutubeNoiseTags(rawTitle: String): String {
+    return rawTitle
+      .replace(
+        Regex(
+          """[\(\[]\s*(?:official\s*(?:music\s*)?(?:video|audio|lyric\s*video|visualizer)|lyric(?:s|\s*video)?|audio\s*only|full\s*audio|mv|m/v|hd|4k|hq|explicit|clean)\s*[\)\]]""",
+          RegexOption.IGNORE_CASE
+        ),
+        ""
+      )
+      .replace(Regex("""\s*\|\s*[^|]+$"""), "")
+      .replace(Regex("""\s+"""), " ")
+      .trim()
+  }
+
+  private fun parseYoutubeTitleAndArtist(rawTitle: String, rawAuthor: String): Pair<String, String> {
+    val cleanedNoise = stripYoutubeNoiseTags(rawTitle)
+    val channelArtist = cleanChannelAuthor(rawAuthor)
+    val separators = listOf(" - ", " – ", " — ")
+    for (sep in separators) {
+      val idx = cleanedNoise.indexOf(sep)
+      if (idx > 0 && idx + sep.length < cleanedNoise.length) {
+        val left = cleanedNoise.substring(0, idx).trim()
+        val right = cleanedNoise.substring(idx + sep.length).trim()
+        if (left.isNotBlank() && right.isNotBlank()) {
+          return right to left
+        }
+      }
+    }
+    return cleanedNoise.ifBlank { rawTitle } to channelArtist
   }
 
   fun analyzeYoutubeUrl() {
@@ -414,134 +458,88 @@ class AurixViewModel(application: Application) : AndroidViewModel(application) {
       _youtubeDownloadState.value = YoutubeDownloadState.Idle
 
       try {
-        val videoId = extractYoutubeVideoId(rawUrl)
+        val videoId = YoutubeExtractor.extractVideoId(rawUrl)
+        if (videoId.isNullOrBlank()) {
+          _youtubeError.value = "Could not find a valid YouTube video ID in this link."
+          return@launch
+        }
+
         val oembedDeferred = async {
           runCatching { NetworkClient.youtubeOEmbedApi.getVideoInfo(rawUrl) }.getOrNull()
         }
-        val pipedDeferred = async {
-          if (!videoId.isNullOrBlank()) NetworkClient.fetchPipedStreams(videoId) else null
+        val extractedDeferred = async {
+          YoutubeExtractor.extractFullAudio(videoId)
         }
 
+        val extracted = extractedDeferred.await()
         val info = oembedDeferred.await()
-        val piped = pipedDeferred.await()
 
-        val rawTitle = info?.title?.trim()?.takeIf { it.isNotBlank() }
-          ?: piped?.title?.trim().orEmpty()
-        val rawAuthor = info?.authorName?.trim()?.takeIf { it.isNotBlank() }
-          ?: piped?.uploader?.trim().orEmpty()
-        val thumbnailUrl = info?.thumbnailUrl?.trim()?.takeIf { it.isNotBlank() }
-          ?: piped?.thumbnailUrl?.trim()?.takeIf { it.isNotBlank() }
-          ?: videoId?.let { "https://i.ytimg.com/vi/$it/hqdefault.jpg" }
-          ?: ""
+        val rawTitle = extracted?.title?.takeIf { it.isNotBlank() }
+          ?: info?.title?.trim()?.takeIf { it.isNotBlank() }
+          .orEmpty()
+        val rawAuthor = extracted?.author?.takeIf { it.isNotBlank() }
+          ?: info?.authorName?.trim()?.takeIf { it.isNotBlank() }
+          .orEmpty()
+        val thumbnailUrl = extracted?.thumbnailUrl?.takeIf { it.isNotBlank() }
+          ?: info?.thumbnailUrl?.trim()?.takeIf { it.isNotBlank() }
+          ?: "https://i.ytimg.com/vi/$videoId/hqdefault.jpg"
 
         if (rawTitle.isBlank()) {
           _youtubeError.value = "Unable to load video info from this YouTube link."
           return@launch
         }
 
-        val cleanedTitle = cleanTrackTitle(rawTitle).ifBlank { rawTitle }
-        val searchTerm = listOf(cleanedTitle, rawAuthor)
-          .filter { it.isNotBlank() }
-          .joinToString(" ")
-          .ifBlank { rawTitle }
-
-        val itunesDeferred = async {
-          runCatching { NetworkClient.itunesApi.searchSongs(term = searchTerm, limit = 5) }.getOrNull()
-        }
-        val deezerDeferred = async {
-          runCatching { NetworkClient.deezerApi.searchTracks(query = searchTerm, limit = 5) }.getOrNull()
-        }
-
-        val formats = mutableListOf<AudioFormatOption>()
-
-        // 1. Add real direct YouTube audio streams if a Piped mirror resolved them
-        if (piped != null) {
-          val pipedDuration = piped.duration.coerceAtLeast(30L)
-          piped.audioStreams
-            .filter { !it.url.isNullOrBlank() }
-            .sortedByDescending { it.bitrate }
-            .forEachIndexed { idx, stream ->
-              val mime = stream.mimeType.orEmpty().substringBefore(';').trim()
-              val upperFormat = stream.format.orEmpty().uppercase(Locale.US)
-              val isM4a = upperFormat.contains("M4A") || mime.contains("mp4", ignoreCase = true)
-              val ext = if (isM4a) "m4a" else "webm"
-              val fmtLabel = if (isM4a) "M4A" else "WEBM"
-              val kbps = if (stream.bitrate > 0) "${stream.bitrate / 1000} kbps" else stream.quality.orEmpty().ifBlank { "Standard" }
-              val codecNote = stream.codec?.uppercase(Locale.US)?.takeIf { it.isNotBlank() } ?: if (isM4a) "AAC" else "Opus"
-              val sizeMb = if (stream.contentLength > 0L) {
-                String.format(Locale.US, " • %.1f MB", stream.contentLength / (1024f * 1024f))
-              } else ""
-              formats.add(
-                AudioFormatOption(
-                  id = "piped_${idx}_${ext}_${stream.bitrate}",
-                  formatLabel = fmtLabel,
-                  qualityLabel = "$kbps $codecNote",
-                  detailLabel = "Full Audio$sizeMb",
-                  extension = ext,
-                  mimeType = mime.ifBlank { if (isM4a) "audio/mp4" else "audio/webm" },
-                  streamUrl = stream.url.orEmpty(),
-                  durationSeconds = pipedDuration,
-                  contentLengthBytes = stream.contentLength
-                )
-              )
-            }
-        }
-
-        // 2. Add real matched iTunes M4A (AAC) & Deezer MP3 formats for this track
-        val itunesMatch = itunesDeferred.await()?.results?.let { mapItunesTracks(it) }?.firstOrNull()
-        val deezerMatch = deezerDeferred.await()?.data?.let { mapDeezerTracks(it, "Deezer MP3") }?.firstOrNull()
-
-        if (itunesMatch != null && itunesMatch.streamUrl.isNotBlank()) {
-          formats.add(
-            AudioFormatOption(
-              id = "itunes_${itunesMatch.id}",
-              formatLabel = "M4A",
-              qualityLabel = "256 kbps AAC",
-              detailLabel = "30s High Quality",
-              extension = "m4a",
-              mimeType = "audio/mp4",
-              streamUrl = itunesMatch.streamUrl,
-              durationSeconds = 30L
-            )
-          )
-        }
-        if (deezerMatch != null && deezerMatch.streamUrl.isNotBlank()) {
-          formats.add(
-            AudioFormatOption(
-              id = "deezer_${deezerMatch.id}",
-              formatLabel = "MP3",
-              qualityLabel = "128 kbps MP3",
-              detailLabel = "30s Preview",
-              extension = "mp3",
-              mimeType = "audio/mpeg",
-              streamUrl = deezerMatch.streamUrl,
-              durationSeconds = 30L
-            )
-          )
-        }
-
-        val uniqueFormats = formats.distinctBy { "${it.formatLabel}_${it.qualityLabel}_${it.detailLabel}" }
-        if (uniqueFormats.isEmpty()) {
-          _youtubeError.value = "No downloadable audio formats available for \"$cleanedTitle\"."
+        val fullFormats = extracted?.audioFormats.orEmpty()
+        if (fullFormats.isEmpty()) {
+          val reason = extracted?.extractorError?.takeIf { it.isNotBlank() }
+          _youtubeError.value = if (reason != null) {
+            "Could not extract full YouTube audio ($reason)."
+          } else {
+            "Could not extract full-length audio stream for this video. Please try another link or retry."
+          }
           return@launch
         }
 
-        val trackTitle = itunesMatch?.title ?: deezerMatch?.title ?: cleanedTitle
-        val trackArtist = itunesMatch?.artist ?: deezerMatch?.artist ?: rawAuthor.ifBlank { "YouTube Audio" }
-        val displayThumb = thumbnailUrl.ifBlank { itunesMatch?.artworkUrl.orEmpty() }.ifBlank { deezerMatch?.artworkUrl.orEmpty() }
+        val (parsedTitle, parsedArtist) = parseYoutubeTitleAndArtist(rawTitle, rawAuthor)
+        val cleanedForSearch = cleanTrackTitle(parsedTitle).ifBlank { parsedTitle }
+        val searchTerm = listOf(cleanedForSearch, parsedArtist)
+          .filter { it.isNotBlank() }
+          .joinToString(" ")
+          .ifBlank { parsedTitle }
+
+        // Cross-reference metadata only (title, artist, square album art) for accurate lyrics syncing
+        val itunesMatch = runCatching {
+          NetworkClient.itunesApi.searchSongs(term = searchTerm, limit = 5)
+        }.getOrNull()?.results?.let { mapItunesTracks(it) }?.firstOrNull()
+
+        val videoDurSec = extracted?.durationSeconds?.takeIf { it > 0L }
+          ?: fullFormats.firstOrNull()?.durationSeconds
+          ?: 0L
+
+        val trackTitle = itunesMatch?.title?.takeIf {
+          val nMatch = normalizeForMatch(cleanTrackTitle(it))
+          val nParsed = normalizeForMatch(cleanedForSearch)
+          nMatch.isNotBlank() && (nMatch == nParsed || nMatch.contains(nParsed) || nParsed.contains(nMatch))
+        } ?: parsedTitle
+
+        val trackArtist = itunesMatch?.artist?.takeIf { trackTitle == itunesMatch.title }
+          ?: parsedArtist.ifBlank { "YouTube Audio" }
+
+        val displayThumb = thumbnailUrl.ifBlank { itunesMatch?.artworkUrl.orEmpty() }
 
         val analysis = YoutubeAnalysisResult(
-          videoId = videoId.orEmpty(),
+          videoId = videoId,
           originalUrl = rawUrl,
           videoTitle = rawTitle,
           channelName = rawAuthor.ifBlank { trackArtist },
           thumbnailUrl = displayThumb,
           matchedTrackTitle = trackTitle,
           matchedArtist = trackArtist,
-          formats = uniqueFormats
+          durationSeconds = videoDurSec,
+          formats = fullFormats
         )
         _youtubeAnalysis.value = analysis
-        _selectedYoutubeFormatId.value = uniqueFormats.first().id
+        _selectedYoutubeFormatId.value = fullFormats.first().id
       } catch (_: Exception) {
         _youtubeError.value = "Unable to analyze YouTube link. Check your network connection."
       } finally {
@@ -574,20 +572,25 @@ class AurixViewModel(application: Application) : AndroidViewModel(application) {
         )
       }
 
-      downloadRes.onSuccess { savedUri ->
+      downloadRes.onSuccess { savedAudio ->
         val cachedCover = SongDownloader.cacheRemoteArtwork(
           context = context,
-          songId = savedUri.toString(),
+          songId = savedAudio.uri.toString(),
           imageUrl = analysis.thumbnailUrl
         )
         val artwork = cachedCover ?: analysis.thumbnailUrl.ifBlank { APP_ICON_ARTWORK }
+        val finalDuration = savedAudio.durationSeconds
+          .takeIf { it > 0L }
+          ?: analysis.durationSeconds
+          ?: format.durationSeconds
+
         val entity = LocalSongEntity(
-          id = savedUri.toString(),
+          id = savedAudio.uri.toString(),
           title = analysis.matchedTrackTitle,
           artist = analysis.matchedArtist,
           artworkUrl = artwork,
-          durationSeconds = format.durationSeconds,
-          streamUrl = savedUri.toString(),
+          durationSeconds = finalDuration,
+          streamUrl = savedAudio.uri.toString(),
           source = "Downloaded"
         )
         dao.insertLocalSong(entity)
@@ -600,10 +603,11 @@ class AurixViewModel(application: Application) : AndroidViewModel(application) {
           durationSeconds = entity.durationSeconds,
           streamUrl = entity.streamUrl,
           source = entity.source,
-          isFavorite = entity.id in favoriteIds.value
+          isFavorite = entity.id in favoriteIds.value,
+          fullDurationSeconds = entity.durationSeconds
         )
         _youtubeDownloadState.value = YoutubeDownloadState.Saved(savedSong)
-        Toast.makeText(context, "Saved to App (My songs): ${savedSong.title}", Toast.LENGTH_LONG).show()
+        Toast.makeText(context, "Saved full song (${YoutubeExtractor.formatDurationShort(finalDuration)}): ${savedSong.title}", Toast.LENGTH_LONG).show()
       }.onFailure { err ->
         val msg = err.localizedMessage ?: "Download failed"
         _youtubeDownloadState.value = YoutubeDownloadState.Error(msg)
@@ -774,16 +778,16 @@ class AurixViewModel(application: Application) : AndroidViewModel(application) {
       }
 
       _songDownloadProgress.value = _songDownloadProgress.value - song.id
-      result.onSuccess { savedUri ->
+      result.onSuccess { savedAudio ->
         _downloadedSongIds.value = _downloadedSongIds.value + song.id
-        val cachedCover = SongDownloader.cacheRemoteArtwork(context, savedUri.toString(), song.artworkUrl)
+        val cachedCover = SongDownloader.cacheRemoteArtwork(context, savedAudio.uri.toString(), song.artworkUrl)
         val entity = LocalSongEntity(
-          id = savedUri.toString(),
+          id = savedAudio.uri.toString(),
           title = song.title,
           artist = song.artist,
           artworkUrl = cachedCover ?: song.artworkUrl.ifBlank { APP_ICON_ARTWORK },
-          durationSeconds = song.durationSeconds,
-          streamUrl = savedUri.toString(),
+          durationSeconds = savedAudio.durationSeconds.takeIf { it > 0L } ?: song.durationSeconds,
+          streamUrl = savedAudio.uri.toString(),
           source = "Downloaded"
         )
         dao.insertLocalSong(entity)
@@ -1420,9 +1424,11 @@ class AurixViewModel(application: Application) : AndroidViewModel(application) {
         val cleanTitle = cleanTrackTitle(song.title).ifBlank { song.title }
         val cleanArtist = song.artist.substringBefore(',').substringBefore('&').trim().ifBlank { song.artist }
 
-        val controllerDurSec = mediaController?.duration?.takeIf { it > 0L }?.div(1000L) ?: 0L
+        val activeControllerDurSec = mediaController
+          ?.takeIf { it.currentMediaItem?.mediaId == song.id && it.duration > 0L }
+          ?.duration?.div(1000L) ?: 0L
         val targetDurationSec = when {
-          controllerDurSec > 35L -> controllerDurSec
+          activeControllerDurSec > 35L -> activeControllerDurSec
           song.fullDurationSeconds > 35L -> song.fullDurationSeconds
           song.durationSeconds > 35L -> song.durationSeconds
           else -> 0L

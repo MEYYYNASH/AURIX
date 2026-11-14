@@ -121,10 +121,12 @@ fun NowPlayingSheet(
     label = "np_heart"
   )
 
+  val rootInteraction = remember { MutableInteractionSource() }
   Box(
     modifier = Modifier
       .fillMaxSize()
       .background(Color(0xFF0C0F16))
+      .clickable(interactionSource = rootInteraction, indication = null) {}
   ) {
     // True Dynamic Artwork Background sampled from actual album cover colors + blurred drifting art
     if (bgAlpha > 0.01f) {

@@ -79,9 +79,6 @@ fun SettingsScreen(
     "#8B5CF6" to AccentPurple
   )
 
-  var ownerInput by remember(githubOwner) { mutableStateOf(githubOwner) }
-  var repoInput by remember(githubRepo) { mutableStateOf(githubRepo) }
-  var showRepoConfig by remember { mutableStateOf(false) }
   var showReleaseNotesSheet by remember { mutableStateOf(false) }
 
   val isDownloading = apkDownloadState is ApkDownloadState.Downloading
@@ -182,48 +179,11 @@ fun SettingsScreen(
                 overflow = TextOverflow.Ellipsis
               )
               Text(
-                text = "GitHub: ${ownerInput.ifBlank { "MEYYYNASH" }}/${repoInput.ifBlank { "AURIX" }}",
+                text = "Over-the-air updates & release notes",
                 style = MaterialTheme.typography.bodySmall,
                 color = MaterialTheme.colorScheme.primary,
                 maxLines = 1,
                 overflow = TextOverflow.Ellipsis
-              )
-            }
-            IconButton(
-              onClick = { showRepoConfig = !showRepoConfig },
-              modifier = Modifier.size(36.dp)
-            ) {
-              Icon(
-                imageVector = if (showRepoConfig) Icons.Rounded.ExpandLess else Icons.Rounded.Edit,
-                contentDescription = "Edit Repository",
-                tint = MaterialTheme.colorScheme.onSurfaceVariant,
-                modifier = Modifier.size(18.dp)
-              )
-            }
-          }
-
-          // Optional Repo Editor (hidden by default so card stays clean)
-          AnimatedVisibility(
-            visible = showRepoConfig,
-            enter = expandVertically() + fadeIn(),
-            exit = shrinkVertically() + fadeOut()
-          ) {
-            Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
-              OutlinedTextField(
-                value = ownerInput,
-                onValueChange = { ownerInput = it; onGithubOwnerChanged(it) },
-                label = { Text("GitHub Owner") },
-                modifier = Modifier.fillMaxWidth(),
-                shape = RoundedCornerShape(16.dp),
-                singleLine = true
-              )
-              OutlinedTextField(
-                value = repoInput,
-                onValueChange = { repoInput = it; onGithubRepoChanged(it) },
-                label = { Text("GitHub Repository") },
-                modifier = Modifier.fillMaxWidth(),
-                shape = RoundedCornerShape(16.dp),
-                singleLine = true
               )
             }
           }
@@ -243,7 +203,7 @@ fun SettingsScreen(
                 value = "v${installedAppInfo.versionName} (code ${installedAppInfo.versionCode})"
               )
               UpdateSummaryRow(
-                label = "Latest GitHub Release",
+                label = "Latest Release",
                 value = latestRelease?.let { "${it.tagName} (code ${it.versionCode})" } ?: "Not checked yet"
               )
               UpdateSummaryRow(
@@ -417,7 +377,7 @@ fun SettingsScreen(
             horizontalArrangement = Arrangement.spacedBy(10.dp)
           ) {
             GlassActionPill(
-              text = "Open GitHub Releases",
+              text = "Open Release Page",
               icon = Icons.AutoMirrored.Rounded.OpenInNew,
               darkTheme = darkTheme,
               enabled = true,

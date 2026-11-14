@@ -172,25 +172,22 @@ fun LyricsView(
   }
 
   val listState = rememberLazyListState()
-  val density = LocalDensity.current
 
-  BoxWithConstraints(modifier = modifier.fillMaxSize()) {
-    val viewportHeightPx = with(density) { maxHeight.toPx() }
-    val centerOffsetPx = -(viewportHeightPx * 0.28f).toInt()
-
-    LaunchedEffect(activeIndex, centerOffsetPx) {
-      if (activeIndex in synced.indices) {
-        // +1 accounts for the sticky sync header item at index 0
-        val targetListIndex = activeIndex + 1
-        if (reducedMotion) {
-          listState.scrollToItem(targetListIndex, centerOffsetPx)
-        } else {
-          listState.animateScrollToItem(targetListIndex, centerOffsetPx)
-        }
-      } else if (activeIndex == -1 && listState.firstVisibleItemIndex > 1) {
-        listState.animateScrollToItem(0)
+  LaunchedEffect(activeIndex) {
+    if (activeIndex in synced.indices) {
+      // Scroll to the line right before activeIndex so the active line sits smoothly near the upper-center
+      val targetListIndex = activeIndex.coerceAtLeast(0)
+      if (reducedMotion) {
+        listState.scrollToItem(targetListIndex)
+      } else {
+        listState.animateScrollToItem(targetListIndex)
       }
+    } else if (activeIndex == -1 && listState.firstVisibleItemIndex > 1) {
+      listState.animateScrollToItem(0)
     }
+  }
+
+  Box(modifier = modifier.fillMaxSize()) {
 
     LazyColumn(
       state = listState,
@@ -239,9 +236,7 @@ fun LyricsView(
             verticalAlignment = Alignment.CenterVertically,
             horizontalArrangement = Arrangement.SpaceBetween
           ) {
-            if (isPreviewClip) {
-              SyncNudgeChip(label = "-5s", onClick = { onAdjustOffset(-5000L) })
-            }
+            SyncNudgeChip(label = "-5s", onClick = { onAdjustOffset(-5000L) })
             SyncNudgeChip(label = "-0.5s", onClick = { onAdjustOffset(-500L) })
 
             val offsetLabel = if (lyricOffsetMs == 0L) {
@@ -265,9 +260,7 @@ fun LyricsView(
             }
 
             SyncNudgeChip(label = "+0.5s", onClick = { onAdjustOffset(500L) })
-            if (isPreviewClip) {
-              SyncNudgeChip(label = "+5s", onClick = { onAdjustOffset(5000L) })
-            }
+            SyncNudgeChip(label = "+5s", onClick = { onAdjustOffset(5000L) })
           }
         }
       }
@@ -338,7 +331,6 @@ fun LyricsView(
             modifier = Modifier
               .fillMaxWidth()
               .alpha(lineAlpha)
-              .blur(if (isActive || distance <= 1 || reducedMotion) 0.dp else 0.8.dp)
           )
         }
       }

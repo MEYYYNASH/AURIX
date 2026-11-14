@@ -35,7 +35,8 @@ data class AudioFormatOption(
   val mimeType: String,
   val streamUrl: String,
   val durationSeconds: Long,
-  val contentLengthBytes: Long = -1L
+  val contentLengthBytes: Long = -1L,
+  val requiredUserAgent: String? = null
 )
 
 data class YoutubeAnalysisResult(
@@ -46,6 +47,7 @@ data class YoutubeAnalysisResult(
   val thumbnailUrl: String,
   val matchedTrackTitle: String,
   val matchedArtist: String,
+  val durationSeconds: Long = 0L,
   val formats: List<AudioFormatOption>
 )
 
