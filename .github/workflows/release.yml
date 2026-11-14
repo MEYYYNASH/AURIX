@@ -10,9 +10,9 @@ on:
   workflow_dispatch:
     inputs:
       tag:
-        description: 'Release tag (e.g. v1.3.7)'
+        description: 'Release tag (e.g. v1.3.8)'
         required: false
-        default: 'v1.3.7'
+        default: 'v1.3.8'
 
 permissions:
   contents: write
@@ -52,11 +52,11 @@ jobs:
             RELEASE_TAG="${{ github.ref_name }}"
           else
             VERSION=$(grep -m1 'versionName' app/build.gradle.kts | sed -E 's/.*"([^"]+)".*/\1/')
-            RELEASE_TAG="v${VERSION:-1.3.7}"
+            RELEASE_TAG="v${VERSION:-1.3.8}"
           fi
           VCODE=$(grep -m1 'versionCode' app/build.gradle.kts | sed -E 's/[^0-9]*([0-9]+).*/\1/')
           echo "RELEASE_TAG=${RELEASE_TAG}" >> "$GITHUB_ENV"
-          echo "RELEASE_VERSION_CODE=${VCODE:-10307}" >> "$GITHUB_ENV"
+          echo "RELEASE_VERSION_CODE=${VCODE:-10308}" >> "$GITHUB_ENV"
 
       - name: Ensure keystores exist
         run: |
@@ -100,9 +100,9 @@ jobs:
             mandatory: false
 
             What's New in AURIX ${{ env.RELEASE_TAG }}:
-            - Fixed HTTP 403 error during YouTube full-song downloads using bounded query-range & header-range chunking, native client headers, and automatic mirror fallback/retry
-            - Full-length YouTube audio extraction & download (M4A/WEBM) with accurate duration metadata and audio-to-lyrics synchronization
-            - Hidden GitHub owner & repository input fields in Settings and smoother NowPlaying/bottom dock transitions
+            - Integrated NewPipeExtractor (v0.26.5) with full JS signature & n-parameter deciphering as primary YouTube extractor to eliminate HTTP 403 download errors
+            - Multi-point chunk verification and automatic fallback across NewPipeExtractor, InnerTube clients, Piped, and Invidious proxies
+            - Full-length YouTube audio download (M4A/WEBM) with accurate duration metadata and audio-to-lyrics synchronization
           files: |
             app/build/outputs/apk/release/app-release.apk
             AURIX-${{ env.RELEASE_TAG }}.apk

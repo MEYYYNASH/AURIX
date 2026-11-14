@@ -7,11 +7,22 @@ import com.example.model.StreamDownloadMode
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 import okhttp3.MediaType.Companion.toMediaType
+import okhttp3.MediaType.Companion.toMediaTypeOrNull
 import okhttp3.OkHttpClient
 import okhttp3.Request
 import okhttp3.RequestBody.Companion.toRequestBody
 import org.json.JSONArray
 import org.json.JSONObject
+import org.schabi.newpipe.extractor.MediaFormat
+import org.schabi.newpipe.extractor.NewPipe
+import org.schabi.newpipe.extractor.ServiceList
+import org.schabi.newpipe.extractor.downloader.Downloader
+import org.schabi.newpipe.extractor.downloader.Request as NpRequest
+import org.schabi.newpipe.extractor.downloader.Response as NpResponse
+import org.schabi.newpipe.extractor.exceptions.ReCaptchaException
+import org.schabi.newpipe.extractor.localization.Localization
+import org.schabi.newpipe.extractor.stream.DeliveryMethod
+import org.schabi.newpipe.extractor.stream.StreamInfo
 import java.util.Locale
 import java.util.concurrent.TimeUnit
 
@@ -36,12 +47,81 @@ private data class InnerTubeClientProfile(
   val androidSdkVersion: Int? = null
 )
 
+private class NewPipeOkHttpDownloader(
+  private val httpClient: OkHttpClient
+) : Downloader() {
+  companion object {
+    const val DESKTOP_FIREFOX_UA =
+      "Mozilla/5.0 (Windows NT 10.0; Win64; x64; rv:128.0) Gecko/20100101 Firefox/128.0"
+    const val DESKTOP_CHROME_UA =
+      "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/134.0.0.0 Safari/537.36"
+  }
+
+  override fun execute(request: NpRequest): NpResponse {
+    val httpMethod = request.httpMethod()
+    val url = request.url()
+    val headers = request.headers()
+    val dataToSend = request.dataToSend()
+
+    val contentType = headers.entries
+      .firstOrNull { it.key.equals("Content-Type", ignoreCase = true) }
+      ?.value?.firstOrNull()
+      ?.toMediaTypeOrNull()
+
+    val body = when {
+      dataToSend != null -> dataToSend.toRequestBody(contentType)
+      httpMethod.equals("POST", ignoreCase = true) ||
+        httpMethod.equals("PUT", ignoreCase = true) -> ByteArray(0).toRequestBody(null)
+      else -> null
+    }
+
+    val reqBuilder = Request.Builder()
+      .url(url)
+      .method(httpMethod, body)
+      .header("User-Agent", DESKTOP_FIREFOX_UA)
+
+    for ((key, values) in headers) {
+      if (values.isEmpty()) continue
+      if (key.equals("User-Agent", ignoreCase = true)) {
+        reqBuilder.header("User-Agent", values.first())
+      } else {
+        reqBuilder.removeHeader(key)
+        for (v in values) {
+          reqBuilder.addHeader(key, v)
+        }
+      }
+    }
+
+    httpClient.newCall(reqBuilder.build()).execute().use { resp ->
+      if (resp.code == 429) {
+        throw ReCaptchaException("reCaptcha Challenge requested", url)
+      }
+      val responseBody = resp.body?.string().orEmpty()
+      val finalUrl = resp.request.url.toString()
+      return NpResponse(
+        resp.code,
+        resp.message,
+        resp.headers.toMultimap(),
+        responseBody,
+        finalUrl
+      )
+    }
+  }
+}
+
 object YoutubeExtractor {
   private val jsonMediaType = "application/json; charset=utf-8".toMediaType()
 
   private val client = OkHttpClient.Builder()
-    .connectTimeout(8, TimeUnit.SECONDS)
-    .readTimeout(12, TimeUnit.SECONDS)
+    .connectTimeout(10, TimeUnit.SECONDS)
+    .readTimeout(20, TimeUnit.SECONDS)
+    .followRedirects(true)
+    .followSslRedirects(true)
+    .build()
+
+  private val newPipeHttpClient = OkHttpClient.Builder()
+    .connectTimeout(15, TimeUnit.SECONDS)
+    .readTimeout(30, TimeUnit.SECONDS)
     .followRedirects(true)
     .followSslRedirects(true)
     .build()
@@ -53,11 +133,22 @@ object YoutubeExtractor {
     .followSslRedirects(true)
     .build()
 
+  @Volatile
+  private var newPipeInitialized = false
+
+  @Synchronized
+  private fun ensureNewPipeInitialized() {
+    if (!newPipeInitialized) {
+      NewPipe.init(NewPipeOkHttpDownloader(newPipeHttpClient), Localization.DEFAULT)
+      newPipeInitialized = true
+    }
+  }
+
   private val innerTubeProfiles = listOf(
     InnerTubeClientProfile(
       clientName = "ANDROID_VR",
-      clientVersion = "1.60.19",
-      userAgent = "com.google.android.apps.youtube.vr.oculus/1.60.19 (Linux; U; Android 12L; eureka-user Build/SQ3A.220605.009.A1) gzip",
+      clientVersion = "1.61.48",
+      userAgent = "com.google.android.apps.youtube.vr.oculus/1.61.48 (Linux; U; Android 12L; eureka-user Build/SQ3A.220605.009.A1) gzip",
       deviceMake = "Oculus",
       deviceModel = "Quest 3",
       osName = "Android",
@@ -121,9 +212,39 @@ object YoutubeExtractor {
     return "${cleanUrl}${separator}range=$start-$end"
   }
 
-  private fun probeRequestOk(req: Request): Boolean {
+  private fun inferUserAgentsForStreamUrl(streamUrl: String): List<String> {
+    val clientParam = Regex("""[?&]c=([^&]+)""", RegexOption.IGNORE_CASE)
+      .find(streamUrl)
+      ?.groupValues
+      ?.getOrNull(1)
+      ?.uppercase(Locale.US)
+      .orEmpty()
+
+    return when (clientParam) {
+      "IOS" -> listOf(
+        "com.google.ios.youtube/20.10.4 (iPhone16,2; U; CPU iOS 18_3_2 like Mac OS X;)",
+        NewPipeOkHttpDownloader.DESKTOP_FIREFOX_UA
+      )
+      "ANDROID_VR" -> listOf(
+        "com.google.android.apps.youtube.vr.oculus/1.61.48 (Linux; U; Android 12L; eureka-user Build/SQ3A.220605.009.A1) gzip",
+        NewPipeOkHttpDownloader.DESKTOP_FIREFOX_UA
+      )
+      "ANDROID", "ANDROID_MUSIC", "ANDROID_TESTSUITE" -> listOf(
+        "com.google.android.youtube/20.10.38 (Linux; U; Android 14) gzip",
+        NewPipeOkHttpDownloader.DESKTOP_FIREFOX_UA
+      )
+      else -> listOf(
+        NewPipeOkHttpDownloader.DESKTOP_FIREFOX_UA,
+        NewPipeOkHttpDownloader.DESKTOP_CHROME_UA,
+        "AURIX-Android"
+      )
+    }.distinct()
+  }
+
+  private fun probeRequestOk(req: Request, allow416: Boolean = false): Boolean {
     return runCatching {
       probeClient.newCall(req).execute().use { resp ->
+        if (allow416 && resp.code == 416) return@use true
         if (!resp.isSuccessful && resp.code != 206) return@use false
         val cType = resp.header("Content-Type").orEmpty().lowercase(Locale.US)
         if (cType.contains("text/html")) return@use false
@@ -135,42 +256,69 @@ object YoutubeExtractor {
     }.getOrDefault(false)
   }
 
+  private fun probeModeAtOffsets(
+    url: String,
+    userAgent: String,
+    mode: StreamDownloadMode,
+    contentLengthBytes: Long
+  ): Boolean {
+    val secondOffset = when {
+      contentLengthBytes > 600_000L -> 524_288L to 525_311L
+      contentLengthBytes <= 0L && mode != StreamDownloadMode.DIRECT -> 262_144L to 263_167L
+      else -> null
+    }
+    val offsets = if (secondOffset != null) {
+      listOf(0L to 1023L, secondOffset)
+    } else {
+      listOf(0L to 1023L)
+    }
+
+    return offsets.mapIndexed { index, (start, end) ->
+      val req = when (mode) {
+        StreamDownloadMode.QUERY_RANGE -> Request.Builder()
+          .url(appendRangeQueryParam(url, start, end))
+          .header("User-Agent", userAgent)
+          .header("Accept", "*/*")
+          .build()
+        StreamDownloadMode.HEADER_RANGE -> Request.Builder()
+          .url(url)
+          .header("User-Agent", userAgent)
+          .header("Accept", "*/*")
+          .header("Range", "bytes=$start-$end")
+          .build()
+        StreamDownloadMode.DIRECT -> Request.Builder()
+          .url(url)
+          .header("User-Agent", userAgent)
+          .header("Accept", "*/*")
+          .build()
+      }
+      probeRequestOk(req, allow416 = (index > 0 && contentLengthBytes <= 0L))
+    }.all { it }
+  }
+
   /**
-   * Tests a stream URL using tiny 1 KB probes so HTTP 403 URLs are caught and bypassed
-   * automatically before returning formats to the UI or failing mid-download.
+   * Tests a stream URL at BOTH start (0-1023) AND chunk 1 (524288-525311 when >600KB),
+   * catching HTTP 403 streams that only allow initial probe bytes before rejecting full chunks.
    */
-  fun probeWorkingDownloadMode(url: String, userAgent: String): StreamDownloadMode? {
+  fun probeWorkingDownloadMode(
+    url: String,
+    userAgent: String,
+    contentLengthBytes: Long = -1L
+  ): StreamDownloadMode? {
     if (url.isBlank()) return null
     val isGoogleVideo = url.contains("googlevideo.com", ignoreCase = true)
 
-    if (isGoogleVideo) {
-      // 1. Bounded query-param range (native YouTube Android/VR/iOS player protocol)
-      val qUrl = appendRangeQueryParam(url, 0L, 1023L)
-      val qReq = Request.Builder()
-        .url(qUrl)
-        .header("User-Agent", userAgent)
-        .header("Accept", "*/*")
-        .build()
-      if (probeRequestOk(qReq)) return StreamDownloadMode.QUERY_RANGE
-
-      // 2. Bounded HTTP Range header
-      val hReq = Request.Builder()
-        .url(url)
-        .header("User-Agent", userAgent)
-        .header("Accept", "*/*")
-        .header("Range", "bytes=0-1023")
-        .build()
-      if (probeRequestOk(hReq)) return StreamDownloadMode.HEADER_RANGE
-
-      // 3. Direct GET probe (no Referer)
-      val dReq = Request.Builder()
-        .url(url)
-        .header("User-Agent", userAgent)
-        .header("Accept", "*/*")
-        .build()
-      if (probeRequestOk(dReq)) return StreamDownloadMode.DIRECT
-
-      return null
+    return if (isGoogleVideo) {
+      val cParam = Regex("""[?&]c=([^&]+)""", RegexOption.IGNORE_CASE)
+        .find(url)?.groupValues?.getOrNull(1)?.uppercase(Locale.US).orEmpty()
+      val orderedModes = if (cParam.startsWith("WEB") || cParam.startsWith("TV") || cParam == "MWEB") {
+        listOf(StreamDownloadMode.HEADER_RANGE, StreamDownloadMode.QUERY_RANGE, StreamDownloadMode.DIRECT)
+      } else {
+        listOf(StreamDownloadMode.QUERY_RANGE, StreamDownloadMode.HEADER_RANGE, StreamDownloadMode.DIRECT)
+      }
+      orderedModes.firstOrNull { mode ->
+        probeModeAtOffsets(url, userAgent, mode, contentLengthBytes)
+      }
     } else {
       val hReq = Request.Builder()
         .url(url)
@@ -187,7 +335,7 @@ object YoutubeExtractor {
         .build()
       if (probeRequestOk(dReq)) return StreamDownloadMode.DIRECT
 
-      return null
+      null
     }
   }
 
@@ -258,7 +406,33 @@ object YoutubeExtractor {
 
     val progressiveBackups = mutableListOf<AudioFormatOption>()
 
-    // 1. Direct InnerTube clients (probe top format so 403-blocked clients are skipped automatically)
+    // 1. Primary: NewPipeExtractor (full JS signature & n-parameter deobfuscation + client rotation)
+    if ("NEWPIPE" !in skipClients) {
+      val npAttempt = runCatching { fetchFromNewPipeExtractor(videoId) }.getOrNull()
+      if (npAttempt != null) {
+        if (npAttempt.title.isNotBlank()) lastTitle = npAttempt.title
+        if (npAttempt.author.isNotBlank()) lastAuthor = npAttempt.author
+        if (npAttempt.thumbnailUrl.isNotBlank()) lastThumb = npAttempt.thumbnailUrl
+        if (npAttempt.durationSeconds > 0L) lastDurationSec = npAttempt.durationSeconds
+        if (!npAttempt.extractorError.isNullOrBlank()) lastReason = npAttempt.extractorError
+
+        val verifiedNp = verifyFormatList(npAttempt.adaptiveFormats)
+        if (verifiedNp.isNotEmpty()) {
+          return@withContext ExtractedYoutubeData(
+            videoId = videoId,
+            title = lastTitle,
+            author = lastAuthor,
+            thumbnailUrl = lastThumb,
+            durationSeconds = lastDurationSec,
+            audioFormats = verifiedNp,
+            extractorError = null
+          )
+        }
+        progressiveBackups.addAll(npAttempt.progressiveFormats)
+      }
+    }
+
+    // 2. Direct InnerTube clients (verified at both byte 0 and chunk 1)
     for (profile in innerTubeProfiles) {
       if (profile.clientName in skipClients) continue
       val attempt = runCatching { fetchFromInnerTube(videoId, profile) }.getOrNull() ?: continue
@@ -283,7 +457,7 @@ object YoutubeExtractor {
       progressiveBackups.addAll(attempt.progressiveFormats)
     }
 
-    // 2. Piped public instances (server-side deciphered & proxied)
+    // 3. Piped public instances (server-side deciphered & proxied)
     for (base in basePipedMirrors) {
       val attempt = runCatching { fetchFromPiped(base, videoId) }.getOrNull() ?: continue
       if (attempt.title.isNotBlank()) lastTitle = attempt.title
@@ -304,7 +478,7 @@ object YoutubeExtractor {
       }
     }
 
-    // 3. Invidious public instances (checks direct URL AND Invidious `local=true` server proxy)
+    // 4. Invidious public instances (checks direct URL AND Invidious `local=true` server proxy)
     for (base in getInvidiousMirrors()) {
       val attempt = runCatching { fetchFromInvidious(base, videoId) }.getOrNull() ?: continue
       if (attempt.title.isNotBlank()) lastTitle = attempt.title
@@ -325,7 +499,7 @@ object YoutubeExtractor {
       }
     }
 
-    // 4. Last-resort Invidious local=true direct proxy endpoints even if video JSON endpoint was limited
+    // 5. Direct Invidious local=true proxy endpoints
     val proxyFallbacks = probeDirectInvidiousProxies(videoId, lastDurationSec)
     if (proxyFallbacks.isNotEmpty()) {
       return@withContext ExtractedYoutubeData(
@@ -338,7 +512,7 @@ object YoutubeExtractor {
       )
     }
 
-    // 5. Progressive InnerTube fallback (e.g. itag=18 MP4 AAC when adaptive streams require PO token)
+    // 6. Progressive MP4 fallback (itag=18)
     val verifiedProgressive = verifyFormatList(progressiveBackups)
     if (verifiedProgressive.isNotEmpty()) {
       return@withContext ExtractedYoutubeData(
@@ -367,57 +541,188 @@ object YoutubeExtractor {
   }
 
   /**
-   * Used when a selected format hits 403 during download (e.g. expired URL or mid-stream rejection):
-   * resolves a fresh verified format matching the requested extension or best working audio format.
+   * Used when a selected format hits 403 during download: resolves a fresh verified format
+   * from an alternative client/mirror matching the requested extension or best working audio format.
    */
   suspend fun extractFreshWorkingFormat(
     videoId: String,
     preferredExtension: String,
     failedFormatId: String? = null
   ): AudioFormatOption? = withContext(Dispatchers.IO) {
-    val failedClient = innerTubeProfiles
-      .firstOrNull { profile ->
-        failedFormatId?.contains("_${profile.clientName.lowercase(Locale.US)}_", ignoreCase = true) == true
+    val skipSet = buildSet {
+      if (failedFormatId?.startsWith("np_", ignoreCase = true) == true) {
+        add("NEWPIPE")
       }
-      ?.clientName
-    val skipSet = if (failedClient != null) setOf(failedClient) else emptySet()
+      innerTubeProfiles.forEach { profile ->
+        if (failedFormatId?.contains("_${profile.clientName.lowercase(Locale.US)}_", ignoreCase = true) == true) {
+          add(profile.clientName)
+        }
+      }
+    }
     val fresh = extractFullAudio(videoId, skipClients = skipSet)
       ?: if (skipSet.isNotEmpty()) extractFullAudio(videoId) else null
     fresh?.audioFormats?.firstOrNull { it.extension.equals(preferredExtension, ignoreCase = true) }
       ?: fresh?.audioFormats?.firstOrNull()
   }
 
+  private fun fetchFromNewPipeExtractor(videoId: String): InnerTubeAttempt {
+    ensureNewPipeInitialized()
+    val watchUrl = "https://www.youtube.com/watch?v=$videoId"
+    val info = StreamInfo.getInfo(ServiceList.YouTube, watchUrl)
+
+    val title = info.name.orEmpty().trim()
+    val author = info.uploaderName.orEmpty().trim()
+    val durSec = info.duration.coerceAtLeast(0L)
+    val thumbUrl = info.thumbnails
+      .maxByOrNull { it.width * it.height }
+      ?.url
+      ?.takeIf { it.isNotBlank() }
+      ?: "https://i.ytimg.com/vi/$videoId/hqdefault.jpg"
+
+    val parsedAdaptive = mutableListOf<AudioFormatOption>()
+    info.audioStreams.forEachIndexed { idx, stream ->
+      if (stream.deliveryMethod != DeliveryMethod.PROGRESSIVE_HTTP) return@forEachIndexed
+      val url = stream.content.orEmpty().trim()
+      if (url.isBlank()) return@forEachIndexed
+
+      val mediaFmt = stream.format
+      val isM4a = mediaFmt == MediaFormat.M4A || mediaFmt?.suffix.equals("m4a", ignoreCase = true)
+      val isMp3 = mediaFmt == MediaFormat.MP3 || mediaFmt?.suffix.equals("mp3", ignoreCase = true)
+      val ext = when {
+        isM4a -> "m4a"
+        isMp3 -> "mp3"
+        else -> "webm"
+      }
+      val fmtLabel = ext.uppercase(Locale.US)
+      val codecName = when {
+        isM4a -> "AAC"
+        isMp3 -> "MP3"
+        else -> "Opus"
+      }
+      val bitrate = stream.averageBitrate.let { if (it > 0) it else 128 }
+      val contentLength = stream.itagItem?.contentLength?.takeIf { it > 0L } ?: -1L
+      val kbpsLabel = "$bitrate kbps $codecName"
+      val durFormatted = formatDurationShort(durSec)
+      val sizeText = if (contentLength > 0L) {
+        String.format(Locale.US, " • %.1f MB", contentLength / (1024f * 1024f))
+      } else ""
+
+      val candidateUas = inferUserAgentsForStreamUrl(url)
+      val primaryUa = candidateUas.first()
+      val extraBackups = candidateUas.drop(1).map { ua ->
+        StreamCandidate(url = url, userAgent = ua, downloadMode = StreamDownloadMode.HEADER_RANGE)
+      }
+
+      parsedAdaptive.add(
+        AudioFormatOption(
+          id = "np_${stream.itag}_${bitrate}_$idx",
+          formatLabel = fmtLabel,
+          qualityLabel = kbpsLabel,
+          detailLabel = "Full Song ($durFormatted)$sizeText",
+          extension = ext,
+          mimeType = mediaFmt?.mimeType ?: if (isM4a) "audio/mp4" else "audio/webm",
+          streamUrl = url,
+          durationSeconds = durSec,
+          contentLengthBytes = contentLength,
+          requiredUserAgent = primaryUa,
+          fallbackCandidates = extraBackups
+        )
+      )
+    }
+
+    val sortedAdaptive = parsedAdaptive
+      .sortedWith(
+        compareByDescending<AudioFormatOption> { it.extension == "m4a" }
+          .thenByDescending { extractBitrateNumber(it.qualityLabel) }
+      )
+      .distinctBy { "${it.formatLabel}_${it.qualityLabel}" }
+
+    val parsedProgressive = mutableListOf<AudioFormatOption>()
+    info.videoStreams.forEachIndexed { idx, vStream ->
+      if (vStream.deliveryMethod != DeliveryMethod.PROGRESSIVE_HTTP) return@forEachIndexed
+      val url = vStream.content.orEmpty().trim()
+      if (url.isBlank()) return@forEachIndexed
+      val contentLength = vStream.itagItem?.contentLength?.takeIf { it > 0L } ?: -1L
+      val durFormatted = formatDurationShort(durSec)
+      val sizeText = if (contentLength > 0L) {
+        String.format(Locale.US, " • %.1f MB", contentLength / (1024f * 1024f))
+      } else ""
+      val candidateUas = inferUserAgentsForStreamUrl(url)
+      parsedProgressive.add(
+        AudioFormatOption(
+          id = "np_prog_${vStream.itag}_$idx",
+          formatLabel = "MP4",
+          qualityLabel = "128 kbps AAC (Standard)",
+          detailLabel = "Full Song ($durFormatted)$sizeText",
+          extension = "mp4",
+          mimeType = "audio/mp4",
+          streamUrl = url,
+          durationSeconds = durSec,
+          contentLengthBytes = contentLength,
+          requiredUserAgent = candidateUas.first(),
+          fallbackCandidates = candidateUas.drop(1).map { ua ->
+            StreamCandidate(url = url, userAgent = ua, downloadMode = StreamDownloadMode.HEADER_RANGE)
+          }
+        )
+      )
+    }
+
+    return InnerTubeAttempt(
+      title = title,
+      author = author,
+      thumbnailUrl = thumbUrl,
+      durationSeconds = durSec,
+      adaptiveFormats = sortedAdaptive,
+      progressiveFormats = parsedProgressive,
+      extractorError = null
+    )
+  }
+
   private fun verifyFormatList(formats: List<AudioFormatOption>): List<AudioFormatOption> {
     if (formats.isEmpty()) return emptyList()
-    // Probe the primary format of this source first; if it passes, apply its verified downloadMode
-    // to sibling formats from the same client/mirror, or probe any fallback candidate if present.
-    val first = formats.first()
-    val firstUa = first.requiredUserAgent ?: "AURIX-Android"
-    val firstMode = probeWorkingDownloadMode(first.streamUrl, firstUa)
-    if (firstMode != null) {
-      return formats.map { fmt ->
-        fmt.copy(downloadMode = firstMode)
+
+    val verified = mutableListOf<AudioFormatOption>()
+    // Group by extension ("m4a", "webm", "mp4") so a block on M4A doesn't hide working WEBM, or vice versa.
+    val modeByExt = mutableMapOf<String, StreamDownloadMode?>()
+
+    for (fmt in formats) {
+      val extKey = fmt.extension.lowercase(Locale.US)
+      if (!modeByExt.containsKey(extKey)) {
+        val primaryUa = fmt.requiredUserAgent ?: NewPipeOkHttpDownloader.DESKTOP_FIREFOX_UA
+        var foundMode = probeWorkingDownloadMode(fmt.streamUrl, primaryUa, fmt.contentLengthBytes)
+        var workingUrl = fmt.streamUrl
+        var workingUa = primaryUa
+
+        if (foundMode == null) {
+          for (cand in fmt.fallbackCandidates) {
+            val candMode = probeWorkingDownloadMode(cand.url, cand.userAgent, fmt.contentLengthBytes)
+            if (candMode != null) {
+              foundMode = candMode
+              workingUrl = cand.url
+              workingUa = cand.userAgent
+              break
+            }
+          }
+        }
+        modeByExt[extKey] = foundMode
+        if (foundMode != null) {
+          verified.add(
+            fmt.copy(
+              streamUrl = workingUrl,
+              requiredUserAgent = workingUa,
+              downloadMode = foundMode
+            )
+          )
+        }
+      } else {
+        val extMode = modeByExt[extKey]
+        if (extMode != null) {
+          verified.add(fmt.copy(downloadMode = extMode))
+        }
       }
     }
 
-    // If primary streamUrl failed (e.g. Invidious direct googlevideo URL 403), try attached fallbackCandidates
-    val updated = mutableListOf<AudioFormatOption>()
-    for (fmt in formats) {
-      val workingBackup = fmt.fallbackCandidates.firstNotNullOfOrNull { cand ->
-        val mode = probeWorkingDownloadMode(cand.url, cand.userAgent)
-        if (mode != null) cand.copy(downloadMode = mode) else null
-      }
-      if (workingBackup != null) {
-        updated.add(
-          fmt.copy(
-            streamUrl = workingBackup.url,
-            requiredUserAgent = workingBackup.userAgent,
-            downloadMode = workingBackup.downloadMode
-          )
-        )
-      }
-    }
-    return updated
+    return verified
   }
 
   private fun probeDirectInvidiousProxies(videoId: String, durationSec: Long): List<AudioFormatOption> {
@@ -430,7 +735,7 @@ object YoutubeExtractor {
       val verified = mutableListOf<AudioFormatOption>()
       for ((itag, labels, mimePair) in itagSpecs) {
         val proxyUrl = "$base/latest_version?id=$videoId&itag=$itag&local=true"
-        val mode = probeWorkingDownloadMode(proxyUrl, "AURIX-Android")
+        val mode = probeWorkingDownloadMode(proxyUrl, "AURIX-Android", -1L)
         if (mode != null) {
           val durFormatted = formatDurationShort(durationSec)
           verified.add(
@@ -492,8 +797,6 @@ object YoutubeExtractor {
       .post(payload.toString().toRequestBody(jsonMediaType))
       .header("User-Agent", profile.userAgent)
       .header("Content-Type", "application/json")
-      .header("Origin", "https://www.youtube.com")
-      .header("Referer", "https://www.youtube.com/watch?v=$videoId")
       .build()
 
     client.newCall(request).execute().use { resp ->
@@ -594,7 +897,6 @@ object YoutubeExtractor {
         )
         .distinctBy { "${it.formatLabel}_${it.qualityLabel}" }
 
-      // Parse progressive fallback (e.g. itag 18 MP4 with AAC audio)
       val progressiveArr = streamingData.optJSONArray("formats") ?: JSONArray()
       val parsedProgressive = mutableListOf<AudioFormatOption>()
       for (i in 0 until progressiveArr.length()) {
