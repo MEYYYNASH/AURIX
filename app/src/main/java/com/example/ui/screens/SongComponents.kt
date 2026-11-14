@@ -20,9 +20,14 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.alpha
 import androidx.compose.ui.draw.blur
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.draw.drawBehind
 import androidx.compose.ui.draw.scale
+import androidx.compose.ui.geometry.CornerRadius
+import androidx.compose.ui.geometry.Offset
+import androidx.compose.ui.geometry.Size
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.res.painterResource
@@ -149,25 +154,108 @@ fun GlassCard(
 ) {
   val shape = RoundedCornerShape(cornerRadius)
   val fillColor = if (darkTheme) {
-    Color(0xFF182032).copy(alpha = 0.74f)
+    Color(0xFF172034).copy(alpha = 0.68f)
   } else {
-    Color.White.copy(alpha = 0.86f)
+    Color.White.copy(alpha = 0.78f)
   }
   val borderBrush = Brush.verticalGradient(
     colors = if (darkTheme) {
       listOf(Color.White.copy(alpha = 0.24f), Color.White.copy(alpha = 0.06f))
     } else {
-      listOf(Color.White.copy(alpha = 0.96f), Color.White.copy(alpha = 0.55f))
+      listOf(Color.White.copy(alpha = 0.96f), Color.White.copy(alpha = 0.50f))
     }
   )
+  val topSpecular = Color.White.copy(alpha = if (darkTheme) 0.30f else 0.95f)
 
   Box(
     modifier = modifier
       .clip(shape)
       .background(fillColor)
       .border(1.dp, borderBrush, shape)
+      .drawBehind {
+        val stroke15 = 1.5.dp.toPx()
+        val inset = stroke15 * 0.5f
+        val r = (cornerRadius.toPx() - inset).coerceAtLeast(0f)
+        drawRoundRect(
+          brush = Brush.verticalGradient(
+            colors = listOf(topSpecular, Color.Transparent),
+            startY = 0f,
+            endY = size.height * 0.32f
+          ),
+          topLeft = Offset(inset, inset),
+          size = Size(size.width - stroke15, size.height - stroke15),
+          cornerRadius = CornerRadius(r, r),
+          style = Stroke(width = stroke15)
+        )
+      }
   ) {
     Column(content = content)
+  }
+}
+
+@Composable
+fun GlassSegmentedBar(
+  options: List<Pair<String, androidx.compose.ui.graphics.vector.ImageVector?>>,
+  selectedIndex: Int,
+  darkTheme: Boolean,
+  onSelect: (Int) -> Unit,
+  modifier: Modifier = Modifier,
+  testTags: List<String> = emptyList()
+) {
+  val barBg = if (darkTheme) Color.White.copy(alpha = 0.08f) else Color.White.copy(alpha = 0.68f)
+  val barBorder = if (darkTheme) Color.White.copy(alpha = 0.16f) else Color.White.copy(alpha = 0.95f)
+  val pillBg = if (darkTheme) Color(0xFF28344E) else Color.White
+
+  Row(
+    modifier = modifier
+      .fillMaxWidth()
+      .clip(CircleShape)
+      .background(barBg)
+      .border(1.dp, barBorder, CircleShape)
+      .padding(4.dp),
+    horizontalArrangement = Arrangement.spacedBy(4.dp)
+  ) {
+    options.forEachIndexed { index, (label, icon) ->
+      val selected = selectedIndex == index
+      val tag = testTags.getOrNull(index)
+      Row(
+        modifier = Modifier
+          .weight(1f)
+          .clip(CircleShape)
+          .background(if (selected) pillBg else Color.Transparent)
+          .then(
+            if (selected) Modifier.border(
+              0.75.dp,
+              Color.White.copy(alpha = if (darkTheme) 0.18f else 0.9f),
+              CircleShape
+            ) else Modifier
+          )
+          .clickable { onSelect(index) }
+          .then(if (tag != null) Modifier.testTag(tag) else Modifier)
+          .padding(vertical = 10.dp, horizontal = 8.dp),
+        horizontalArrangement = Arrangement.Center,
+        verticalAlignment = Alignment.CenterVertically
+      ) {
+        if (icon != null) {
+          Icon(
+            imageVector = icon,
+            contentDescription = null,
+            tint = if (selected) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurfaceVariant,
+            modifier = Modifier.size(16.dp)
+          )
+          Spacer(modifier = Modifier.width(6.dp))
+        }
+        Text(
+          text = label,
+          style = MaterialTheme.typography.bodySmall.copy(
+            fontWeight = if (selected) FontWeight.Bold else FontWeight.SemiBold
+          ),
+          color = if (selected) MaterialTheme.colorScheme.onSurface else MaterialTheme.colorScheme.onSurfaceVariant,
+          maxLines = 1,
+          overflow = TextOverflow.Ellipsis
+        )
+      }
+    }
   }
 }
 
@@ -267,7 +355,6 @@ fun DynamicArtworkBackdrop(
   )
   val activeScale = if (reducedMotion) 1.32f else driftScale
 
-  // Luminous pastel aurora (light) or midnight nebula (dark) backdrop so frosted glass always pops
   Box(modifier = modifier.fillMaxSize()) {
     Box(
       modifier = Modifier
@@ -291,17 +378,12 @@ fun DynamicArtworkBackdrop(
         )
     )
 
-    // Soft floating aurora orbs
     Box(
       modifier = Modifier
         .fillMaxSize()
         .background(
           Brush.radialGradient(
-            colors = if (darkTheme) {
-              listOf(accentColor.copy(alpha = 0.24f), Color.Transparent)
-            } else {
-              listOf(accentColor.copy(alpha = 0.22f), Color.Transparent)
-            },
+            colors = listOf(accentColor.copy(alpha = 0.22f), Color.Transparent),
             radius = 950f
           )
         )
@@ -369,12 +451,23 @@ fun SongRow(
     modifier = Modifier
       .fillMaxWidth()
       .clip(RoundedCornerShape(16.dp))
+      .then(
+        if (isCurrent) Modifier.background(MaterialTheme.colorScheme.primary.copy(alpha = 0.12f))
+        else Modifier
+      )
       .clickable { onSongClick() }
-      .padding(vertical = 8.dp, horizontal = 4.dp),
+      .padding(vertical = 8.dp, horizontal = 8.dp),
     verticalAlignment = Alignment.CenterVertically
   ) {
-    SongArtwork(song = song, modifier = Modifier.size(48.dp), cornerRadius = 12.dp)
-    Spacer(modifier = Modifier.width(14.dp))
+    Box(
+      modifier = Modifier
+        .size(48.dp)
+        .clip(RoundedCornerShape(12.dp))
+        .border(1.dp, Color.White.copy(alpha = 0.22f), RoundedCornerShape(12.dp))
+    ) {
+      SongArtwork(song = song, modifier = Modifier.fillMaxSize(), cornerRadius = 12.dp)
+    }
+    Spacer(modifier = Modifier.width(12.dp))
     Column(modifier = Modifier.weight(1f)) {
       Row(verticalAlignment = Alignment.CenterVertically) {
         AnimatedVisibility(visible = isCurrent, enter = fadeIn(), exit = fadeOut()) {
@@ -396,15 +489,34 @@ fun SongRow(
           color = if (isCurrent) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onBackground
         )
       }
-      Text(
-        text = song.artist,
-        style = MaterialTheme.typography.bodySmall,
-        maxLines = 1,
-        overflow = TextOverflow.Ellipsis,
-        color = MaterialTheme.colorScheme.onSurfaceVariant
-      )
+      Row(
+        verticalAlignment = Alignment.CenterVertically,
+        horizontalArrangement = Arrangement.spacedBy(6.dp)
+      ) {
+        Text(
+          text = song.artist,
+          style = MaterialTheme.typography.bodySmall,
+          maxLines = 1,
+          overflow = TextOverflow.Ellipsis,
+          color = MaterialTheme.colorScheme.onSurfaceVariant,
+          modifier = Modifier.weight(1f, fill = false)
+        )
+        if (song.source == "iTunes 30s") {
+          Surface(
+            shape = RoundedCornerShape(6.dp),
+            color = MaterialTheme.colorScheme.primary.copy(alpha = 0.15f)
+          ) {
+            Text(
+              text = "30s",
+              style = MaterialTheme.typography.labelSmall.copy(fontWeight = FontWeight.Bold, fontSize = 10.sp),
+              color = MaterialTheme.colorScheme.primary,
+              modifier = Modifier.padding(horizontal = 5.dp, vertical = 1.dp)
+            )
+          }
+        }
+      }
     }
-    if (song.durationSeconds > 0) {
+    if (song.durationSeconds > 0 && song.source != "iTunes 30s") {
       Text(
         text = "${song.durationSeconds / 60}:${String.format("%02d", song.durationSeconds % 60)}",
         style = MaterialTheme.typography.bodySmall,
@@ -444,7 +556,7 @@ fun SongDownloadRow(
   Surface(
     modifier = Modifier
       .fillMaxWidth()
-      .padding(vertical = 4.dp)
+      .padding(vertical = 3.dp)
       .clip(RoundedCornerShape(20.dp))
       .clickable { onSongClick() },
     color = if (isCurrent) MaterialTheme.colorScheme.primary.copy(alpha = 0.16f) else MaterialTheme.colorScheme.surface.copy(alpha = 0.72f),
@@ -532,7 +644,7 @@ fun SongDownloadRow(
         } else {
           Icon(
             imageVector = if (isDownloaded) Icons.Rounded.DownloadDone else Icons.Rounded.Download,
-            contentDescription = "Download MP3",
+            contentDescription = "Download Preview",
             tint = if (isDownloaded) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurfaceVariant
           )
         }

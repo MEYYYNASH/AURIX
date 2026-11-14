@@ -58,6 +58,7 @@ fun AurixApp(viewModel: AurixViewModel) {
   }
 
   var currentScreen by remember { mutableStateOf<Screen>(Screen.Home) }
+  var libraryTab by remember { mutableIntStateOf(0) }
   var showNowPlaying by remember { mutableStateOf(false) }
   val context = LocalContext.current
 
@@ -170,25 +171,24 @@ fun AurixApp(viewModel: AurixViewModel) {
               featuredTracks = featuredTracks,
               isLoadingFeatured = isLoadingFeatured,
               featuredError = featuredError,
+              favoritesCount = favorites.size,
+              localSongsCount = localSongs.size,
               recentlyPlayed = recentlyPlayed,
               currentSong = currentSong,
               isPlaying = isPlaying,
               darkTheme = darkTheme,
               reducedMotion = reducedMotion,
-              songDownloadProgress = songDownloadProgress,
-              downloadedSongIds = downloadedSongIds,
               onRetryFeatured = { viewModel.loadFeaturedItunes() },
-              onOpenSearch = { query ->
+              onOpenSearch = {
                 viewModel.setSearchMode("itunes")
-                if (!query.isNullOrBlank()) viewModel.search(query)
                 currentScreen = Screen.Search
               },
-              onOpenLibrary = { currentScreen = Screen.Library },
-              onOpenNowPlaying = { showNowPlaying = true },
-              onPlayPauseClick = { viewModel.togglePlayPause() },
+              onOpenLibraryTab = { tab ->
+                libraryTab = tab
+                currentScreen = Screen.Library
+              },
               onSongClick = { song, queue -> viewModel.playSong(song, queue) },
-              onFavoriteClick = { viewModel.toggleFavorite(it) },
-              onDownloadClick = { viewModel.downloadSong(context, it) }
+              onFavoriteClick = { viewModel.toggleFavorite(it) }
             )
             is Screen.Search -> SearchScreen(
               searchMode = searchMode,
@@ -220,7 +220,10 @@ fun AurixApp(viewModel: AurixViewModel) {
               recentlyPlayed = recentlyPlayed,
               currentSong = currentSong,
               isPlaying = isPlaying,
+              darkTheme = darkTheme,
               reducedMotion = reducedMotion,
+              selectedTab = libraryTab,
+              onTabSelected = { libraryTab = it },
               onAddLocalSong = { viewModel.addLocalSong(it) },
               onSongClick = { viewModel.playSong(it) },
               onFavoriteClick = { viewModel.toggleFavorite(it) }

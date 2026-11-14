@@ -33,6 +33,7 @@ import androidx.compose.ui.platform.LocalSoftwareKeyboardController
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.ImeAction
+import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
@@ -70,10 +71,10 @@ fun SearchScreen(
   Column(
     modifier = Modifier
       .fillMaxSize()
-      .padding(horizontal = 16.dp)
+      .padding(horizontal = 20.dp)
       .windowInsetsPadding(WindowInsets.statusBars)
   ) {
-    Spacer(modifier = Modifier.height(14.dp))
+    Spacer(modifier = Modifier.height(16.dp))
 
     Text(
       text = "Search",
@@ -88,48 +89,17 @@ fun SearchScreen(
 
     Spacer(modifier = Modifier.height(14.dp))
 
-    // Mode Switcher (ONLY in Search, moved out of Home)
-    val switcherBg = if (darkTheme) Color.White.copy(alpha = 0.08f) else Color.White.copy(alpha = 0.72f)
-    val switcherBorder = if (darkTheme) Color.White.copy(alpha = 0.14f) else Color.White
-    Row(
-      modifier = Modifier
-        .fillMaxWidth()
-        .clip(RoundedCornerShape(28.dp))
-        .background(switcherBg)
-        .border(1.dp, switcherBorder, RoundedCornerShape(28.dp))
-        .padding(4.dp),
-      horizontalArrangement = Arrangement.spacedBy(4.dp)
-    ) {
-      Button(
-        onClick = { onSearchModeChanged("itunes") },
-        modifier = Modifier.weight(1f).testTag("mode_search_button"),
-        colors = ButtonDefaults.buttonColors(
-          containerColor = if (searchMode == "itunes") MaterialTheme.colorScheme.surface else Color.Transparent,
-          contentColor = if (searchMode == "itunes") MaterialTheme.colorScheme.onSurface else MaterialTheme.colorScheme.onSurfaceVariant
-        ),
-        elevation = ButtonDefaults.buttonElevation(defaultElevation = 0.dp),
-        shape = RoundedCornerShape(24.dp)
-      ) {
-        Icon(Icons.Rounded.Search, contentDescription = null, modifier = Modifier.size(16.dp))
-        Spacer(modifier = Modifier.width(6.dp))
-        Text("iTunes 30s", style = MaterialTheme.typography.bodyMedium.copy(fontWeight = FontWeight.Bold), maxLines = 1)
-      }
-
-      Button(
-        onClick = { onSearchModeChanged("youtube") },
-        modifier = Modifier.weight(1f).testTag("mode_youtube_button"),
-        colors = ButtonDefaults.buttonColors(
-          containerColor = if (searchMode == "youtube") MaterialTheme.colorScheme.surface else Color.Transparent,
-          contentColor = if (searchMode == "youtube") MaterialTheme.colorScheme.onSurface else MaterialTheme.colorScheme.onSurfaceVariant
-        ),
-        elevation = ButtonDefaults.buttonElevation(defaultElevation = 0.dp),
-        shape = RoundedCornerShape(24.dp)
-      ) {
-        Icon(Icons.Rounded.PlayArrow, contentDescription = null, modifier = Modifier.size(16.dp))
-        Spacer(modifier = Modifier.width(6.dp))
-        Text("YouTube Link", style = MaterialTheme.typography.bodyMedium.copy(fontWeight = FontWeight.Bold), maxLines = 1)
-      }
-    }
+    // Unified Liquid Glass Mode Switcher (ONLY in Search)
+    GlassSegmentedBar(
+      options = listOf(
+        "iTunes 30s" to Icons.Rounded.Search,
+        "YouTube Link" to Icons.Rounded.PlayArrow
+      ),
+      selectedIndex = if (searchMode == "youtube") 1 else 0,
+      darkTheme = darkTheme,
+      onSelect = { idx -> onSearchModeChanged(if (idx == 1) "youtube" else "itunes") },
+      testTags = listOf("mode_search_button", "mode_youtube_button")
+    )
 
     Spacer(modifier = Modifier.height(14.dp))
 
@@ -142,7 +112,6 @@ fun SearchScreen(
       label = "search_mode_content"
     ) { mode ->
       if (mode == "youtube") {
-        // YouTube Link Matcher Card (ONLY in Search)
         LazyColumn(
           modifier = Modifier.fillMaxSize(),
           verticalArrangement = Arrangement.spacedBy(16.dp),
@@ -206,7 +175,7 @@ fun SearchScreen(
                       }
                     },
                     modifier = Modifier.weight(1f).height(46.dp),
-                    shape = RoundedCornerShape(20.dp)
+                    shape = CircleShape
                   ) {
                     Icon(Icons.Rounded.ContentPaste, contentDescription = null, modifier = Modifier.size(16.dp))
                     Spacer(modifier = Modifier.width(6.dp))
@@ -220,7 +189,7 @@ fun SearchScreen(
                     },
                     enabled = !isAnalyzingYoutube,
                     modifier = Modifier.weight(1f).height(46.dp).testTag("analyze_link_button"),
-                    shape = RoundedCornerShape(20.dp),
+                    shape = CircleShape,
                     colors = ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.primary)
                   ) {
                     if (isAnalyzingYoutube) {
@@ -295,7 +264,7 @@ fun SearchScreen(
                     Button(
                       onClick = { onSongClick(analyzedSong, listOf(analyzedSong)) },
                       modifier = Modifier.weight(1f).height(46.dp),
-                      shape = RoundedCornerShape(20.dp)
+                      shape = CircleShape
                     ) {
                       Icon(Icons.Rounded.PlayArrow, contentDescription = null)
                       Spacer(modifier = Modifier.width(4.dp))
@@ -304,7 +273,7 @@ fun SearchScreen(
                     Button(
                       onClick = { onDownloadClick(analyzedSong) },
                       modifier = Modifier.weight(1f).height(46.dp),
-                      shape = RoundedCornerShape(20.dp),
+                      shape = CircleShape,
                       colors = ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.primary)
                     ) {
                       Icon(Icons.Rounded.Download, contentDescription = null)
@@ -318,13 +287,21 @@ fun SearchScreen(
           }
         }
       } else {
-        // Real iTunes Search (30-second Previews)
         Column(modifier = Modifier.fillMaxSize()) {
-          OutlinedTextField(
+          val fieldBg = if (darkTheme) Color(0xFF172034).copy(alpha = 0.72f) else Color.White.copy(alpha = 0.85f)
+          val fieldBorder = if (darkTheme) Color.White.copy(alpha = 0.16f) else Color.White
+
+          TextField(
             value = searchQuery,
             onValueChange = onSearchQueryChanged,
             placeholder = { Text("Search any song or artist (iTunes 30s)") },
-            leadingIcon = { Icon(Icons.Rounded.Search, contentDescription = null) },
+            leadingIcon = {
+              Icon(
+                Icons.Rounded.Search,
+                contentDescription = null,
+                tint = MaterialTheme.colorScheme.primary
+              )
+            },
             trailingIcon = {
               if (searchQuery.isNotEmpty()) {
                 IconButton(onClick = { onSearchQueryChanged("") }) {
@@ -337,8 +314,19 @@ fun SearchScreen(
               keyboardController?.hide()
               if (searchQuery.isNotBlank()) onSearchQueryChanged(searchQuery)
             }),
-            shape = RoundedCornerShape(999.dp),
-            modifier = Modifier.fillMaxWidth().testTag("search_input_field"),
+            colors = TextFieldDefaults.colors(
+              focusedContainerColor = fieldBg,
+              unfocusedContainerColor = fieldBg,
+              focusedIndicatorColor = Color.Transparent,
+              unfocusedIndicatorColor = Color.Transparent,
+              disabledIndicatorColor = Color.Transparent
+            ),
+            shape = CircleShape,
+            modifier = Modifier
+              .fillMaxWidth()
+              .border(1.dp, fieldBorder, CircleShape)
+              .clip(CircleShape)
+              .testTag("search_input_field"),
             singleLine = true
           )
 
@@ -375,28 +363,80 @@ fun SearchScreen(
 
           when {
             isSearching -> {
-              Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
+              Box(modifier = Modifier.fillMaxSize().padding(bottom = 80.dp), contentAlignment = Alignment.Center) {
                 CircularProgressIndicator(color = MaterialTheme.colorScheme.primary)
               }
             }
             !searchError.isNullOrBlank() -> {
-              Box(modifier = Modifier.fillMaxSize().padding(bottom = 80.dp), contentAlignment = Alignment.Center) {
-                Column(horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.spacedBy(10.dp)) {
-                  Text(searchError, color = MaterialTheme.colorScheme.onSurfaceVariant)
-                  OutlinedButton(onClick = { onSearchQueryChanged(searchQuery) }) {
-                    Text("Try Again")
+              Box(modifier = Modifier.fillMaxSize().padding(bottom = 110.dp), contentAlignment = Alignment.Center) {
+                GlassCard(darkTheme = darkTheme, cornerRadius = 24.dp, modifier = Modifier.fillMaxWidth()) {
+                  Column(
+                    modifier = Modifier.fillMaxWidth().padding(22.dp),
+                    horizontalAlignment = Alignment.CenterHorizontally,
+                    verticalArrangement = Arrangement.spacedBy(10.dp)
+                  ) {
+                    Text(searchError, color = MaterialTheme.colorScheme.onSurfaceVariant, textAlign = TextAlign.Center)
+                    OutlinedButton(onClick = { onSearchQueryChanged(searchQuery) }, shape = CircleShape) {
+                      Text("Try Again")
+                    }
                   }
                 }
               }
             }
             searchResults.isEmpty() && searchQuery.isNotBlank() -> {
-              Box(modifier = Modifier.fillMaxSize().padding(bottom = 80.dp), contentAlignment = Alignment.Center) {
-                Text("No 30s iTunes previews found. Try another title or artist.", color = MaterialTheme.colorScheme.onSurfaceVariant)
+              Box(modifier = Modifier.fillMaxSize().padding(bottom = 110.dp), contentAlignment = Alignment.Center) {
+                GlassCard(darkTheme = darkTheme, cornerRadius = 24.dp, modifier = Modifier.fillMaxWidth()) {
+                  Column(
+                    modifier = Modifier.fillMaxWidth().padding(24.dp),
+                    horizontalAlignment = Alignment.CenterHorizontally,
+                    verticalArrangement = Arrangement.spacedBy(8.dp)
+                  ) {
+                    Icon(Icons.Rounded.SearchOff, contentDescription = null, tint = MaterialTheme.colorScheme.primary, modifier = Modifier.size(30.dp))
+                    Text(
+                      text = "No 30s iTunes previews found",
+                      style = MaterialTheme.typography.titleSmall.copy(fontWeight = FontWeight.Bold),
+                      color = MaterialTheme.colorScheme.onSurface
+                    )
+                    Text(
+                      text = "Try searching another track title or artist name.",
+                      style = MaterialTheme.typography.bodySmall,
+                      color = MaterialTheme.colorScheme.onSurfaceVariant,
+                      textAlign = TextAlign.Center
+                    )
+                  }
+                }
               }
             }
             searchResults.isEmpty() -> {
-              Box(modifier = Modifier.fillMaxSize().padding(bottom = 80.dp), contentAlignment = Alignment.Center) {
-                Text("Search iTunes for 30-second song previews.", color = MaterialTheme.colorScheme.onSurfaceVariant)
+              Box(modifier = Modifier.fillMaxSize().padding(bottom = 110.dp), contentAlignment = Alignment.Center) {
+                GlassCard(darkTheme = darkTheme, cornerRadius = 24.dp, modifier = Modifier.fillMaxWidth()) {
+                  Column(
+                    modifier = Modifier.fillMaxWidth().padding(24.dp),
+                    horizontalAlignment = Alignment.CenterHorizontally,
+                    verticalArrangement = Arrangement.spacedBy(8.dp)
+                  ) {
+                    Box(
+                      modifier = Modifier
+                        .size(52.dp)
+                        .clip(CircleShape)
+                        .background(MaterialTheme.colorScheme.primary.copy(alpha = 0.14f)),
+                      contentAlignment = Alignment.Center
+                    ) {
+                      Icon(Icons.Rounded.MusicNote, contentDescription = null, tint = MaterialTheme.colorScheme.primary, modifier = Modifier.size(26.dp))
+                    }
+                    Text(
+                      text = "iTunes 30s Music Search",
+                      style = MaterialTheme.typography.titleMedium.copy(fontWeight = FontWeight.Bold),
+                      color = MaterialTheme.colorScheme.onSurface
+                    )
+                    Text(
+                      text = "Type a song or artist above, or pick a quick genre tag.",
+                      style = MaterialTheme.typography.bodySmall,
+                      color = MaterialTheme.colorScheme.onSurfaceVariant,
+                      textAlign = TextAlign.Center
+                    )
+                  }
+                }
               }
             }
             else -> {

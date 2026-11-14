@@ -10,62 +10,54 @@ import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.rounded.*
+import androidx.compose.material.icons.rounded.FavoriteBorder
+import androidx.compose.material.icons.rounded.FolderOpen
+import androidx.compose.material.icons.rounded.Refresh
+import androidx.compose.material.icons.rounded.Search
 import androidx.compose.material3.*
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
-import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.example.model.Song
+import com.example.ui.theme.HeartRed
 
 @Composable
 fun HomeScreen(
   featuredTracks: List<Song>,
   isLoadingFeatured: Boolean,
   featuredError: String?,
+  favoritesCount: Int,
+  localSongsCount: Int,
   recentlyPlayed: List<Song>,
   currentSong: Song?,
   isPlaying: Boolean,
   darkTheme: Boolean,
   reducedMotion: Boolean,
-  songDownloadProgress: Map<String, Float>,
-  downloadedSongIds: Set<String>,
   onRetryFeatured: () -> Unit,
-  onOpenSearch: (String?) -> Unit,
-  onOpenLibrary: () -> Unit,
-  onOpenNowPlaying: () -> Unit,
-  onPlayPauseClick: () -> Unit,
+  onOpenSearch: () -> Unit,
+  onOpenLibraryTab: (Int) -> Unit,
   onSongClick: (Song, List<Song>) -> Unit,
-  onFavoriteClick: (Song) -> Unit,
-  onDownloadClick: (Song) -> Unit
+  onFavoriteClick: (Song) -> Unit
 ) {
-  val genres = listOf(
-    "Top Hits" to "top hits 2026",
-    "Khmer" to "khmer song",
-    "Pop" to "pop hits",
-    "R&B" to "r&b soul",
-    "Lo-Fi" to "lofi beats",
-    "Electronic" to "electronic dance"
-  )
-
   LazyColumn(
     modifier = Modifier
       .fillMaxSize()
-      .padding(horizontal = 16.dp),
-    verticalArrangement = Arrangement.spacedBy(18.dp),
+      .padding(horizontal = 20.dp),
+    verticalArrangement = Arrangement.spacedBy(20.dp),
     contentPadding = PaddingValues(
-      top = WindowInsets.statusBars.asPaddingValues().calculateTopPadding() + 14.dp,
+      top = WindowInsets.statusBars.asPaddingValues().calculateTopPadding() + 16.dp,
       bottom = if (currentSong != null) 195.dp else 125.dp
     )
   ) {
-    // Clean Brand Header
+    // Minimal Brand Header
     item {
       Row(
         modifier = Modifier.fillMaxWidth(),
@@ -73,12 +65,12 @@ fun HomeScreen(
         verticalAlignment = Alignment.CenterVertically
       ) {
         Row(
-          modifier = Modifier.weight(1f).padding(end = 8.dp),
+          modifier = Modifier.weight(1f).padding(end = 12.dp),
           verticalAlignment = Alignment.CenterVertically,
           horizontalArrangement = Arrangement.spacedBy(12.dp)
         ) {
           AurixBrandLogo(
-            size = 42.dp,
+            size = 40.dp,
             cornerRadius = 13.dp,
             animated = true,
             reducedMotion = reducedMotion
@@ -96,7 +88,7 @@ fun HomeScreen(
               overflow = TextOverflow.Ellipsis
             )
             Text(
-              text = "iTunes 30s Previews & Library",
+              text = "Library & Featured",
               style = MaterialTheme.typography.bodySmall,
               color = MaterialTheme.colorScheme.onSurfaceVariant,
               maxLines = 1,
@@ -105,264 +97,74 @@ fun HomeScreen(
           }
         }
 
-        val pillBg = if (darkTheme) Color.White.copy(alpha = 0.10f) else Color.White.copy(alpha = 0.85f)
-        val pillBorder = if (darkTheme) Color.White.copy(alpha = 0.18f) else Color.White
-        Row(
+        val iconBg = if (darkTheme) Color.White.copy(alpha = 0.10f) else Color.White.copy(alpha = 0.85f)
+        val iconBorder = if (darkTheme) Color.White.copy(alpha = 0.18f) else Color.White
+        IconButton(
+          onClick = onOpenSearch,
           modifier = Modifier
+            .minimumInteractiveComponentSize()
+            .size(44.dp)
             .clip(CircleShape)
-            .background(pillBg)
-            .border(1.dp, pillBorder, CircleShape)
-            .clickable { onOpenSearch(null) }
-            .padding(horizontal = 14.dp, vertical = 9.dp)
-            .testTag("home_open_search_button"),
-          verticalAlignment = Alignment.CenterVertically,
-          horizontalArrangement = Arrangement.spacedBy(6.dp)
+            .background(iconBg)
+            .border(1.dp, iconBorder, CircleShape)
+            .testTag("home_open_search_button")
         ) {
           Icon(
             imageVector = Icons.Rounded.Search,
-            contentDescription = "Search iTunes 30s",
-            tint = MaterialTheme.colorScheme.primary,
-            modifier = Modifier.size(17.dp)
-          )
-          Text(
-            text = "Search",
-            style = MaterialTheme.typography.bodySmall.copy(fontWeight = FontWeight.SemiBold),
-            color = MaterialTheme.colorScheme.onSurface
+            contentDescription = "Search iTunes",
+            tint = MaterialTheme.colorScheme.onSurface,
+            modifier = Modifier.size(20.dp)
           )
         }
       }
     }
 
-    // Clean Hero Card (Currently Playing OR Discovery Launch Card)
+    // Minimal Library Shortcuts (Local Songs & Favorites)
     item {
-      GlassCard(
-        darkTheme = darkTheme,
-        cornerRadius = 26.dp,
-        modifier = Modifier.fillMaxWidth()
+      Row(
+        modifier = Modifier.fillMaxWidth(),
+        horizontalArrangement = Arrangement.spacedBy(12.dp)
       ) {
-        if (currentSong != null) {
-          Column(
-            modifier = Modifier.padding(18.dp),
-            verticalArrangement = Arrangement.spacedBy(14.dp)
-          ) {
-            Row(
-              modifier = Modifier
-                .fillMaxWidth()
-                .clip(RoundedCornerShape(18.dp))
-                .clickable { onOpenNowPlaying() },
-              verticalAlignment = Alignment.CenterVertically
-            ) {
-              SongArtwork(
-                song = currentSong,
-                modifier = Modifier.size(72.dp),
-                cornerRadius = 18.dp,
-                iconSize = 30.dp
-              )
-              Spacer(modifier = Modifier.width(14.dp))
-              Column(modifier = Modifier.weight(1f)) {
-                Row(
-                  verticalAlignment = Alignment.CenterVertically,
-                  horizontalArrangement = Arrangement.spacedBy(6.dp)
-                ) {
-                  EqualizerBars(
-                    isPlaying = isPlaying,
-                    color = MaterialTheme.colorScheme.primary,
-                    reducedMotion = reducedMotion,
-                    maxHeight = 12.dp
-                  )
-                  Text(
-                    text = if (isPlaying) "NOW PLAYING" else "PAUSED",
-                    style = MaterialTheme.typography.labelSmall.copy(
-                      fontWeight = FontWeight.Bold,
-                      letterSpacing = 0.8.sp
-                    ),
-                    color = MaterialTheme.colorScheme.primary
-                  )
-                  if (currentSong.source == "iTunes 30s") {
-                    Text(
-                      text = "· 30s",
-                      style = MaterialTheme.typography.labelSmall.copy(fontWeight = FontWeight.SemiBold),
-                      color = MaterialTheme.colorScheme.onSurfaceVariant
-                    )
-                  }
-                }
-                Spacer(modifier = Modifier.height(4.dp))
-                Text(
-                  text = currentSong.title,
-                  style = MaterialTheme.typography.titleMedium.copy(fontWeight = FontWeight.Bold),
-                  color = MaterialTheme.colorScheme.onSurface,
-                  maxLines = 1,
-                  overflow = TextOverflow.Ellipsis
-                )
-                Text(
-                  text = currentSong.artist,
-                  style = MaterialTheme.typography.bodySmall,
-                  color = MaterialTheme.colorScheme.onSurfaceVariant,
-                  maxLines = 1,
-                  overflow = TextOverflow.Ellipsis
-                )
-              }
-            }
-
-            Row(
-              modifier = Modifier.fillMaxWidth(),
-              horizontalArrangement = Arrangement.spacedBy(10.dp)
-            ) {
-              Button(
-                onClick = onPlayPauseClick,
-                modifier = Modifier.weight(1f).height(44.dp),
-                shape = RoundedCornerShape(16.dp),
-                colors = ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.primary)
-              ) {
-                Icon(
-                  imageVector = if (isPlaying) Icons.Rounded.Pause else Icons.Rounded.PlayArrow,
-                  contentDescription = null,
-                  modifier = Modifier.size(18.dp)
-                )
-                Spacer(modifier = Modifier.width(6.dp))
-                Text(
-                  text = if (isPlaying) "Pause" else "Resume",
-                  style = MaterialTheme.typography.bodySmall.copy(fontWeight = FontWeight.Bold)
-                )
-              }
-              OutlinedButton(
-                onClick = { onFavoriteClick(currentSong) },
-                modifier = Modifier.weight(1f).height(44.dp),
-                shape = RoundedCornerShape(16.dp)
-              ) {
-                Icon(
-                  imageVector = if (currentSong.isFavorite) Icons.Rounded.Favorite else Icons.Rounded.FavoriteBorder,
-                  contentDescription = null,
-                  tint = if (currentSong.isFavorite) MaterialTheme.colorScheme.error else MaterialTheme.colorScheme.onSurface,
-                  modifier = Modifier.size(17.dp)
-                )
-                Spacer(modifier = Modifier.width(6.dp))
-                Text(
-                  text = if (currentSong.isFavorite) "Saved" else "Favorite",
-                  style = MaterialTheme.typography.bodySmall.copy(fontWeight = FontWeight.SemiBold),
-                  color = MaterialTheme.colorScheme.onSurface
-                )
-              }
-            }
-          }
-        } else {
-          Column(
-            modifier = Modifier.padding(20.dp),
-            verticalArrangement = Arrangement.spacedBy(12.dp)
-          ) {
-            Row(
-              verticalAlignment = Alignment.CenterVertically,
-              horizontalArrangement = Arrangement.spacedBy(10.dp)
-            ) {
-              Box(
-                modifier = Modifier
-                  .size(40.dp)
-                  .clip(RoundedCornerShape(12.dp))
-                  .background(
-                    Brush.linearGradient(
-                      colors = listOf(
-                        MaterialTheme.colorScheme.primary,
-                        MaterialTheme.colorScheme.primary.copy(alpha = 0.65f)
-                      )
-                    )
-                  ),
-                contentAlignment = Alignment.Center
-              ) {
-                Icon(
-                  imageVector = Icons.Rounded.MusicNote,
-                  contentDescription = null,
-                  tint = Color.White,
-                  modifier = Modifier.size(22.dp)
-                )
-              }
-              Column(modifier = Modifier.weight(1f)) {
-                Text(
-                  text = "Discover 30s Music Previews",
-                  style = MaterialTheme.typography.titleMedium.copy(fontWeight = FontWeight.Bold),
-                  color = MaterialTheme.colorScheme.onSurface
-                )
-                Text(
-                  text = "Search iTunes tracks or play audio from your device",
-                  style = MaterialTheme.typography.bodySmall,
-                  color = MaterialTheme.colorScheme.onSurfaceVariant
-                )
-              }
-            }
-
-            Row(
-              modifier = Modifier.fillMaxWidth(),
-              horizontalArrangement = Arrangement.spacedBy(10.dp)
-            ) {
-              Button(
-                onClick = { onOpenSearch(null) },
-                modifier = Modifier.weight(1f).height(44.dp),
-                shape = RoundedCornerShape(16.dp),
-                colors = ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.primary)
-              ) {
-                Icon(Icons.Rounded.Search, contentDescription = null, modifier = Modifier.size(17.dp))
-                Spacer(modifier = Modifier.width(6.dp))
-                Text("Search iTunes", style = MaterialTheme.typography.bodySmall.copy(fontWeight = FontWeight.Bold))
-              }
-              OutlinedButton(
-                onClick = onOpenLibrary,
-                modifier = Modifier.weight(1f).height(44.dp),
-                shape = RoundedCornerShape(16.dp)
-              ) {
-                Icon(Icons.Rounded.FolderOpen, contentDescription = null, modifier = Modifier.size(17.dp))
-                Spacer(modifier = Modifier.width(6.dp))
-                Text("My Library", style = MaterialTheme.typography.bodySmall.copy(fontWeight = FontWeight.SemiBold))
-              }
-            }
-          }
-        }
-      }
-    }
-
-    // Quick Genre Pills (jumps straight to Search -> iTunes 30s)
-    item {
-      Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
-        Text(
-          text = "Browse iTunes 30s",
-          style = MaterialTheme.typography.titleMedium.copy(fontWeight = FontWeight.Bold),
-          color = MaterialTheme.colorScheme.onBackground
+        HomeLibraryTile(
+          title = "My Songs",
+          subtitle = if (localSongsCount == 1) "1 track" else "$localSongsCount tracks",
+          icon = Icons.Rounded.FolderOpen,
+          iconTint = MaterialTheme.colorScheme.primary,
+          darkTheme = darkTheme,
+          modifier = Modifier.weight(1f).testTag("home_library_local_tile"),
+          onClick = { onOpenLibraryTab(0) }
         )
-        Row(
-          modifier = Modifier
-            .fillMaxWidth()
-            .horizontalScroll(rememberScrollState()),
-          horizontalArrangement = Arrangement.spacedBy(8.dp)
-        ) {
-          genres.forEach { (label, query) ->
-            val chipBg = if (darkTheme) Color.White.copy(alpha = 0.09f) else Color.White.copy(alpha = 0.85f)
-            val chipBorder = if (darkTheme) Color.White.copy(alpha = 0.16f) else Color.White
-            Box(
-              modifier = Modifier
-                .clip(CircleShape)
-                .background(chipBg)
-                .border(1.dp, chipBorder, CircleShape)
-                .clickable { onOpenSearch(query) }
-                .padding(horizontal = 16.dp, vertical = 10.dp)
-            ) {
-              Text(
-                text = label,
-                style = MaterialTheme.typography.bodySmall.copy(fontWeight = FontWeight.SemiBold),
-                color = MaterialTheme.colorScheme.onSurface
-              )
-            }
-          }
-        }
+        HomeLibraryTile(
+          title = "Favorites",
+          subtitle = if (favoritesCount == 1) "1 saved" else "$favoritesCount saved",
+          icon = Icons.Rounded.FavoriteBorder,
+          iconTint = HeartRed,
+          darkTheme = darkTheme,
+          modifier = Modifier.weight(1f).testTag("home_library_favorites_tile"),
+          onClick = { onOpenLibraryTab(1) }
+        )
       }
     }
 
-    // User's Real Recently Played Shelf (only shown when non-empty)
+    // Recently Played Shelf (shown only when user has listening history)
     if (recentlyPlayed.isNotEmpty()) {
       item {
         Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
-          Text(
-            text = "Recently Played",
-            style = MaterialTheme.typography.titleMedium.copy(fontWeight = FontWeight.Bold),
-            color = MaterialTheme.colorScheme.onBackground
-          )
+          Row(
+            modifier = Modifier.fillMaxWidth(),
+            horizontalArrangement = Arrangement.SpaceBetween,
+            verticalAlignment = Alignment.CenterVertically
+          ) {
+            Text(
+              text = "Recent",
+              style = MaterialTheme.typography.titleMedium.copy(fontWeight = FontWeight.Bold),
+              color = MaterialTheme.colorScheme.onBackground
+            )
+            TextButton(onClick = { onOpenLibraryTab(2) }) {
+              Text("See all", color = MaterialTheme.colorScheme.primary)
+            }
+          }
+
           Row(
             modifier = Modifier
               .fillMaxWidth()
@@ -372,7 +174,7 @@ fun HomeScreen(
             recentlyPlayed.take(6).forEach { recent ->
               GlassCard(
                 darkTheme = darkTheme,
-                cornerRadius = 18.dp,
+                cornerRadius = 20.dp,
                 modifier = Modifier
                   .width(136.dp)
                   .clickable { onSongClick(recent, recentlyPlayed) }
@@ -380,14 +182,14 @@ fun HomeScreen(
                 Column(modifier = Modifier.padding(10.dp)) {
                   SongArtwork(
                     song = recent,
-                    modifier = Modifier.fillMaxWidth().height(112.dp),
-                    cornerRadius = 12.dp,
-                    iconSize = 28.dp
+                    modifier = Modifier.fillMaxWidth().height(110.dp),
+                    cornerRadius = 14.dp,
+                    iconSize = 26.dp
                   )
                   Spacer(modifier = Modifier.height(8.dp))
                   Text(
                     text = recent.title,
-                    style = MaterialTheme.typography.bodySmall.copy(fontWeight = FontWeight.Bold),
+                    style = MaterialTheme.typography.bodySmall.copy(fontWeight = FontWeight.SemiBold),
                     color = MaterialTheme.colorScheme.onSurface,
                     maxLines = 1,
                     overflow = TextOverflow.Ellipsis
@@ -407,7 +209,7 @@ fun HomeScreen(
       }
     }
 
-    // Live iTunes 30s Previews Header
+    // Featured Section inside a cohesive Liquid Glass Card (Real iTunes 30s Previews, zero demo tracks)
     item {
       Row(
         modifier = Modifier.fillMaxWidth(),
@@ -415,71 +217,148 @@ fun HomeScreen(
         verticalAlignment = Alignment.CenterVertically
       ) {
         Text(
-          text = "Featured 30s Previews",
+          text = "Featured",
           style = MaterialTheme.typography.titleMedium.copy(fontWeight = FontWeight.Bold),
           color = MaterialTheme.colorScheme.onBackground
         )
-        TextButton(onClick = { onOpenSearch(null) }) {
-          Text("Search All", color = MaterialTheme.colorScheme.primary)
+        TextButton(onClick = onOpenSearch) {
+          Text("Search", color = MaterialTheme.colorScheme.primary)
         }
       }
     }
 
-    if (isLoadingFeatured && featuredTracks.isEmpty()) {
-      item {
-        Box(
-          modifier = Modifier
-            .fillMaxWidth()
-            .padding(vertical = 28.dp),
-          contentAlignment = Alignment.Center
-        ) {
-          CircularProgressIndicator(color = MaterialTheme.colorScheme.primary)
-        }
-      }
-    } else if (featuredTracks.isEmpty()) {
-      item {
-        GlassCard(
-          darkTheme = darkTheme,
-          cornerRadius = 22.dp,
-          modifier = Modifier.fillMaxWidth()
-        ) {
-          Column(
-            modifier = Modifier.padding(18.dp),
-            horizontalAlignment = Alignment.CenterHorizontally,
-            verticalArrangement = Arrangement.spacedBy(10.dp)
+    when {
+      isLoadingFeatured && featuredTracks.isEmpty() -> {
+        item {
+          GlassCard(
+            darkTheme = darkTheme,
+            cornerRadius = 24.dp,
+            modifier = Modifier.fillMaxWidth()
           ) {
-            Text(
-              text = featuredError ?: "No previews loaded yet.",
-              style = MaterialTheme.typography.bodyMedium,
-              color = MaterialTheme.colorScheme.onSurfaceVariant
-            )
-            OutlinedButton(
-              onClick = onRetryFeatured,
-              shape = RoundedCornerShape(16.dp)
+            Box(
+              modifier = Modifier
+                .fillMaxWidth()
+                .padding(vertical = 34.dp),
+              contentAlignment = Alignment.Center
             ) {
-              Icon(Icons.Rounded.Refresh, contentDescription = null, modifier = Modifier.size(16.dp))
-              Spacer(modifier = Modifier.width(6.dp))
-              Text("Retry iTunes")
+              CircularProgressIndicator(color = MaterialTheme.colorScheme.primary)
             }
           }
         }
       }
-    } else {
-      featuredTracks.forEachIndexed { index, song ->
-        item(key = song.id) {
-          SongDownloadRow(
-            song = song,
-            index = index + 1,
-            isPlaying = isPlaying,
-            isCurrent = currentSong?.id == song.id,
-            reducedMotion = reducedMotion,
-            downloadProgress = songDownloadProgress[song.id],
-            isDownloaded = song.id in downloadedSongIds,
-            onSongClick = { onSongClick(song, featuredTracks) },
-            onFavoriteClick = { onFavoriteClick(song) },
-            onDownloadClick = { onDownloadClick(song) }
-          )
+      featuredTracks.isEmpty() -> {
+        item {
+          GlassCard(
+            darkTheme = darkTheme,
+            cornerRadius = 24.dp,
+            modifier = Modifier.fillMaxWidth()
+          ) {
+            Column(
+              modifier = Modifier.fillMaxWidth().padding(22.dp),
+              horizontalAlignment = Alignment.CenterHorizontally,
+              verticalArrangement = Arrangement.spacedBy(10.dp)
+            ) {
+              Text(
+                text = featuredError ?: "No featured tracks available right now.",
+                style = MaterialTheme.typography.bodyMedium,
+                color = MaterialTheme.colorScheme.onSurfaceVariant
+              )
+              OutlinedButton(
+                onClick = onRetryFeatured,
+                shape = CircleShape
+              ) {
+                Icon(Icons.Rounded.Refresh, contentDescription = null, modifier = Modifier.size(16.dp))
+                Spacer(modifier = Modifier.width(6.dp))
+                Text("Retry")
+              }
+            }
+          }
         }
+      }
+      else -> {
+        item {
+          val displayed = featuredTracks.take(10)
+          GlassCard(
+            darkTheme = darkTheme,
+            cornerRadius = 26.dp,
+            modifier = Modifier.fillMaxWidth()
+          ) {
+            Column(modifier = Modifier.padding(horizontal = 8.dp, vertical = 8.dp)) {
+              displayed.forEachIndexed { idx, song ->
+                SongRow(
+                  song = song,
+                  isPlaying = isPlaying,
+                  isCurrent = currentSong?.id == song.id,
+                  reducedMotion = reducedMotion,
+                  onSongClick = { onSongClick(song, featuredTracks) },
+                  onFavoriteClick = { onFavoriteClick(song) }
+                )
+                if (idx < displayed.lastIndex) {
+                  HorizontalDivider(
+                    modifier = Modifier.padding(horizontal = 12.dp),
+                    color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.06f)
+                  )
+                }
+              }
+            }
+          }
+        }
+      }
+    }
+  }
+}
+
+@Composable
+private fun HomeLibraryTile(
+  title: String,
+  subtitle: String,
+  icon: ImageVector,
+  iconTint: Color,
+  darkTheme: Boolean,
+  modifier: Modifier = Modifier,
+  onClick: () -> Unit
+) {
+  GlassCard(
+    darkTheme = darkTheme,
+    cornerRadius = 22.dp,
+    modifier = modifier.clickable { onClick() }
+  ) {
+    Row(
+      modifier = Modifier
+        .fillMaxWidth()
+        .padding(horizontal = 14.dp, vertical = 14.dp),
+      verticalAlignment = Alignment.CenterVertically,
+      horizontalArrangement = Arrangement.spacedBy(10.dp)
+    ) {
+      Box(
+        modifier = Modifier
+          .size(38.dp)
+          .clip(RoundedCornerShape(12.dp))
+          .background(iconTint.copy(alpha = 0.15f)),
+        contentAlignment = Alignment.Center
+      ) {
+        Icon(
+          imageVector = icon,
+          contentDescription = null,
+          tint = iconTint,
+          modifier = Modifier.size(19.dp)
+        )
+      }
+      Column(modifier = Modifier.weight(1f)) {
+        Text(
+          text = title,
+          style = MaterialTheme.typography.bodyMedium.copy(fontWeight = FontWeight.SemiBold),
+          color = MaterialTheme.colorScheme.onSurface,
+          maxLines = 1,
+          overflow = TextOverflow.Ellipsis
+        )
+        Text(
+          text = subtitle,
+          style = MaterialTheme.typography.bodySmall,
+          color = MaterialTheme.colorScheme.onSurfaceVariant,
+          maxLines = 1,
+          overflow = TextOverflow.Ellipsis
+        )
       }
     }
   }
