@@ -2,13 +2,16 @@ name: Build and Release APK
 
 on:
   push:
+    branches:
+      - main
+      - master
     tags:
       - 'v*'
   workflow_dispatch:
     inputs:
       tag:
         description: 'Release tag (e.g. v1.2.6)'
-        required: true
+        required: false
         default: 'v1.2.6'
 
 permissions:
@@ -33,6 +36,24 @@ jobs:
         with:
           gradle-version: '9.3.1'
 
+      - name: Accept Android SDK licenses
+        run: |
+          if [ -x "$ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager" ]; then
+            yes | "$ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager" --licenses > /dev/null 2>&1 || true
+          fi
+
+      - name: Determine release tag
+        run: |
+          if [ "${{ github.event_name }}" = "workflow_dispatch" ] && [ -n "${{ github.event.inputs.tag }}" ]; then
+            RELEASE_TAG="${{ github.event.inputs.tag }}"
+          elif [ "${{ github.ref_type }}" = "tag" ]; then
+            RELEASE_TAG="${{ github.ref_name }}"
+          else
+            VERSION=$(grep -m1 'versionName' app/build.gradle.kts | sed -E 's/.*"([^"]+)".*/\1/')
+            RELEASE_TAG="v${VERSION:-1.2.6}"
+          fi
+          echo "RELEASE_TAG=${RELEASE_TAG}" >> "$GITHUB_ENV"
+
       - name: Ensure release keystore exists
         run: |
           if [ ! -f my-upload-key.jks ]; then
@@ -46,21 +67,25 @@ jobs:
           KEY_PASSWORD: android
 
       - name: Prepare versioned APK
-        env:
-          RELEASE_TAG: ${{ github.event.inputs.tag || github.ref_name || 'v1.2.6' }}
         run: cp app/build/outputs/apk/release/app-release.apk "AURIX-${RELEASE_TAG}.apk"
 
-      - name: Upload Release APK
+      - name: Upload APK Artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: AURIX-${{ env.RELEASE_TAG }}-apk
+          path: AURIX-${{ env.RELEASE_TAG }}.apk
+
+      - name: Create GitHub Release
         uses: softprops/action-gh-release@v2
         with:
-          tag_name: ${{ github.event.inputs.tag || github.ref_name || 'v1.2.6' }}
-          name: AURIX ${{ github.event.inputs.tag || github.ref_name || 'v1.2.6' }}
+          tag_name: ${{ env.RELEASE_TAG }}
+          name: AURIX ${{ env.RELEASE_TAG }}
           body: |
-            What's New in AURIX v1.2.6:
+            What's New in AURIX ${{ env.RELEASE_TAG }}:
             - Added semantic version comparison in GitHub OTA updater with release notes preview
             - Synced version v1.2.6 (versionCode 10206) and default repository MEYYYNASH/AURIX
           files: |
             app/build/outputs/apk/release/app-release.apk
-            AURIX-*.apk
+            AURIX-${{ env.RELEASE_TAG }}.apk
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
