@@ -543,6 +543,7 @@ fun NowPlayingSheet(
       lyricsResult = lyricsResult,
       currentPositionMs = positionProvider(),
       lyricOffsetMs = lyricOffsetMs,
+      reducedMotion = reducedMotion,
       onDismiss = { showShareLyrics = false }
     )
   }

@@ -3,6 +3,11 @@ package com.example.ui.screens
 import android.graphics.Bitmap
 import android.widget.Toast
 import androidx.compose.animation.AnimatedVisibility
+import androidx.compose.animation.core.FastOutSlowInEasing
+import androidx.compose.animation.core.animateDpAsState
+import androidx.compose.animation.core.animateFloatAsState
+import androidx.compose.animation.core.snap
+import androidx.compose.animation.core.tween
 import androidx.compose.animation.expandVertically
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
@@ -11,6 +16,7 @@ import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.itemsIndexed
@@ -35,7 +41,10 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.graphicsLayer
+import androidx.compose.ui.hapticfeedback.HapticFeedbackType
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.platform.LocalHapticFeedback
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
@@ -52,9 +61,12 @@ import com.example.model.Song
 import com.example.share.ShareCardData
 import com.example.share.ShareCardExporter
 import com.example.share.ShareCardMode
+import com.example.share.ShareCardRenderer
 import com.example.share.ShareGradientTheme
 import com.example.share.ShareLyricsCard
 import com.example.share.SharePaletteExtractor
+import com.example.share.SharePaletteSwatches
+import com.example.share.ShareThemeStyle
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
@@ -74,20 +86,34 @@ fun ShareLyricsSheet(
   lyricsResult: LyricsResult?,
   currentPositionMs: Long,
   lyricOffsetMs: Long = 0L,
+  reducedMotion: Boolean = false,
   onDismiss: () -> Unit
 ) {
   val context = LocalContext.current
+  val haptics = LocalHapticFeedback.current
   val coroutineScope = rememberCoroutineScope()
   val accentColor = MaterialTheme.colorScheme.primary
   val sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true)
 
-  // Parse lyric lines from rawLrc, synced lines, or plain text
+  // 250ms slide-up + fade entrance animation
+  var appeared by remember { mutableStateOf(false) }
+  LaunchedEffect(Unit) { appeared = true }
+  val enterAlpha by animateFloatAsState(
+    targetValue = if (appeared) 1f else 0f,
+    animationSpec = if (reducedMotion) snap() else tween(250, easing = FastOutSlowInEasing),
+    label = "sheet_enter_alpha"
+  )
+  val enterSlidePx by animateFloatAsState(
+    targetValue = if (appeared) 0f else 48f,
+    animationSpec = if (reducedMotion) snap() else tween(250, easing = FastOutSlowInEasing),
+    label = "sheet_enter_slide"
+  )
+
   val parsedLyrics = remember(lyricsResult) {
     extractShareableLyricLines(lyricsResult)
   }
   val hasLyrics = parsedLyrics.isNotEmpty()
 
-  // Compute initial active line + next line whenever the sheet opens
   val initialSelection = remember(parsedLyrics) {
     computeInitialLineSelection(
       lines = parsedLyrics,
@@ -103,43 +129,59 @@ fun ShareLyricsSheet(
   }
   var isEditingLyrics by remember { mutableStateOf(false) }
 
-  // Load album art bitmap (if available) and extract 4 Palette-driven gradient themes off main thread
+  // Load album art + blurred 1.3x saturated art + Palette swatches/themes off main thread
   var artworkBitmap by remember(song.id, song.artworkUrl) { mutableStateOf<Bitmap?>(null) }
+  var blurredArtworkBitmap by remember(song.id, song.artworkUrl) { mutableStateOf<Bitmap?>(null) }
   val (fallbackC1, fallbackC2) = remember(song.title) { artworkHueColors(song.title) }
+
+  var swatches by remember(song.id, accentColor) {
+    mutableStateOf(
+      SharePaletteSwatches(
+        vibrant = accentColor,
+        muted = fallbackC1,
+        darkVibrant = fallbackC2,
+        dominant = accentColor
+      )
+    )
+  }
   var gradientThemes by remember(song.id, accentColor) {
     mutableStateOf(
       listOf(
         ShareGradientTheme(
-          id = "album_palette",
-          name = "Album",
-          startColor = fallbackC1,
-          midColor = fallbackC2,
-          endColor = Color(0xFF0A0D18),
-          accentGlowColor = accentColor
+          id = "art",
+          style = ShareThemeStyle.ART,
+          name = "Art",
+          swatchPrimary = accentColor,
+          swatchSecondary = fallbackC1,
+          swatchTertiary = fallbackC2,
+          showBlurredArtwork = true
         ),
         ShareGradientTheme(
-          id = "midnight_blue",
-          name = "Midnight",
-          startColor = Color(0xFF1D4ED8),
-          midColor = Color(0xFF1E1B4B),
-          endColor = Color(0xFF090D1A),
-          accentGlowColor = Color(0xFF38BDF8)
+          id = "vibrant",
+          style = ShareThemeStyle.VIBRANT,
+          name = "Vibrant",
+          swatchPrimary = accentColor,
+          swatchSecondary = fallbackC1,
+          swatchTertiary = fallbackC2,
+          showBlurredArtwork = false
         ),
         ShareGradientTheme(
-          id = "crimson_rose",
-          name = "Sunset",
-          startColor = Color(0xFFBE185D),
-          midColor = Color(0xFF4C0519),
-          endColor = Color(0xFF130712),
-          accentGlowColor = Color(0xFFFB7185)
+          id = "dark",
+          style = ShareThemeStyle.DARK,
+          name = "Dark",
+          swatchPrimary = fallbackC2,
+          swatchSecondary = Color(0xFF0B0E17),
+          swatchTertiary = Color(0xFF05070C),
+          showBlurredArtwork = false
         ),
         ShareGradientTheme(
-          id = "emerald_teal",
-          name = "Emerald",
-          startColor = Color(0xFF0F766E),
-          midColor = Color(0xFF064E3B),
-          endColor = Color(0xFF071717),
-          accentGlowColor = Color(0xFF2DD4BF)
+          id = "mono",
+          style = ShareThemeStyle.MONO,
+          name = "Mono",
+          swatchPrimary = Color(0xFF2B2E36),
+          swatchSecondary = Color(0xFF14161B),
+          swatchTertiary = Color(0xFF060709),
+          showBlurredArtwork = false
         )
       )
     )
@@ -166,14 +208,16 @@ fun ShareLyricsSheet(
       }
     }
     artworkBitmap = loadedBitmap
-    gradientThemes = SharePaletteExtractor.buildThemes(
+    blurredArtworkBitmap = SharePaletteExtractor.createBlurredSaturatedArtwork(loadedBitmap)
+    val (extractedSwatches, extractedThemes) = SharePaletteExtractor.extractSwatchesAndThemes(
       bitmap = loadedBitmap,
       fallbackTitle = song.title,
       accentColor = accentColor
     )
+    swatches = extractedSwatches
+    gradientThemes = extractedThemes
   }
 
-  // Always order selected lines in song order regardless of tap order
   val orderedSelectedLines = remember(selectedIndices, parsedLyrics) {
     selectedIndices
       .sorted()
@@ -185,18 +229,22 @@ fun ShareLyricsSheet(
     song.title,
     song.artist,
     artworkBitmap,
+    blurredArtworkBitmap,
     orderedSelectedLines,
     cardMode,
-    activeTheme
+    activeTheme,
+    swatches
   ) {
     ShareCardData(
       title = song.title,
       artist = song.artist,
       artworkBitmap = artworkBitmap,
+      blurredArtworkBitmap = blurredArtworkBitmap,
       selectedLines = orderedSelectedLines,
       mode = if (hasLyrics) cardMode else ShareCardMode.SONG,
       theme = activeTheme,
-      brandName = "DCEAY MUSIC"
+      swatches = swatches,
+      brandName = "AURIX MUSIC"
     )
   }
 
@@ -211,424 +259,549 @@ fun ShareLyricsSheet(
     contentColor = MaterialTheme.colorScheme.onSurface,
     dragHandle = null
   ) {
-    Column(
+    BoxWithConstraints(
       modifier = Modifier
         .fillMaxSize()
         .windowInsetsPadding(WindowInsets.safeDrawing)
-        .padding(horizontal = 20.dp, vertical = 14.dp),
-      horizontalAlignment = Alignment.CenterHorizontally
-    ) {
-      // Top Sheet Header: "Share lyrics" + Close (X) button
-      Row(
-        modifier = Modifier.fillMaxWidth(),
-        horizontalArrangement = Arrangement.SpaceBetween,
-        verticalAlignment = Alignment.CenterVertically
-      ) {
-        Text(
-          text = "Share lyrics",
-          style = MaterialTheme.typography.titleLarge.copy(
-            fontSize = 20.sp,
-            fontWeight = FontWeight.Bold
-          ),
-          color = MaterialTheme.colorScheme.onSurface
-        )
-        IconButton(
-          onClick = onDismiss,
-          modifier = Modifier
-            .minimumInteractiveComponentSize()
-            .clip(CircleShape)
-            .background(MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.65f))
-            .testTag("share_lyrics_close_button")
-        ) {
-          Icon(
-            imageVector = Icons.Rounded.Close,
-            contentDescription = "Close",
-            tint = MaterialTheme.colorScheme.onSurface
-          )
+        .graphicsLayer {
+          alpha = enterAlpha
+          translationY = enterSlidePx
         }
-      }
-
-      Spacer(modifier = Modifier.height(10.dp))
-
-      // Scrollable middle content so both the card preview and optional lyric picker fit comfortably
+    ) {
+      val isCompactHeight = maxHeight < 640.dp || isEditingLyrics
       Column(
         modifier = Modifier
-          .weight(1f)
-          .fillMaxWidth()
-          .verticalScroll(rememberScrollState()),
+          .fillMaxSize()
+          .padding(horizontal = 20.dp, vertical = 12.dp),
         horizontalAlignment = Alignment.CenterHorizontally
       ) {
-        // Card Preview (constrained width when lyric editor is open so both stay visible)
-        val cardMaxWidthFraction = if (isEditingLyrics && hasLyrics && cardMode == ShareCardMode.LYRICS) 0.68f else 0.90f
-        Box(
-          modifier = Modifier.fillMaxWidth(cardMaxWidthFraction),
-          contentAlignment = Alignment.Center
-        ) {
-          ShareLyricsCard(
-            data = shareCardData,
-            modifier = Modifier.testTag("share_lyrics_card_preview")
-          )
-        }
-
-        Spacer(modifier = Modifier.height(14.dp))
-
-        // 4 Gradient Color Dots
-        Row(
-          horizontalArrangement = Arrangement.spacedBy(14.dp),
-          verticalAlignment = Alignment.CenterVertically
-        ) {
-          gradientThemes.forEachIndexed { index, themeOption ->
-            val isSelected = selectedThemeIndex == index
-            Box(
-              modifier = Modifier
-                .size(38.dp)
-                .clip(CircleShape)
-                .background(
-                  Brush.linearGradient(
-                    colors = listOf(themeOption.startColor, themeOption.midColor, themeOption.endColor)
-                  )
-                )
-                .border(
-                  width = if (isSelected) 2.5.dp else 1.dp,
-                  color = if (isSelected) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurface.copy(alpha = 0.28f),
-                  shape = CircleShape
-                )
-                .clickable { selectedThemeIndex = index }
-                .testTag("share_theme_dot_$index"),
-              contentAlignment = Alignment.Center
-            ) {
-              if (isSelected) {
-                Icon(
-                  imageVector = Icons.Rounded.Check,
-                  contentDescription = themeOption.name,
-                  tint = Color.White,
-                  modifier = Modifier.size(18.dp)
-                )
-              }
-            }
-          }
-        }
-
-        Spacer(modifier = Modifier.height(14.dp))
-
-        // Mode Pill Toggle ("Song" | "Lyrics") + "Edit lyrics" Pill Button
+        // Header: "Share lyrics" + Close (X) button
         Row(
           modifier = Modifier.fillMaxWidth(),
-          horizontalArrangement = Arrangement.Center,
+          horizontalArrangement = Arrangement.SpaceBetween,
           verticalAlignment = Alignment.CenterVertically
         ) {
-          // Pill toggle: "Song" | "Lyrics"
-          Surface(
-            shape = CircleShape,
-            color = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.75f),
-            border = BorderStroke(1.dp, MaterialTheme.colorScheme.onSurface.copy(alpha = 0.12f))
+          Text(
+            text = "Share lyrics",
+            style = MaterialTheme.typography.titleLarge.copy(
+              fontSize = 20.sp,
+              fontWeight = FontWeight.Bold
+            ),
+            color = MaterialTheme.colorScheme.onSurface
+          )
+          IconButton(
+            onClick = onDismiss,
+            modifier = Modifier
+              .minimumInteractiveComponentSize()
+              .size(38.dp)
+              .clip(CircleShape)
+              .background(MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.65f))
+              .testTag("share_lyrics_close_button")
           ) {
-            Row(modifier = Modifier.padding(3.dp)) {
-              // Song option
-              val songSelected = cardMode == ShareCardMode.SONG || !hasLyrics
-              Box(
-                modifier = Modifier
-                  .clip(CircleShape)
-                  .background(
-                    if (songSelected) MaterialTheme.colorScheme.primary else Color.Transparent
-                  )
-                  .clickable {
-                    cardMode = ShareCardMode.SONG
-                    isEditingLyrics = false
-                  }
-                  .testTag("share_mode_song_pill")
-                  .padding(horizontal = 18.dp, vertical = 8.dp)
-              ) {
-                Text(
-                  text = "Song",
-                  style = MaterialTheme.typography.bodySmall.copy(fontWeight = FontWeight.Bold),
-                  color = if (songSelected) Color.White else MaterialTheme.colorScheme.onSurfaceVariant
-                )
-              }
+            Icon(
+              imageVector = Icons.Rounded.Close,
+              contentDescription = "Close",
+              tint = MaterialTheme.colorScheme.onSurface,
+              modifier = Modifier.size(20.dp)
+            )
+          }
+        }
 
-              // Lyrics option (selected by default when lyrics exist)
-              val lyricsSelected = hasLyrics && cardMode == ShareCardMode.LYRICS
-              Box(
-                modifier = Modifier
-                  .clip(CircleShape)
-                  .background(
-                    if (lyricsSelected) MaterialTheme.colorScheme.primary else Color.Transparent
-                  )
-                  .clickable {
-                    if (hasLyrics) {
-                      cardMode = ShareCardMode.LYRICS
-                    } else {
-                      Toast.makeText(
-                        context,
-                        "No lyrics available for this song",
-                        Toast.LENGTH_SHORT
-                      ).show()
-                    }
-                  }
-                  .testTag("share_mode_lyrics_pill")
-                  .padding(horizontal = 18.dp, vertical = 8.dp)
-              ) {
-                Text(
-                  text = "Lyrics",
-                  style = MaterialTheme.typography.bodySmall.copy(fontWeight = FontWeight.Bold),
-                  color = when {
-                    lyricsSelected -> Color.White
-                    hasLyrics -> MaterialTheme.colorScheme.onSurfaceVariant
-                    else -> MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.42f)
-                  }
+        Spacer(modifier = Modifier.height(10.dp))
+
+        // Main flexible area (scrollable on small screens or when lyric picker is expanded)
+        Column(
+          modifier = Modifier
+            .weight(1f)
+            .fillMaxWidth()
+            .then(
+              if (isCompactHeight) Modifier.verticalScroll(rememberScrollState())
+              else Modifier
+            ),
+          horizontalAlignment = Alignment.CenterHorizontally,
+          verticalArrangement = Arrangement.Center
+        ) {
+          // 1. LARGE CARD PREVIEW (weight 1 when not editing lyrics, aspect ratio 4:5 at most)
+          Box(
+            modifier = Modifier
+              .then(
+                if (!isCompactHeight) Modifier.weight(1f, fill = true)
+                else Modifier.heightIn(min = 240.dp, max = 380.dp)
+              )
+              .fillMaxWidth(),
+            contentAlignment = Alignment.Center
+          ) {
+            ShareLyricsCard(
+              data = shareCardData,
+              reducedMotion = reducedMotion,
+              modifier = Modifier
+                .fillMaxWidth()
+                .aspectRatio(
+                  ratio = ShareCardRenderer.CARD_ASPECT_RATIO,
+                  matchHeightConstraintsFirst = !isCompactHeight
                 )
-              }
-            }
+                .testTag("share_lyrics_card_preview")
+            )
           }
 
-          // "Edit lyrics" pill button when Lyrics mode is active
-          if (hasLyrics && cardMode == ShareCardMode.LYRICS) {
-            Spacer(modifier = Modifier.width(10.dp))
-            Surface(
-              shape = CircleShape,
-              color = if (isEditingLyrics) {
-                MaterialTheme.colorScheme.primary.copy(alpha = 0.16f)
-              } else {
-                MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.75f)
-              },
-              border = BorderStroke(
-                1.dp,
-                if (isEditingLyrics) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurface.copy(alpha = 0.12f)
-              ),
-              modifier = Modifier
-                .clip(CircleShape)
-                .clickable { isEditingLyrics = !isEditingLyrics }
-                .testTag("share_edit_lyrics_button")
-            ) {
-              Row(
-                modifier = Modifier.padding(horizontal = 14.dp, vertical = 8.dp),
-                verticalAlignment = Alignment.CenterVertically,
-                horizontalArrangement = Arrangement.spacedBy(6.dp)
+          Spacer(modifier = Modifier.height(14.dp))
+
+          // 2. ONE TIDY ROW UNDER THE CARD:
+          // Left: Song | Lyrics sliding segmented control (150ms pill slide)
+          // Right: "Edit lyrics (2/5)" text button
+          Row(
+            modifier = Modifier.fillMaxWidth(),
+            horizontalArrangement = Arrangement.SpaceBetween,
+            verticalAlignment = Alignment.CenterVertically
+          ) {
+            SlidingModeSegmentedControl(
+              cardMode = if (hasLyrics) cardMode else ShareCardMode.SONG,
+              hasLyrics = hasLyrics,
+              reducedMotion = reducedMotion,
+              onSelectMode = { targetMode ->
+                if (targetMode == ShareCardMode.LYRICS && !hasLyrics) {
+                  Toast.makeText(
+                    context,
+                    "No lyrics available for this song",
+                    Toast.LENGTH_SHORT
+                  ).show()
+                } else {
+                  haptics.performHapticFeedback(HapticFeedbackType.TextHandleMove)
+                  cardMode = targetMode
+                  if (targetMode == ShareCardMode.SONG) {
+                    isEditingLyrics = false
+                  }
+                }
+              }
+            )
+
+            if (hasLyrics && cardMode == ShareCardMode.LYRICS) {
+              TextButton(
+                onClick = {
+                  haptics.performHapticFeedback(HapticFeedbackType.TextHandleMove)
+                  isEditingLyrics = !isEditingLyrics
+                },
+                shape = CircleShape,
+                colors = ButtonDefaults.textButtonColors(
+                  contentColor = if (isEditingLyrics) {
+                    MaterialTheme.colorScheme.primary
+                  } else {
+                    MaterialTheme.colorScheme.onSurface
+                  }
+                ),
+                contentPadding = PaddingValues(horizontal = 12.dp, vertical = 6.dp),
+                modifier = Modifier.testTag("share_edit_lyrics_button")
               ) {
                 Icon(
                   imageVector = Icons.Rounded.EditNote,
                   contentDescription = null,
-                  tint = if (isEditingLyrics) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurface,
                   modifier = Modifier.size(18.dp)
                 )
+                Spacer(modifier = Modifier.width(5.dp))
                 Text(
                   text = "Edit lyrics (${selectedIndices.size}/$MAX_SELECTED_LYRIC_LINES)",
-                  style = MaterialTheme.typography.bodySmall.copy(fontWeight = FontWeight.SemiBold),
-                  color = if (isEditingLyrics) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurface
+                  style = MaterialTheme.typography.bodySmall.copy(fontWeight = FontWeight.SemiBold)
                 )
               }
             }
           }
-        }
 
-        // Hint when no lyrics are available
-        if (!hasLyrics) {
           Spacer(modifier = Modifier.height(10.dp))
-          Row(
-            modifier = Modifier
-              .clip(RoundedCornerShape(12.dp))
-              .background(MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.6f))
-              .padding(horizontal = 12.dp, vertical = 8.dp),
-            verticalAlignment = Alignment.CenterVertically,
-            horizontalArrangement = Arrangement.spacedBy(8.dp)
-          ) {
-            Icon(
-              imageVector = Icons.Rounded.Info,
-              contentDescription = null,
-              tint = MaterialTheme.colorScheme.onSurfaceVariant,
-              modifier = Modifier.size(16.dp)
-            )
-            Text(
-              text = "Lyrics unavailable for this song — showing Song card",
-              style = MaterialTheme.typography.bodySmall,
-              color = MaterialTheme.colorScheme.onSurfaceVariant
-            )
-          }
-        }
 
-        // Expandable Scrollable Lyric Line Picker
-        AnimatedVisibility(
-          visible = isEditingLyrics && hasLyrics && cardMode == ShareCardMode.LYRICS,
-          enter = fadeIn() + expandVertically(),
-          exit = fadeOut() + shrinkVertically()
-        ) {
-          val listState = rememberLazyListState(
-            initialFirstVisibleItemIndex = (selectedIndices.minOrNull() ?: 0).coerceAtLeast(0)
-          )
-          Column(
-            modifier = Modifier
-              .fillMaxWidth()
-              .padding(top = 12.dp)
-              .clip(RoundedCornerShape(20.dp))
-              .background(MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.48f))
-              .border(
-                1.dp,
-                MaterialTheme.colorScheme.onSurface.copy(alpha = 0.10f),
-                RoundedCornerShape(20.dp)
-              )
-              .padding(vertical = 8.dp)
+          // 3. 4 COLOR SWATCHES CENTERED ON A ROW BELOW IT (28dp each with check ring, smaller & quieter)
+          Row(
+            modifier = Modifier.fillMaxWidth(),
+            horizontalArrangement = Arrangement.Center,
+            verticalAlignment = Alignment.CenterVertically
           ) {
-            Text(
-              text = "Tap up to 5 lines (shown in song order)",
-              style = MaterialTheme.typography.labelMedium,
-              color = MaterialTheme.colorScheme.onSurfaceVariant,
-              modifier = Modifier.padding(horizontal = 16.dp, vertical = 4.dp)
-            )
-            LazyColumn(
-              state = listState,
-              modifier = Modifier
-                .fillMaxWidth()
-                .heightIn(min = 160.dp, max = 240.dp)
-                .testTag("share_lyrics_line_picker")
+            Row(
+              horizontalArrangement = Arrangement.spacedBy(18.dp),
+              verticalAlignment = Alignment.CenterVertically
             ) {
-              itemsIndexed(parsedLyrics, key = { idx, _ -> idx }) { index, line ->
-                val isLineSelected = index in selectedIndices
-                Row(
+              gradientThemes.forEachIndexed { index, themeOption ->
+                val isSelected = selectedThemeIndex == index
+                val swatchInteraction = remember { MutableInteractionSource() }
+                Column(
+                  horizontalAlignment = Alignment.CenterHorizontally,
                   modifier = Modifier
-                    .fillMaxWidth()
-                    .clickable {
-                      if (isLineSelected) {
-                        if (selectedIndices.size <= 1) {
-                          Toast.makeText(
-                            context,
-                            "Keep at least 1 line selected",
-                            Toast.LENGTH_SHORT
-                          ).show()
-                        } else {
-                          selectedIndices = selectedIndices - index
-                        }
-                      } else {
-                        if (selectedIndices.size >= MAX_SELECTED_LYRIC_LINES) {
-                          Toast.makeText(
-                            context,
-                            "You can select up to 5 lines",
-                            Toast.LENGTH_SHORT
-                          ).show()
-                        } else {
-                          selectedIndices = selectedIndices + index
-                        }
+                    .clickable(
+                      interactionSource = swatchInteraction,
+                      indication = null
+                    ) {
+                      if (selectedThemeIndex != index) {
+                        haptics.performHapticFeedback(HapticFeedbackType.TextHandleMove)
+                        selectedThemeIndex = index
                       }
                     }
-                    .background(
-                      if (isLineSelected) MaterialTheme.colorScheme.primary.copy(alpha = 0.12f)
-                      else Color.Transparent
-                    )
-                    .padding(horizontal = 14.dp, vertical = 10.dp)
-                    .testTag("share_lyric_row_$index"),
-                  verticalAlignment = Alignment.CenterVertically,
-                  horizontalArrangement = Arrangement.spacedBy(12.dp)
+                    .testTag("share_theme_dot_$index")
                 ) {
-                  Icon(
-                    imageVector = if (isLineSelected) Icons.Rounded.CheckCircle else Icons.Rounded.RadioButtonUnchecked,
-                    contentDescription = if (isLineSelected) "Selected" else "Not selected",
-                    tint = if (isLineSelected) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.65f),
-                    modifier = Modifier.size(22.dp)
-                  )
+                  // Outer check ring + 28dp swatch
+                  Box(
+                    modifier = Modifier
+                      .size(34.dp)
+                      .then(
+                        if (isSelected) {
+                          Modifier.border(
+                            width = 1.75.dp,
+                            color = MaterialTheme.colorScheme.primary,
+                            shape = CircleShape
+                          )
+                        } else {
+                          Modifier
+                        }
+                      ),
+                    contentAlignment = Alignment.Center
+                  ) {
+                    Box(
+                      modifier = Modifier
+                        .size(28.dp)
+                        .clip(CircleShape)
+                        .background(
+                          Brush.linearGradient(
+                            colors = listOf(
+                              themeOption.swatchPrimary,
+                              themeOption.swatchSecondary,
+                              themeOption.swatchTertiary
+                            )
+                          )
+                        )
+                        .border(
+                          width = 1.dp,
+                          color = Color.White.copy(alpha = if (isSelected) 0.55f else 0.18f),
+                          shape = CircleShape
+                        ),
+                      contentAlignment = Alignment.Center
+                    ) {
+                      if (isSelected) {
+                        Icon(
+                          imageVector = Icons.Rounded.Check,
+                          contentDescription = themeOption.name,
+                          tint = Color.White,
+                          modifier = Modifier.size(14.dp)
+                        )
+                      }
+                    }
+                  }
+                  Spacer(modifier = Modifier.height(3.dp))
                   Text(
-                    text = line.text,
-                    style = MaterialTheme.typography.bodyMedium.copy(
-                      fontWeight = if (isLineSelected) FontWeight.Bold else FontWeight.Medium
+                    text = themeOption.name,
+                    style = MaterialTheme.typography.labelSmall.copy(
+                      fontSize = 10.sp,
+                      fontWeight = if (isSelected) FontWeight.Bold else FontWeight.Medium
                     ),
-                    color = if (isLineSelected) MaterialTheme.colorScheme.onSurface else MaterialTheme.colorScheme.onSurfaceVariant,
-                    maxLines = 2,
-                    overflow = TextOverflow.Ellipsis,
-                    modifier = Modifier.weight(1f)
+                    color = if (isSelected) {
+                      MaterialTheme.colorScheme.onSurface
+                    } else {
+                      MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.72f)
+                    }
                   )
                 }
               }
             }
           }
-        }
-      }
 
-      Spacer(modifier = Modifier.height(12.dp))
-
-      // Bottom Action Buttons: Full-width "Share" + "Save to gallery"
-      Button(
-        onClick = {
-          if (isSharing || isSaving) return@Button
-          isSharing = true
-          coroutineScope.launch {
-            val result = ShareCardExporter.shareCardImage(context, shareCardData)
-            isSharing = false
-            result.onFailure {
-              Toast.makeText(context, "Could not share card", Toast.LENGTH_SHORT).show()
+          // Hint when no lyrics are available
+          if (!hasLyrics) {
+            Spacer(modifier = Modifier.height(8.dp))
+            Row(
+              modifier = Modifier
+                .clip(RoundedCornerShape(12.dp))
+                .background(MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.55f))
+                .padding(horizontal = 12.dp, vertical = 6.dp),
+              verticalAlignment = Alignment.CenterVertically,
+              horizontalArrangement = Arrangement.spacedBy(6.dp)
+            ) {
+              Icon(
+                imageVector = Icons.Rounded.Info,
+                contentDescription = null,
+                tint = MaterialTheme.colorScheme.onSurfaceVariant,
+                modifier = Modifier.size(15.dp)
+              )
+              Text(
+                text = "Lyrics unavailable for this song — showing Song card",
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant
+              )
             }
           }
-        },
-        enabled = !isSharing && !isSaving,
-        shape = CircleShape,
-        colors = ButtonDefaults.buttonColors(
-          containerColor = MaterialTheme.colorScheme.primary,
-          contentColor = Color.White
-        ),
-        modifier = Modifier
-          .fillMaxWidth()
-          .height(52.dp)
-          .testTag("share_card_submit_button")
-      ) {
-        if (isSharing) {
-          CircularProgressIndicator(
-            color = Color.White,
-            strokeWidth = 2.5.dp,
-            modifier = Modifier.size(20.dp)
-          )
-          Spacer(modifier = Modifier.width(10.dp))
-          Text("Rendering 1080p Card...", fontWeight = FontWeight.Bold)
-        } else {
-          Icon(
-            imageVector = Icons.Rounded.Share,
-            contentDescription = null,
-            modifier = Modifier.size(20.dp)
-          )
-          Spacer(modifier = Modifier.width(8.dp))
-          Text("Share", style = MaterialTheme.typography.bodyLarge.copy(fontWeight = FontWeight.Bold))
-        }
-      }
 
-      Spacer(modifier = Modifier.height(8.dp))
-
-      OutlinedButton(
-        onClick = {
-          if (isSaving || isSharing) return@OutlinedButton
-          isSaving = true
-          coroutineScope.launch {
-            val result = ShareCardExporter.saveCardToGallery(context, shareCardData)
-            isSaving = false
-            result.onSuccess {
-              Toast.makeText(context, "Saved to Gallery", Toast.LENGTH_SHORT).show()
-            }.onFailure {
-              Toast.makeText(context, "Failed to save to Gallery", Toast.LENGTH_SHORT).show()
+          // Expandable Scrollable Lyric Line Picker
+          AnimatedVisibility(
+            visible = isEditingLyrics && hasLyrics && cardMode == ShareCardMode.LYRICS,
+            enter = fadeIn(tween(180)) + expandVertically(tween(200)),
+            exit = fadeOut(tween(150)) + shrinkVertically(tween(180))
+          ) {
+            val listState = rememberLazyListState(
+              initialFirstVisibleItemIndex = (selectedIndices.minOrNull() ?: 0).coerceAtLeast(0)
+            )
+            Column(
+              modifier = Modifier
+                .fillMaxWidth()
+                .padding(top = 10.dp)
+                .clip(RoundedCornerShape(18.dp))
+                .background(MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.48f))
+                .border(
+                  1.dp,
+                  MaterialTheme.colorScheme.onSurface.copy(alpha = 0.10f),
+                  RoundedCornerShape(18.dp)
+                )
+                .padding(vertical = 6.dp)
+            ) {
+              Text(
+                text = "Tap up to 5 lines (shown in song order)",
+                style = MaterialTheme.typography.labelMedium,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                modifier = Modifier.padding(horizontal = 14.dp, vertical = 4.dp)
+              )
+              LazyColumn(
+                state = listState,
+                modifier = Modifier
+                  .fillMaxWidth()
+                  .heightIn(min = 140.dp, max = 210.dp)
+                  .testTag("share_lyrics_line_picker")
+              ) {
+                itemsIndexed(parsedLyrics, key = { idx, _ -> idx }) { index, line ->
+                  val isLineSelected = index in selectedIndices
+                  Row(
+                    modifier = Modifier
+                      .fillMaxWidth()
+                      .clickable {
+                        if (isLineSelected) {
+                          if (selectedIndices.size <= 1) {
+                            Toast.makeText(
+                              context,
+                              "Keep at least 1 line selected",
+                              Toast.LENGTH_SHORT
+                            ).show()
+                          } else {
+                            haptics.performHapticFeedback(HapticFeedbackType.TextHandleMove)
+                            selectedIndices = selectedIndices - index
+                          }
+                        } else {
+                          if (selectedIndices.size >= MAX_SELECTED_LYRIC_LINES) {
+                            Toast.makeText(
+                              context,
+                              "You can select up to 5 lines",
+                              Toast.LENGTH_SHORT
+                            ).show()
+                          } else {
+                            haptics.performHapticFeedback(HapticFeedbackType.TextHandleMove)
+                            selectedIndices = selectedIndices + index
+                          }
+                        }
+                      }
+                      .background(
+                        if (isLineSelected) MaterialTheme.colorScheme.primary.copy(alpha = 0.12f)
+                        else Color.Transparent
+                      )
+                      .padding(horizontal = 14.dp, vertical = 9.dp)
+                      .testTag("share_lyric_row_$index"),
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.spacedBy(12.dp)
+                  ) {
+                    Icon(
+                      imageVector = if (isLineSelected) Icons.Rounded.CheckCircle else Icons.Rounded.RadioButtonUnchecked,
+                      contentDescription = if (isLineSelected) "Selected" else "Not selected",
+                      tint = if (isLineSelected) {
+                        MaterialTheme.colorScheme.primary
+                      } else {
+                        MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.60f)
+                      },
+                      modifier = Modifier.size(21.dp)
+                    )
+                    Text(
+                      text = line.text,
+                      style = MaterialTheme.typography.bodyMedium.copy(
+                        fontWeight = if (isLineSelected) FontWeight.Bold else FontWeight.Medium
+                      ),
+                      color = if (isLineSelected) {
+                        MaterialTheme.colorScheme.onSurface
+                      } else {
+                        MaterialTheme.colorScheme.onSurfaceVariant
+                      },
+                      maxLines = 2,
+                      overflow = TextOverflow.Ellipsis,
+                      modifier = Modifier.weight(1f)
+                    )
+                  }
+                }
+              }
             }
           }
-        },
-        enabled = !isSaving && !isSharing,
-        shape = CircleShape,
-        border = BorderStroke(1.dp, MaterialTheme.colorScheme.onSurface.copy(alpha = 0.22f)),
-        colors = ButtonDefaults.outlinedButtonColors(
-          contentColor = MaterialTheme.colorScheme.onSurface
-        ),
+        }
+
+        Spacer(modifier = Modifier.height(12.dp))
+
+        // 4. PINNED BOTTOM ACTIONS:
+        // Large "Share" button (accent filled) + square 56dp icon-only "Save to gallery" button
+        Row(
+          modifier = Modifier.fillMaxWidth(),
+          horizontalArrangement = Arrangement.spacedBy(12.dp),
+          verticalAlignment = Alignment.CenterVertically
+        ) {
+          Button(
+            onClick = {
+              if (isSharing || isSaving) return@Button
+              isSharing = true
+              coroutineScope.launch {
+                val result = ShareCardExporter.shareCardImage(context, shareCardData)
+                isSharing = false
+                result.onFailure {
+                  Toast.makeText(context, "Could not share card", Toast.LENGTH_SHORT).show()
+                }
+              }
+            },
+            enabled = !isSharing && !isSaving,
+            shape = RoundedCornerShape(18.dp),
+            colors = ButtonDefaults.buttonColors(
+              containerColor = MaterialTheme.colorScheme.primary,
+              contentColor = Color.White
+            ),
+            modifier = Modifier
+              .weight(1f)
+              .height(56.dp)
+              .testTag("share_card_submit_button")
+          ) {
+            if (isSharing) {
+              CircularProgressIndicator(
+                color = Color.White,
+                strokeWidth = 2.5.dp,
+                modifier = Modifier.size(20.dp)
+              )
+              Spacer(modifier = Modifier.width(10.dp))
+              Text("Rendering...", fontWeight = FontWeight.Bold)
+            } else {
+              Icon(
+                imageVector = Icons.Rounded.Share,
+                contentDescription = null,
+                modifier = Modifier.size(20.dp)
+              )
+              Spacer(modifier = Modifier.width(8.dp))
+              Text(
+                text = "Share",
+                style = MaterialTheme.typography.bodyLarge.copy(fontWeight = FontWeight.Bold)
+              )
+            }
+          }
+
+          // Square 56dp icon-only "Save to gallery" button
+          Surface(
+            onClick = {
+              if (isSaving || isSharing) return@Surface
+              isSaving = true
+              coroutineScope.launch {
+                val result = ShareCardExporter.saveCardToGallery(context, shareCardData)
+                isSaving = false
+                result.onSuccess {
+                  Toast.makeText(context, "Saved to Gallery", Toast.LENGTH_SHORT).show()
+                }.onFailure {
+                  Toast.makeText(context, "Failed to save to Gallery", Toast.LENGTH_SHORT).show()
+                }
+              }
+            },
+            enabled = !isSaving && !isSharing,
+            shape = RoundedCornerShape(18.dp),
+            color = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.85f),
+            border = BorderStroke(1.dp, MaterialTheme.colorScheme.onSurface.copy(alpha = 0.14f)),
+            modifier = Modifier
+              .size(56.dp)
+              .testTag("save_card_gallery_button")
+          ) {
+            Box(contentAlignment = Alignment.Center) {
+              if (isSaving) {
+                CircularProgressIndicator(
+                  color = MaterialTheme.colorScheme.primary,
+                  strokeWidth = 2.5.dp,
+                  modifier = Modifier.size(20.dp)
+                )
+              } else {
+                Icon(
+                  imageVector = Icons.Rounded.Download,
+                  contentDescription = "Save to gallery",
+                  tint = MaterialTheme.colorScheme.onSurface,
+                  modifier = Modifier.size(22.dp)
+                )
+              }
+            }
+          }
+        }
+      }
+    }
+  }
+}
+
+@Composable
+private fun SlidingModeSegmentedControl(
+  cardMode: ShareCardMode,
+  hasLyrics: Boolean,
+  reducedMotion: Boolean,
+  onSelectMode: (ShareCardMode) -> Unit
+) {
+  val tabWidth = 76.dp
+  val tabHeight = 34.dp
+  val isLyricsSelected = hasLyrics && cardMode == ShareCardMode.LYRICS
+  val pillOffsetX by animateDpAsState(
+    targetValue = if (isLyricsSelected) tabWidth else 0.dp,
+    animationSpec = if (reducedMotion) snap() else tween(durationMillis = 150, easing = FastOutSlowInEasing),
+    label = "mode_pill_slide"
+  )
+
+  Surface(
+    shape = CircleShape,
+    color = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.78f),
+    border = BorderStroke(1.dp, MaterialTheme.colorScheme.onSurface.copy(alpha = 0.10f))
+  ) {
+    Box(
+      modifier = Modifier
+        .padding(3.dp)
+        .width(tabWidth * 2)
+        .height(tabHeight)
+    ) {
+      // Sliding active highlight pill (150ms)
+      Box(
         modifier = Modifier
-          .fillMaxWidth()
-          .height(48.dp)
-          .testTag("save_card_gallery_button")
-      ) {
-        if (isSaving) {
-          CircularProgressIndicator(
-            color = MaterialTheme.colorScheme.primary,
-            strokeWidth = 2.5.dp,
-            modifier = Modifier.size(18.dp)
+          .offset(x = pillOffsetX)
+          .width(tabWidth)
+          .fillMaxHeight()
+          .clip(CircleShape)
+          .background(MaterialTheme.colorScheme.primary)
+      )
+
+      Row(modifier = Modifier.fillMaxSize()) {
+        Box(
+          modifier = Modifier
+            .width(tabWidth)
+            .fillMaxHeight()
+            .clip(CircleShape)
+            .clickable { onSelectMode(ShareCardMode.SONG) }
+            .testTag("share_mode_song_pill"),
+          contentAlignment = Alignment.Center
+        ) {
+          Text(
+            text = "Song",
+            style = MaterialTheme.typography.bodySmall.copy(fontWeight = FontWeight.Bold),
+            color = if (!isLyricsSelected) Color.White else MaterialTheme.colorScheme.onSurfaceVariant
           )
-          Spacer(modifier = Modifier.width(10.dp))
-          Text("Saving...", fontWeight = FontWeight.SemiBold)
-        } else {
-          Icon(
-            imageVector = Icons.Rounded.Download,
-            contentDescription = null,
-            modifier = Modifier.size(18.dp)
+        }
+
+        Box(
+          modifier = Modifier
+            .width(tabWidth)
+            .fillMaxHeight()
+            .clip(CircleShape)
+            .clickable { onSelectMode(ShareCardMode.LYRICS) }
+            .testTag("share_mode_lyrics_pill"),
+          contentAlignment = Alignment.Center
+        ) {
+          Text(
+            text = "Lyrics",
+            style = MaterialTheme.typography.bodySmall.copy(fontWeight = FontWeight.Bold),
+            color = when {
+              isLyricsSelected -> Color.White
+              hasLyrics -> MaterialTheme.colorScheme.onSurfaceVariant
+              else -> MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.38f)
+            }
           )
-          Spacer(modifier = Modifier.width(8.dp))
-          Text("Save to gallery", fontWeight = FontWeight.SemiBold)
         }
       }
     }
@@ -677,7 +850,6 @@ private fun computeInitialLineSelection(
   effectivePositionMs: Long
 ): Set<Int> {
   if (lines.isEmpty()) return emptySet()
-  // Binary-search active line when timestamps exist
   val isSynced = lines.any { it.timestampMs >= 0L }
   val activeIdx = if (isSynced) {
     var low = 0
@@ -699,7 +871,7 @@ private fun computeInitialLineSelection(
 
   val nextIdx = (activeIdx + 1).takeIf { it in lines.indices }
   return if (nextIdx != null) {
-     linkedSetOf(activeIdx, nextIdx)
+    linkedSetOf(activeIdx, nextIdx)
   } else {
     linkedSetOf(activeIdx)
   }
