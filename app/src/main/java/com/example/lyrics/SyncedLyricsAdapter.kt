@@ -3,14 +3,17 @@ package com.example.lyrics
 import android.content.Context
 import android.graphics.Canvas
 import android.graphics.Color
+import android.graphics.LinearGradient
+import android.graphics.Paint
 import android.graphics.Rect
+import android.graphics.Shader
 import android.graphics.Typeface
-import android.graphics.drawable.GradientDrawable
 import android.os.Build
 import android.text.Layout
 import android.util.TypedValue
 import android.view.Gravity
 import android.view.ViewGroup
+import android.view.animation.PathInterpolator
 import android.widget.FrameLayout
 import android.widget.TextView
 import androidx.recyclerview.widget.RecyclerView
@@ -18,7 +21,8 @@ import kotlin.math.abs
 
 /**
  * Custom TextView that draws progressive word-level LRC highlight clipped cleanly at
- * precomputed BreakIterator grapheme boundaries without allocating Spans or Rects per frame.
+ * precomputed BreakIterator grapheme boundaries with a soft leading-edge feather gradient,
+ * without allocating Spans or objects per frame.
  */
 class LyricLineTextView(context: Context) : TextView(context) {
   private var parsedLine: ParsedLyricLine? = null
@@ -44,7 +48,7 @@ class LyricLineTextView(context: Context) : TextView(context) {
   fun bindLine(line: ParsedLyricLine, active: Boolean) {
     parsedLine = line
     isActiveLine = active
-    val display = line.text.ifBlank { "..." }
+    val display = line.text.ifBlank { "•••" }
     if (text.toString() != display) {
       text = display
     }
@@ -133,6 +137,7 @@ class SyncedLyricsAdapter(
 
   companion object {
     const val PAYLOAD_STATE_CHANGED = 1
+    private val SMOOTH_EASE = PathInterpolator(0.22f, 1f, 0.36f, 1f)
   }
 
   private val lines = ArrayList<ParsedLyricLine>()
@@ -175,11 +180,15 @@ class SyncedLyricsAdapter(
     notifyItemRangeChanged(0, lines.size, PAYLOAD_STATE_CHANGED)
   }
 
+  fun getAccentColor(): Int = accentColor
+
   fun setReducedMotion(enabled: Boolean) {
     reducedMotion = enabled
   }
 
   fun getActiveIndex(): Int = activeIndex
+
+  fun isSyncedLyrics(): Boolean = isSynced
 
   fun getLineAt(index: Int): ParsedLyricLine? = lines.getOrNull(index)
 
@@ -190,21 +199,21 @@ class SyncedLyricsAdapter(
 
     // Rebind only the old and new neighborhoods whose distance-based dimming changed
     if (oldIndex >= 0 && lines.isNotEmpty()) {
-      val start = (oldIndex - 3).coerceAtLeast(0)
-      val end = (oldIndex + 3).coerceAtMost(lines.lastIndex)
+      val start = (oldIndex - 4).coerceAtLeast(0)
+      val end = (oldIndex + 4).coerceAtMost(lines.lastIndex)
       if (end >= start) {
         notifyItemRangeChanged(start, end - start + 1, PAYLOAD_STATE_CHANGED)
       }
     }
     if (newIndex >= 0 && lines.isNotEmpty()) {
-      val start = (newIndex - 3).coerceAtLeast(0)
-      val end = (newIndex + 3).coerceAtMost(lines.lastIndex)
+      val start = (newIndex - 4).coerceAtLeast(0)
+      val end = (newIndex + 4).coerceAtMost(lines.lastIndex)
       if (end >= start) {
         notifyItemRangeChanged(start, end - start + 1, PAYLOAD_STATE_CHANGED)
       }
     }
     if (oldIndex == -1 || newIndex == -1) {
-      val count = minOf(4, lines.size)
+      val count = minOf(5, lines.size)
       if (count > 0) notifyItemRangeChanged(0, count, PAYLOAD_STATE_CHANGED)
     }
   }
@@ -213,9 +222,9 @@ class SyncedLyricsAdapter(
 
   override fun onCreateViewHolder(parent: ViewGroup, viewType: Int): LyricViewHolder {
     val dp = parent.resources.displayMetrics.density
-    val hMargin = (6f * dp).toInt()
-    val hPad = (16f * dp).toInt()
-    val vPad = (12f * dp).toInt()
+    val hMargin = (8f * dp).toInt()
+    val hPad = (18f * dp).toInt()
+    val vPad = (13f * dp).toInt()
 
     val container = FrameLayout(parent.context).apply {
       layoutParams = RecyclerView.LayoutParams(
@@ -226,7 +235,7 @@ class SyncedLyricsAdapter(
         rightMargin = hMargin
         bottomMargin = (8f * dp).toInt()
       }
-      minimumHeight = (48f * dp).toInt()
+      minimumHeight = (50f * dp).toInt()
       setPadding(hPad, vPad, hPad, vPad)
       clipChildren = false
       clipToPadding = false
@@ -240,8 +249,10 @@ class SyncedLyricsAdapter(
         ViewGroup.LayoutParams.WRAP_CONTENT,
         Gravity.CENTER_VERTICAL
       )
-      setTextSize(TypedValue.COMPLEX_UNIT_SP, 20f)
-      setLineSpacing((6f * dp), 1f)
+      // Consistent 21sp layout size so StaticLayout never re-wraps or jumps during scale transitions
+      setTextSize(TypedValue.COMPLEX_UNIT_SP, 21f)
+      setLineSpacing((6f * dp), 1.04f)
+      pivotX = 0f
     }
     container.addView(textView)
     return LyricViewHolder(container, textView, dp)
@@ -263,14 +274,6 @@ class SyncedLyricsAdapter(
     private val textView: LyricLineTextView,
     private val density: Float
   ) : RecyclerView.ViewHolder(container) {
-
-    // Glass pill box matching the exact rounded lyric highlight box design
-    private val activePillDrawable = GradientDrawable().apply {
-      shape = GradientDrawable.RECTANGLE
-      cornerRadius = 18f * density
-      setColor(Color.argb(38, 255, 255, 255))
-      setStroke((1f * density).toInt().coerceAtLeast(1), Color.argb(72, 255, 255, 255))
-    }
 
     private var currentBoundLine: ParsedLyricLine? = null
     private var lastAppliedActive: Boolean? = null
@@ -297,9 +300,21 @@ class SyncedLyricsAdapter(
       val targetAlpha = when {
         !isSynced -> 0.90f
         isActive -> 1.0f
-        distance == 1 -> 0.58f
-        distance == 2 -> 0.38f
-        else -> 0.24f
+        distance == 1 -> 0.56f
+        distance == 2 -> 0.35f
+        distance == 3 -> 0.22f
+        else -> 0.15f
+      }
+      val targetScale = when {
+        !isSynced -> 1.0f
+        isActive -> 1.0f
+        distance == 1 -> 0.965f
+        else -> 0.945f
+      }
+      val targetTranslationY = when {
+        !isSynced || isActive -> 0f
+        position > activeIndex -> 2.5f * density
+        else -> -1.5f * density
       }
 
       if (fullBind) {
@@ -318,23 +333,30 @@ class SyncedLyricsAdapter(
       )
       textView.setHighlightColors(textColor, dimmedHighlight)
 
-      if (lastAppliedActive != isActive || fullBind) {
-        lastAppliedActive = isActive
-        if (isActive) {
-          container.background = activePillDrawable
-          textView.setTextSize(TypedValue.COMPLEX_UNIT_SP, 21f)
-          textView.typeface = extraBoldTypeface
-        } else {
-          container.background = null
-          textView.setTextSize(TypedValue.COMPLEX_UNIT_SP, 20f)
-          textView.typeface = semiBoldTypeface
-        }
-      }
+      val stateChanged = lastAppliedActive != isActive || lastAppliedAlpha != targetAlpha
+      lastAppliedActive = isActive
+      lastAppliedAlpha = targetAlpha
 
-      if (lastAppliedAlpha != targetAlpha || fullBind) {
-        lastAppliedAlpha = targetAlpha
+      textView.typeface = if (isActive) extraBoldTypeface else semiBoldTypeface
+      textView.pivotX = 0f
+      textView.pivotY = (textView.height.takeIf { it > 0 } ?: (26f * density).toInt()) * 0.5f
+
+      if (fullBind || reducedMotion) {
         textView.animate().cancel()
         textView.alpha = targetAlpha
+        textView.scaleX = targetScale
+        textView.scaleY = targetScale
+        textView.translationY = targetTranslationY
+      } else if (stateChanged) {
+        textView.animate().cancel()
+        textView.animate()
+          .alpha(targetAlpha)
+          .scaleX(targetScale)
+          .scaleY(targetScale)
+          .translationY(targetTranslationY)
+          .setDuration(if (isActive) 340L else 280L)
+          .setInterpolator(SMOOTH_EASE)
+          .start()
       }
     }
 
