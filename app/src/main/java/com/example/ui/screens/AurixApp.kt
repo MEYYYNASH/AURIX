@@ -50,6 +50,8 @@ fun AurixApp(viewModel: AurixViewModel) {
   val analyzedSong by viewModel.analyzedSong.collectAsStateWithLifecycle()
   val updateStatus by viewModel.updateStatus.collectAsStateWithLifecycle()
   val latestRelease by viewModel.latestRelease.collectAsStateWithLifecycle()
+  val githubOwner by viewModel.githubOwner.collectAsStateWithLifecycle()
+  val githubRepo by viewModel.githubRepo.collectAsStateWithLifecycle()
 
   val trending by viewModel.trendingTracks.collectAsStateWithLifecycle()
   val searchResults by viewModel.searchResults.collectAsStateWithLifecycle()
@@ -117,8 +119,12 @@ fun AurixApp(viewModel: AurixViewModel) {
               currentLanguage = "en",
               dynamicBg = dynamicBg,
               reducedMotion = reducedMotion,
+              githubOwner = githubOwner,
+              githubRepo = githubRepo,
               updateStatus = updateStatus,
               latestRelease = latestRelease,
+              onGithubOwnerChanged = { viewModel.setGithubOwner(it) },
+              onGithubRepoChanged = { viewModel.setGithubRepo(it) },
               onCheckUpdate = { viewModel.checkForUpdates(it) },
               onDownloadUpdate = { viewModel.downloadAndInstallUpdate(it) },
               onInstallUpdate = { viewModel.installDownloadedApk(it) },

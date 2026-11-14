@@ -32,9 +32,11 @@ class AurixViewModel(application: Application) : AndroidViewModel(application) {
   val dynamicBg = prefsManager.dynamicBg.stateIn(viewModelScope, SharingStarted.Lazily, true)
   val reducedMotion = prefsManager.reducedMotion.stateIn(viewModelScope, SharingStarted.Lazily, false)
   val onboardingCompleted = prefsManager.onboardingCompleted.stateIn(viewModelScope, SharingStarted.Lazily, false)
+  val githubOwner = prefsManager.githubOwner.stateIn(viewModelScope, SharingStarted.Lazily, "aurix-music")
+  val githubRepo = prefsManager.githubRepo.stateIn(viewModelScope, SharingStarted.Lazily, "aurix-android")
 
   // App Modes & Downloader States
-  private val _appMode = MutableStateFlow("search") // "search" or "youtube"
+  private val _appMode = MutableStateFlow("search")
   val appMode: StateFlow<String> = _appMode
 
   private val _youtubeUrl = MutableStateFlow("")
@@ -99,18 +101,12 @@ class AurixViewModel(application: Application) : AndroidViewModel(application) {
     })
   }
 
-  fun setAppMode(mode: String) {
-    _appMode.value = mode
-  }
-
-  fun setYoutubeUrl(url: String) {
-    _youtubeUrl.value = url
-  }
+  fun setAppMode(mode: String) { _appMode.value = mode }
+  fun setYoutubeUrl(url: String) { _youtubeUrl.value = url }
 
   fun analyzeYoutubeUrl() {
     val url = _youtubeUrl.value
     if (url.isBlank()) return
-    // Simulated mock analysis of YouTube link into a downloadable song item
     val song = Song(
       id = "yt_" + url.hashCode(),
       title = "Die with a smile (tiktok remix)",
@@ -123,15 +119,17 @@ class AurixViewModel(application: Application) : AndroidViewModel(application) {
     _analyzedSong.value = song
   }
 
-  fun checkForUpdates(context: Context, owner: String = "aurix-music", repo: String = "aurix-android") {
+  fun checkForUpdates(context: Context) {
     viewModelScope.launch {
       _updateStatus.value = "Checking..."
+      val owner = githubOwner.value
+      val repo = githubRepo.value
       val release = GitHubUpdater.checkForUpdates(owner, repo)
       if (release != null) {
         _latestRelease.value = release
         _updateStatus.value = "Update available: ${release.tagName}"
       } else {
-        _updateStatus.value = "App is up to date"
+        _updateStatus.value = "App is up to date or repo not found"
       }
     }
   }
@@ -322,6 +320,8 @@ class AurixViewModel(application: Application) : AndroidViewModel(application) {
   fun setDynamicBg(enabled: Boolean) { viewModelScope.launch { prefsManager.setDynamicBg(enabled) } }
   fun setReducedMotion(enabled: Boolean) { viewModelScope.launch { prefsManager.setReducedMotion(enabled) } }
   fun setOnboardingCompleted(completed: Boolean) { viewModelScope.launch { prefsManager.setOnboardingCompleted(completed) } }
+  fun setGithubOwner(owner: String) { viewModelScope.launch { prefsManager.setGithubOwner(owner) } }
+  fun setGithubRepo(repo: String) { viewModelScope.launch { prefsManager.setGithubRepo(repo) } }
 
   override fun onCleared() {
     super.onCleared()

@@ -20,6 +20,7 @@ import androidx.compose.ui.unit.sp
 import com.example.data.GitHubRelease
 import com.example.ui.theme.*
 
+@OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun SettingsScreen(
   currentTheme: String,
@@ -27,8 +28,12 @@ fun SettingsScreen(
   currentLanguage: String,
   dynamicBg: Boolean,
   reducedMotion: Boolean,
+  githubOwner: String,
+  githubRepo: String,
   updateStatus: String,
   latestRelease: GitHubRelease?,
+  onGithubOwnerChanged: (String) -> Unit,
+  onGithubRepoChanged: (String) -> Unit,
   onCheckUpdate: (Context) -> Unit,
   onDownloadUpdate: (Context) -> Unit,
   onInstallUpdate: (Context) -> Unit,
@@ -49,6 +54,9 @@ fun SettingsScreen(
     "#8B5CF6" to AccentPurple
   )
 
+  var ownerInput by remember(githubOwner) { mutableStateOf(githubOwner) }
+  var repoInput by remember(githubRepo) { mutableStateOf(githubRepo) }
+
   LazyColumn(
     modifier = Modifier
       .fillMaxSize()
@@ -65,10 +73,26 @@ fun SettingsScreen(
       )
     }
 
-    // GitHub Updates
+    // GitHub Updates & Repository Config
     item {
       SettingsSection(title = "GitHub Updates & Releases") {
         Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
+          OutlinedTextField(
+            value = ownerInput,
+            onValueChange = { ownerInput = it; onGithubOwnerChanged(it) },
+            label = { Text("GitHub Username / Owner") },
+            modifier = Modifier.fillMaxWidth(),
+            shape = RoundedCornerShape(16.dp),
+            singleLine = true
+          )
+          OutlinedTextField(
+            value = repoInput,
+            onValueChange = { repoInput = it; onGithubRepoChanged(it) },
+            label = { Text("GitHub Repository Name") },
+            modifier = Modifier.fillMaxWidth(),
+            shape = RoundedCornerShape(16.dp),
+            singleLine = true
+          )
           Text(text = "Status: $updateStatus", style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
           Row(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
             Button(
@@ -184,7 +208,7 @@ fun SettingsScreen(
     item {
       SettingsSection(title = "About") {
         Column {
-          Text("AURIX / All Sound Finder v0.1.1", style = MaterialTheme.typography.bodyMedium.copy(fontWeight = FontWeight.Bold), color = MaterialTheme.colorScheme.onBackground)
+          Text("AURIX / All Sound Finder v0.1.2", style = MaterialTheme.typography.bodyMedium.copy(fontWeight = FontWeight.Bold), color = MaterialTheme.colorScheme.onBackground)
           Spacer(modifier = Modifier.height(4.dp))
           Text("Powered by Audius and LRCLIB. GitHub OTA Update Enabled.", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
         }
