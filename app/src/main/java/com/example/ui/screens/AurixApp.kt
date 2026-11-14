@@ -1,5 +1,6 @@
 package com.example.ui.screens
 
+import androidx.activity.compose.BackHandler
 import androidx.compose.animation.*
 import androidx.compose.animation.core.CubicBezierEasing
 import androidx.compose.animation.core.animateFloatAsState
@@ -60,9 +61,13 @@ fun AurixApp(viewModel: AurixViewModel) {
   var showNowPlaying by remember { mutableStateOf(false) }
   val context = LocalContext.current
 
-  val appMode by viewModel.appMode.collectAsStateWithLifecycle()
+  val searchMode by viewModel.searchMode.collectAsStateWithLifecycle()
+  val searchQuery by viewModel.searchQuery.collectAsStateWithLifecycle()
   val youtubeUrl by viewModel.youtubeUrl.collectAsStateWithLifecycle()
   val analyzedSong by viewModel.analyzedSong.collectAsStateWithLifecycle()
+  val isAnalyzingYoutube by viewModel.isAnalyzingYoutube.collectAsStateWithLifecycle()
+  val youtubeError by viewModel.youtubeError.collectAsStateWithLifecycle()
+
   val installedAppInfo by viewModel.installedAppInfo.collectAsStateWithLifecycle()
   val updateCheckStatus by viewModel.updateCheckStatus.collectAsStateWithLifecycle()
   val updateStatus by viewModel.updateStatus.collectAsStateWithLifecycle()
@@ -73,9 +78,13 @@ fun AurixApp(viewModel: AurixViewModel) {
   val githubOwner by viewModel.githubOwner.collectAsStateWithLifecycle()
   val githubRepo by viewModel.githubRepo.collectAsStateWithLifecycle()
 
-  val trending by viewModel.trendingTracks.collectAsStateWithLifecycle()
+  val featuredTracks by viewModel.featuredTracks.collectAsStateWithLifecycle()
+  val isLoadingFeatured by viewModel.isLoadingFeatured.collectAsStateWithLifecycle()
+  val featuredError by viewModel.featuredError.collectAsStateWithLifecycle()
   val searchResults by viewModel.searchResults.collectAsStateWithLifecycle()
   val isSearching by viewModel.isSearching.collectAsStateWithLifecycle()
+  val searchError by viewModel.searchError.collectAsStateWithLifecycle()
+
   val localSongs by viewModel.localSongs.collectAsStateWithLifecycle()
   val favorites by viewModel.favorites.collectAsStateWithLifecycle()
   val recentlyPlayed by viewModel.recentlyPlayed.collectAsStateWithLifecycle()
@@ -105,6 +114,11 @@ fun AurixApp(viewModel: AurixViewModel) {
   val accentColor = parseHexColor(accentHex, darkTheme)
   val isNowPlayingOpen = showNowPlaying && currentSong != null
 
+  // System Back returns cleanly to Home from any secondary tab
+  BackHandler(enabled = currentScreen != Screen.Home && !isNowPlayingOpen) {
+    currentScreen = Screen.Home
+  }
+
   val pageScale by animateFloatAsState(
     targetValue = if (isNowPlayingOpen) 0.93f else 1.0f,
     animationSpec = if (reducedMotion) snap() else tween(450, easing = AurixEase),
@@ -122,7 +136,7 @@ fun AurixApp(viewModel: AurixViewModel) {
         .fillMaxSize()
         .background(Color.Black)
     ) {
-      // Main App Shell (scales down & dims when Now Playing is open)
+      // Main App Shell
       Box(
         modifier = Modifier
           .fillMaxSize()
@@ -131,7 +145,6 @@ fun AurixApp(viewModel: AurixViewModel) {
           .clip(RoundedCornerShape(if (isNowPlayingOpen) 28.dp else 0.dp))
           .background(MaterialTheme.colorScheme.background)
       ) {
-        // Dynamic Artwork Backdrop behind screens when enabled
         DynamicArtworkBackdrop(
           song = currentSong,
           enabled = dynamicBg,
@@ -139,7 +152,6 @@ fun AurixApp(viewModel: AurixViewModel) {
           reducedMotion = reducedMotion
         )
 
-        // Screen content with smooth animated transitions
         AnimatedContent(
           targetState = currentScreen,
           modifier = Modifier.fillMaxSize(),
@@ -155,32 +167,52 @@ fun AurixApp(viewModel: AurixViewModel) {
         ) { screen ->
           when (screen) {
             is Screen.Home -> HomeScreen(
-              appMode = appMode,
-              youtubeUrl = youtubeUrl,
-              analyzedSong = analyzedSong,
-              trendingTracks = trending,
+              featuredTracks = featuredTracks,
+              isLoadingFeatured = isLoadingFeatured,
+              featuredError = featuredError,
+              recentlyPlayed = recentlyPlayed,
               currentSong = currentSong,
               isPlaying = isPlaying,
+              darkTheme = darkTheme,
               reducedMotion = reducedMotion,
               songDownloadProgress = songDownloadProgress,
               downloadedSongIds = downloadedSongIds,
-              onAppModeChanged = { viewModel.setAppMode(it) },
-              onYoutubeUrlChanged = { viewModel.setYoutubeUrl(it) },
-              onAnalyzeYoutube = { viewModel.analyzeYoutubeUrl() },
-              onSongClick = { viewModel.playSong(it) },
-              onMoodClick = { viewModel.search(it); currentScreen = Screen.Search },
+              onRetryFeatured = { viewModel.loadFeaturedItunes() },
+              onOpenSearch = { query ->
+                viewModel.setSearchMode("itunes")
+                if (!query.isNullOrBlank()) viewModel.search(query)
+                currentScreen = Screen.Search
+              },
+              onOpenLibrary = { currentScreen = Screen.Library },
+              onOpenNowPlaying = { showNowPlaying = true },
+              onPlayPauseClick = { viewModel.togglePlayPause() },
+              onSongClick = { song, queue -> viewModel.playSong(song, queue) },
               onFavoriteClick = { viewModel.toggleFavorite(it) },
               onDownloadClick = { viewModel.downloadSong(context, it) }
             )
             is Screen.Search -> SearchScreen(
+              searchMode = searchMode,
+              searchQuery = searchQuery,
               searchResults = searchResults,
               isSearching = isSearching,
+              searchError = searchError,
+              youtubeUrl = youtubeUrl,
+              analyzedSong = analyzedSong,
+              isAnalyzingYoutube = isAnalyzingYoutube,
+              youtubeError = youtubeError,
               currentSong = currentSong,
               isPlaying = isPlaying,
+              darkTheme = darkTheme,
               reducedMotion = reducedMotion,
+              songDownloadProgress = songDownloadProgress,
+              downloadedSongIds = downloadedSongIds,
+              onSearchModeChanged = { viewModel.setSearchMode(it) },
               onSearchQueryChanged = { viewModel.search(it) },
-              onSongClick = { viewModel.playSong(it, searchResults) },
-              onFavoriteClick = { viewModel.toggleFavorite(it) }
+              onYoutubeUrlChanged = { viewModel.setYoutubeUrl(it) },
+              onAnalyzeYoutube = { viewModel.analyzeYoutubeUrl() },
+              onSongClick = { song, queue -> viewModel.playSong(song, queue) },
+              onFavoriteClick = { viewModel.toggleFavorite(it) },
+              onDownloadClick = { viewModel.downloadSong(context, it) }
             )
             is Screen.Library -> LibraryScreen(
               localSongs = localSongs,
@@ -266,7 +298,7 @@ fun AurixApp(viewModel: AurixViewModel) {
         }
       }
 
-      // Now Playing Full-Screen Sheet with smooth slide-up animation
+      // Now Playing Full-Screen Sheet
       AnimatedVisibility(
         visible = isNowPlayingOpen,
         enter = if (reducedMotion) fadeIn(snap()) else slideInVertically(tween(480, easing = AurixEase)) { it },

@@ -9,7 +9,7 @@
     <string name="speed_dial_trending">Trending</string>
     <string name="my_songs">My songs</string>
     <string name="recently_played">Recently played</string>
-    <string name="trending_on_audius">Trending on Audius</string>
+    <string name="trending_on_audius">iTunes 30s Previews</string>
     <string name="mood_chill">Chill</string>
     <string name="mood_happy">Happy</string>
     <string name="mood_focus">Focus</string>
@@ -24,5 +24,5 @@
     <string name="settings_about">About</string>
     <string name="try_again">Try again</string>
     <string name="add_local_song">Add local music</string>
-    <string name="empty_library">No songs in library. Add local music or like songs from Audius!</string>
+    <string name="empty_library">No songs in library. Add local music or like songs from iTunes Search!</string>
 </resources>

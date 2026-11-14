@@ -36,12 +36,16 @@ object SongDownloader {
       return@withContext Result.failure(IllegalStateException("Track is already saved on device"))
     }
 
+    val isM4a = streamUrl.contains(".m4a", ignoreCase = true)
+    val ext = if (isM4a) "m4a" else "mp3"
+    val mimeType = if (isM4a) "audio/mp4" else "audio/mpeg"
+
     val safeName = "${song.artist} - ${song.title}"
       .replace(Regex("""[\\/:*?"<>|]"""), "_")
       .trim()
       .take(80)
       .ifBlank { "aurix_track_${song.id}" }
-    val fileName = "$safeName.mp3"
+    val fileName = "$safeName.$ext"
 
     try {
       onProgress(0.05f)
@@ -62,7 +66,7 @@ object SongDownloader {
           val resolver = context.contentResolver
           val values = ContentValues().apply {
             put(MediaStore.Audio.Media.DISPLAY_NAME, fileName)
-            put(MediaStore.Audio.Media.MIME_TYPE, "audio/mpeg")
+            put(MediaStore.Audio.Media.MIME_TYPE, mimeType)
             put(MediaStore.Audio.Media.TITLE, song.title)
             put(MediaStore.Audio.Media.ARTIST, song.artist)
             put(MediaStore.Audio.Media.RELATIVE_PATH, "${Environment.DIRECTORY_MUSIC}/AURIX")

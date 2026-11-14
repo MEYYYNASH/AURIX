@@ -1,74 +1,59 @@
 package com.example.ui.screens
 
-import androidx.compose.animation.AnimatedContent
-import androidx.compose.animation.core.tween
-import androidx.compose.animation.fadeIn
-import androidx.compose.animation.fadeOut
-import androidx.compose.animation.togetherWith
 import androidx.compose.foundation.background
+import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
-import androidx.compose.foundation.text.KeyboardActions
-import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.rounded.*
 import androidx.compose.material3.*
-import androidx.compose.runtime.*
+import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.text.font.FontWeight
-import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.example.model.Song
 
-@OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun HomeScreen(
-  appMode: String,
-  youtubeUrl: String,
-  analyzedSong: Song?,
-  trendingTracks: List<Song>,
+  featuredTracks: List<Song>,
+  isLoadingFeatured: Boolean,
+  featuredError: String?,
+  recentlyPlayed: List<Song>,
   currentSong: Song?,
   isPlaying: Boolean,
+  darkTheme: Boolean,
   reducedMotion: Boolean,
   songDownloadProgress: Map<String, Float>,
   downloadedSongIds: Set<String>,
-  onAppModeChanged: (String) -> Unit,
-  onYoutubeUrlChanged: (String) -> Unit,
-  onAnalyzeYoutube: () -> Unit,
-  onSongClick: (Song) -> Unit,
-  onMoodClick: (String) -> Unit,
+  onRetryFeatured: () -> Unit,
+  onOpenSearch: (String?) -> Unit,
+  onOpenLibrary: () -> Unit,
+  onOpenNowPlaying: () -> Unit,
+  onPlayPauseClick: () -> Unit,
+  onSongClick: (Song, List<Song>) -> Unit,
   onFavoriteClick: (Song) -> Unit,
   onDownloadClick: (Song) -> Unit
 ) {
-  val quickFilters = listOf(
-    "បទថ្មី 2026 · New Khmer" to "Khmer",
-    "បទសេដ · Sad Song" to "Sad",
-    "បទញាក់ · Remix & DJ" to "Remix"
+  val genres = listOf(
+    "Top Hits" to "top hits 2026",
+    "Khmer" to "khmer song",
+    "Pop" to "pop hits",
+    "R&B" to "r&b soul",
+    "Lo-Fi" to "lofi beats",
+    "Electronic" to "electronic dance"
   )
-  val categories = listOf("All", "Trending New", "Songs", "Videos", "Artists")
-  val khmerArtists = listOf(
-    "VannDa · វណ្ណដា" to "VannDa",
-    "Tena · តេណា" to "Tena",
-    "Suly Pheng · ស៊ូលីផេង" to "Suly Pheng",
-    "G-Devith" to "G-Devith"
-  )
-  val quickYoutube = listOf(
-    "VannDa - Time To Rise" to "https://youtu.be/6j-8_eS0rN0",
-    "The Weeknd - Blinding Lights" to "https://youtu.be/4NRXx6U8ABQ"
-  )
-
-  var selectedCategory by remember { mutableIntStateOf(0) }
-  var quickSearchText by remember { mutableStateOf("") }
 
   LazyColumn(
     modifier = Modifier
@@ -77,10 +62,10 @@ fun HomeScreen(
     verticalArrangement = Arrangement.spacedBy(18.dp),
     contentPadding = PaddingValues(
       top = WindowInsets.statusBars.asPaddingValues().calculateTopPadding() + 14.dp,
-      bottom = if (currentSong != null) 190.dp else 120.dp
+      bottom = if (currentSong != null) 195.dp else 125.dp
     )
   ) {
-    // Header
+    // Clean Brand Header
     item {
       Row(
         modifier = Modifier.fillMaxWidth(),
@@ -90,25 +75,28 @@ fun HomeScreen(
         Row(
           modifier = Modifier.weight(1f).padding(end = 8.dp),
           verticalAlignment = Alignment.CenterVertically,
-          horizontalArrangement = Arrangement.spacedBy(10.dp)
+          horizontalArrangement = Arrangement.spacedBy(12.dp)
         ) {
           AurixBrandLogo(
-            size = 38.dp,
-            cornerRadius = 11.dp,
+            size = 42.dp,
+            cornerRadius = 13.dp,
             animated = true,
             reducedMotion = reducedMotion
           )
           Column {
             Text(
-              text = if (appMode == "search") "All Sound Finder" else "Link Downloader",
-              style = MaterialTheme.typography.titleLarge.copy(fontWeight = FontWeight.Bold, fontSize = 20.sp),
+              text = "AURIX",
+              style = MaterialTheme.typography.titleLarge.copy(
+                fontWeight = FontWeight.Bold,
+                fontSize = 22.sp,
+                letterSpacing = 0.6.sp
+              ),
               color = MaterialTheme.colorScheme.onBackground,
               maxLines = 1,
               overflow = TextOverflow.Ellipsis
             )
-            Spacer(modifier = Modifier.height(2.dp))
             Text(
-              text = "Songs, Remixes, Lyrics & MP3",
+              text = "iTunes 30s Previews & Library",
               style = MaterialTheme.typography.bodySmall,
               color = MaterialTheme.colorScheme.onSurfaceVariant,
               maxLines = 1,
@@ -116,360 +104,301 @@ fun HomeScreen(
             )
           }
         }
-        Surface(
-          shape = RoundedCornerShape(20.dp),
-          color = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.85f)
+
+        val pillBg = if (darkTheme) Color.White.copy(alpha = 0.10f) else Color.White.copy(alpha = 0.85f)
+        val pillBorder = if (darkTheme) Color.White.copy(alpha = 0.18f) else Color.White
+        Row(
+          modifier = Modifier
+            .clip(CircleShape)
+            .background(pillBg)
+            .border(1.dp, pillBorder, CircleShape)
+            .clickable { onOpenSearch(null) }
+            .padding(horizontal = 14.dp, vertical = 9.dp)
+            .testTag("home_open_search_button"),
+          verticalAlignment = Alignment.CenterVertically,
+          horizontalArrangement = Arrangement.spacedBy(6.dp)
         ) {
-          Row(
-            modifier = Modifier
-              .clickable { onAppModeChanged(if (appMode == "search") "youtube" else "search") }
-              .padding(horizontal = 12.dp, vertical = 8.dp),
-            verticalAlignment = Alignment.CenterVertically
-          ) {
-            Icon(
-              Icons.Rounded.GraphicEq,
-              contentDescription = "Sound Finder",
-              tint = MaterialTheme.colorScheme.primary,
-              modifier = Modifier.size(16.dp)
-            )
-            Spacer(modifier = Modifier.width(6.dp))
-            Text("Sound Finder", style = MaterialTheme.typography.bodySmall.copy(fontWeight = FontWeight.SemiBold), color = MaterialTheme.colorScheme.onSurface)
-          }
+          Icon(
+            imageVector = Icons.Rounded.Search,
+            contentDescription = "Search iTunes 30s",
+            tint = MaterialTheme.colorScheme.primary,
+            modifier = Modifier.size(17.dp)
+          )
+          Text(
+            text = "Search",
+            style = MaterialTheme.typography.bodySmall.copy(fontWeight = FontWeight.SemiBold),
+            color = MaterialTheme.colorScheme.onSurface
+          )
         }
       }
     }
 
-    // Top Tabs Switcher (Search & Download vs YouTube Link)
+    // Clean Hero Card (Currently Playing OR Discovery Launch Card)
     item {
-      Row(
-        modifier = Modifier
-          .fillMaxWidth()
-          .clip(RoundedCornerShape(28.dp))
-          .background(MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.85f))
-          .padding(4.dp),
-        horizontalArrangement = Arrangement.spacedBy(4.dp)
+      GlassCard(
+        darkTheme = darkTheme,
+        cornerRadius = 26.dp,
+        modifier = Modifier.fillMaxWidth()
       ) {
-        Button(
-          onClick = { onAppModeChanged("search") },
-          modifier = Modifier.weight(1f).testTag("mode_search_button"),
-          colors = ButtonDefaults.buttonColors(
-            containerColor = if (appMode == "search") MaterialTheme.colorScheme.surface else Color.Transparent,
-            contentColor = if (appMode == "search") MaterialTheme.colorScheme.onSurface else MaterialTheme.colorScheme.onSurfaceVariant
-          ),
-          elevation = ButtonDefaults.buttonElevation(defaultElevation = 0.dp),
-          shape = RoundedCornerShape(24.dp)
-        ) {
-          Icon(Icons.Rounded.Search, contentDescription = null, modifier = Modifier.size(16.dp))
-          Spacer(modifier = Modifier.width(6.dp))
-          Text("Search & Play", style = MaterialTheme.typography.bodyMedium.copy(fontWeight = FontWeight.Bold), maxLines = 1)
-        }
-
-        Button(
-          onClick = { onAppModeChanged("youtube") },
-          modifier = Modifier.weight(1f).testTag("mode_youtube_button"),
-          colors = ButtonDefaults.buttonColors(
-            containerColor = if (appMode == "youtube") MaterialTheme.colorScheme.surface else Color.Transparent,
-            contentColor = if (appMode == "youtube") MaterialTheme.colorScheme.onSurface else MaterialTheme.colorScheme.onSurfaceVariant
-          ),
-          elevation = ButtonDefaults.buttonElevation(defaultElevation = 0.dp),
-          shape = RoundedCornerShape(24.dp)
-        ) {
-          Icon(Icons.Rounded.PlayArrow, contentDescription = null, modifier = Modifier.size(16.dp))
-          Spacer(modifier = Modifier.width(6.dp))
-          Text("YouTube Link", style = MaterialTheme.typography.bodyMedium.copy(fontWeight = FontWeight.Bold), maxLines = 1)
-        }
-      }
-    }
-
-    item {
-      AnimatedContent(
-        targetState = appMode,
-        transitionSpec = {
-          fadeIn(tween(if (reducedMotion) 0 else 220)) togetherWith fadeOut(tween(if (reducedMotion) 0 else 180))
-        },
-        label = "home_mode"
-      ) { mode ->
-        if (mode == "youtube") {
-          Column(verticalArrangement = Arrangement.spacedBy(16.dp)) {
-            Surface(
-              modifier = Modifier.fillMaxWidth().clip(RoundedCornerShape(26.dp)),
-              color = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.85f),
-              tonalElevation = 4.dp
+        if (currentSong != null) {
+          Column(
+            modifier = Modifier.padding(18.dp),
+            verticalArrangement = Arrangement.spacedBy(14.dp)
+          ) {
+            Row(
+              modifier = Modifier
+                .fillMaxWidth()
+                .clip(RoundedCornerShape(18.dp))
+                .clickable { onOpenNowPlaying() },
+              verticalAlignment = Alignment.CenterVertically
             ) {
-              Column(
-                modifier = Modifier.padding(16.dp),
-                verticalArrangement = Arrangement.spacedBy(14.dp)
-              ) {
-                Row(verticalAlignment = Alignment.CenterVertically) {
-                  Icon(Icons.Rounded.PlayArrow, contentDescription = null, tint = MaterialTheme.colorScheme.error)
-                  Spacer(modifier = Modifier.width(8.dp))
-                  Text(
-                    "YouTube Video & MP3 Link Downloader",
-                    style = MaterialTheme.typography.titleLarge.copy(fontSize = 16.sp, fontWeight = FontWeight.Bold),
-                    color = MaterialTheme.colorScheme.onSurface
-                  )
-                }
-
-                OutlinedTextField(
-                  value = youtubeUrl,
-                  onValueChange = onYoutubeUrlChanged,
-                  placeholder = { Text("Paste YouTube link (youtu.be/... or youtube.com...)") },
-                  leadingIcon = { Icon(Icons.Rounded.Link, contentDescription = null) },
-                  modifier = Modifier.fillMaxWidth().testTag("youtube_url_input"),
-                  shape = RoundedCornerShape(18.dp),
-                  singleLine = true
-                )
-
+              SongArtwork(
+                song = currentSong,
+                modifier = Modifier.size(72.dp),
+                cornerRadius = 18.dp,
+                iconSize = 30.dp
+              )
+              Spacer(modifier = Modifier.width(14.dp))
+              Column(modifier = Modifier.weight(1f)) {
                 Row(
-                  modifier = Modifier.fillMaxWidth(),
-                  horizontalArrangement = Arrangement.spacedBy(12.dp)
+                  verticalAlignment = Alignment.CenterVertically,
+                  horizontalArrangement = Arrangement.spacedBy(6.dp)
                 ) {
-                  OutlinedButton(
-                    onClick = { onYoutubeUrlChanged("https://youtu.be/6j-8_eS0rN0") },
-                    modifier = Modifier.weight(1f),
-                    shape = RoundedCornerShape(20.dp)
-                  ) {
-                    Icon(Icons.Rounded.ContentPaste, contentDescription = null, modifier = Modifier.size(16.dp))
-                    Spacer(modifier = Modifier.width(4.dp))
-                    Text("Paste Link")
-                  }
-                  Button(
-                    onClick = onAnalyzeYoutube,
-                    modifier = Modifier.weight(1f).testTag("analyze_link_button"),
-                    shape = RoundedCornerShape(20.dp),
-                    colors = ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.primary)
-                  ) {
-                    Icon(Icons.Rounded.Download, contentDescription = null, modifier = Modifier.size(16.dp))
-                    Spacer(modifier = Modifier.width(4.dp))
-                    Text("Analyze Link")
-                  }
-                }
-
-                Column {
-                  Text("Quick Try YouTube Links:", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
-                  Spacer(modifier = Modifier.height(8.dp))
-                  Row(
-                    modifier = Modifier
-                      .fillMaxWidth()
-                      .horizontalScroll(rememberScrollState()),
-                    horizontalArrangement = Arrangement.spacedBy(8.dp)
-                  ) {
-                    quickYoutube.forEach { (label, url) ->
-                      AssistChip(
-                        onClick = { onYoutubeUrlChanged(url); onAnalyzeYoutube() },
-                        label = { Text(label, maxLines = 1) },
-                        shape = RoundedCornerShape(16.dp)
-                      )
-                    }
+                  EqualizerBars(
+                    isPlaying = isPlaying,
+                    color = MaterialTheme.colorScheme.primary,
+                    reducedMotion = reducedMotion,
+                    maxHeight = 12.dp
+                  )
+                  Text(
+                    text = if (isPlaying) "NOW PLAYING" else "PAUSED",
+                    style = MaterialTheme.typography.labelSmall.copy(
+                      fontWeight = FontWeight.Bold,
+                      letterSpacing = 0.8.sp
+                    ),
+                    color = MaterialTheme.colorScheme.primary
+                  )
+                  if (currentSong.source == "iTunes 30s") {
+                    Text(
+                      text = "· 30s",
+                      style = MaterialTheme.typography.labelSmall.copy(fontWeight = FontWeight.SemiBold),
+                      color = MaterialTheme.colorScheme.onSurfaceVariant
+                    )
                   }
                 }
+                Spacer(modifier = Modifier.height(4.dp))
+                Text(
+                  text = currentSong.title,
+                  style = MaterialTheme.typography.titleMedium.copy(fontWeight = FontWeight.Bold),
+                  color = MaterialTheme.colorScheme.onSurface,
+                  maxLines = 1,
+                  overflow = TextOverflow.Ellipsis
+                )
+                Text(
+                  text = currentSong.artist,
+                  style = MaterialTheme.typography.bodySmall,
+                  color = MaterialTheme.colorScheme.onSurfaceVariant,
+                  maxLines = 1,
+                  overflow = TextOverflow.Ellipsis
+                )
               }
             }
 
-            if (analyzedSong != null) {
-              Surface(
-                modifier = Modifier.fillMaxWidth().clip(RoundedCornerShape(26.dp)),
-                color = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.85f),
-                tonalElevation = 6.dp
+            Row(
+              modifier = Modifier.fillMaxWidth(),
+              horizontalArrangement = Arrangement.spacedBy(10.dp)
+            ) {
+              Button(
+                onClick = onPlayPauseClick,
+                modifier = Modifier.weight(1f).height(44.dp),
+                shape = RoundedCornerShape(16.dp),
+                colors = ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.primary)
               ) {
-                Column(
-                  modifier = Modifier.padding(16.dp),
-                  verticalArrangement = Arrangement.spacedBy(12.dp)
-                ) {
-                  Row(
-                    modifier = Modifier.fillMaxWidth(),
-                    verticalAlignment = Alignment.CenterVertically
-                  ) {
-                    SongArtwork(song = analyzedSong, modifier = Modifier.size(64.dp), cornerRadius = 16.dp)
-                    Spacer(modifier = Modifier.width(16.dp))
-                    Column(modifier = Modifier.weight(1f)) {
-                      Text("World Trending · 3:30", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.primary)
-                      Text(analyzedSong.title, style = MaterialTheme.typography.bodyMedium.copy(fontWeight = FontWeight.Bold), color = MaterialTheme.colorScheme.onSurface)
-                      Text(analyzedSong.artist, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
-                    }
-                  }
-
-                  Row(
-                    modifier = Modifier.fillMaxWidth(),
-                    horizontalArrangement = Arrangement.spacedBy(12.dp)
-                  ) {
-                    Button(
-                      onClick = { onSongClick(analyzedSong) },
-                      modifier = Modifier.weight(1f),
-                      shape = RoundedCornerShape(20.dp)
-                    ) {
-                      Icon(Icons.Rounded.PlayArrow, contentDescription = null)
-                      Spacer(modifier = Modifier.width(4.dp))
-                      Text("Play Audio")
-                    }
-                    Button(
-                      onClick = { onDownloadClick(analyzedSong) },
-                      modifier = Modifier.weight(1f),
-                      shape = RoundedCornerShape(20.dp),
-                      colors = ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.primary)
-                    ) {
-                      Icon(Icons.Rounded.Download, contentDescription = null)
-                      Spacer(modifier = Modifier.width(4.dp))
-                      Text("Save Audio")
-                    }
-                  }
-                }
+                Icon(
+                  imageVector = if (isPlaying) Icons.Rounded.Pause else Icons.Rounded.PlayArrow,
+                  contentDescription = null,
+                  modifier = Modifier.size(18.dp)
+                )
+                Spacer(modifier = Modifier.width(6.dp))
+                Text(
+                  text = if (isPlaying) "Pause" else "Resume",
+                  style = MaterialTheme.typography.bodySmall.copy(fontWeight = FontWeight.Bold)
+                )
+              }
+              OutlinedButton(
+                onClick = { onFavoriteClick(currentSong) },
+                modifier = Modifier.weight(1f).height(44.dp),
+                shape = RoundedCornerShape(16.dp)
+              ) {
+                Icon(
+                  imageVector = if (currentSong.isFavorite) Icons.Rounded.Favorite else Icons.Rounded.FavoriteBorder,
+                  contentDescription = null,
+                  tint = if (currentSong.isFavorite) MaterialTheme.colorScheme.error else MaterialTheme.colorScheme.onSurface,
+                  modifier = Modifier.size(17.dp)
+                )
+                Spacer(modifier = Modifier.width(6.dp))
+                Text(
+                  text = if (currentSong.isFavorite) "Saved" else "Favorite",
+                  style = MaterialTheme.typography.bodySmall.copy(fontWeight = FontWeight.SemiBold),
+                  color = MaterialTheme.colorScheme.onSurface
+                )
               }
             }
           }
         } else {
-          Column(verticalArrangement = Arrangement.spacedBy(16.dp)) {
-            OutlinedTextField(
-              value = quickSearchText,
-              onValueChange = { quickSearchText = it },
-              placeholder = { Text("Search any song without limits (VannDa, ណារ៉ា,...)") },
-              leadingIcon = { Icon(Icons.Rounded.Search, contentDescription = null) },
-              trailingIcon = {
-                IconButton(onClick = { if (quickSearchText.isNotBlank()) onMoodClick(quickSearchText) }) {
-                  Icon(Icons.Rounded.GraphicEq, contentDescription = "Search", tint = MaterialTheme.colorScheme.primary)
-                }
-              },
-              keyboardOptions = KeyboardOptions(imeAction = ImeAction.Search),
-              keyboardActions = KeyboardActions(onSearch = {
-                if (quickSearchText.isNotBlank()) onMoodClick(quickSearchText)
-              }),
-              modifier = Modifier.fillMaxWidth().testTag("home_search_field"),
-              shape = RoundedCornerShape(28.dp),
-              singleLine = true
-            )
-
+          Column(
+            modifier = Modifier.padding(20.dp),
+            verticalArrangement = Arrangement.spacedBy(12.dp)
+          ) {
             Row(
-              modifier = Modifier.fillMaxWidth().horizontalScroll(rememberScrollState()),
-              horizontalArrangement = Arrangement.spacedBy(8.dp)
+              verticalAlignment = Alignment.CenterVertically,
+              horizontalArrangement = Arrangement.spacedBy(10.dp)
             ) {
-              quickFilters.forEach { (label, query) ->
-                AssistChip(
-                  onClick = { onMoodClick(query) },
-                  label = { Text(label) },
-                  shape = RoundedCornerShape(16.dp)
-                )
-              }
-            }
-
-            Row(
-              modifier = Modifier.fillMaxWidth().horizontalScroll(rememberScrollState()),
-              horizontalArrangement = Arrangement.spacedBy(8.dp)
-            ) {
-              categories.forEachIndexed { index, cat ->
-                FilterChip(
-                  selected = selectedCategory == index,
-                  onClick = {
-                    selectedCategory = index
-                    if (index > 0) onMoodClick(cat)
-                  },
-                  label = { Text(cat) },
-                  shape = RoundedCornerShape(16.dp)
-                )
-              }
-            }
-
-            Column {
-              Row(
-                modifier = Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.SpaceBetween,
-                verticalAlignment = Alignment.CenterVertically
-              ) {
-                Text(
-                  "Khmer Artists · តារាចម្រៀងខ្មែរ",
-                  style = MaterialTheme.typography.titleLarge.copy(fontSize = 16.sp, fontWeight = FontWeight.Bold),
-                  color = MaterialTheme.colorScheme.onBackground
-                )
-                TextButton(onClick = { onMoodClick("Khmer") }) {
-                  Text("View All", color = MaterialTheme.colorScheme.primary)
-                }
-              }
-              Spacer(modifier = Modifier.height(6.dp))
-              Row(
-                modifier = Modifier.fillMaxWidth().horizontalScroll(rememberScrollState()),
-                horizontalArrangement = Arrangement.spacedBy(8.dp)
-              ) {
-                khmerArtists.forEach { (label, query) ->
-                  AssistChip(
-                    onClick = { onMoodClick(query) },
-                    label = { Text(label) },
-                    shape = RoundedCornerShape(20.dp)
-                  )
-                }
-              }
-            }
-
-            // Featured Popular Track Card
-            val featuredSong = trendingTracks.firstOrNull()
-            if (featuredSong != null) {
-              Surface(
-                modifier = Modifier.fillMaxWidth().clip(RoundedCornerShape(28.dp)),
-                color = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.85f),
-                tonalElevation = 6.dp
-              ) {
-                Column(
-                  modifier = Modifier.padding(16.dp),
-                  verticalArrangement = Arrangement.spacedBy(14.dp)
-                ) {
-                  Row(verticalAlignment = Alignment.CenterVertically) {
-                    SongArtwork(
-                      song = featuredSong,
-                      modifier = Modifier.size(88.dp),
-                      cornerRadius = 20.dp,
-                      iconSize = 36.dp
+              Box(
+                modifier = Modifier
+                  .size(40.dp)
+                  .clip(RoundedCornerShape(12.dp))
+                  .background(
+                    Brush.linearGradient(
+                      colors = listOf(
+                        MaterialTheme.colorScheme.primary,
+                        MaterialTheme.colorScheme.primary.copy(alpha = 0.65f)
+                      )
                     )
-                    Spacer(modifier = Modifier.width(16.dp))
-                    Column(modifier = Modifier.weight(1f)) {
-                      Text(
-                        "#1 Popular on Audius",
-                        style = MaterialTheme.typography.bodySmall.copy(fontWeight = FontWeight.SemiBold),
-                        color = MaterialTheme.colorScheme.primary
-                      )
-                      Spacer(modifier = Modifier.height(4.dp))
-                      Text(
-                        featuredSong.title,
-                        style = MaterialTheme.typography.titleLarge.copy(fontSize = 18.sp, fontWeight = FontWeight.Bold),
-                        color = MaterialTheme.colorScheme.onSurface,
-                        maxLines = 2,
-                        overflow = TextOverflow.Ellipsis
-                      )
-                      Text(
-                        featuredSong.artist,
-                        style = MaterialTheme.typography.bodyMedium,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant,
-                        maxLines = 1,
-                        overflow = TextOverflow.Ellipsis
-                      )
-                    }
-                  }
+                  ),
+                contentAlignment = Alignment.Center
+              ) {
+                Icon(
+                  imageVector = Icons.Rounded.MusicNote,
+                  contentDescription = null,
+                  tint = Color.White,
+                  modifier = Modifier.size(22.dp)
+                )
+              }
+              Column(modifier = Modifier.weight(1f)) {
+                Text(
+                  text = "Discover 30s Music Previews",
+                  style = MaterialTheme.typography.titleMedium.copy(fontWeight = FontWeight.Bold),
+                  color = MaterialTheme.colorScheme.onSurface
+                )
+                Text(
+                  text = "Search iTunes tracks or play audio from your device",
+                  style = MaterialTheme.typography.bodySmall,
+                  color = MaterialTheme.colorScheme.onSurfaceVariant
+                )
+              }
+            }
 
-                  Row(
-                    modifier = Modifier.fillMaxWidth(),
-                    horizontalArrangement = Arrangement.spacedBy(12.dp)
-                  ) {
-                    Button(
-                      onClick = { onSongClick(featuredSong) },
-                      modifier = Modifier.weight(1f),
-                      shape = RoundedCornerShape(24.dp),
-                      colors = ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.surface, contentColor = MaterialTheme.colorScheme.onSurface)
-                    ) {
-                      Icon(Icons.Rounded.PlayArrow, contentDescription = null)
-                      Spacer(modifier = Modifier.width(4.dp))
-                      Text("Play")
-                    }
-                    Button(
-                      onClick = { onFavoriteClick(featuredSong) },
-                      modifier = Modifier.weight(1f),
-                      shape = RoundedCornerShape(24.dp),
-                      colors = ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.primary)
-                    ) {
-                      Icon(
-                        if (featuredSong.isFavorite) Icons.Rounded.Favorite else Icons.Rounded.FavoriteBorder,
-                        contentDescription = null
-                      )
-                      Spacer(modifier = Modifier.width(6.dp))
-                      Text(if (featuredSong.isFavorite) "Saved" else "Save Song")
-                    }
-                  }
+            Row(
+              modifier = Modifier.fillMaxWidth(),
+              horizontalArrangement = Arrangement.spacedBy(10.dp)
+            ) {
+              Button(
+                onClick = { onOpenSearch(null) },
+                modifier = Modifier.weight(1f).height(44.dp),
+                shape = RoundedCornerShape(16.dp),
+                colors = ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.primary)
+              ) {
+                Icon(Icons.Rounded.Search, contentDescription = null, modifier = Modifier.size(17.dp))
+                Spacer(modifier = Modifier.width(6.dp))
+                Text("Search iTunes", style = MaterialTheme.typography.bodySmall.copy(fontWeight = FontWeight.Bold))
+              }
+              OutlinedButton(
+                onClick = onOpenLibrary,
+                modifier = Modifier.weight(1f).height(44.dp),
+                shape = RoundedCornerShape(16.dp)
+              ) {
+                Icon(Icons.Rounded.FolderOpen, contentDescription = null, modifier = Modifier.size(17.dp))
+                Spacer(modifier = Modifier.width(6.dp))
+                Text("My Library", style = MaterialTheme.typography.bodySmall.copy(fontWeight = FontWeight.SemiBold))
+              }
+            }
+          }
+        }
+      }
+    }
+
+    // Quick Genre Pills (jumps straight to Search -> iTunes 30s)
+    item {
+      Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
+        Text(
+          text = "Browse iTunes 30s",
+          style = MaterialTheme.typography.titleMedium.copy(fontWeight = FontWeight.Bold),
+          color = MaterialTheme.colorScheme.onBackground
+        )
+        Row(
+          modifier = Modifier
+            .fillMaxWidth()
+            .horizontalScroll(rememberScrollState()),
+          horizontalArrangement = Arrangement.spacedBy(8.dp)
+        ) {
+          genres.forEach { (label, query) ->
+            val chipBg = if (darkTheme) Color.White.copy(alpha = 0.09f) else Color.White.copy(alpha = 0.85f)
+            val chipBorder = if (darkTheme) Color.White.copy(alpha = 0.16f) else Color.White
+            Box(
+              modifier = Modifier
+                .clip(CircleShape)
+                .background(chipBg)
+                .border(1.dp, chipBorder, CircleShape)
+                .clickable { onOpenSearch(query) }
+                .padding(horizontal = 16.dp, vertical = 10.dp)
+            ) {
+              Text(
+                text = label,
+                style = MaterialTheme.typography.bodySmall.copy(fontWeight = FontWeight.SemiBold),
+                color = MaterialTheme.colorScheme.onSurface
+              )
+            }
+          }
+        }
+      }
+    }
+
+    // User's Real Recently Played Shelf (only shown when non-empty)
+    if (recentlyPlayed.isNotEmpty()) {
+      item {
+        Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
+          Text(
+            text = "Recently Played",
+            style = MaterialTheme.typography.titleMedium.copy(fontWeight = FontWeight.Bold),
+            color = MaterialTheme.colorScheme.onBackground
+          )
+          Row(
+            modifier = Modifier
+              .fillMaxWidth()
+              .horizontalScroll(rememberScrollState()),
+            horizontalArrangement = Arrangement.spacedBy(12.dp)
+          ) {
+            recentlyPlayed.take(6).forEach { recent ->
+              GlassCard(
+                darkTheme = darkTheme,
+                cornerRadius = 18.dp,
+                modifier = Modifier
+                  .width(136.dp)
+                  .clickable { onSongClick(recent, recentlyPlayed) }
+              ) {
+                Column(modifier = Modifier.padding(10.dp)) {
+                  SongArtwork(
+                    song = recent,
+                    modifier = Modifier.fillMaxWidth().height(112.dp),
+                    cornerRadius = 12.dp,
+                    iconSize = 28.dp
+                  )
+                  Spacer(modifier = Modifier.height(8.dp))
+                  Text(
+                    text = recent.title,
+                    style = MaterialTheme.typography.bodySmall.copy(fontWeight = FontWeight.Bold),
+                    color = MaterialTheme.colorScheme.onSurface,
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis
+                  )
+                  Text(
+                    text = recent.artist,
+                    style = MaterialTheme.typography.labelSmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis
+                  )
                 }
               }
             }
@@ -478,16 +407,65 @@ fun HomeScreen(
       }
     }
 
-    if (appMode == "search") {
-      item {
+    // Live iTunes 30s Previews Header
+    item {
+      Row(
+        modifier = Modifier.fillMaxWidth(),
+        horizontalArrangement = Arrangement.SpaceBetween,
+        verticalAlignment = Alignment.CenterVertically
+      ) {
         Text(
-          "Popular Songs First · បទល្បីៗ",
-          style = MaterialTheme.typography.titleLarge.copy(fontSize = 16.sp, fontWeight = FontWeight.Bold),
+          text = "Featured 30s Previews",
+          style = MaterialTheme.typography.titleMedium.copy(fontWeight = FontWeight.Bold),
           color = MaterialTheme.colorScheme.onBackground
         )
+        TextButton(onClick = { onOpenSearch(null) }) {
+          Text("Search All", color = MaterialTheme.colorScheme.primary)
+        }
       }
+    }
 
-      trendingTracks.forEachIndexed { index, song ->
+    if (isLoadingFeatured && featuredTracks.isEmpty()) {
+      item {
+        Box(
+          modifier = Modifier
+            .fillMaxWidth()
+            .padding(vertical = 28.dp),
+          contentAlignment = Alignment.Center
+        ) {
+          CircularProgressIndicator(color = MaterialTheme.colorScheme.primary)
+        }
+      }
+    } else if (featuredTracks.isEmpty()) {
+      item {
+        GlassCard(
+          darkTheme = darkTheme,
+          cornerRadius = 22.dp,
+          modifier = Modifier.fillMaxWidth()
+        ) {
+          Column(
+            modifier = Modifier.padding(18.dp),
+            horizontalAlignment = Alignment.CenterHorizontally,
+            verticalArrangement = Arrangement.spacedBy(10.dp)
+          ) {
+            Text(
+              text = featuredError ?: "No previews loaded yet.",
+              style = MaterialTheme.typography.bodyMedium,
+              color = MaterialTheme.colorScheme.onSurfaceVariant
+            )
+            OutlinedButton(
+              onClick = onRetryFeatured,
+              shape = RoundedCornerShape(16.dp)
+            ) {
+              Icon(Icons.Rounded.Refresh, contentDescription = null, modifier = Modifier.size(16.dp))
+              Spacer(modifier = Modifier.width(6.dp))
+              Text("Retry iTunes")
+            }
+          }
+        }
+      }
+    } else {
+      featuredTracks.forEachIndexed { index, song ->
         item(key = song.id) {
           SongDownloadRow(
             song = song,
@@ -497,7 +475,7 @@ fun HomeScreen(
             reducedMotion = reducedMotion,
             downloadProgress = songDownloadProgress[song.id],
             isDownloaded = song.id in downloadedSongIds,
-            onSongClick = { onSongClick(song) },
+            onSongClick = { onSongClick(song, featuredTracks) },
             onFavoriteClick = { onFavoriteClick(song) },
             onDownloadClick = { onDownloadClick(song) }
           )

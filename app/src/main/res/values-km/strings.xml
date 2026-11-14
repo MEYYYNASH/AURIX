@@ -9,7 +9,7 @@
     <string name="speed_dial_trending">កំពុងនិយម</string>
     <string name="my_songs">បទចម្រៀងរបស់ខ្ញុំ</string>
     <string name="recently_played">ទើបតែបានលេង</string>
-    <string name="trending_on_audius">កំពុងពេញនិយមលើ Audius</string>
+    <string name="trending_on_audius">ចម្រៀងខ្លី 30វិនាទី iTunes</string>
     <string name="mood_chill">សម្រាក</string>
     <string name="mood_happy">សប្បាយចិត្ត</string>
     <string name="mood_focus">ផ្តោតអារម្មណ៍</string>
@@ -24,5 +24,5 @@
     <string name="settings_about">អំពីកម្មវិធី</string>
     <string name="try_again">ព្យាយាមម្តងទៀត</string>
     <string name="add_local_song">បន្ថែមតន្ត្រីក្នុងទូរសព្ទ</string>
-    <string name="empty_library">គ្មានបទចម្រៀងក្នុងបណ្ណាល័យទេ។ បន្ថែមតន្ត្រី ឬចុចបេះដូងលើបទ Audius!</string>
+    <string name="empty_library">គ្មានបទចម្រៀងក្នុងបណ្ណាល័យទេ។ បន្ថែមតន្ត្រី ឬចុចបេះដូងលើបទ iTunes!</string>
 </resources>

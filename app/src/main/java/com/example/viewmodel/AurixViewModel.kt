@@ -9,12 +9,11 @@ import android.provider.OpenableColumns
 import android.widget.Toast
 import androidx.lifecycle.AndroidViewModel
 import androidx.lifecycle.viewModelScope
-import androidx.room.Room
 import androidx.media3.common.MediaItem
 import androidx.media3.common.PlaybackParameters
 import androidx.media3.common.Player
 import androidx.media3.exoplayer.ExoPlayer
-import com.example.BuildConfig
+import androidx.room.Room
 import com.example.data.*
 import com.example.model.*
 import kotlinx.coroutines.Job
@@ -44,15 +43,24 @@ class AurixViewModel(application: Application) : AndroidViewModel(application) {
   val githubOwner = prefsManager.githubOwner.stateIn(viewModelScope, SharingStarted.Lazily, "MEYYYNASH")
   val githubRepo = prefsManager.githubRepo.stateIn(viewModelScope, SharingStarted.Lazily, "AURIX")
 
-  // App Modes & Downloader States
-  private val _appMode = MutableStateFlow("search")
-  val appMode: StateFlow<String> = _appMode
+  // Search-Only Mode & YouTube Link Matcher States
+  private val _searchMode = MutableStateFlow("itunes") // "itunes" | "youtube"
+  val searchMode: StateFlow<String> = _searchMode
+
+  private val _searchQuery = MutableStateFlow("")
+  val searchQuery: StateFlow<String> = _searchQuery
 
   private val _youtubeUrl = MutableStateFlow("")
   val youtubeUrl: StateFlow<String> = _youtubeUrl
 
   private val _analyzedSong = MutableStateFlow<Song?>(null)
   val analyzedSong: StateFlow<Song?> = _analyzedSong
+
+  private val _isAnalyzingYoutube = MutableStateFlow(false)
+  val isAnalyzingYoutube: StateFlow<Boolean> = _isAnalyzingYoutube
+
+  private val _youtubeError = MutableStateFlow<String?>(null)
+  val youtubeError: StateFlow<String?> = _youtubeError
 
   // GitHub Smart Update States (backed by actual Android PackageManager info)
   private val _installedAppInfo = MutableStateFlow(GitHubUpdater.getInstalledAppInfo(application))
@@ -79,9 +87,21 @@ class AurixViewModel(application: Application) : AndroidViewModel(application) {
   private val _downloadedSongIds = MutableStateFlow<Set<String>>(emptySet())
   val downloadedSongIds: StateFlow<Set<String>> = _downloadedSongIds
 
-  // Music States
-  private val _rawTrending = MutableStateFlow<List<Song>>(emptyList())
+  // Music States (Real iTunes Search 30-second Previews & Local Files — zero demo tracks)
+  private val _rawFeatured = MutableStateFlow<List<Song>>(emptyList())
+  private val _isLoadingFeatured = MutableStateFlow(false)
+  val isLoadingFeatured: StateFlow<Boolean> = _isLoadingFeatured
+
+  private val _featuredError = MutableStateFlow<String?>(null)
+  val featuredError: StateFlow<String?> = _featuredError
+
   private val _rawSearchResults = MutableStateFlow<List<Song>>(emptyList())
+  private val _isSearching = MutableStateFlow(false)
+  val isSearching: StateFlow<Boolean> = _isSearching
+
+  private val _searchError = MutableStateFlow<String?>(null)
+  val searchError: StateFlow<String?> = _searchError
+
   private val _localSongs = MutableStateFlow<List<Song>>(emptyList())
 
   val favorites: StateFlow<List<Song>> = dao.getFavorites().map { list ->
@@ -92,7 +112,7 @@ class AurixViewModel(application: Application) : AndroidViewModel(application) {
     list.map { it.id }.toSet()
   }.stateIn(viewModelScope, SharingStarted.Eagerly, emptySet())
 
-  val trendingTracks: StateFlow<List<Song>> = combine(_rawTrending, favoriteIds) { tracks, favs ->
+  val featuredTracks: StateFlow<List<Song>> = combine(_rawFeatured, favoriteIds) { tracks, favs ->
     tracks.map { it.copy(isFavorite = it.id in favs) }
   }.stateIn(viewModelScope, SharingStarted.Lazily, emptyList())
 
@@ -109,9 +129,6 @@ class AurixViewModel(application: Application) : AndroidViewModel(application) {
       Song(it.songId, it.title, it.artist, it.artworkUrl, it.durationSeconds, it.streamUrl, it.source, it.songId in favs)
     }
   }.stateIn(viewModelScope, SharingStarted.Lazily, emptyList())
-
-  private val _isSearching = MutableStateFlow(false)
-  val isSearching: StateFlow<Boolean> = _isSearching
 
   private val _rawCurrentSong = MutableStateFlow<Song?>(null)
   val currentSong: StateFlow<Song?> = combine(_rawCurrentSong, favoriteIds) { song, favs ->
@@ -149,7 +166,7 @@ class AurixViewModel(application: Application) : AndroidViewModel(application) {
   private var searchJob: Job? = null
 
   init {
-    loadTrending()
+    loadFeaturedItunes()
     setupPlayerListener()
     startPositionTicker()
     GitHubUpdater.cleanupObsoleteApks(application, _installedAppInfo.value.versionCode)
@@ -190,23 +207,64 @@ class AurixViewModel(application: Application) : AndroidViewModel(application) {
     })
   }
 
-  fun setAppMode(mode: String) { _appMode.value = mode }
-  fun setYoutubeUrl(url: String) { _youtubeUrl.value = url }
+  fun setSearchMode(mode: String) {
+    _searchMode.value = mode
+  }
+
+  fun setYoutubeUrl(url: String) {
+    _youtubeUrl.value = url
+    _youtubeError.value = null
+  }
 
   fun analyzeYoutubeUrl() {
-    val url = _youtubeUrl.value
-    if (url.isBlank()) return
-    val top = _rawTrending.value.firstOrNull()
-    val song = Song(
-      id = "yt_" + url.hashCode(),
-      title = top?.title ?: "Die with a smile (tiktok remix)",
-      artist = top?.artist ?: "Lady Gaga, Bruno Mars",
-      artworkUrl = top?.artworkUrl ?: "",
-      durationSeconds = top?.durationSeconds ?: 210,
-      streamUrl = top?.streamUrl ?: "https://discoveryprovider.audius.co/v1/tracks/7WJ9x/stream?app_name=aurix",
-      source = "YouTube"
-    )
-    _analyzedSong.value = song
+    val rawUrl = _youtubeUrl.value.trim()
+    if (rawUrl.isBlank()) {
+      _youtubeError.value = "Paste a YouTube link first."
+      return
+    }
+    if (!rawUrl.contains("youtube.com", ignoreCase = true) && !rawUrl.contains("youtu.be", ignoreCase = true)) {
+      _youtubeError.value = "Enter a valid YouTube URL (youtube.com or youtu.be)."
+      return
+    }
+
+    viewModelScope.launch {
+      _isAnalyzingYoutube.value = true
+      _youtubeError.value = null
+      _analyzedSong.value = null
+      try {
+        val info = NetworkClient.youtubeOEmbedApi.getVideoInfo(rawUrl)
+        val rawTitle = info.title?.trim().orEmpty()
+        val rawAuthor = info.authorName?.trim().orEmpty()
+        val cleanedTitle = rawTitle
+          .replace(Regex("""\((official|lyric|audio|music\s*video|mv|hd|4k).*?\)""", RegexOption.IGNORE_CASE), "")
+          .replace(Regex("""\[(official|lyric|audio|music\s*video|mv|hd|4k).*?\]""", RegexOption.IGNORE_CASE), "")
+          .trim()
+        val searchTerm = listOf(cleanedTitle, rawAuthor)
+          .filter { it.isNotBlank() }
+          .joinToString(" ")
+          .ifBlank { rawTitle }
+
+        if (searchTerm.isBlank()) {
+          _youtubeError.value = "Could not extract track title from link."
+          return@launch
+        }
+
+        val itunesRes = NetworkClient.itunesApi.searchSongs(term = searchTerm, limit = 8)
+        val matched = mapItunesTracks(itunesRes.results).firstOrNull()
+        if (matched != null) {
+          _analyzedSong.value = matched.copy(
+            artworkUrl = matched.artworkUrl.ifBlank { info.thumbnailUrl.orEmpty() },
+            source = "iTunes 30s"
+          )
+        } else {
+          _youtubeError.value = "No 30-second iTunes preview found for \"$cleanedTitle\"."
+        }
+      } catch (e: Exception) {
+        _youtubeError.value = "Unable to look up YouTube link. Check your network connection."
+      } finally {
+        _isAnalyzingYoutube.value = false
+      }
+    }
   }
 
   fun checkForUpdates(context: Context, silent: Boolean = false) {
@@ -298,7 +356,6 @@ class AurixViewModel(application: Application) : AndroidViewModel(application) {
           val targetRelease = currentStatus.release
           _latestRelease.value = targetRelease
 
-          // Reuse already-downloaded & signature-validated APK if it matches target versionCode
           val existingValidated = GitHubUpdater.hasValidatedNewerApk(context)
           if (existingValidated != null && existingValidated.apkVersionCode >= targetRelease.versionCode) {
             _apkDownloadState.value = existingValidated
@@ -365,7 +422,7 @@ class AurixViewModel(application: Application) : AndroidViewModel(application) {
     if (_songDownloadProgress.value.containsKey(song.id)) return
     viewModelScope.launch {
       _songDownloadProgress.value = _songDownloadProgress.value + (song.id to 0.05f)
-      Toast.makeText(context, "Downloading ${song.title}...", Toast.LENGTH_SHORT).show()
+      Toast.makeText(context, "Saving 30s preview: ${song.title}...", Toast.LENGTH_SHORT).show()
 
       val result = SongDownloader.downloadSongToDevice(context, song) { progress ->
         _songDownloadProgress.value = _songDownloadProgress.value + (song.id to progress)
@@ -389,69 +446,73 @@ class AurixViewModel(application: Application) : AndroidViewModel(application) {
     }
   }
 
-  fun loadTrending() {
-    viewModelScope.launch {
-      try {
-        val res = NetworkClient.audiusApi.getTrendingTracks()
-        val mapped = res.data.map { track ->
-          val art = track.artwork?.size480 ?: track.artwork?.size150 ?: ""
-          val streamUrl = "https://discoveryprovider.audius.co/v1/tracks/${track.id}/stream?app_name=aurix"
-          Song(
-            id = track.id,
-            title = track.title,
-            artist = track.user?.name ?: "Unknown artist",
-            artworkUrl = art,
-            durationSeconds = track.duration,
-            streamUrl = streamUrl,
-            source = "Audius"
-          )
-        }
-        _rawTrending.value = mapped
-      } catch (e: Exception) {
-        _rawTrending.value = listOf(
-          Song("1", "Die with a smile (tiktok remix)", "Lady Gaga, Bruno Mars", "", 210, "", "Audius"),
-          Song("2", "NIGHT THINKER", "VannDa", "", 195, "", "Audius"),
-          Song("3", "Time To Rise", "VannDa ft. Master Kong Nay", "", 240, "", "Audius")
+  private fun mapItunesTracks(results: List<ItunesTrack>): List<Song> {
+    return results
+      .filter { !it.previewUrl.isNullOrBlank() && !it.trackName.isNullOrBlank() }
+      .distinctBy { it.trackId }
+      .map { track ->
+        val art = (track.artworkUrl100 ?: track.artworkUrl60)
+          ?.replace("100x100bb", "600x600bb")
+          ?.replace("60x60bb", "600x600bb")
+          ?: ""
+        Song(
+          id = "itunes_${track.trackId}",
+          title = track.trackName ?: "Untitled",
+          artist = track.artistName ?: "Unknown Artist",
+          artworkUrl = art,
+          durationSeconds = 30L,
+          streamUrl = track.previewUrl.orEmpty(),
+          source = "iTunes 30s"
         )
+      }
+  }
+
+  fun loadFeaturedItunes(term: String = "top hits") {
+    viewModelScope.launch {
+      _isLoadingFeatured.value = true
+      _featuredError.value = null
+      try {
+        val res = NetworkClient.itunesApi.searchSongs(term = term, limit = 15)
+        _rawFeatured.value = mapItunesTracks(res.results)
+      } catch (_: Exception) {
+        _rawFeatured.value = emptyList()
+        _featuredError.value = "Unable to reach iTunes Search right now."
+      } finally {
+        _isLoadingFeatured.value = false
       }
     }
   }
 
   fun search(query: String) {
+    _searchQuery.value = query
     searchJob?.cancel()
     if (query.isBlank()) {
       _rawSearchResults.value = emptyList()
+      _searchError.value = null
       _isSearching.value = false
       return
     }
     searchJob = viewModelScope.launch {
       _isSearching.value = true
+      _searchError.value = null
       delay(300)
       try {
-        val res = NetworkClient.audiusApi.searchTracks(query)
-        val mapped = res.data.map { track ->
-          val art = track.artwork?.size480 ?: track.artwork?.size150 ?: ""
-          val streamUrl = "https://discoveryprovider.audius.co/v1/tracks/${track.id}/stream?app_name=aurix"
-          Song(
-            id = track.id,
-            title = track.title,
-            artist = track.user?.name ?: "Unknown artist",
-            artworkUrl = art,
-            durationSeconds = track.duration,
-            streamUrl = streamUrl,
-            source = "Audius"
-          )
-        }
-        _rawSearchResults.value = mapped
-      } catch (e: Exception) {
+        val res = NetworkClient.itunesApi.searchSongs(term = query.trim(), limit = 30)
+        _rawSearchResults.value = mapItunesTracks(res.results)
+      } catch (_: Exception) {
         _rawSearchResults.value = emptyList()
+        _searchError.value = "Network error while searching iTunes."
       } finally {
         _isSearching.value = false
       }
     }
   }
 
-  fun playSong(song: Song, newQueue: List<Song> = _rawTrending.value.ifEmpty { listOf(song) }) {
+  fun playSong(song: Song, newQueue: List<Song> = _rawFeatured.value.ifEmpty { listOf(song) }) {
+    if (song.streamUrl.isBlank()) {
+      Toast.makeText(getApplication(), "No playable 30s preview URL for this track.", Toast.LENGTH_SHORT).show()
+      return
+    }
     _rawCurrentSong.value = song
     _queue.value = if (newQueue.any { it.id == song.id }) newQueue else listOf(song) + newQueue
     _currentPosition.value = 0L
@@ -475,15 +536,13 @@ class AurixViewModel(application: Application) : AndroidViewModel(application) {
     try {
       exoPlayer.stop()
       exoPlayer.clearMediaItems()
-      val mediaItem = MediaItem.fromUri(
-        Uri.parse(song.streamUrl.ifBlank { "https://discoveryprovider.audius.co/v1/tracks/7WJ9x/stream?app_name=aurix" })
-      )
+      val mediaItem = MediaItem.fromUri(Uri.parse(song.streamUrl))
       exoPlayer.setMediaItem(mediaItem)
       exoPlayer.playbackParameters = PlaybackParameters(_playbackSpeed.value)
       exoPlayer.prepare()
       exoPlayer.play()
-    } catch (e: Exception) {
-      // ignore
+    } catch (_: Exception) {
+      Toast.makeText(getApplication(), "Unable to play this track.", Toast.LENGTH_SHORT).show()
     }
   }
 
@@ -654,7 +713,7 @@ class AurixViewModel(application: Application) : AndroidViewModel(application) {
             _lyrics.value = LyricsResult(synced = null, plain = firstPlain?.plainLyrics ?: "No lyrics found for this song.")
           }
         }
-      } catch (e: Exception) {
+      } catch (_: Exception) {
         _lyrics.value = LyricsResult(synced = null, plain = "No lyrics found for this song.")
       }
     }

@@ -35,7 +35,7 @@ data class OnboardingPage(
 @Composable
 fun OnboardingScreen(onFinished: () -> Unit) {
   val pages = listOf(
-    OnboardingPage("Your music, all in one place", "Stream millions of songs from Audius and play your local files seamlessly.", Icons.Rounded.MusicNote),
+    OnboardingPage("Your music, all in one place", "Discover 30-second iTunes previews and play your local audio files seamlessly.", Icons.Rounded.MusicNote),
     OnboardingPage("Beautiful synchronized lyrics", "Follow along with real-time synced lyrics that auto-scroll as the music plays.", Icons.Rounded.Equalizer),
     OnboardingPage("Customize your experience", "Personalize themes, custom accent colors, language, and immersive backgrounds.", Icons.Rounded.Palette),
     OnboardingPage("Ready to listen?", "Dive into your personalized music journey with AURIX today.", Icons.Rounded.PlayArrow)

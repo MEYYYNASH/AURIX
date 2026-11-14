@@ -7,7 +7,7 @@ data class Song(
   val artworkUrl: String,
   val durationSeconds: Long,
   val streamUrl: String,
-  val source: String = "Audius", // "Audius" or "Local"
+  val source: String = "iTunes 30s", // "iTunes 30s", "Local", or "Downloaded"
   val isFavorite: Boolean = false
 )
 

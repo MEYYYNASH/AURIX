@@ -621,7 +621,7 @@ fun SettingsScreen(
             color = MaterialTheme.colorScheme.onSurface
           )
           Text(
-            text = "AURIX ${installedAppInfo.versionName} (code ${installedAppInfo.versionCode}). Streaming from Audius, synced lyrics from LRCLIB, signed OTA updates via GitHub.",
+            text = "AURIX ${installedAppInfo.versionName} (code ${installedAppInfo.versionCode}). iTunes 30s previews, synced lyrics from LRCLIB, signed OTA updates via GitHub.",
             style = MaterialTheme.typography.bodyMedium,
             color = MaterialTheme.colorScheme.onSurfaceVariant
           )

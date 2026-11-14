@@ -19,6 +19,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.blur
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.draw.drawBehind
+import androidx.compose.ui.draw.drawWithContent
 import androidx.compose.ui.geometry.CornerRadius
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.geometry.Rect
@@ -47,6 +48,7 @@ import androidx.compose.ui.unit.Density
 import androidx.compose.ui.unit.LayoutDirection
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import kotlinx.coroutines.Job
 import kotlinx.coroutines.coroutineScope
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
@@ -90,10 +92,10 @@ fun LiquidGlassTabBar(
   }
   val skipAnimations = reducedMotion || systemAnimScale == 0f
 
-  val darkTheme = MaterialTheme.colorScheme.background.luminance() < 0.5f || isSystemInDarkTheme() && MaterialTheme.colorScheme.surface.luminance() < 0.5f
+  val darkTheme = MaterialTheme.colorScheme.background.luminance() < 0.5f ||
+    (isSystemInDarkTheme() && MaterialTheme.colorScheme.surface.luminance() < 0.5f)
   val accentColor = MaterialTheme.colorScheme.primary
 
-  val padPx = with(density) { 5.dp.toPx() }
   val barInnerHeightPx = with(density) { 54.dp.toPx() }
   val restMarginPx = with(density) { 4.dp.toPx() }
   val extraWidthPressedPx = with(density) { 26.dp.toPx() }
@@ -103,7 +105,7 @@ fun LiquidGlassTabBar(
   val tabCount = tabs.size
   val tabWidthPx = if (innerWidthPx > 0f) innerWidthPx / tabCount else 0f
 
-  // Animation state kept strictly inside Animatable / float holders so frames never recompose
+  // Animation state kept strictly inside Animatable / SnapshotState so frames never trigger full recomposition
   val lensX = remember { Animatable(0f) }
   val pressProgress = remember { Animatable(0f) }
   var velocityX by remember { mutableFloatStateOf(0f) }
@@ -162,22 +164,20 @@ fun LiquidGlassTabBar(
     LensClipShape { rowSize -> computeLensRoundRect(rowSize) }
   }
 
-  val glassBaseFill = if (darkTheme) Color(0xFF606878).copy(alpha = 0.38f) else Color.White.copy(alpha = 0.26f)
-  val innerEdgeHighlight = Color.White.copy(alpha = if (darkTheme) 0.24f else 0.58f)
-  val topEdgeBrightHighlight = Color.White.copy(alpha = if (darkTheme) 0.45f else 0.88f)
+  val glassBaseFill = if (darkTheme) Color(0xFF424B5E).copy(alpha = 0.42f) else Color.White.copy(alpha = 0.30f)
+  val innerEdgeHighlight = Color.White.copy(alpha = if (darkTheme) 0.24f else 0.62f)
+  val topEdgeBrightHighlight = Color.White.copy(alpha = if (darkTheme) 0.48f else 0.90f)
   val baseTabColor = if (darkTheme) Color(0xFFE5EAF5) else Color(0xFF1E293B)
-
-  val scope = rememberCoroutineScope()
 
   Box(
     modifier = modifier
-      .fillMaxWidth()
       .padding(horizontal = 22.dp)
       .widthIn(max = 350.dp)
+      .fillMaxWidth()
       .height(64.dp),
     contentAlignment = Alignment.Center
   ) {
-    // 1. Soft Ambient Pill Shadow (drawn smoothly behind without muddying translucent fill)
+    // 1. Soft Ambient Pill Shadow
     Box(
       modifier = Modifier
         .matchParentSize()
@@ -187,7 +187,7 @@ fun LiquidGlassTabBar(
             brush = Brush.verticalGradient(
               colors = listOf(
                 Color.Black.copy(alpha = if (darkTheme) 0.28f else 0.08f),
-                Color.Black.copy(alpha = if (darkTheme) 0.40f else 0.14f)
+                Color.Black.copy(alpha = if (darkTheme) 0.42f else 0.14f)
               )
             ),
             topLeft = Offset(0f, 6.dp.toPx()),
@@ -203,7 +203,6 @@ fun LiquidGlassTabBar(
         .matchParentSize()
         .clip(CircleShape)
     ) {
-      // Android 12+ (API 31+) blurred ambient frost strip inside the glass pill
       if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
         Box(
           modifier = Modifier
@@ -220,7 +219,7 @@ fun LiquidGlassTabBar(
                 } else {
                   listOf(
                     accentColor.copy(alpha = 0.12f),
-                    Color.White.copy(alpha = 0.44f),
+                    Color.White.copy(alpha = 0.46f),
                     Color(0xFFC4B5FD).copy(alpha = 0.24f)
                   )
                 }
@@ -229,7 +228,6 @@ fun LiquidGlassTabBar(
         )
       }
 
-      // Translucent glass fill + 1dp inner edge + brighter 1.5dp top highlight
       Box(
         modifier = Modifier
           .matchParentSize()
@@ -243,7 +241,7 @@ fun LiquidGlassTabBar(
               brush = Brush.verticalGradient(
                 colors = listOf(
                   topEdgeBrightHighlight,
-                  topEdgeBrightHighlight.copy(alpha = 0.12f),
+                  topEdgeBrightHighlight.copy(alpha = 0.14f),
                   Color.Transparent
                 ),
                 startY = 0f,
@@ -268,12 +266,14 @@ fun LiquidGlassTabBar(
           if (tabWidthPx <= 0f) return@pointerInput
           val maxLensX = (tabCount - 1) * tabWidthPx
           val touchSlopSq = viewConfiguration.touchSlop * viewConfiguration.touchSlop
+          var releaseJob: Job? = null
 
           coroutineScope {
             while (true) {
               awaitPointerEventScope {
                 val down = awaitPointerEvent().changes.firstOrNull { it.pressed } ?: return@awaitPointerEventScope
                 down.consume()
+                releaseJob?.cancel()
                 val pressStartMs = System.currentTimeMillis()
                 isPointerActive = true
                 val startPos = down.position
@@ -305,7 +305,7 @@ fun LiquidGlassTabBar(
                       launch {
                         lensX.animateTo(targetX, settleXSpring)
                       }
-                      launch {
+                      releaseJob = launch {
                         val remainingHold = (180L - elapsed).coerceAtLeast(0L)
                         if (remainingHold > 0L) delay(remainingHold)
                         isPointerActive = false
@@ -322,7 +322,7 @@ fun LiquidGlassTabBar(
                       isPointerActive = false
                       velocityX = 0f
                       launch { lensX.animateTo(targetX, settleXSpring) }
-                      launch { pressProgress.animateTo(0f, pressSpring) }
+                      releaseJob = launch { pressProgress.animateTo(0f, pressSpring) }
                     }
                     break
                   }
@@ -372,8 +372,7 @@ fun LiquidGlassTabBar(
             val topLeft = Offset(rr.left, rr.top)
             val lensSize = Size(rr.width, rr.height)
 
-            // Subtle at rest -> brighter frosted glass fill while pressed
-            val fillAlpha = if (darkTheme) (0.14f + 0.18f * p) else (0.38f + 0.30f * p)
+            val fillAlpha = if (darkTheme) (0.16f + 0.18f * p) else (0.44f + 0.30f * p)
             drawRoundRect(
               color = Color.White.copy(alpha = fillAlpha),
               topLeft = topLeft,
@@ -381,7 +380,6 @@ fun LiquidGlassTabBar(
               cornerRadius = corner
             )
 
-            // Soft diagonal white shine
             if (p > 0.02f) {
               drawRoundRect(
                 brush = Brush.linearGradient(
@@ -399,16 +397,14 @@ fun LiquidGlassTabBar(
               )
             }
 
-            // Crisp white lens rim
             drawRoundRect(
-              color = Color.White.copy(alpha = if (darkTheme) (0.16f + 0.42f * p) else (0.45f + 0.45f * p)),
+              color = Color.White.copy(alpha = if (darkTheme) (0.20f + 0.42f * p) else (0.50f + 0.42f * p)),
               topLeft = topLeft,
               size = lensSize,
               cornerRadius = corner,
               style = Stroke(width = (1f + 0.8f * p).dp.toPx())
             )
 
-            // Colored chromatic rim light while pressed (pink left, blue right, yellow top, purple bottom at ~0.3 alpha)
             if (p > 0.03f) {
               val rimWidth = 2.dp.toPx()
               drawRoundRect(
@@ -445,9 +441,24 @@ fun LiquidGlassTabBar(
           }
       )
 
-      // B. Base Row of 4 Equal Tabs (fades out smoothly under the lens so copies never overlap)
+      // B. Base Row of 4 Equal Tabs — punches out exact Lens RoundRect with BlendMode.Clear so copies NEVER overlap!
       Row(
-        modifier = Modifier.matchParentSize(),
+        modifier = Modifier
+          .matchParentSize()
+          .graphicsLayer { compositingStrategy = CompositingStrategy.Offscreen }
+          .drawWithContent {
+            drawContent()
+            val rr = computeLensRoundRect(size)
+            if (rr.width > 0f && rr.height > 0f) {
+              drawRoundRect(
+                color = Color.Black,
+                topLeft = Offset(rr.left, rr.top),
+                size = Size(rr.width, rr.height),
+                cornerRadius = CornerRadius(rr.topLeftCornerRadius.x, rr.topLeftCornerRadius.y),
+                blendMode = BlendMode.Clear
+              )
+            }
+          },
         verticalAlignment = Alignment.CenterVertically
       ) {
         tabs.forEachIndexed { index, tab ->
@@ -460,15 +471,7 @@ fun LiquidGlassTabBar(
                 selected = (index == selectedIndex)
                 contentDescription = tab.label
               }
-              .testTag("nav_tab_${tab.label.lowercase()}")
-              .graphicsLayer {
-                if (tabWidthPx > 0f) {
-                  val tabCenter = (index + 0.5f) * tabWidthPx
-                  val lensCenter = lensX.value + tabWidthPx * 0.5f
-                  val dist = abs(tabCenter - lensCenter) / (tabWidthPx * 0.52f)
-                  alpha = dist.coerceIn(0f, 1f)
-                }
-              },
+              .testTag("nav_tab_${tab.label.lowercase()}"),
             contentAlignment = Alignment.Center
           ) {
             LiquidGlassTabContent(
@@ -479,13 +482,19 @@ fun LiquidGlassTabBar(
         }
       }
 
-      // C. Magnifier Copy in Accent Blue, clipped to Lens Shape and scaled up around Lens Center
+      // C. Magnifier Copy in Accent Blue, strictly clipped to Lens Shape and scaled up around Lens Center
       Row(
         modifier = Modifier
           .matchParentSize()
           .graphicsLayer {
-            clip = true
-            shape = lensClipShape
+            // Read animated state values here so the outline clip tracks every animation frame
+            val unusedX = lensX.value
+            val unusedP = pressProgress.value
+            val unusedV = velocityX
+            if (unusedX.isFinite() && unusedP.isFinite() && unusedV.isFinite()) {
+              clip = true
+              shape = lensClipShape
+            }
           }
           .graphicsLayer {
             val scale = if (skipAnimations) 1.0f else (1.0f + 0.2f * pressProgress.value.coerceIn(0f, 1f))
