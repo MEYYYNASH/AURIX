@@ -92,6 +92,8 @@ class SyncedLyricsView @JvmOverloads constructor(
       onLineClick?.invoke((line.timestampMs - offsetMs).coerceAtLeast(0L))
     }
 
+    clipChildren = false
+    clipToPadding = false
     recyclerView = RecyclerView(context).apply {
       layoutParams = LayoutParams(
         ViewGroup.LayoutParams.MATCH_PARENT,
@@ -99,12 +101,13 @@ class SyncedLyricsView @JvmOverloads constructor(
       )
       layoutManager = this@SyncedLyricsView.layoutManager
       adapter = this@SyncedLyricsView.adapter
+      clipChildren = false
       clipToPadding = false
       overScrollMode = OVER_SCROLL_NEVER
       isVerticalFadingEdgeEnabled = true
-      setFadingEdgeLength((28f * dp).toInt())
+      setFadingEdgeLength((24f * dp).toInt())
       itemAnimator = null
-      setPadding(0, (8f * dp).toInt(), 0, (160f * dp).toInt())
+      setPadding((4f * dp).toInt(), (12f * dp).toInt(), (4f * dp).toInt(), (160f * dp).toInt())
     }
 
     recyclerView.addOnScrollListener(object : RecyclerView.OnScrollListener() {

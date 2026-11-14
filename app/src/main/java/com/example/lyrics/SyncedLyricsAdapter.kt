@@ -30,7 +30,7 @@ class LyricLineTextView(context: Context) : TextView(context) {
   private val tempClipRect = Rect()
 
   init {
-    includeFontPadding = false
+    includeFontPadding = true
     gravity = Gravity.START or Gravity.CENTER_VERTICAL
     setTextColor(Color.WHITE)
   }
@@ -101,18 +101,18 @@ class LyricLineTextView(context: Context) : TextView(context) {
       val lineEnd = textLayout.getLineEnd(i)
       if (safeReveal <= lineStart) break
 
-      val top = textLayout.getLineTop(i) + extendedPaddingTop
-      val bottom = textLayout.getLineBottom(i) + extendedPaddingTop
+      val top = if (i == 0) 0 else (textLayout.getLineTop(i) + extendedPaddingTop)
+      val bottom = if (i == lineCount - 1) height else (textLayout.getLineBottom(i) + extendedPaddingTop)
 
       if (safeReveal >= lineEnd) {
-        tempClipRect.set(compoundPaddingLeft, top, contentRight, bottom)
+        tempClipRect.set(0, top, width, bottom)
       } else {
         val boundaryX = (textLayout.getPrimaryHorizontal(safeReveal) + padLeft).toInt()
         val isLtr = textLayout.getParagraphDirection(i) != Layout.DIR_RIGHT_TO_LEFT
         if (isLtr) {
-          tempClipRect.set(compoundPaddingLeft, top, boundaryX.coerceIn(compoundPaddingLeft, contentRight), bottom)
+          tempClipRect.set(0, top, boundaryX.coerceIn(0, contentRight), bottom)
         } else {
-          tempClipRect.set(boundaryX.coerceIn(compoundPaddingLeft, contentRight), top, contentRight, bottom)
+          tempClipRect.set(boundaryX.coerceIn(compoundPaddingLeft, width), top, width, bottom)
         }
       }
 
@@ -213,14 +213,19 @@ class SyncedLyricsAdapter(
 
   override fun onCreateViewHolder(parent: ViewGroup, viewType: Int): LyricViewHolder {
     val dp = parent.resources.displayMetrics.density
+    val hMargin = (4f * dp).toInt()
     val container = FrameLayout(parent.context).apply {
       layoutParams = RecyclerView.LayoutParams(
         ViewGroup.LayoutParams.MATCH_PARENT,
         ViewGroup.LayoutParams.WRAP_CONTENT
       ).apply {
-        bottomMargin = (10f * dp).toInt()
+        leftMargin = hMargin
+        rightMargin = hMargin
+        bottomMargin = (8f * dp).toInt()
       }
       minimumHeight = (48f * dp).toInt()
+      clipChildren = false
+      clipToPadding = false
       isClickable = true
       isFocusable = true
     }
@@ -255,7 +260,7 @@ class SyncedLyricsAdapter(
 
     private val activePillDrawable = GradientDrawable().apply {
       shape = GradientDrawable.RECTANGLE
-      cornerRadius = 18f * density
+      cornerRadius = 20f * density
       orientation = GradientDrawable.Orientation.LEFT_RIGHT
     }
 
@@ -307,18 +312,18 @@ class SyncedLyricsAdapter(
 
       if (lastAppliedActive != isActive) {
         lastAppliedActive = isActive
-        val hPad = (14f * density).toInt()
-        val vPad = ((if (isActive) 12f else 8f) * density).toInt()
+        val hPad = (16f * density).toInt()
+        val vPad = ((if (isActive) 14f else 9f) * density).toInt()
         container.setPadding(hPad, vPad, hPad, vPad)
 
         if (isActive) {
-          val startTint = Color.argb(72, Color.red(accentColor), Color.green(accentColor), Color.blue(accentColor))
-          val endTint = Color.argb(36, 255, 255, 255)
+          val startTint = Color.argb(56, Color.red(accentColor), Color.green(accentColor), Color.blue(accentColor))
+          val endTint = Color.argb(28, 255, 255, 255)
           activePillDrawable.colors = intArrayOf(startTint, endTint)
-          activePillDrawable.setStroke((1f * density).toInt().coerceAtLeast(1), Color.argb(82, 255, 255, 255))
+          activePillDrawable.setStroke((1f * density).toInt().coerceAtLeast(1), Color.argb(72, 255, 255, 255))
           container.background = activePillDrawable
-          textView.setTextSize(TypedValue.COMPLEX_UNIT_SP, 23f)
-          textView.setLineSpacing((7f * density), 1f)
+          textView.setTextSize(TypedValue.COMPLEX_UNIT_SP, 22f)
+          textView.setLineSpacing((8f * density), 1f)
           textView.typeface = extraBoldTypeface
         } else {
           container.background = null
@@ -327,18 +332,10 @@ class SyncedLyricsAdapter(
           textView.typeface = semiBoldTypeface
         }
 
-        val targetScale = if (isActive && !reducedMotion) 1.02f else 1.0f
-        if (reducedMotion || fullBind) {
-          container.animate().cancel()
-          container.scaleX = targetScale
-          container.scaleY = targetScale
-        } else {
-          container.animate()
-            .scaleX(targetScale)
-            .scaleY(targetScale)
-            .setDuration(220L)
-            .start()
-        }
+        // Keep horizontal scale at 1.0f so the left/right rounded corners of the active pill are never clipped
+        container.animate().cancel()
+        container.scaleX = 1.0f
+        container.scaleY = 1.0f
       }
 
       if (lastAppliedAlpha != targetAlpha) {
