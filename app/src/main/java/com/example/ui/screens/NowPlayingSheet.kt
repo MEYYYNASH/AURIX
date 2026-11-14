@@ -3,8 +3,13 @@ package com.example.ui.screens
 import android.content.Intent
 import androidx.activity.compose.BackHandler
 import androidx.compose.animation.AnimatedContent
+import androidx.compose.animation.core.FastOutSlowInEasing
+import androidx.compose.animation.core.RepeatMode
 import androidx.compose.animation.core.Spring
+import androidx.compose.animation.core.animateFloat
 import androidx.compose.animation.core.animateFloatAsState
+import androidx.compose.animation.core.infiniteRepeatable
+import androidx.compose.animation.core.rememberInfiniteTransition
 import androidx.compose.animation.core.snap
 import androidx.compose.animation.core.spring
 import androidx.compose.animation.core.tween
@@ -12,11 +17,10 @@ import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
 import androidx.compose.animation.togetherWith
 import androidx.compose.foundation.background
+import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.layout.*
-import androidx.compose.foundation.lazy.LazyColumn
-import androidx.compose.foundation.lazy.itemsIndexed
-import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
@@ -29,13 +33,13 @@ import androidx.compose.ui.draw.alpha
 import androidx.compose.ui.draw.blur
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.draw.scale
+import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.text.font.FontWeight
-import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextDecoration
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
@@ -45,6 +49,7 @@ import com.example.model.LyricsResult
 import com.example.model.Song
 import com.example.ui.theme.HeartRed
 
+@OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun NowPlayingSheet(
   song: Song,
@@ -68,7 +73,8 @@ fun NowPlayingSheet(
   onSeek: (Long) -> Unit,
   onFavorite: () -> Unit,
   onClose: () -> Unit,
-  onLineClick: (Long) -> Unit
+  onLineClick: (Long) -> Unit,
+  onRetryLyrics: () -> Unit = {}
 ) {
   BackHandler { onClose() }
 
@@ -76,12 +82,34 @@ fun NowPlayingSheet(
   var showDetails by remember { mutableStateOf(false) }
   val context = LocalContext.current
 
-  val (c1, c2) = remember(song.title) { artworkHueColors(song.title) }
+  val (c1, c2) = rememberArtworkColors(song.artworkUrl, song.title)
   val bgAlpha by animateFloatAsState(
-    targetValue = if (dynamicBg) 0.85f else 0f,
+    targetValue = if (dynamicBg) 1.0f else 0f,
     animationSpec = if (reducedMotion) snap() else tween(500),
     label = "np_bg_alpha"
   )
+
+  val infiniteTransition = rememberInfiniteTransition(label = "np_backdrop_drift")
+  val backdropScale by infiniteTransition.animateFloat(
+    initialValue = 1.28f,
+    targetValue = 1.44f,
+    animationSpec = infiniteRepeatable(
+      animation = tween(durationMillis = 6800, easing = FastOutSlowInEasing),
+      repeatMode = RepeatMode.Reverse
+    ),
+    label = "np_drift_scale"
+  )
+  val backdropShiftX by infiniteTransition.animateFloat(
+    initialValue = -16f,
+    targetValue = 16f,
+    animationSpec = infiniteRepeatable(
+      animation = tween(durationMillis = 8200, easing = FastOutSlowInEasing),
+      repeatMode = RepeatMode.Reverse
+    ),
+    label = "np_drift_x"
+  )
+  val activeBgScale = if (reducedMotion) 1.32f else backdropScale
+  val activeBgShiftX = if (reducedMotion) 0f else backdropShiftX
 
   val heartScale by animateFloatAsState(
     targetValue = if (song.isFavorite) 1.25f else 1.0f,
@@ -92,9 +120,9 @@ fun NowPlayingSheet(
   Box(
     modifier = Modifier
       .fillMaxSize()
-      .background(Color(0xFF10131A))
+      .background(Color(0xFF0C0F16))
   ) {
-    // Dynamic artwork blurred backdrop
+    // True Dynamic Artwork Background sampled from actual album cover colors + blurred drifting art
     if (bgAlpha > 0.01f) {
       Box(modifier = Modifier.fillMaxSize().alpha(bgAlpha)) {
         if (song.artworkUrl.isNotBlank()) {
@@ -104,8 +132,9 @@ fun NowPlayingSheet(
             contentScale = ContentScale.Crop,
             modifier = Modifier
               .fillMaxSize()
-              .scale(1.2f)
-              .blur(60.dp)
+              .offset(x = activeBgShiftX.dp)
+              .scale(activeBgScale)
+              .blur(54.dp)
           )
         }
         Box(
@@ -114,17 +143,42 @@ fun NowPlayingSheet(
             .background(
               Brush.radialGradient(
                 colors = listOf(
-                  c2.copy(alpha = 0.55f),
-                  c1.copy(alpha = 0.45f),
-                  Color(0xFF0B1020).copy(alpha = 0.88f)
-                )
+                  c1.copy(alpha = 0.62f),
+                  c2.copy(alpha = 0.34f),
+                  Color.Transparent
+                ),
+                center = Offset(320f, 380f),
+                radius = 1250f
               )
             )
         )
         Box(
           modifier = Modifier
             .fillMaxSize()
-            .background(Color(0xFF0A0D14).copy(alpha = 0.48f))
+            .background(
+              Brush.radialGradient(
+                colors = listOf(
+                  c2.copy(alpha = 0.44f),
+                  Color.Transparent
+                ),
+                center = Offset(780f, 1550f),
+                radius = 1000f
+              )
+            )
+        )
+        // Balanced contrast gradient so cover art colors glow vibrantly while keeping white controls crisp
+        Box(
+          modifier = Modifier
+            .fillMaxSize()
+            .background(
+              Brush.verticalGradient(
+                colors = listOf(
+                  Color(0xFF090C14).copy(alpha = 0.32f),
+                  Color(0xFF090C14).copy(alpha = 0.42f),
+                  Color(0xFF080A11).copy(alpha = 0.72f)
+                )
+              )
+            )
         )
       }
     }
@@ -152,7 +206,8 @@ fun NowPlayingSheet(
         // Glass Switch: Player | Lyrics
         Surface(
           shape = RoundedCornerShape(999.dp),
-          color = Color.White.copy(alpha = 0.14f)
+          color = Color.White.copy(alpha = 0.14f),
+          border = androidx.compose.foundation.BorderStroke(1.dp, Color.White.copy(alpha = 0.22f))
         ) {
           Row(modifier = Modifier.padding(3.dp)) {
             listOf(false to "Player", true to "Lyrics").forEach { (lyricsTab, label) ->
@@ -160,13 +215,14 @@ fun NowPlayingSheet(
               Box(
                 modifier = Modifier
                   .clip(RoundedCornerShape(999.dp))
-                  .background(if (selected) Color.White.copy(alpha = 0.24f) else Color.Transparent)
+                  .background(if (selected) Color.White.copy(alpha = 0.26f) else Color.Transparent)
                   .clickable { showLyrics = lyricsTab }
+                  .testTag(if (lyricsTab) "np_tab_lyrics" else "np_tab_player")
                   .padding(horizontal = 18.dp, vertical = 8.dp)
               ) {
                 Text(
                   text = label,
-                  color = if (selected) Color.White else Color.White.copy(alpha = 0.7f),
+                  color = if (selected) Color.White else Color.White.copy(alpha = 0.72f),
                   style = MaterialTheme.typography.bodySmall.copy(fontWeight = FontWeight.SemiBold)
                 )
               }
@@ -182,7 +238,12 @@ fun NowPlayingSheet(
         }
       }
 
-      Spacer(modifier = Modifier.height(16.dp))
+      Spacer(modifier = Modifier.height(12.dp))
+
+      val syncedLines = lyricsResult?.synced
+      val activeLyricLine = remember(syncedLines, currentPositionMs) {
+        syncedLines?.lastOrNull { it.timestampMs <= currentPositionMs } ?: syncedLines?.firstOrNull()
+      }
 
       // Pane Switcher with smooth fade
       AnimatedContent(
@@ -195,11 +256,13 @@ fun NowPlayingSheet(
         label = "np_pane"
       ) { lyricsVisible ->
         if (lyricsVisible) {
-          SyncedLyricsPane(
+          LyricsView(
             lyricsResult = lyricsResult,
             currentPositionMs = currentPositionMs,
+            accentColor = c1,
             reducedMotion = reducedMotion,
-            onLineClick = onLineClick
+            onLineClick = onLineClick,
+            onRetryLyrics = onRetryLyrics
           )
         } else {
           Column(
@@ -215,7 +278,7 @@ fun NowPlayingSheet(
 
             Surface(
               modifier = Modifier
-                .size(280.dp)
+                .size(if (activeLyricLine != null) 252.dp else 280.dp)
                 .scale(artScale),
               shape = RoundedCornerShape(28.dp),
               shadowElevation = 24.dp,
@@ -229,7 +292,7 @@ fun NowPlayingSheet(
               )
             }
 
-            Spacer(modifier = Modifier.height(28.dp))
+            Spacer(modifier = Modifier.height(22.dp))
 
             Row(
               modifier = Modifier.fillMaxWidth(),
@@ -250,7 +313,7 @@ fun NowPlayingSheet(
                   style = MaterialTheme.typography.bodyMedium,
                   maxLines = 1,
                   overflow = TextOverflow.Ellipsis,
-                  color = Color.White.copy(alpha = 0.72f)
+                  color = Color.White.copy(alpha = 0.78f)
                 )
               }
               IconButton(
@@ -265,36 +328,96 @@ fun NowPlayingSheet(
                 )
               }
             }
+
+            if (activeLyricLine != null) {
+              Spacer(modifier = Modifier.height(12.dp))
+              Row(
+                modifier = Modifier
+                  .fillMaxWidth()
+                  .clip(RoundedCornerShape(16.dp))
+                  .background(Color.White.copy(alpha = 0.12f))
+                  .border(1.dp, Color.White.copy(alpha = 0.20f), RoundedCornerShape(16.dp))
+                  .clickable { showLyrics = true }
+                  .padding(horizontal = 14.dp, vertical = 10.dp),
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.spacedBy(8.dp)
+              ) {
+                Icon(
+                  imageVector = Icons.Rounded.Lyrics,
+                  contentDescription = null,
+                  tint = Color.White.copy(alpha = 0.85f),
+                  modifier = Modifier.size(16.dp)
+                )
+                Text(
+                  text = activeLyricLine.text,
+                  style = MaterialTheme.typography.bodySmall.copy(fontWeight = FontWeight.SemiBold),
+                  color = Color.White.copy(alpha = 0.94f),
+                  maxLines = 1,
+                  overflow = TextOverflow.Ellipsis,
+                  modifier = Modifier.weight(1f)
+                )
+              }
+            }
           }
         }
       }
 
-      Spacer(modifier = Modifier.height(12.dp))
+      Spacer(modifier = Modifier.height(10.dp))
 
-      // Seek bar
+      // Seek bar with sleek circular white thumb (replaces tall vertical M3 thumb)
       val totalMs = durationMs.coerceAtLeast(song.durationSeconds * 1000L).coerceAtLeast(1L)
       val sliderPos = currentPositionMs.toFloat().coerceIn(0f, totalMs.toFloat())
+      val sliderInteraction = remember { MutableInteractionSource() }
 
       Slider(
         value = sliderPos,
         onValueChange = { onSeek(it.toLong()) },
         valueRange = 0f..totalMs.toFloat(),
-        colors = SliderDefaults.colors(
-          thumbColor = Color.White,
-          activeTrackColor = Color.White,
-          inactiveTrackColor = Color.White.copy(alpha = 0.25f)
-        )
+        interactionSource = sliderInteraction,
+        thumb = {
+          Box(
+            modifier = Modifier
+              .size(16.dp)
+              .clip(CircleShape)
+              .background(Color.White)
+              .border(1.dp, c1.copy(alpha = 0.45f), CircleShape)
+          )
+        },
+        track = { sliderState ->
+          val fraction = ((sliderState.value - sliderState.valueRange.start) /
+            (sliderState.valueRange.endInclusive - sliderState.valueRange.start).coerceAtLeast(1f))
+            .coerceIn(0f, 1f)
+          Box(
+            modifier = Modifier
+              .fillMaxWidth()
+              .height(5.dp)
+              .clip(CircleShape)
+              .background(Color.White.copy(alpha = 0.24f))
+          ) {
+            Box(
+              modifier = Modifier
+                .fillMaxWidth(fraction)
+                .fillMaxHeight()
+                .clip(CircleShape)
+                .background(
+                  Brush.horizontalGradient(
+                    colors = listOf(Color.White, Color.White.copy(alpha = 0.92f))
+                  )
+                )
+            )
+          }
+        }
       )
 
       Row(
         modifier = Modifier.fillMaxWidth(),
         horizontalArrangement = Arrangement.SpaceBetween
       ) {
-        Text(text = formatTime(currentPositionMs), style = MaterialTheme.typography.bodySmall, color = Color.White.copy(alpha = 0.72f))
-        Text(text = formatTime(totalMs), style = MaterialTheme.typography.bodySmall, color = Color.White.copy(alpha = 0.72f))
+        Text(text = formatTime(currentPositionMs), style = MaterialTheme.typography.bodySmall, color = Color.White.copy(alpha = 0.78f))
+        Text(text = formatTime(totalMs), style = MaterialTheme.typography.bodySmall, color = Color.White.copy(alpha = 0.78f))
       }
 
-      Spacer(modifier = Modifier.height(14.dp))
+      Spacer(modifier = Modifier.height(12.dp))
 
       // Playback controls
       Row(
@@ -306,7 +429,7 @@ fun NowPlayingSheet(
           Icon(
             Icons.Rounded.Shuffle,
             contentDescription = "Shuffle",
-            tint = if (shuffleEnabled) MaterialTheme.colorScheme.primary else Color.White.copy(alpha = 0.65f)
+            tint = if (shuffleEnabled) c1 else Color.White.copy(alpha = 0.70f)
           )
         }
         IconButton(onClick = onPrevious, modifier = Modifier.minimumInteractiveComponentSize()) {
@@ -338,12 +461,12 @@ fun NowPlayingSheet(
           Icon(
             Icons.Rounded.Repeat,
             contentDescription = "Repeat",
-            tint = if (repeatEnabled) MaterialTheme.colorScheme.primary else Color.White.copy(alpha = 0.65f)
+            tint = if (repeatEnabled) c1 else Color.White.copy(alpha = 0.70f)
           )
         }
       }
 
-      Spacer(modifier = Modifier.height(12.dp))
+      Spacer(modifier = Modifier.height(10.dp))
 
       // Sleep timer & speed toggles
       Row(
@@ -354,7 +477,7 @@ fun NowPlayingSheet(
           val label = if (sleepMinutes == 0) "Sleep: Off" else "Sleep: ${sleepMinutes}m"
           Text(
             text = label,
-            color = if (sleepMinutes > 0) Color.White else Color.White.copy(alpha = 0.65f),
+            color = if (sleepMinutes > 0) Color.White else Color.White.copy(alpha = 0.70f),
             textDecoration = if (sleepMinutes > 0) TextDecoration.Underline else TextDecoration.None
           )
         }
@@ -367,7 +490,7 @@ fun NowPlayingSheet(
           }
           Text(
             text = "Speed: $speedLabel",
-            color = if (playbackSpeed != 1.0f) Color.White else Color.White.copy(alpha = 0.65f),
+            color = if (playbackSpeed != 1.0f) Color.White else Color.White.copy(alpha = 0.70f),
             textDecoration = if (playbackSpeed != 1.0f) TextDecoration.Underline else TextDecoration.None
           )
         }
@@ -393,96 +516,6 @@ fun NowPlayingSheet(
         showDetails = false
       }
     )
-  }
-}
-
-@Composable
-fun SyncedLyricsPane(
-  lyricsResult: LyricsResult?,
-  currentPositionMs: Long,
-  reducedMotion: Boolean,
-  onLineClick: (Long) -> Unit
-) {
-  if (lyricsResult == null) {
-    Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
-      CircularProgressIndicator(color = Color.White)
-    }
-    return
-  }
-
-  if (lyricsResult.synced.isNullOrEmpty()) {
-    LazyColumn(
-      modifier = Modifier.fillMaxSize(),
-      contentPadding = PaddingValues(vertical = 32.dp)
-    ) {
-      item {
-        Text(
-          text = "Not synced",
-          style = MaterialTheme.typography.bodySmall,
-          color = Color.White.copy(alpha = 0.6f),
-          modifier = Modifier.padding(bottom = 16.dp)
-        )
-        Text(
-          text = lyricsResult.plain ?: "No lyrics found for this song.",
-          style = MaterialTheme.typography.titleLarge.copy(fontSize = 20.sp, lineHeight = 30.sp),
-          color = Color.White.copy(alpha = 0.88f)
-        )
-      }
-    }
-    return
-  }
-
-  val synced = lyricsResult.synced
-  val activeIndex = synced.indexOfLast { it.timestampMs <= currentPositionMs }.coerceAtLeast(0)
-  val listState = rememberLazyListState()
-
-  LaunchedEffect(activeIndex) {
-    if (activeIndex >= 0 && activeIndex < synced.size) {
-      if (reducedMotion) {
-        listState.scrollToItem(activeIndex)
-      } else {
-        listState.animateScrollToItem(activeIndex)
-      }
-    }
-  }
-
-  LazyColumn(
-    state = listState,
-    modifier = Modifier.fillMaxSize(),
-    verticalArrangement = Arrangement.spacedBy(18.dp),
-    contentPadding = PaddingValues(top = 24.dp, bottom = 180.dp)
-  ) {
-    item {
-      Text(
-        text = "Synced lyrics",
-        style = MaterialTheme.typography.bodySmall,
-        color = Color.White.copy(alpha = 0.6f)
-      )
-    }
-    itemsIndexed(synced) { index, line ->
-      val isActive = index == activeIndex
-      val lineAlpha by animateFloatAsState(
-        targetValue = if (isActive) 1.0f else 0.35f,
-        animationSpec = if (reducedMotion) snap() else tween(350),
-        label = "lyric_alpha"
-      )
-      Text(
-        text = line.text.ifBlank { "..." },
-        style = MaterialTheme.typography.displayLarge.copy(
-          fontSize = 24.sp,
-          lineHeight = 31.sp,
-          fontWeight = FontWeight.Bold
-        ),
-        color = Color.White,
-        textAlign = TextAlign.Start,
-        modifier = Modifier
-          .fillMaxWidth()
-          .alpha(lineAlpha)
-          .blur(if (isActive || reducedMotion) 0.dp else 1.dp)
-          .clickable { onLineClick(line.timestampMs) }
-          .padding(vertical = 4.dp)
-      )
-    }
   }
 }
 

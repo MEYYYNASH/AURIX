@@ -1,6 +1,11 @@
 package com.example.ui.screens
 
+import android.Manifest
+import android.content.pm.PackageManager
+import android.os.Build
 import androidx.activity.compose.BackHandler
+import androidx.activity.compose.rememberLauncherForActivityResult
+import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.animation.*
 import androidx.compose.animation.core.CubicBezierEasing
 import androidx.compose.animation.core.animateFloatAsState
@@ -22,11 +27,16 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.alpha
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.draw.scale
+import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.window.DialogProperties
+import androidx.core.content.ContextCompat
+import androidx.lifecycle.Lifecycle
+import androidx.lifecycle.LifecycleEventObserver
+import androidx.lifecycle.compose.LocalLifecycleOwner
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.example.data.ApkDownloadState
 import com.example.data.UpdateCheckStatus
@@ -82,6 +92,8 @@ fun AurixApp(viewModel: AurixViewModel) {
   val featuredTracks by viewModel.featuredTracks.collectAsStateWithLifecycle()
   val isLoadingFeatured by viewModel.isLoadingFeatured.collectAsStateWithLifecycle()
   val featuredError by viewModel.featuredError.collectAsStateWithLifecycle()
+  val selectedDailyFeed by viewModel.selectedDailyFeed.collectAsStateWithLifecycle()
+  val dailyUpdatedLabel by viewModel.dailyUpdatedLabel.collectAsStateWithLifecycle()
   val searchResults by viewModel.searchResults.collectAsStateWithLifecycle()
   val isSearching by viewModel.isSearching.collectAsStateWithLifecycle()
   val searchError by viewModel.searchError.collectAsStateWithLifecycle()
@@ -114,6 +126,40 @@ fun AurixApp(viewModel: AurixViewModel) {
 
   val accentColor = parseHexColor(accentHex, darkTheme)
   val isNowPlayingOpen = showNowPlaying && currentSong != null
+
+  // Request runtime notification permission once when playback starts on Android 13+
+  var askedNotificationPermission by remember { mutableStateOf(false) }
+  val notificationPermissionLauncher = rememberLauncherForActivityResult(
+    contract = ActivityResultContracts.RequestPermission()
+  ) { }
+  LaunchedEffect(currentSong != null) {
+    if (
+      currentSong != null &&
+      !askedNotificationPermission &&
+      Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU
+    ) {
+      askedNotificationPermission = true
+      val granted = ContextCompat.checkSelfPermission(
+        context,
+        Manifest.permission.POST_NOTIFICATIONS
+      ) == PackageManager.PERMISSION_GRANTED
+      if (!granted) {
+        notificationPermissionLauncher.launch(Manifest.permission.POST_NOTIFICATIONS)
+      }
+    }
+  }
+
+  // Automatically refresh recommendations if a new calendar day starts while app is backgrounded
+  val lifecycleOwner = LocalLifecycleOwner.current
+  DisposableEffect(lifecycleOwner) {
+    val observer = LifecycleEventObserver { _, event ->
+      if (event == Lifecycle.Event.ON_RESUME) {
+        viewModel.refreshDailyFeedIfNewDay()
+      }
+    }
+    lifecycleOwner.lifecycle.addObserver(observer)
+    onDispose { lifecycleOwner.lifecycle.removeObserver(observer) }
+  }
 
   // System Back returns cleanly to Home from any secondary tab
   BackHandler(enabled = currentScreen != Screen.Home && !isNowPlayingOpen) {
@@ -171,6 +217,8 @@ fun AurixApp(viewModel: AurixViewModel) {
               featuredTracks = featuredTracks,
               isLoadingFeatured = isLoadingFeatured,
               featuredError = featuredError,
+              selectedFeed = selectedDailyFeed,
+              dailyUpdatedLabel = dailyUpdatedLabel,
               favoritesCount = favorites.size,
               localSongsCount = localSongs.size,
               recentlyPlayed = recentlyPlayed,
@@ -178,7 +226,8 @@ fun AurixApp(viewModel: AurixViewModel) {
               isPlaying = isPlaying,
               darkTheme = darkTheme,
               reducedMotion = reducedMotion,
-              onRetryFeatured = { viewModel.loadFeaturedItunes() },
+              onSelectFeed = { viewModel.selectDailyFeed(it) },
+              onRefreshDailyFeed = { viewModel.loadDailyRecommendations(selectedDailyFeed, forceRefresh = true) },
               onOpenSearch = {
                 viewModel.setSearchMode("itunes")
                 currentScreen = Screen.Search
@@ -258,6 +307,24 @@ fun AurixApp(viewModel: AurixViewModel) {
           }
         }
 
+        // Subtle atmospheric gradient scrim so scrolling list rows fade gracefully behind the floating dock
+        val dockScrimBase = if (darkTheme) Color(0xFF0A0E1A) else Color(0xFFEAF0FF)
+        Box(
+          modifier = Modifier
+            .align(Alignment.BottomCenter)
+            .fillMaxWidth()
+            .height(if (currentSong != null && !isNowPlayingOpen) 210.dp else 135.dp)
+            .background(
+              Brush.verticalGradient(
+                colors = listOf(
+                  Color.Transparent,
+                  dockScrimBase.copy(alpha = 0.58f),
+                  dockScrimBase.copy(alpha = 0.90f)
+                )
+              )
+            )
+        )
+
         // Bottom Floating MiniPlayer + Liquid Glass Navigation Bar
         val screens = remember { listOf(Screen.Home, Screen.Search, Screen.Library, Screen.Settings) }
         val navTabs = remember { screens.map { TabItem(it.title, it.icon) } }
@@ -330,7 +397,8 @@ fun AurixApp(viewModel: AurixViewModel) {
             onSeek = { viewModel.seekTo(it) },
             onFavorite = { viewModel.toggleFavorite(song) },
             onClose = { showNowPlaying = false },
-            onLineClick = { viewModel.seekTo(it) }
+            onLineClick = { viewModel.seekTo(it) },
+            onRetryLyrics = { viewModel.retryLyrics() }
           )
         }
       }

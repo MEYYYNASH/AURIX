@@ -1,6 +1,8 @@
 package com.example.ui.screens
 
+import android.graphics.Bitmap
 import androidx.compose.animation.AnimatedVisibility
+import androidx.compose.animation.animateColorAsState
 import androidx.compose.animation.core.*
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
@@ -29,6 +31,7 @@ import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.layout.ContentScale
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.text.font.FontWeight
@@ -36,9 +39,15 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import androidx.core.graphics.drawable.toBitmap
 import coil.compose.AsyncImage
+import coil.imageLoader
+import coil.request.ImageRequest
+import coil.request.SuccessResult
 import com.example.R
 import com.example.model.Song
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.withContext
 
 fun artworkHueColors(title: String): Pair<Color, Color> {
   var h = 0
@@ -48,6 +57,152 @@ fun artworkHueColors(title: String): Pair<Color, Color> {
   val hue1 = ((h % 360) + 360) % 360f
   val hue2 = (hue1 + 50f) % 360f
   return Color.hsl(hue1, 0.70f, 0.52f) to Color.hsl(hue2, 0.80f, 0.62f)
+}
+
+@Composable
+fun rememberArtworkColors(
+  artworkUrl: String,
+  fallbackTitle: String
+): Pair<Color, Color> {
+  val context = LocalContext.current
+  val fallback = remember(fallbackTitle) { artworkHueColors(fallbackTitle) }
+  var extracted by remember(artworkUrl, fallbackTitle) { mutableStateOf(fallback) }
+
+  LaunchedEffect(artworkUrl, fallbackTitle) {
+    if (artworkUrl.isBlank()) {
+      extracted = fallback
+      return@LaunchedEffect
+    }
+    val sampled = withContext(Dispatchers.IO) {
+      try {
+        val request = ImageRequest.Builder(context)
+          .data(artworkUrl)
+          .allowHardware(false)
+          .size(64)
+          .build()
+        val result = context.imageLoader.execute(request)
+        val bitmap = (result as? SuccessResult)?.drawable?.toBitmap() ?: return@withContext null
+        withContext(Dispatchers.Default) {
+          extractVibrantPair(bitmap)
+        }
+      } catch (_: Exception) {
+        null
+      }
+    }
+    extracted = sampled ?: fallback
+  }
+
+  val animatedPrimary by animateColorAsState(
+    targetValue = extracted.first,
+    animationSpec = tween(durationMillis = 600),
+    label = "artwork_primary_color"
+  )
+  val animatedSecondary by animateColorAsState(
+    targetValue = extracted.second,
+    animationSpec = tween(durationMillis = 600),
+    label = "artwork_secondary_color"
+  )
+  return animatedPrimary to animatedSecondary
+}
+
+private fun extractVibrantPair(bitmap: Bitmap): Pair<Color, Color>? {
+  val width = bitmap.width
+  val height = bitmap.height
+  if (width <= 0 || height <= 0) return null
+
+  val stepX = (width / 24).coerceAtLeast(1)
+  val stepY = (height / 24).coerceAtLeast(1)
+  val hsv = FloatArray(3)
+  val hueBuckets = FloatArray(12)
+  val hueR = FloatArray(12)
+  val hueG = FloatArray(12)
+  val hueB = FloatArray(12)
+
+  var fallbackR = 0f
+  var fallbackG = 0f
+  var fallbackB = 0f
+  var fallbackCount = 0
+
+  var y = 0
+  while (y < height) {
+    var x = 0
+    while (x < width) {
+      val pixel = bitmap.getPixel(x, y)
+      val a = android.graphics.Color.alpha(pixel)
+      if (a >= 180) {
+        val r = android.graphics.Color.red(pixel)
+        val g = android.graphics.Color.green(pixel)
+        val b = android.graphics.Color.blue(pixel)
+        android.graphics.Color.RGBToHSV(r, g, b, hsv)
+        val s = hsv[1]
+        val v = hsv[2]
+        if (v > 0.10f) {
+          fallbackR += r
+          fallbackG += g
+          fallbackB += b
+          fallbackCount++
+        }
+        // Favor saturated, mid-to-bright colors (avoids washed-out whites and pure blacks)
+        if (s > 0.20f && v > 0.16f && !(s < 0.15f && v > 0.88f)) {
+          val bucket = ((hsv[0] / 30f).toInt()).coerceIn(0, 11)
+          val weight = s * s * (0.4f + v)
+          hueBuckets[bucket] += weight
+          hueR[bucket] += r * weight
+          hueG[bucket] += g * weight
+          hueB[bucket] += b * weight
+        }
+      }
+      x += stepX
+    }
+    y += stepY
+  }
+
+  val sortedBuckets = (0..11).sortedByDescending { hueBuckets[it] }
+  val top1 = sortedBuckets.first()
+  if (hueBuckets[top1] > 0.05f) {
+    val w1 = hueBuckets[top1]
+    val c1 = boostColorVibrance(
+      (hueR[top1] / w1).toInt().coerceIn(0, 255),
+      (hueG[top1] / w1).toInt().coerceIn(0, 255),
+      (hueB[top1] / w1).toInt().coerceIn(0, 255)
+    )
+    val top2 = sortedBuckets.firstOrNull { idx ->
+      idx != top1 && hueBuckets[idx] > 0.03f && kotlin.math.abs(idx - top1) !in listOf(1, 11)
+    } ?: sortedBuckets.getOrNull(1)
+
+    val c2 = if (top2 != null && hueBuckets[top2] > 0.03f) {
+      val w2 = hueBuckets[top2]
+      boostColorVibrance(
+        (hueR[top2] / w2).toInt().coerceIn(0, 255),
+        (hueG[top2] / w2).toInt().coerceIn(0, 255),
+        (hueB[top2] / w2).toInt().coerceIn(0, 255)
+      )
+    } else {
+      val shifted = FloatArray(3)
+      android.graphics.Color.colorToHSV(android.graphics.Color.rgb((c1.red * 255).toInt(), (c1.green * 255).toInt(), (c1.blue * 255).toInt()), shifted)
+      Color.hsl((shifted[0] + 28f) % 360f, (shifted[1] * 0.9f).coerceIn(0.5f, 0.92f), 0.58f)
+    }
+    return c1 to c2
+  }
+
+  if (fallbackCount > 0) {
+    val avg = boostColorVibrance(
+      (fallbackR / fallbackCount).toInt().coerceIn(0, 255),
+      (fallbackG / fallbackCount).toInt().coerceIn(0, 255),
+      (fallbackB / fallbackCount).toInt().coerceIn(0, 255)
+    )
+    return avg to avg.copy(alpha = 0.85f)
+  }
+  return null
+}
+
+private fun boostColorVibrance(r: Int, g: Int, b: Int): Color {
+  val hsl = FloatArray(3)
+  val packed = android.graphics.Color.rgb(r, g, b)
+  android.graphics.Color.colorToHSV(packed, hsl)
+  val sat = hsl[1].coerceIn(0.45f, 0.92f)
+  val valBoost = hsl[2].coerceIn(0.48f, 0.86f)
+  return Color(android.graphics.Color.HSVToColor(floatArrayOf(hsl[0], sat, valBoost)))
 }
 
 @Composable
@@ -336,24 +491,39 @@ fun DynamicArtworkBackdrop(
   modifier: Modifier = Modifier
 ) {
   val accentColor = MaterialTheme.colorScheme.primary
-  val targetAlpha = if (enabled && song != null) (if (darkTheme) 0.55f else 0.42f) else 0f
+  val targetAlpha = if (enabled && song != null) (if (darkTheme) 0.78f else 0.56f) else 0f
   val animatedAlpha by animateFloatAsState(
     targetValue = targetAlpha,
     animationSpec = if (reducedMotion) snap() else tween(durationMillis = 750),
     label = "dynamic_bg_alpha"
   )
 
+  val (c1, c2) = rememberArtworkColors(
+    artworkUrl = if (enabled) song?.artworkUrl.orEmpty() else "",
+    fallbackTitle = song?.title.orEmpty()
+  )
+
   val infiniteTransition = rememberInfiniteTransition(label = "bg_glow")
   val driftScale by infiniteTransition.animateFloat(
-    initialValue = 1.28f,
-    targetValue = 1.40f,
+    initialValue = 1.32f,
+    targetValue = 1.48f,
     animationSpec = infiniteRepeatable(
-      animation = tween(durationMillis = 6500, easing = FastOutSlowInEasing),
+      animation = tween(durationMillis = 7200, easing = FastOutSlowInEasing),
       repeatMode = RepeatMode.Reverse
     ),
     label = "bg_drift_scale"
   )
-  val activeScale = if (reducedMotion) 1.32f else driftScale
+  val driftOffsetX by infiniteTransition.animateFloat(
+    initialValue = -18f,
+    targetValue = 18f,
+    animationSpec = infiniteRepeatable(
+      animation = tween(durationMillis = 8600, easing = FastOutSlowInEasing),
+      repeatMode = RepeatMode.Reverse
+    ),
+    label = "bg_drift_x"
+  )
+  val activeScale = if (reducedMotion) 1.36f else driftScale
+  val activeOffsetX = if (reducedMotion) 0f else driftOffsetX
 
   Box(modifier = modifier.fillMaxSize()) {
     Box(
@@ -383,14 +553,13 @@ fun DynamicArtworkBackdrop(
         .fillMaxSize()
         .background(
           Brush.radialGradient(
-            colors = listOf(accentColor.copy(alpha = 0.22f), Color.Transparent),
+            colors = listOf(accentColor.copy(alpha = 0.20f), Color.Transparent),
             radius = 950f
           )
         )
     )
 
     if (animatedAlpha > 0.01f && song != null) {
-      val (c1, c2) = remember(song.title) { artworkHueColors(song.title) }
       Box(modifier = Modifier.fillMaxSize().alpha(animatedAlpha)) {
         if (song.artworkUrl.isNotBlank()) {
           AsyncImage(
@@ -399,20 +568,23 @@ fun DynamicArtworkBackdrop(
             contentScale = ContentScale.Crop,
             modifier = Modifier
               .fillMaxSize()
+              .offset(x = activeOffsetX.dp)
               .scale(activeScale)
-              .blur(90.dp)
+              .blur(68.dp)
           )
         }
         Box(
           modifier = Modifier
             .fillMaxSize()
             .background(
-              Brush.linearGradient(
+              Brush.radialGradient(
                 colors = listOf(
-                  c1.copy(alpha = 0.55f),
-                  c2.copy(alpha = 0.42f),
-                  accentColor.copy(alpha = 0.28f)
-                )
+                  c1.copy(alpha = if (darkTheme) 0.56f else 0.42f),
+                  c2.copy(alpha = if (darkTheme) 0.36f else 0.28f),
+                  Color.Transparent
+                ),
+                center = Offset(240f, 320f),
+                radius = 1200f
               )
             )
         )
@@ -420,11 +592,21 @@ fun DynamicArtworkBackdrop(
           modifier = Modifier
             .fillMaxSize()
             .background(
-              if (darkTheme) {
-                Color(0xFF0B0F1A).copy(alpha = 0.52f)
-              } else {
-                Color(0xFFF3F6FF).copy(alpha = 0.48f)
-              }
+              Brush.verticalGradient(
+                colors = if (darkTheme) {
+                  listOf(
+                    Color(0xFF0B0F1A).copy(alpha = 0.36f),
+                    Color(0xFF0B0F1A).copy(alpha = 0.50f),
+                    Color(0xFF080B14).copy(alpha = 0.68f)
+                  )
+                } else {
+                  listOf(
+                    Color(0xFFF3F6FF).copy(alpha = 0.42f),
+                    Color(0xFFF3F6FF).copy(alpha = 0.52f),
+                    Color(0xFFEBF0FF).copy(alpha = 0.62f)
+                  )
+                }
+              )
             )
         )
       }
@@ -438,6 +620,8 @@ fun SongRow(
   isPlaying: Boolean = false,
   isCurrent: Boolean = false,
   reducedMotion: Boolean = false,
+  rank: Int? = null,
+  showSourceBadge: Boolean = true,
   onSongClick: () -> Unit,
   onFavoriteClick: () -> Unit
 ) {
@@ -452,33 +636,58 @@ fun SongRow(
       .fillMaxWidth()
       .clip(RoundedCornerShape(16.dp))
       .then(
-        if (isCurrent) Modifier.background(MaterialTheme.colorScheme.primary.copy(alpha = 0.12f))
+        if (isCurrent) Modifier.background(MaterialTheme.colorScheme.primary.copy(alpha = 0.14f))
         else Modifier
       )
       .clickable { onSongClick() }
       .padding(vertical = 8.dp, horizontal = 8.dp),
     verticalAlignment = Alignment.CenterVertically
   ) {
+    if (rank != null) {
+      Box(
+        modifier = Modifier.width(28.dp),
+        contentAlignment = Alignment.Center
+      ) {
+        if (isCurrent) {
+          EqualizerBars(
+            isPlaying = isPlaying,
+            color = MaterialTheme.colorScheme.primary,
+            reducedMotion = reducedMotion,
+            maxHeight = 14.dp
+          )
+        } else {
+          Text(
+            text = String.format("%02d", rank),
+            style = MaterialTheme.typography.labelLarge.copy(fontWeight = FontWeight.Bold),
+            color = if (rank <= 3) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.78f)
+          )
+        }
+      }
+      Spacer(modifier = Modifier.width(6.dp))
+    }
+
     Box(
       modifier = Modifier
-        .size(48.dp)
-        .clip(RoundedCornerShape(12.dp))
-        .border(1.dp, Color.White.copy(alpha = 0.22f), RoundedCornerShape(12.dp))
+        .size(50.dp)
+        .clip(RoundedCornerShape(13.dp))
+        .border(1.dp, Color.White.copy(alpha = 0.22f), RoundedCornerShape(13.dp))
     ) {
-      SongArtwork(song = song, modifier = Modifier.fillMaxSize(), cornerRadius = 12.dp)
+      SongArtwork(song = song, modifier = Modifier.fillMaxSize(), cornerRadius = 13.dp)
     }
     Spacer(modifier = Modifier.width(12.dp))
     Column(modifier = Modifier.weight(1f)) {
       Row(verticalAlignment = Alignment.CenterVertically) {
-        AnimatedVisibility(visible = isCurrent, enter = fadeIn(), exit = fadeOut()) {
-          Row {
-            EqualizerBars(
-              isPlaying = isPlaying,
-              color = MaterialTheme.colorScheme.primary,
-              reducedMotion = reducedMotion,
-              maxHeight = 13.dp
-            )
-            Spacer(modifier = Modifier.width(8.dp))
+        if (rank == null) {
+          AnimatedVisibility(visible = isCurrent, enter = fadeIn(), exit = fadeOut()) {
+            Row {
+              EqualizerBars(
+                isPlaying = isPlaying,
+                color = MaterialTheme.colorScheme.primary,
+                reducedMotion = reducedMotion,
+                maxHeight = 13.dp
+              )
+              Spacer(modifier = Modifier.width(8.dp))
+            }
           }
         }
         Text(
@@ -501,7 +710,7 @@ fun SongRow(
           color = MaterialTheme.colorScheme.onSurfaceVariant,
           modifier = Modifier.weight(1f, fill = false)
         )
-        if (song.source == "iTunes 30s") {
+        if (showSourceBadge && song.source == "iTunes 30s") {
           Surface(
             shape = RoundedCornerShape(6.dp),
             color = MaterialTheme.colorScheme.primary.copy(alpha = 0.15f)
@@ -516,7 +725,7 @@ fun SongRow(
         }
       }
     }
-    if (song.durationSeconds > 0 && song.source != "iTunes 30s") {
+    if (song.durationSeconds > 0 && song.source != "iTunes 30s" && rank == null) {
       Text(
         text = "${song.durationSeconds / 60}:${String.format("%02d", song.durationSeconds % 60)}",
         style = MaterialTheme.typography.bodySmall,

@@ -66,7 +66,7 @@ fun SearchScreen(
 ) {
   val context = LocalContext.current
   val keyboardController = LocalSoftwareKeyboardController.current
-  val quickTags = listOf("Top Hits", "Khmer", "Pop", "R&B", "Hip-Hop", "Lo-Fi")
+  val quickTags = listOf("TikTok Viral", "Khmer", "Phonk", "Pop", "R&B", "Hip-Hop")
 
   Column(
     modifier = Modifier

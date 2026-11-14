@@ -8,6 +8,7 @@ import androidx.room.OnConflictStrategy
 import androidx.room.PrimaryKey
 import androidx.room.Query
 import androidx.room.RoomDatabase
+import androidx.room.Transaction
 import kotlinx.coroutines.flow.Flow
 
 @Entity(tableName = "favorite_songs")
@@ -54,6 +55,15 @@ interface AurixDao {
 
   @Insert(onConflict = OnConflictStrategy.REPLACE)
   suspend fun insertHistory(history: PlayHistoryEntity)
+
+  @Query("DELETE FROM play_history WHERE songId = :songId")
+  suspend fun deleteHistoryBySongId(songId: String)
+
+  @Transaction
+  suspend fun recordPlay(history: PlayHistoryEntity) {
+    deleteHistoryBySongId(history.songId)
+    insertHistory(history)
+  }
 }
 
 @Database(entities = [FavoriteSongEntity::class, PlayHistoryEntity::class], version = 1, exportSchema = false)

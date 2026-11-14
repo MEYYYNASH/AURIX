@@ -164,9 +164,9 @@ fun LiquidGlassTabBar(
     LensClipShape { rowSize -> computeLensRoundRect(rowSize) }
   }
 
-  val glassBaseFill = if (darkTheme) Color(0xFF424B5E).copy(alpha = 0.42f) else Color.White.copy(alpha = 0.30f)
-  val innerEdgeHighlight = Color.White.copy(alpha = if (darkTheme) 0.24f else 0.62f)
-  val topEdgeBrightHighlight = Color.White.copy(alpha = if (darkTheme) 0.48f else 0.90f)
+  val glassBaseFill = if (darkTheme) Color(0xFF1B2335).copy(alpha = 0.80f) else Color.White.copy(alpha = 0.78f)
+  val innerEdgeHighlight = Color.White.copy(alpha = if (darkTheme) 0.26f else 0.82f)
+  val topEdgeBrightHighlight = Color.White.copy(alpha = if (darkTheme) 0.50f else 0.96f)
   val baseTabColor = if (darkTheme) Color(0xFFE5EAF5) else Color(0xFF1E293B)
 
   Box(

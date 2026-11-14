@@ -52,15 +52,15 @@ fun MiniPlayer(
 ) {
   if (song == null) return
 
-  val (artC1, artC2) = remember(song.title) { artworkHueColors(song.title) }
+  val (artC1, artC2) = rememberArtworkColors(song.artworkUrl, song.title)
   val accentColor = MaterialTheme.colorScheme.primary
 
-  val glassFill = if (darkTheme) Color(0xFF283246).copy(alpha = 0.56f) else Color.White.copy(alpha = 0.72f)
-  val innerEdgeHighlight = Color.White.copy(alpha = if (darkTheme) 0.24f else 0.85f)
-  val topBrightHighlight = Color.White.copy(alpha = if (darkTheme) 0.45f else 0.96f)
+  val glassFill = if (darkTheme) Color(0xFF172034).copy(alpha = 0.82f) else Color.White.copy(alpha = 0.88f)
+  val innerEdgeHighlight = Color.White.copy(alpha = if (darkTheme) 0.26f else 0.90f)
+  val topBrightHighlight = Color.White.copy(alpha = if (darkTheme) 0.48f else 0.98f)
   val primaryTextColor = if (darkTheme) Color.White else Color(0xFF0F172A)
   val secondaryTextColor = if (darkTheme) Color(0xFFB3BFD4) else Color(0xFF52607A)
-  val buttonBgColor = if (darkTheme) Color.White.copy(alpha = 0.94f) else MaterialTheme.colorScheme.primary
+  val buttonBgColor = if (darkTheme) Color.White.copy(alpha = 0.95f) else MaterialTheme.colorScheme.primary
   val buttonIconColor = if (darkTheme) Color(0xFF0F172A) else Color.White
 
   val totalMs = durationMs.coerceAtLeast(song.durationSeconds * 1000L).coerceAtLeast(1L)
