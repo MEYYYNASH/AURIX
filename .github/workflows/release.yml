@@ -4,6 +4,15 @@ on:
   push:
     tags:
       - 'v*'
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: 'Release tag (e.g. v1.2.6)'
+        required: true
+        default: 'v1.2.6'
+
+permissions:
+  contents: write
 
 jobs:
   build:
@@ -18,20 +27,40 @@ jobs:
         with:
           distribution: 'temurin'
           java-version: '17'
-          cache: 'gradle'
 
-      - name: Grant execute permission for gradlew
-        run: chmod +x gradlew
+      - name: Setup Gradle
+        uses: gradle/actions/setup-gradle@v4
+        with:
+          gradle-version: '9.3.1'
+
+      - name: Ensure release keystore exists
+        run: |
+          if [ ! -f my-upload-key.jks ]; then
+            keytool -genkey -v -keystore my-upload-key.jks -keyalg RSA -keysize 2048 -validity 10000 -alias upload -storepass android -keypass android -dname "CN=Aurix, OU=Music, O=Aurix, L=Unknown, ST=Unknown, C=US"
+          fi
 
       - name: Build Release APK
-        run: ./gradlew assembleRelease
+        run: gradle :app:assembleRelease
         env:
           STORE_PASSWORD: android
           KEY_PASSWORD: android
 
+      - name: Prepare versioned APK
+        env:
+          RELEASE_TAG: ${{ github.event.inputs.tag || github.ref_name || 'v1.2.6' }}
+        run: cp app/build/outputs/apk/release/app-release.apk "AURIX-${RELEASE_TAG}.apk"
+
       - name: Upload Release APK
         uses: softprops/action-gh-release@v2
         with:
-          files: app/build/outputs/apk/release/app-release.apk
+          tag_name: ${{ github.event.inputs.tag || github.ref_name || 'v1.2.6' }}
+          name: AURIX ${{ github.event.inputs.tag || github.ref_name || 'v1.2.6' }}
+          body: |
+            What's New in AURIX v1.2.6:
+            - Added semantic version comparison in GitHub OTA updater with release notes preview
+            - Synced version v1.2.6 (versionCode 10206) and default repository MEYYYNASH/AURIX
+          files: |
+            app/build/outputs/apk/release/app-release.apk
+            AURIX-*.apk
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}

@@ -23,9 +23,26 @@ data class GitHubRelease(
 object GitHubUpdater {
   private val client = OkHttpClient()
 
+  fun isNewerVersion(remoteTag: String, currentVersion: String): Boolean {
+    val remoteParts = remoteTag.trim().removePrefix("v").split(".").mapNotNull { it.toIntOrNull() }
+    val currentParts = currentVersion.trim().removePrefix("v").split(".").mapNotNull { it.toIntOrNull() }
+    val maxLen = maxOf(remoteParts.size, currentParts.size)
+    for (idx in 0 until maxLen) {
+      val r = remoteParts.getOrElse(idx) { 0 }
+      val c = currentParts.getOrElse(idx) { 0 }
+      if (r > c) return true
+      if (r < c) return false
+    }
+    return false
+  }
+
   suspend fun checkForUpdates(owner: String, repo: String): GitHubRelease? = withContext(Dispatchers.IO) {
     try {
-      val url = "https://api.github.com/repos/$owner/$repo/releases/latest"
+      val cleanOwner = owner.trim()
+      val cleanRepo = repo.trim()
+      if (cleanOwner.isEmpty() || cleanRepo.isEmpty()) return@withContext null
+
+      val url = "https://api.github.com/repos/$cleanOwner/$cleanRepo/releases/latest"
       val request = Request.Builder().url(url).header("Accept", "application/vnd.github+json").build()
       val response = client.newCall(request).execute()
       if (!response.isSuccessful) return@withContext null

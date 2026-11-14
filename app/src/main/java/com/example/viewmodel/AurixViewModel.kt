@@ -9,6 +9,7 @@ import androidx.room.Room
 import androidx.media3.common.MediaItem
 import androidx.media3.common.Player
 import androidx.media3.exoplayer.ExoPlayer
+import com.example.BuildConfig
 import com.example.data.*
 import com.example.model.*
 import kotlinx.coroutines.flow.*
@@ -32,8 +33,8 @@ class AurixViewModel(application: Application) : AndroidViewModel(application) {
   val dynamicBg = prefsManager.dynamicBg.stateIn(viewModelScope, SharingStarted.Lazily, true)
   val reducedMotion = prefsManager.reducedMotion.stateIn(viewModelScope, SharingStarted.Lazily, false)
   val onboardingCompleted = prefsManager.onboardingCompleted.stateIn(viewModelScope, SharingStarted.Lazily, false)
-  val githubOwner = prefsManager.githubOwner.stateIn(viewModelScope, SharingStarted.Lazily, "aurix-music")
-  val githubRepo = prefsManager.githubRepo.stateIn(viewModelScope, SharingStarted.Lazily, "aurix-android")
+  val githubOwner = prefsManager.githubOwner.stateIn(viewModelScope, SharingStarted.Lazily, "MEYYYNASH")
+  val githubRepo = prefsManager.githubRepo.stateIn(viewModelScope, SharingStarted.Lazily, "AURIX")
 
   // App Modes & Downloader States
   private val _appMode = MutableStateFlow("search")
@@ -126,10 +127,16 @@ class AurixViewModel(application: Application) : AndroidViewModel(application) {
       val repo = githubRepo.value
       val release = GitHubUpdater.checkForUpdates(owner, repo)
       if (release != null) {
-        _latestRelease.value = release
-        _updateStatus.value = "Update available: ${release.tagName}"
+        if (GitHubUpdater.isNewerVersion(release.tagName, BuildConfig.VERSION_NAME)) {
+          _latestRelease.value = release
+          _updateStatus.value = "Update available: ${release.tagName}"
+        } else {
+          _latestRelease.value = null
+          _updateStatus.value = "Up to date (v${BuildConfig.VERSION_NAME})"
+        }
       } else {
-        _updateStatus.value = "App is up to date or repo not found"
+        _latestRelease.value = null
+        _updateStatus.value = "No APK release found"
       }
     }
   }

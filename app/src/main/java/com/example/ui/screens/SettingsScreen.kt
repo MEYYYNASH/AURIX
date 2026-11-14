@@ -94,6 +94,13 @@ fun SettingsScreen(
             singleLine = true
           )
           Text(text = "Status: $updateStatus", style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
+          if (latestRelease != null && latestRelease.body.isNotBlank()) {
+            Text(
+              text = latestRelease.body,
+              style = MaterialTheme.typography.bodySmall,
+              color = MaterialTheme.colorScheme.onSurfaceVariant
+            )
+          }
           Row(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
             Button(
               onClick = { onCheckUpdate(context) },
@@ -208,7 +215,7 @@ fun SettingsScreen(
     item {
       SettingsSection(title = "About") {
         Column {
-          Text("AURIX / All Sound Finder v0.1.2", style = MaterialTheme.typography.bodyMedium.copy(fontWeight = FontWeight.Bold), color = MaterialTheme.colorScheme.onBackground)
+          Text("AURIX / All Sound Finder v1.2.6", style = MaterialTheme.typography.bodyMedium.copy(fontWeight = FontWeight.Bold), color = MaterialTheme.colorScheme.onBackground)
           Spacer(modifier = Modifier.height(4.dp))
           Text("Powered by Audius and LRCLIB. GitHub OTA Update Enabled.", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
         }

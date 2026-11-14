@@ -1,33 +1,26 @@
 # AURIX — ONE APP. ALL YOUR MUSIC.
 
-AURIX is a premium, beautifully crafted Android music player app built with Kotlin, Jetpack Compose, and Material 3.
+AURIX (`v1.2.6`) is a modern Android music player and sound finder app built with Kotlin, Jetpack Compose, and Material 3.
 
-## ✨ Features
+## Features
 
-- **Streaming & Local Music**: Stream millions of tracks via the Audius public API (`/v1/tracks/trending`, `/v1/tracks/search`) and import local audio files from your device storage.
-- **Synchronized Lyrics**: Real-time synced `.lrc` lyrics auto-scrolling with the music via the LRCLIB API, with plain lyrics fallback.
-- **Robust Playback**: Powered by AndroidX Media3 (ExoPlayer) with background audio support and media notifications.
-- **Rich Screens & Navigation**:
-  - **Splash & Onboarding**: Immersive 4-page onboarding flow on first launch.
-  - **Home**: Time-based greeting, Speed Dial (Liked Songs & Trending), Moods filter chips (Chill, Happy, Focus, Workout, Khmer, Party), My songs, Recently played, and Trending on Audius.
-  - **Search**: Debounced live search across Audius tracks.
-  - **Library**: Segmented tabs for My songs, Favorites, and Recent.
-  - **Settings**: Instant language toggle (English / ភាសាខ្មែរ), theme picker (System / Light / Dark), 7 custom accent color themes, dynamic artwork background toggle, and reduced motion settings.
-  - **Now Playing Sheet**: Full-screen immersive player with blurred dynamic artwork background, seek bar, play/pause, shuffle, repeat, sleep timer (15, 30, 60 min), and playback speed controls (1x, 1.25x, 1.5x, 0.75x).
-  - **Floating Glass Bottom Bar**: 4 main tabs and a 56dp round accent Now Playing button with animated equalizers.
+- **Streaming & Local Music**: Stream tracks via the Audius public API (`/v1/tracks/trending`, `/v1/tracks/search`) and import local audio files from device storage.
+- **YouTube Link & Sound Finder**: Analyze links, filter by Khmer/international moods and categories, and play tracks seamlessly.
+- **Synchronized Lyrics**: Real-time synced `.lrc` lyrics auto-scrolling with playback via the LRCLIB API, with plain lyrics fallback.
+- **Background Playback**: Powered by AndroidX Media3 (ExoPlayer) with media controls.
+- **GitHub OTA Updates**: Built-in release checker (`MEYYYNASH/AURIX`) with release notes display, APK download, and in-app installer.
+- **Customization & Localization**: English and Khmer (`values-km`), System/Light/Dark themes, 7 accent colors, dynamic artwork background, and reduced motion support.
 
-## 🛠️ Tech Stack
+## Tech Stack
 
 - **Language**: Kotlin
 - **UI**: Jetpack Compose & Material 3
-- **Architecture**: MVVM with ViewModel and StateFlow
+- **Architecture**: MVVM (`AurixViewModel` + `StateFlow`)
 - **Playback**: AndroidX Media3 (ExoPlayer)
-- **Networking**: Retrofit & Moshi
-- **Persistence**: Room Database (Favorites & Play History) & DataStore Preferences (Settings & Onboarding state)
+- **Networking**: Retrofit, Moshi, OkHttp
+- **Persistence**: Room Database (Favorites & History) & DataStore Preferences
 
----
-
-## 📦 How to Build Signed Release APK & AAB
+## Build Signed Release APK & AAB
 
 1. **Generate a Keystore**:
    ```bash
