@@ -1,0 +1,6 @@
+{
+  "name": "AURIX",
+  "description": "ONE APP. ALL YOUR MUSIC. Premium music player app with Audius API, synced lyrics, and local music support.",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}

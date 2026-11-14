@@ -1,0 +1,28 @@
+<resources>
+    <string name="app_name">អូរីច</string>
+    <string name="tagline">កម្មវិធីតែមួយ។ តន្ត្រីទាំងអស់របស់អ្នក។</string>
+    <string name="nav_home">ទំព័រដើម</string>
+    <string name="nav_search">ស្វែងរក</string>
+    <string name="nav_library">បណ្ណាល័យ</string>
+    <string name="nav_settings">ការកំណត់</string>
+    <string name="speed_dial_liked">បទដែលចូលចិត្ត</string>
+    <string name="speed_dial_trending">កំពុងនិយម</string>
+    <string name="my_songs">បទចម្រៀងរបស់ខ្ញុំ</string>
+    <string name="recently_played">ទើបតែបានលេង</string>
+    <string name="trending_on_audius">កំពុងពេញនិយមលើ Audius</string>
+    <string name="mood_chill">សម្រាក</string>
+    <string name="mood_happy">សប្បាយចិត្ត</string>
+    <string name="mood_focus">ផ្តោតអារម្មណ៍</string>
+    <string name="mood_workout">ហាត់ប្រាណ</string>
+    <string name="mood_khmer">បទខ្មែរ</string>
+    <string name="mood_party">ពិធីជប់លៀង</string>
+    <string name="settings_language">ភាសា</string>
+    <string name="settings_theme">ស្បែក</string>
+    <string name="settings_accent">ពណ៌សំខាន់</string>
+    <string name="settings_dynamic_bg">ផ្ទៃខាងក្រោយរូបភាពសកម្ម</string>
+    <string name="settings_reduced_motion">កាត់បន្ថយចលនា</string>
+    <string name="settings_about">អំពីកម្មវិធី</string>
+    <string name="try_again">ព្យាយាមម្តងទៀត</string>
+    <string name="add_local_song">បន្ថែមតន្ត្រីក្នុងទូរសព្ទ</string>
+    <string name="empty_library">គ្មានបទចម្រៀងក្នុងបណ្ណាល័យទេ។ បន្ថែមតន្ត្រី ឬចុចបេះដូងលើបទ Audius!</string>
+</resources>

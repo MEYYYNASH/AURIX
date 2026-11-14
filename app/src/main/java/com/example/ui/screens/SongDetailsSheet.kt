@@ -1,0 +1,128 @@
+package com.example.ui.screens
+
+import androidx.compose.foundation.background
+import androidx.compose.foundation.clickable
+import androidx.compose.foundation.layout.*
+import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.rounded.Favorite
+import androidx.compose.material.icons.rounded.FavoriteBorder
+import androidx.compose.material.icons.rounded.PlayArrow
+import androidx.compose.material.icons.rounded.Share
+import androidx.compose.material3.*
+import androidx.compose.runtime.*
+import androidx.compose.ui.Alignment
+import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clip
+import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.layout.ContentScale
+import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.unit.dp
+import coil.compose.AsyncImage
+import com.example.model.Song
+
+@OptIn(ExperimentalMaterial3Api::class)
+@Composable
+fun SongDetailsSheet(
+  song: Song,
+  onDismiss: () -> Unit,
+  onPlay: () -> Unit,
+  onFavorite: () -> Unit,
+  onShare: () -> Unit
+) {
+  ModalBottomSheet(
+    onDismissRequest = onDismiss,
+    sheetState = rememberModalBottomSheetState(),
+    shape = RoundedCornerShape(topStart = 32.dp, topEnd = 32.dp)
+  ) {
+    Column(
+      modifier = Modifier
+        .fillMaxWidth()
+        .padding(24.dp)
+        .windowInsetsPadding(WindowInsets.safeDrawing),
+      horizontalAlignment = Alignment.CenterHorizontally
+    ) {
+      Box(
+        modifier = Modifier
+          .size(120.dp)
+          .clip(RoundedCornerShape(24.dp))
+          .background(MaterialTheme.colorScheme.primary.copy(alpha = 0.2f)),
+        contentAlignment = Alignment.Center
+      ) {
+        if (song.artworkUrl.isNotBlank()) {
+          AsyncImage(
+            model = song.artworkUrl,
+            contentDescription = null,
+            contentScale = ContentScale.Crop,
+            modifier = Modifier.fillMaxSize()
+          )
+        }
+      }
+
+      Spacer(modifier = Modifier.height(16.dp))
+
+      Text(
+        text = song.title,
+        style = MaterialTheme.typography.titleLarge.copy(fontWeight = FontWeight.Bold),
+        color = MaterialTheme.colorScheme.onSurface
+      )
+      Text(
+        text = song.artist,
+        style = MaterialTheme.typography.bodyMedium,
+        color = MaterialTheme.colorScheme.onSurfaceVariant
+      )
+
+      Spacer(modifier = Modifier.height(24.dp))
+
+      Divider(color = MaterialTheme.colorScheme.surfaceVariant)
+
+      Spacer(modifier = Modifier.height(16.dp))
+
+      Row(
+        modifier = Modifier.fillMaxWidth(),
+        horizontalArrangement = Arrangement.SpaceEvenly
+      ) {
+        IconButtonAction(icon = Icons.Rounded.PlayArrow, label = "Play", onClick = onPlay)
+        IconButtonAction(
+          icon = if (song.isFavorite) Icons.Rounded.Favorite else Icons.Rounded.FavoriteBorder,
+          label = "Like",
+          tint = if (song.isFavorite) MaterialTheme.colorScheme.error else MaterialTheme.colorScheme.onSurface,
+          onClick = onFavorite
+        )
+        IconButtonAction(icon = Icons.Rounded.Share, label = "Share", onClick = onShare)
+      }
+
+      Spacer(modifier = Modifier.height(24.dp))
+
+      InfoRow(label = "Duration", value = "${song.durationSeconds / 60}:${String.format("%02d", song.durationSeconds % 60)}")
+      InfoRow(label = "Source", value = song.source)
+      InfoRow(label = "Queue Status", value = "Ready")
+    }
+  }
+}
+
+@Composable
+fun IconButtonAction(icon: androidx.compose.ui.graphics.vector.ImageVector, label: String, tint: Color = MaterialTheme.colorScheme.onSurface, onClick: () -> Unit) {
+  Column(
+    horizontalAlignment = Alignment.CenterHorizontally,
+    modifier = Modifier.clickable { onClick() }.padding(8.dp)
+  ) {
+    IconButton(onClick = onClick) {
+      Icon(imageVector = icon, contentDescription = label, tint = tint)
+    }
+    Text(text = label, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+  }
+}
+
+@Composable
+fun InfoRow(label: String, value: String) {
+  Row(
+    modifier = Modifier
+      .fillMaxWidth()
+      .padding(vertical = 8.dp),
+    horizontalArrangement = Arrangement.SpaceBetween
+  ) {
+    Text(text = label, style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
+    Text(text = value, style = MaterialTheme.typography.bodyMedium.copy(fontWeight = FontWeight.Bold), color = MaterialTheme.colorScheme.onSurface)
+  }
+}
