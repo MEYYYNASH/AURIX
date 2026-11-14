@@ -105,10 +105,9 @@ class SyncedLyricsView @JvmOverloads constructor(
       clipChildren = false
       clipToPadding = false
       overScrollMode = OVER_SCROLL_NEVER
-      isVerticalFadingEdgeEnabled = true
-      setFadingEdgeLength((24f * dp).toInt())
+      isVerticalFadingEdgeEnabled = false
       itemAnimator = null
-      setPadding((4f * dp).toInt(), (72f * dp).toInt(), (4f * dp).toInt(), (180f * dp).toInt())
+      setPadding((4f * dp).toInt(), (16f * dp).toInt(), (4f * dp).toInt(), (140f * dp).toInt())
     }
 
     recyclerView.addOnScrollListener(object : RecyclerView.OnScrollListener() {

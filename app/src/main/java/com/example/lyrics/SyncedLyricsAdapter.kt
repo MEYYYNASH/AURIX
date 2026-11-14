@@ -5,6 +5,7 @@ import android.graphics.Canvas
 import android.graphics.Color
 import android.graphics.Rect
 import android.graphics.Typeface
+import android.graphics.drawable.GradientDrawable
 import android.os.Build
 import android.text.Layout
 import android.util.TypedValue
@@ -43,8 +44,9 @@ class LyricLineTextView(context: Context) : TextView(context) {
   fun bindLine(line: ParsedLyricLine, active: Boolean) {
     parsedLine = line
     isActiveLine = active
-    if (text.toString() != line.text) {
-      text = line.text.ifBlank { "..." }
+    val display = line.text.ifBlank { "..." }
+    if (text.toString() != display) {
+      text = display
     }
   }
 
@@ -211,14 +213,21 @@ class SyncedLyricsAdapter(
 
   override fun onCreateViewHolder(parent: ViewGroup, viewType: Int): LyricViewHolder {
     val dp = parent.resources.displayMetrics.density
+    val hMargin = (6f * dp).toInt()
+    val hPad = (16f * dp).toInt()
+    val vPad = (12f * dp).toInt()
+
     val container = FrameLayout(parent.context).apply {
       layoutParams = RecyclerView.LayoutParams(
         ViewGroup.LayoutParams.MATCH_PARENT,
         ViewGroup.LayoutParams.WRAP_CONTENT
       ).apply {
-        bottomMargin = (6f * dp).toInt()
+        leftMargin = hMargin
+        rightMargin = hMargin
+        bottomMargin = (8f * dp).toInt()
       }
       minimumHeight = (48f * dp).toInt()
+      setPadding(hPad, vPad, hPad, vPad)
       clipChildren = false
       clipToPadding = false
       isClickable = true
@@ -231,6 +240,8 @@ class SyncedLyricsAdapter(
         ViewGroup.LayoutParams.WRAP_CONTENT,
         Gravity.CENTER_VERTICAL
       )
+      setTextSize(TypedValue.COMPLEX_UNIT_SP, 20f)
+      setLineSpacing((6f * dp), 1f)
     }
     container.addView(textView)
     return LyricViewHolder(container, textView, dp)
@@ -252,6 +263,14 @@ class SyncedLyricsAdapter(
     private val textView: LyricLineTextView,
     private val density: Float
   ) : RecyclerView.ViewHolder(container) {
+
+    // Glass pill box matching the exact rounded lyric highlight box design
+    private val activePillDrawable = GradientDrawable().apply {
+      shape = GradientDrawable.RECTANGLE
+      cornerRadius = 18f * density
+      setColor(Color.argb(38, 255, 255, 255))
+      setStroke((1f * density).toInt().coerceAtLeast(1), Color.argb(72, 255, 255, 255))
+    }
 
     private var currentBoundLine: ParsedLyricLine? = null
     private var lastAppliedActive: Boolean? = null
@@ -278,9 +297,9 @@ class SyncedLyricsAdapter(
       val targetAlpha = when {
         !isSynced -> 0.90f
         isActive -> 1.0f
-        distance == 1 -> 0.56f
-        distance == 2 -> 0.36f
-        else -> 0.22f
+        distance == 1 -> 0.58f
+        distance == 2 -> 0.38f
+        else -> 0.24f
       }
 
       if (fullBind) {
@@ -292,50 +311,30 @@ class SyncedLyricsAdapter(
       }
 
       val dimmedHighlight = Color.argb(
-        110,
+        115,
         Color.red(textColor),
         Color.green(textColor),
         Color.blue(textColor)
       )
       textView.setHighlightColors(textColor, dimmedHighlight)
 
-      if (lastAppliedActive != isActive) {
+      if (lastAppliedActive != isActive || fullBind) {
         lastAppliedActive = isActive
-        val hPad = (8f * density).toInt()
-        val vPad = ((if (isActive) 12f else 9f) * density).toInt()
-        container.setPadding(hPad, vPad, hPad, vPad)
-        container.background = null
-
         if (isActive) {
-          textView.setTextSize(TypedValue.COMPLEX_UNIT_SP, 24f)
-          textView.setLineSpacing((8f * density), 1f)
+          container.background = activePillDrawable
+          textView.setTextSize(TypedValue.COMPLEX_UNIT_SP, 21f)
           textView.typeface = extraBoldTypeface
-          val glowColor = Color.argb(
-            110,
-            Color.red(accentColor),
-            Color.green(accentColor),
-            Color.blue(accentColor)
-          )
-          textView.setShadowLayer(18f * density, 0f, 0f, glowColor)
         } else {
+          container.background = null
           textView.setTextSize(TypedValue.COMPLEX_UNIT_SP, 20f)
-          textView.setLineSpacing((7f * density), 1f)
           textView.typeface = semiBoldTypeface
-          textView.setShadowLayer(0f, 0f, 0f, Color.TRANSPARENT)
         }
       }
 
-      if (lastAppliedAlpha != targetAlpha) {
+      if (lastAppliedAlpha != targetAlpha || fullBind) {
         lastAppliedAlpha = targetAlpha
-        if (reducedMotion || fullBind) {
-          textView.animate().cancel()
-          textView.alpha = targetAlpha
-        } else {
-          textView.animate()
-            .alpha(targetAlpha)
-            .setDuration(200L)
-            .start()
-        }
+        textView.animate().cancel()
+        textView.alpha = targetAlpha
       }
     }
 
