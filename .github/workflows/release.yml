@@ -31,22 +31,18 @@ jobs:
           distribution: 'temurin'
           java-version: '17'
 
-      - name: Set up Android SDK
-        uses: android-actions/setup-android@v3
-
-      - name: Accept Android SDK licenses
-        run: |
-          SDK_ROOT="${ANDROID_HOME:-$ANDROID_SDK_ROOT}"
-          SDKMANAGER=$(command -v sdkmanager || find "$SDK_ROOT/cmdline-tools" -name sdkmanager -type f 2>/dev/null | head -n1 || true)
-          if [ -n "$SDKMANAGER" ]; then
-            set +o pipefail
-            yes | "$SDKMANAGER" --licenses || true
-          fi
-
       - name: Setup Gradle
         uses: gradle/actions/setup-gradle@v4
         with:
           gradle-version: '9.3.1'
+
+      - name: Accept Android SDK licenses
+        run: |
+          SDK_ROOT="${ANDROID_HOME:-$ANDROID_SDK_ROOT}"
+          if [ -n "$SDK_ROOT" ] && [ -x "$SDK_ROOT/cmdline-tools/latest/bin/sdkmanager" ]; then
+            set +o pipefail
+            yes | "$SDK_ROOT/cmdline-tools/latest/bin/sdkmanager" --licenses > /dev/null 2>&1 || true
+          fi
 
       - name: Determine release tag
         run: |
@@ -81,12 +77,11 @@ jobs:
           STORE_PASSWORD: android
           KEY_PASSWORD: android
 
-      - name: Prepare and verify release assets
+      - name: Prepare versioned APK
         run: |
           test -f app/build/outputs/apk/release/app-release.apk
           test -f app/build/outputs/apk/release/output-metadata.json
           cp app/build/outputs/apk/release/app-release.apk "AURIX-${RELEASE_TAG}.apk"
-          ls -lh "AURIX-${RELEASE_TAG}.apk" app/build/outputs/apk/release/app-release.apk
 
       - name: Upload APK Artifact
         uses: actions/upload-artifact@v4
@@ -99,7 +94,6 @@ jobs:
         with:
           tag_name: ${{ env.RELEASE_TAG }}
           name: AURIX ${{ env.RELEASE_TAG }}
-          make_latest: true
           fail_on_unmatched_files: true
           body: |
             versionCode: ${{ env.RELEASE_VERSION_CODE }}
@@ -107,7 +101,7 @@ jobs:
 
             What's New in AURIX ${{ env.RELEASE_TAG }}:
             - Daily-updated TikTok Viral, Global Top Charts, Phonk & Edits, and Khmer & Asia recommendations (auto-refreshed daily from live playlists & charts)
-            - Redesigned Home UI featuring #1 Viral Spotlight Hero card, daily category chips, ranked track rows, and status-bar safe fade
+            - Redesigned Home Spotlight UI & polished Liquid Glass YouTube Link Matcher in Search
             - Real-time Media3 synced lyrics highlighting, lock-screen playback notifications, deduplicated Recent history, and true dynamic artwork glow
           files: |
             app/build/outputs/apk/release/app-release.apk
