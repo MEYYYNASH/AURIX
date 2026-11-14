@@ -42,11 +42,12 @@ fun MiniPlayer(
 ) {
   if (song == null) return
 
-  val containerColor = if (darkTheme) Color.White else Color(0xFF1B1F29)
-  val primaryTextColor = if (darkTheme) Color(0xFF111111) else Color.White
-  val secondaryTextColor = if (darkTheme) Color(0xFF6B7488) else Color(0xFF9AA0AD)
-  val buttonBgColor = if (darkTheme) Color(0xFF111111) else Color.White
-  val buttonIconColor = if (darkTheme) Color.White else Color(0xFF111111)
+  val containerColor = if (darkTheme) Color(0xFF1A2234).copy(alpha = 0.86f) else Color.White.copy(alpha = 0.88f)
+  val borderColor = if (darkTheme) Color.White.copy(alpha = 0.22f) else Color.White.copy(alpha = 0.96f)
+  val primaryTextColor = if (darkTheme) Color.White else Color(0xFF0F172A)
+  val secondaryTextColor = if (darkTheme) Color(0xFF9AA4BA) else Color(0xFF64748B)
+  val buttonBgColor = if (darkTheme) Color.White else MaterialTheme.colorScheme.primary
+  val buttonIconColor = if (darkTheme) Color(0xFF0F172A) else Color.White
 
   val totalMs = durationMs.coerceAtLeast(song.durationSeconds * 1000L).coerceAtLeast(1L)
   val progress = (currentPositionMs.toFloat() / totalMs.toFloat()).coerceIn(0f, 1f)
@@ -60,13 +61,14 @@ fun MiniPlayer(
   Surface(
     modifier = Modifier
       .fillMaxWidth()
-      .padding(horizontal = 12.dp)
-      .clip(RoundedCornerShape(26.dp))
+      .padding(horizontal = 18.dp)
+      .clip(RoundedCornerShape(24.dp))
       .clickable { onClick() }
       .testTag("mini_player_card"),
     color = containerColor,
-    shadowElevation = 12.dp,
-    shape = RoundedCornerShape(26.dp)
+    shadowElevation = 0.dp,
+    border = androidx.compose.foundation.BorderStroke(1.dp, borderColor),
+    shape = RoundedCornerShape(24.dp)
   ) {
     Column(modifier = Modifier.fillMaxWidth()) {
       Row(

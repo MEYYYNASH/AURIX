@@ -18,6 +18,7 @@ import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.automirrored.rounded.OpenInNew
 import androidx.compose.material.icons.rounded.*
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
@@ -32,9 +33,10 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
-import com.example.BuildConfig
 import com.example.data.ApkDownloadState
 import com.example.data.GitHubRelease
+import com.example.data.InstalledAppInfo
+import com.example.data.UpdateCheckStatus
 import com.example.ui.theme.*
 
 @OptIn(ExperimentalMaterial3Api::class)
@@ -49,6 +51,8 @@ fun SettingsScreen(
   hasCurrentSong: Boolean,
   githubOwner: String,
   githubRepo: String,
+  installedAppInfo: InstalledAppInfo,
+  updateCheckStatus: UpdateCheckStatus,
   updateStatus: String,
   latestRelease: GitHubRelease?,
   apkDownloadState: ApkDownloadState,
@@ -68,7 +72,7 @@ fun SettingsScreen(
   val accents = listOf(
     "#EF4444" to AccentRed,
     "#EC4899" to AccentPink,
-    "#3B77F5" to AccentBlue,
+    "#007AFF" to AccentBlue,
     "#22C55E" to AccentGreen,
     "#F59E0B" to AccentAmber,
     "#14B8A6" to AccentTeal,
@@ -81,12 +85,16 @@ fun SettingsScreen(
   var showReleaseNotesSheet by remember { mutableStateOf(false) }
 
   val isDownloading = apkDownloadState is ApkDownloadState.Downloading
-  val isDownloaded = apkDownloadState is ApkDownloadState.Downloaded
+  val isValidatedReady = apkDownloadState is ApkDownloadState.ValidatedReady
+  val isUpdateAvailable = updateCheckStatus is UpdateCheckStatus.UpdateAvailable
+  val isMandatory = (updateCheckStatus as? UpdateCheckStatus.UpdateAvailable)?.isMandatory == true
+  val isUpToDate = updateCheckStatus is UpdateCheckStatus.UpToDate
+  val isDowngradeBlocked = updateCheckStatus is UpdateCheckStatus.DowngradeBlocked
 
   val animatedProgress by animateFloatAsState(
     targetValue = when (apkDownloadState) {
       is ApkDownloadState.Downloading -> if (apkDownloadState.progress >= 0f) apkDownloadState.progress else 0.35f
-      is ApkDownloadState.Downloaded -> 1f
+      is ApkDownloadState.ValidatedReady -> 1f
       else -> 0f
     },
     animationSpec = if (reducedMotion) snap() else tween(260),
@@ -131,7 +139,7 @@ fun SettingsScreen(
           color = MaterialTheme.colorScheme.primary.copy(alpha = 0.14f)
         ) {
           Text(
-            text = "v${BuildConfig.VERSION_NAME}",
+            text = "v${installedAppInfo.versionName}",
             style = MaterialTheme.typography.bodySmall.copy(fontWeight = FontWeight.Bold),
             color = MaterialTheme.colorScheme.primary,
             modifier = Modifier.padding(horizontal = 12.dp, vertical = 6.dp)
@@ -232,11 +240,11 @@ fun SettingsScreen(
             ) {
               UpdateSummaryRow(
                 label = "Installed Version",
-                value = "v${BuildConfig.VERSION_NAME} (code ${BuildConfig.VERSION_CODE})"
+                value = "v${installedAppInfo.versionName} (code ${installedAppInfo.versionCode})"
               )
               UpdateSummaryRow(
                 label = "Latest GitHub Release",
-                value = latestRelease?.tagName ?: "Not checked yet"
+                value = latestRelease?.let { "${it.tagName} (code ${it.versionCode})" } ?: "Not checked yet"
               )
               UpdateSummaryRow(
                 label = "Release Date",
@@ -247,11 +255,40 @@ fun SettingsScreen(
                 value = updateStatus,
                 valueColor = when {
                   apkDownloadState is ApkDownloadState.Error -> MaterialTheme.colorScheme.error
-                  apkDownloadState is ApkDownloadState.Downloaded -> AccentGreen
-                  updateStatus.startsWith("Update available") -> MaterialTheme.colorScheme.primary
+                  isDowngradeBlocked -> AccentAmber
+                  isUpToDate || isValidatedReady -> AccentGreen
+                  isMandatory -> MaterialTheme.colorScheme.error
+                  isUpdateAvailable -> MaterialTheme.colorScheme.primary
+                  updateCheckStatus is UpdateCheckStatus.Error -> MaterialTheme.colorScheme.error
                   else -> MaterialTheme.colorScheme.primary
                 }
               )
+            }
+          }
+
+          if (isMandatory && isUpdateAvailable) {
+            Surface(
+              shape = RoundedCornerShape(14.dp),
+              color = MaterialTheme.colorScheme.error.copy(alpha = 0.14f),
+              modifier = Modifier.fillMaxWidth()
+            ) {
+              Row(
+                modifier = Modifier.padding(horizontal = 12.dp, vertical = 9.dp),
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.spacedBy(8.dp)
+              ) {
+                Icon(
+                  imageVector = Icons.Rounded.WarningAmber,
+                  contentDescription = null,
+                  tint = MaterialTheme.colorScheme.error,
+                  modifier = Modifier.size(18.dp)
+                )
+                Text(
+                  text = "Critical release: Update Now is required.",
+                  style = MaterialTheme.typography.bodySmall.copy(fontWeight = FontWeight.SemiBold),
+                  color = MaterialTheme.colorScheme.error
+                )
+              }
             }
           }
 
@@ -276,7 +313,7 @@ fun SettingsScreen(
                 horizontalArrangement = Arrangement.SpaceBetween
               ) {
                 Text(
-                  text = "Downloading APK...",
+                  text = "Downloading & verifying APK...",
                   style = MaterialTheme.typography.bodySmall.copy(fontWeight = FontWeight.SemiBold),
                   color = MaterialTheme.colorScheme.primary
                 )
@@ -298,90 +335,73 @@ fun SettingsScreen(
             }
           }
 
-          // Full-Width Gradient Primary Action Button
-          val primaryLabel = when {
-            isDownloading -> "Downloading APK..."
-            isDownloaded && latestRelease != null -> "Install Update (${latestRelease.tagName})"
-            latestRelease != null -> "Download & Install ${latestRelease.tagName}"
-            else -> "Check Update"
-          }
-          val primaryIcon = when {
-            isDownloading -> Icons.Rounded.Downloading
-            isDownloaded -> Icons.Rounded.InstallMobile
-            latestRelease != null -> Icons.Rounded.Download
-            else -> Icons.Rounded.NotificationsActive
-          }
+          // Strict Smart Update Primary Action:
+          // "Update Now" appears ONLY when latest versionCode > installed versionCode!
+          if (isUpdateAvailable && latestRelease != null) {
+            val updateLabel = when {
+              isDownloading -> "Downloading Update..."
+              isValidatedReady -> "Install Verified Update (${latestRelease.tagName})"
+              else -> "Update Now (${latestRelease.tagName})"
+            }
+            val updateIcon = when {
+              isDownloading -> Icons.Rounded.Downloading
+              isValidatedReady -> Icons.Rounded.InstallMobile
+              else -> Icons.Rounded.SystemUpdate
+            }
 
-          Box(
-            modifier = Modifier
-              .fillMaxWidth()
-              .height(50.dp)
-              .clip(RoundedCornerShape(18.dp))
-              .background(
-                Brush.horizontalGradient(
-                  colors = listOf(
-                    MaterialTheme.colorScheme.primary,
-                    MaterialTheme.colorScheme.primary.copy(alpha = 0.78f)
+            Box(
+              modifier = Modifier
+                .fillMaxWidth()
+                .height(50.dp)
+                .clip(RoundedCornerShape(18.dp))
+                .background(
+                  Brush.horizontalGradient(
+                    colors = listOf(
+                      MaterialTheme.colorScheme.primary,
+                      MaterialTheme.colorScheme.primary.copy(alpha = 0.78f)
+                    )
                   )
                 )
-              )
-              .clickable(enabled = !isDownloading) {
-                when {
-                  isDownloaded -> onInstallUpdate(context)
-                  latestRelease != null -> onDownloadUpdate(context)
-                  else -> onCheckUpdate(context)
+                .clickable(enabled = !isDownloading) {
+                  if (isValidatedReady) onInstallUpdate(context) else onDownloadUpdate(context)
                 }
-              }
-              .testTag("check_update_button"),
-            contentAlignment = Alignment.Center
-          ) {
-            Row(
-              verticalAlignment = Alignment.CenterVertically,
-              horizontalArrangement = Arrangement.spacedBy(8.dp)
+                .testTag("update_now_button"),
+              contentAlignment = Alignment.Center
             ) {
-              Icon(
-                imageVector = primaryIcon,
-                contentDescription = null,
-                tint = Color.White,
-                modifier = Modifier.size(19.dp)
-              )
-              Text(
-                text = primaryLabel,
-                style = MaterialTheme.typography.bodyMedium.copy(fontWeight = FontWeight.Bold),
-                color = Color.White,
-                maxLines = 1,
-                overflow = TextOverflow.Ellipsis
-              )
+              Row(
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.spacedBy(8.dp)
+              ) {
+                Icon(
+                  imageVector = updateIcon,
+                  contentDescription = null,
+                  tint = Color.White,
+                  modifier = Modifier.size(19.dp)
+                )
+                Text(
+                  text = updateLabel,
+                  style = MaterialTheme.typography.bodyMedium.copy(fontWeight = FontWeight.Bold),
+                  color = Color.White,
+                  maxLines = 1,
+                  overflow = TextOverflow.Ellipsis
+                )
+              }
             }
           }
 
-          // Clean 2-Column Pill Action Grid (Zero Text Wrapping)
+          // Secondary Action Pills (Check Updates always available; Release Notes & GitHub clean)
           Row(
             modifier = Modifier.fillMaxWidth(),
             horizontalArrangement = Arrangement.spacedBy(10.dp)
           ) {
             GlassActionPill(
-              text = "Download APK",
-              icon = Icons.Rounded.Download,
+              text = if (updateCheckStatus is UpdateCheckStatus.Checking) "Checking..." else "Check Updates",
+              icon = Icons.Rounded.Refresh,
               darkTheme = darkTheme,
-              enabled = !isDownloading,
-              modifier = Modifier.weight(1f).testTag("download_apk_button"),
-              onClick = { onDownloadUpdate(context) }
+              enabled = !isDownloading && updateCheckStatus !is UpdateCheckStatus.Checking,
+              modifier = Modifier.weight(1f).testTag("check_update_button"),
+              onClick = { onCheckUpdate(context) }
             )
-            GlassActionPill(
-              text = "Install Update",
-              icon = Icons.Rounded.SystemUpdate,
-              darkTheme = darkTheme,
-              enabled = !isDownloading,
-              modifier = Modifier.weight(1f).testTag("install_apk_button"),
-              onClick = { onInstallUpdate(context) }
-            )
-          }
-
-          Row(
-            modifier = Modifier.fillMaxWidth(),
-            horizontalArrangement = Arrangement.spacedBy(10.dp)
-          ) {
             GlassActionPill(
               text = "Release Notes",
               icon = Icons.Rounded.Description,
@@ -390,9 +410,15 @@ fun SettingsScreen(
               modifier = Modifier.weight(1f),
               onClick = { showReleaseNotesSheet = true }
             )
+          }
+
+          Row(
+            modifier = Modifier.fillMaxWidth(),
+            horizontalArrangement = Arrangement.spacedBy(10.dp)
+          ) {
             GlassActionPill(
-              text = "Open GitHub",
-              icon = Icons.Rounded.OpenInNew,
+              text = "Open GitHub Releases",
+              icon = Icons.AutoMirrored.Rounded.OpenInNew,
               darkTheme = darkTheme,
               enabled = true,
               modifier = Modifier.weight(1f),
@@ -418,7 +444,7 @@ fun SettingsScreen(
             )
             Surface(
               shape = RoundedCornerShape(999.dp),
-              color = if (darkTheme) Color.Black.copy(alpha = 0.28f) else MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.7f),
+              color = if (darkTheme) Color(0xFF0E1320).copy(alpha = 0.72f) else Color(0xFFE1E8F6),
               modifier = Modifier.fillMaxWidth()
             ) {
               Row(modifier = Modifier.padding(4.dp)) {
@@ -428,7 +454,7 @@ fun SettingsScreen(
                     modifier = Modifier
                       .weight(1f)
                       .clip(RoundedCornerShape(999.dp))
-                      .background(if (selected) MaterialTheme.colorScheme.surface else Color.Transparent)
+                      .background(if (selected) (if (darkTheme) Color(0xFF28334A) else Color.White) else Color.Transparent)
                       .clickable { onThemeChanged(key) }
                       .padding(vertical = 10.dp),
                     contentAlignment = Alignment.Center
@@ -455,7 +481,8 @@ fun SettingsScreen(
               horizontalArrangement = Arrangement.SpaceBetween
             ) {
               accents.forEach { (hex, color) ->
-                val selected = currentAccentHex.equals(hex, ignoreCase = true)
+                val selected = currentAccentHex.equals(hex, ignoreCase = true) ||
+                  (hex == "#007AFF" && currentAccentHex.equals("#3B77F5", ignoreCase = true))
                 Box(
                   modifier = Modifier
                     .size(36.dp)
@@ -553,7 +580,7 @@ fun SettingsScreen(
           )
           Surface(
             shape = RoundedCornerShape(999.dp),
-            color = if (darkTheme) Color.Black.copy(alpha = 0.28f) else MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.7f),
+            color = if (darkTheme) Color(0xFF0E1320).copy(alpha = 0.72f) else Color(0xFFE1E8F6),
             modifier = Modifier.fillMaxWidth()
           ) {
             Row(modifier = Modifier.padding(4.dp)) {
@@ -563,7 +590,7 @@ fun SettingsScreen(
                   modifier = Modifier
                     .weight(1f)
                     .clip(RoundedCornerShape(999.dp))
-                    .background(if (selected) MaterialTheme.colorScheme.surface else Color.Transparent)
+                    .background(if (selected) (if (darkTheme) Color(0xFF28334A) else Color.White) else Color.Transparent)
                     .clickable { onLanguageChanged(code) }
                     .padding(vertical = 10.dp),
                   contentAlignment = Alignment.Center
@@ -594,7 +621,7 @@ fun SettingsScreen(
             color = MaterialTheme.colorScheme.onSurface
           )
           Text(
-            text = "AURIX ${BuildConfig.VERSION_NAME}. Streaming from Audius, synced lyrics from LRCLIB, OTA updates via GitHub.",
+            text = "AURIX ${installedAppInfo.versionName} (code ${installedAppInfo.versionCode}). Streaming from Audius, synced lyrics from LRCLIB, signed OTA updates via GitHub.",
             style = MaterialTheme.typography.bodyMedium,
             color = MaterialTheme.colorScheme.onSurfaceVariant
           )
@@ -616,7 +643,7 @@ fun SettingsScreen(
         verticalArrangement = Arrangement.spacedBy(12.dp)
       ) {
         Text(
-          text = "Release Notes (${latestRelease.tagName})",
+          text = "Release Notes (${latestRelease.tagName} · code ${latestRelease.versionCode})",
           style = MaterialTheme.typography.titleLarge.copy(fontWeight = FontWeight.Bold),
           color = MaterialTheme.colorScheme.onSurface
         )
@@ -625,13 +652,15 @@ fun SettingsScreen(
           style = MaterialTheme.typography.bodyMedium,
           color = MaterialTheme.colorScheme.onSurfaceVariant
         )
-        Spacer(modifier = Modifier.height(6.dp))
-        Button(
-          onClick = { showReleaseNotesSheet = false; onDownloadUpdate(context) },
-          modifier = Modifier.fillMaxWidth().height(48.dp),
-          shape = RoundedCornerShape(16.dp)
-        ) {
-          Text("Download & Install ${latestRelease.tagName}", fontWeight = FontWeight.Bold)
+        if (isUpdateAvailable) {
+          Spacer(modifier = Modifier.height(6.dp))
+          Button(
+            onClick = { showReleaseNotesSheet = false; onDownloadUpdate(context) },
+            modifier = Modifier.fillMaxWidth().height(48.dp),
+            shape = RoundedCornerShape(16.dp)
+          ) {
+            Text("Update Now (${latestRelease.tagName})", fontWeight = FontWeight.Bold)
+          }
         }
         Spacer(modifier = Modifier.height(8.dp))
       }

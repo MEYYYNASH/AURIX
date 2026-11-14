@@ -23,7 +23,7 @@ class PreferencesManager(private val context: Context) {
   }
 
   val themeMode: Flow<String> = context.dataStore.data.map { prefs -> prefs[THEME_MODE] ?: "system" }
-  val accentColor: Flow<String> = context.dataStore.data.map { prefs -> prefs[ACCENT_COLOR] ?: "#3B77F5" }
+  val accentColor: Flow<String> = context.dataStore.data.map { prefs -> prefs[ACCENT_COLOR] ?: "#007AFF" }
   val language: Flow<String> = context.dataStore.data.map { prefs -> prefs[LANGUAGE] ?: "en" }
   val dynamicBg: Flow<Boolean> = context.dataStore.data.map { prefs -> prefs[DYNAMIC_BG] ?: true }
   val reducedMotion: Flow<Boolean> = context.dataStore.data.map { prefs -> prefs[REDUCED_MOTION] ?: false }

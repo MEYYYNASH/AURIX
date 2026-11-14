@@ -10,9 +10,9 @@ on:
   workflow_dispatch:
     inputs:
       tag:
-        description: 'Release tag (e.g. v1.2.8)'
+        description: 'Release tag (e.g. v1.2.9)'
         required: false
-        default: 'v1.2.8'
+        default: 'v1.2.9'
 
 permissions:
   contents: write
@@ -50,9 +50,12 @@ jobs:
             RELEASE_TAG="${{ github.ref_name }}"
           else
             VERSION=$(grep -m1 'versionName' app/build.gradle.kts | sed -E 's/.*"([^"]+)".*/\1/')
-            RELEASE_TAG="v${VERSION:-1.2.8}"
+            VCODE=$(grep -m1 'versionCode' app/build.gradle.kts | sed -E 's/[^0-9]*([0-9]+).*/\1/')
+            RELEASE_TAG="v${VERSION:-1.2.9}"
           fi
+          VCODE=${VCODE:-$(grep -m1 'versionCode' app/build.gradle.kts | sed -E 's/[^0-9]*([0-9]+).*/\1/')}
           echo "RELEASE_TAG=${RELEASE_TAG}" >> "$GITHUB_ENV"
+          echo "RELEASE_VERSION_CODE=${VCODE:-10209}" >> "$GITHUB_ENV"
 
       - name: Ensure release keystore exists
         run: |
@@ -81,13 +84,17 @@ jobs:
           tag_name: ${{ env.RELEASE_TAG }}
           name: AURIX ${{ env.RELEASE_TAG }}
           body: |
+            versionCode: ${{ env.RELEASE_VERSION_CODE }}
+            mandatory: false
+
             What's New in AURIX ${{ env.RELEASE_TAG }}:
-            - Fixed in-app APK Download & Install flow with live OkHttp progress bar, GitHub Web rate-limit fallback, and Unknown App Sources permission prompt
-            - Added real MP3 song downloading to Music/AURIX via scoped MediaStore storage and fixed local audio title extraction
-            - Redesigned Settings & Update UI with frosted GlassCard layout, balanced action pills, Release Notes modal, and uncluttered minimal spacing
-            - Updated AURIX app icon & brand logo to a clean minimalist design with smooth breathing animation
+            - Implemented Smart APK Version Update System using actual installed Android PackageManager versionCode & certificate verification
+            - Blocked downgrades and unnecessary reinstalls; added package name + signature validation before installation
+            - Added Liquid Glass bottom navigation bar, fixed frosted card shadow colors, and enriched Dynamic Artwork Background glow
+            - Added optional mandatory critical release enforcement and robust network/download/install error handling
           files: |
             app/build/outputs/apk/release/app-release.apk
             AURIX-${{ env.RELEASE_TAG }}.apk
+            app/build/outputs/apk/release/output-metadata.json
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}

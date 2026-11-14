@@ -149,24 +149,23 @@ fun GlassCard(
 ) {
   val shape = RoundedCornerShape(cornerRadius)
   val fillColor = if (darkTheme) {
-    Color(0xFF1A202E).copy(alpha = 0.72f)
+    Color(0xFF182032).copy(alpha = 0.74f)
   } else {
-    Color.White.copy(alpha = 0.78f)
+    Color.White.copy(alpha = 0.86f)
   }
   val borderBrush = Brush.verticalGradient(
     colors = if (darkTheme) {
-      listOf(Color.White.copy(alpha = 0.22f), Color.White.copy(alpha = 0.05f))
+      listOf(Color.White.copy(alpha = 0.24f), Color.White.copy(alpha = 0.06f))
     } else {
-      listOf(Color.White.copy(alpha = 0.90f), Color.White.copy(alpha = 0.35f))
+      listOf(Color.White.copy(alpha = 0.96f), Color.White.copy(alpha = 0.55f))
     }
   )
 
-  Surface(
-    shape = shape,
-    color = fillColor,
-    tonalElevation = 0.dp,
-    shadowElevation = if (darkTheme) 10.dp else 6.dp,
-    modifier = modifier.border(1.dp, borderBrush, shape)
+  Box(
+    modifier = modifier
+      .clip(shape)
+      .background(fillColor)
+      .border(1.dp, borderBrush, shape)
   ) {
     Column(content = content)
   }
@@ -249,25 +248,61 @@ fun DynamicArtworkBackdrop(
   modifier: Modifier = Modifier
 ) {
   val accentColor = MaterialTheme.colorScheme.primary
-  val targetAlpha = if (enabled && song != null) (if (darkTheme) 0.36f else 0.26f) else 0f
+  val targetAlpha = if (enabled && song != null) (if (darkTheme) 0.55f else 0.42f) else 0f
   val animatedAlpha by animateFloatAsState(
     targetValue = targetAlpha,
-    animationSpec = if (reducedMotion) snap() else tween(durationMillis = 700),
+    animationSpec = if (reducedMotion) snap() else tween(durationMillis = 750),
     label = "dynamic_bg_alpha"
   )
 
-  // Soft ambient glass mesh background (always visible for clean frosted glass depth)
+  val infiniteTransition = rememberInfiniteTransition(label = "bg_glow")
+  val driftScale by infiniteTransition.animateFloat(
+    initialValue = 1.28f,
+    targetValue = 1.40f,
+    animationSpec = infiniteRepeatable(
+      animation = tween(durationMillis = 6500, easing = FastOutSlowInEasing),
+      repeatMode = RepeatMode.Reverse
+    ),
+    label = "bg_drift_scale"
+  )
+  val activeScale = if (reducedMotion) 1.32f else driftScale
+
+  // Luminous pastel aurora (light) or midnight nebula (dark) backdrop so frosted glass always pops
   Box(modifier = modifier.fillMaxSize()) {
+    Box(
+      modifier = Modifier
+        .fillMaxSize()
+        .background(
+          Brush.linearGradient(
+            colors = if (darkTheme) {
+              listOf(
+                Color(0xFF0A0E1A),
+                Color(0xFF10172B),
+                Color(0xFF13132B)
+              )
+            } else {
+              listOf(
+                Color(0xFFEAF0FF),
+                Color(0xFFECE4FF),
+                Color(0xFFDFF1FF)
+              )
+            }
+          )
+        )
+    )
+
+    // Soft floating aurora orbs
     Box(
       modifier = Modifier
         .fillMaxSize()
         .background(
           Brush.radialGradient(
             colors = if (darkTheme) {
-              listOf(accentColor.copy(alpha = 0.20f), Color(0xFF1A103D).copy(alpha = 0.16f), Color.Transparent)
+              listOf(accentColor.copy(alpha = 0.24f), Color.Transparent)
             } else {
-              listOf(accentColor.copy(alpha = 0.16f), Color(0xFFE0D7FF).copy(alpha = 0.35f), Color.Transparent)
-            }
+              listOf(accentColor.copy(alpha = 0.22f), Color.Transparent)
+            },
+            radius = 950f
           )
         )
     )
@@ -282,19 +317,19 @@ fun DynamicArtworkBackdrop(
             contentScale = ContentScale.Crop,
             modifier = Modifier
               .fillMaxSize()
-              .scale(1.25f)
-              .blur(72.dp)
+              .scale(activeScale)
+              .blur(90.dp)
           )
         }
         Box(
           modifier = Modifier
             .fillMaxSize()
             .background(
-              Brush.radialGradient(
+              Brush.linearGradient(
                 colors = listOf(
                   c1.copy(alpha = 0.55f),
-                  c2.copy(alpha = 0.30f),
-                  Color.Transparent
+                  c2.copy(alpha = 0.42f),
+                  accentColor.copy(alpha = 0.28f)
                 )
               )
             )
@@ -303,13 +338,11 @@ fun DynamicArtworkBackdrop(
           modifier = Modifier
             .fillMaxSize()
             .background(
-              Brush.verticalGradient(
-                colors = listOf(
-                  Color.Transparent,
-                  MaterialTheme.colorScheme.background.copy(alpha = 0.85f),
-                  MaterialTheme.colorScheme.background
-                )
-              )
+              if (darkTheme) {
+                Color(0xFF0B0F1A).copy(alpha = 0.52f)
+              } else {
+                Color(0xFFF3F6FF).copy(alpha = 0.48f)
+              }
             )
         )
       }

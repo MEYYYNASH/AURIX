@@ -36,7 +36,7 @@ class AurixViewModel(application: Application) : AndroidViewModel(application) {
 
   // Preferences States
   val themeMode = prefsManager.themeMode.stateIn(viewModelScope, SharingStarted.Lazily, "system")
-  val accentColorHex = prefsManager.accentColor.stateIn(viewModelScope, SharingStarted.Lazily, "#3B77F5")
+  val accentColorHex = prefsManager.accentColor.stateIn(viewModelScope, SharingStarted.Lazily, "#007AFF")
   val language = prefsManager.language.stateIn(viewModelScope, SharingStarted.Lazily, "en")
   val dynamicBg = prefsManager.dynamicBg.stateIn(viewModelScope, SharingStarted.Lazily, true)
   val reducedMotion = prefsManager.reducedMotion.stateIn(viewModelScope, SharingStarted.Lazily, false)
@@ -54,19 +54,21 @@ class AurixViewModel(application: Application) : AndroidViewModel(application) {
   private val _analyzedSong = MutableStateFlow<Song?>(null)
   val analyzedSong: StateFlow<Song?> = _analyzedSong
 
-  // GitHub Update States
-  private val _updateStatus = MutableStateFlow("Ready to check")
+  // GitHub Smart Update States (backed by actual Android PackageManager info)
+  private val _installedAppInfo = MutableStateFlow(GitHubUpdater.getInstalledAppInfo(application))
+  val installedAppInfo: StateFlow<InstalledAppInfo> = _installedAppInfo
+
+  private val _updateCheckStatus = MutableStateFlow<UpdateCheckStatus>(UpdateCheckStatus.Idle)
+  val updateCheckStatus: StateFlow<UpdateCheckStatus> = _updateCheckStatus
+
+  private val _updateStatus = MutableStateFlow("Ready to check for updates")
   val updateStatus: StateFlow<String> = _updateStatus
 
   private val _latestRelease = MutableStateFlow<GitHubRelease?>(null)
   val latestRelease: StateFlow<GitHubRelease?> = _latestRelease
 
   private val _apkDownloadState = MutableStateFlow<ApkDownloadState>(
-    if (GitHubUpdater.hasDownloadedApk(application)) {
-      ApkDownloadState.Downloaded("", "Ready")
-    } else {
-      ApkDownloadState.Idle
-    }
+    GitHubUpdater.hasValidatedNewerApk(application) ?: ApkDownloadState.Idle
   )
   val apkDownloadState: StateFlow<ApkDownloadState> = _apkDownloadState
 
@@ -150,6 +152,8 @@ class AurixViewModel(application: Application) : AndroidViewModel(application) {
     loadTrending()
     setupPlayerListener()
     startPositionTicker()
+    GitHubUpdater.cleanupObsoleteApks(application, _installedAppInfo.value.versionCode)
+    checkForUpdates(application, silent = true)
   }
 
   private fun startPositionTicker() {
@@ -205,24 +209,52 @@ class AurixViewModel(application: Application) : AndroidViewModel(application) {
     _analyzedSong.value = song
   }
 
-  fun checkForUpdates(context: Context) {
+  fun checkForUpdates(context: Context, silent: Boolean = false) {
     viewModelScope.launch {
+      _installedAppInfo.value = GitHubUpdater.getInstalledAppInfo(context)
+      _updateCheckStatus.value = UpdateCheckStatus.Checking
       _updateStatus.value = "Checking GitHub releases..."
+
       val owner = githubOwner.value.trim().ifBlank { "MEYYYNASH" }
       val repo = githubRepo.value.trim().ifBlank { "AURIX" }
-      when (val result = GitHubUpdater.checkForUpdates(owner, repo)) {
-        is UpdateCheckResult.Success -> {
-          val release = result.release
-          _latestRelease.value = release
-          if (GitHubUpdater.isNewerVersion(release.tagName, BuildConfig.VERSION_NAME)) {
-            _updateStatus.value = "Update available: ${release.tagName}"
-          } else {
-            _updateStatus.value = "Up to date (v${BuildConfig.VERSION_NAME})"
+      val result = GitHubUpdater.checkForUpdates(context, owner, repo)
+      _updateCheckStatus.value = result
+      _updateStatus.value = GitHubUpdater.statusTextFor(result)
+
+      when (result) {
+        is UpdateCheckStatus.UpdateAvailable -> {
+          _latestRelease.value = result.release
+          val validated = GitHubUpdater.hasValidatedNewerApk(context)
+          if (validated != null && validated.apkVersionCode == result.release.versionCode) {
+            _apkDownloadState.value = validated
+          } else if (_apkDownloadState.value !is ApkDownloadState.Downloading) {
+            _apkDownloadState.value = ApkDownloadState.Idle
           }
         }
-        is UpdateCheckResult.Failure -> {
-          _updateStatus.value = result.message
+        is UpdateCheckStatus.UpToDate -> {
+          _latestRelease.value = result.release
+          if (_apkDownloadState.value !is ApkDownloadState.Downloading) {
+            _apkDownloadState.value = ApkDownloadState.Idle
+          }
+          if (!silent) {
+            Toast.makeText(context, "You are already using the latest version.", Toast.LENGTH_SHORT).show()
+          }
         }
+        is UpdateCheckStatus.DowngradeBlocked -> {
+          _latestRelease.value = result.release
+          if (_apkDownloadState.value !is ApkDownloadState.Downloading) {
+            _apkDownloadState.value = ApkDownloadState.Idle
+          }
+          if (!silent) {
+            Toast.makeText(context, GitHubUpdater.statusTextFor(result), Toast.LENGTH_LONG).show()
+          }
+        }
+        is UpdateCheckStatus.Error -> {
+          if (!silent) {
+            Toast.makeText(context, result.message, Toast.LENGTH_SHORT).show()
+          }
+        }
+        else -> Unit
       }
     }
   }
@@ -230,58 +262,90 @@ class AurixViewModel(application: Application) : AndroidViewModel(application) {
   fun downloadAndInstallUpdate(context: Context) {
     if (_apkDownloadState.value is ApkDownloadState.Downloading) return
     viewModelScope.launch {
-      var release = _latestRelease.value
-      if (release == null) {
-        _updateStatus.value = "Fetching latest APK link..."
+      val installed = GitHubUpdater.getInstalledAppInfo(context)
+      _installedAppInfo.value = installed
+
+      var currentStatus = _updateCheckStatus.value
+      if (currentStatus !is UpdateCheckStatus.UpdateAvailable) {
+        _updateCheckStatus.value = UpdateCheckStatus.Checking
+        _updateStatus.value = "Verifying latest release..."
         val owner = githubOwner.value.trim().ifBlank { "MEYYYNASH" }
         val repo = githubRepo.value.trim().ifBlank { "AURIX" }
-        when (val result = GitHubUpdater.checkForUpdates(owner, repo)) {
-          is UpdateCheckResult.Success -> {
-            release = result.release
-            _latestRelease.value = release
-          }
-          is UpdateCheckResult.Failure -> {
-            _apkDownloadState.value = ApkDownloadState.Error(result.message)
-            _updateStatus.value = result.message
-            Toast.makeText(context, result.message, Toast.LENGTH_SHORT).show()
+        currentStatus = GitHubUpdater.checkForUpdates(context, owner, repo)
+        _updateCheckStatus.value = currentStatus
+        _updateStatus.value = GitHubUpdater.statusTextFor(currentStatus)
+      }
+
+      when (currentStatus) {
+        is UpdateCheckStatus.UpToDate -> {
+          _latestRelease.value = currentStatus.release
+          Toast.makeText(context, "You are already using the latest version.", Toast.LENGTH_SHORT).show()
+          return@launch
+        }
+        is UpdateCheckStatus.DowngradeBlocked -> {
+          _latestRelease.value = currentStatus.release
+          val msg = GitHubUpdater.statusTextFor(currentStatus)
+          _apkDownloadState.value = ApkDownloadState.Error(msg)
+          Toast.makeText(context, msg, Toast.LENGTH_LONG).show()
+          return@launch
+        }
+        is UpdateCheckStatus.Error -> {
+          _apkDownloadState.value = ApkDownloadState.Error(currentStatus.message)
+          Toast.makeText(context, currentStatus.message, Toast.LENGTH_LONG).show()
+          return@launch
+        }
+        is UpdateCheckStatus.UpdateAvailable -> {
+          val targetRelease = currentStatus.release
+          _latestRelease.value = targetRelease
+
+          // Reuse already-downloaded & signature-validated APK if it matches target versionCode
+          val existingValidated = GitHubUpdater.hasValidatedNewerApk(context)
+          if (existingValidated != null && existingValidated.apkVersionCode >= targetRelease.versionCode) {
+            _apkDownloadState.value = existingValidated
+            val installRes = GitHubUpdater.installDownloadedApk(context)
+            _updateStatus.value = installRes.message
+            Toast.makeText(context, installRes.message, Toast.LENGTH_LONG).show()
             return@launch
           }
-        }
-      }
 
-      val targetRelease = release ?: return@launch
-      _updateStatus.value = "Downloading ${targetRelease.tagName}..."
-      val finalState = GitHubUpdater.downloadApk(context, targetRelease.apkUrl, targetRelease.tagName) { state ->
-        _apkDownloadState.value = state
-        when (state) {
-          is ApkDownloadState.Downloading -> {
-            val pct = if (state.progress >= 0f) "${(state.progress * 100).toInt()}%" else "${state.downloadedBytes / (1024 * 1024)} MB"
-            _updateStatus.value = "Downloading ${targetRelease.tagName} ($pct)"
+          _updateStatus.value = "Downloading ${targetRelease.tagName}..."
+          val finalState = GitHubUpdater.downloadApk(context, targetRelease) { state ->
+            _apkDownloadState.value = state
+            when (state) {
+              is ApkDownloadState.Downloading -> {
+                val pct = if (state.progress >= 0f) "${(state.progress * 100).toInt()}%" else "${state.downloadedBytes / (1024 * 1024)} MB"
+                _updateStatus.value = "Downloading ${targetRelease.tagName} ($pct)"
+              }
+              is ApkDownloadState.ValidatedReady -> {
+                _updateStatus.value = "Verified ${targetRelease.tagName} (code ${state.apkVersionCode}). Starting installer..."
+              }
+              is ApkDownloadState.Error -> {
+                _updateStatus.value = state.message
+              }
+              else -> Unit
+            }
           }
-          is ApkDownloadState.Downloaded -> {
-            _updateStatus.value = "Downloaded ${targetRelease.tagName}. Ready to install."
-          }
-          is ApkDownloadState.Error -> {
-            _updateStatus.value = state.message
-          }
-          else -> Unit
-        }
-      }
 
-      if (finalState is ApkDownloadState.Downloaded) {
-        val installMsg = GitHubUpdater.installDownloadedApk(context)
-        _updateStatus.value = installMsg
-        Toast.makeText(context, installMsg, Toast.LENGTH_LONG).show()
-      } else if (finalState is ApkDownloadState.Error) {
-        Toast.makeText(context, finalState.message, Toast.LENGTH_LONG).show()
+          if (finalState is ApkDownloadState.ValidatedReady) {
+            val installRes = GitHubUpdater.installDownloadedApk(context)
+            _updateStatus.value = installRes.message
+            Toast.makeText(context, installRes.message, Toast.LENGTH_LONG).show()
+          } else if (finalState is ApkDownloadState.Error) {
+            Toast.makeText(context, finalState.message, Toast.LENGTH_LONG).show()
+          }
+        }
+        else -> Unit
       }
     }
   }
 
   fun installDownloadedApk(context: Context) {
-    val msg = GitHubUpdater.installDownloadedApk(context)
-    _updateStatus.value = msg
-    Toast.makeText(context, msg, Toast.LENGTH_LONG).show()
+    val res = GitHubUpdater.installDownloadedApk(context)
+    _updateStatus.value = res.message
+    if (!res.launched && !res.requiresPermission) {
+      _apkDownloadState.value = ApkDownloadState.Error(res.message)
+    }
+    Toast.makeText(context, res.message, Toast.LENGTH_LONG).show()
   }
 
   fun openGitHubRepo(context: Context) {

@@ -1,24 +1,19 @@
 package com.example.ui.screens
 
-import android.widget.Toast
 import androidx.compose.animation.*
 import androidx.compose.animation.core.CubicBezierEasing
 import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.animation.core.snap
 import androidx.compose.animation.core.tween
 import androidx.compose.foundation.background
-import androidx.compose.foundation.border
-import androidx.compose.foundation.clickable
 import androidx.compose.foundation.isSystemInDarkTheme
 import androidx.compose.foundation.layout.*
-import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.outlined.Folder
 import androidx.compose.material.icons.outlined.Home
 import androidx.compose.material.icons.outlined.Search
 import androidx.compose.material.icons.outlined.Settings
-import androidx.compose.material.icons.rounded.MusicNote
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
@@ -26,14 +21,14 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.alpha
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.draw.scale
-import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.platform.LocalContext
-import androidx.compose.ui.platform.testTag
-import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.window.DialogProperties
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import com.example.data.ApkDownloadState
+import com.example.data.UpdateCheckStatus
 import com.example.ui.theme.*
 import com.example.viewmodel.AurixViewModel
 
@@ -68,6 +63,8 @@ fun AurixApp(viewModel: AurixViewModel) {
   val appMode by viewModel.appMode.collectAsStateWithLifecycle()
   val youtubeUrl by viewModel.youtubeUrl.collectAsStateWithLifecycle()
   val analyzedSong by viewModel.analyzedSong.collectAsStateWithLifecycle()
+  val installedAppInfo by viewModel.installedAppInfo.collectAsStateWithLifecycle()
+  val updateCheckStatus by viewModel.updateCheckStatus.collectAsStateWithLifecycle()
   val updateStatus by viewModel.updateStatus.collectAsStateWithLifecycle()
   val latestRelease by viewModel.latestRelease.collectAsStateWithLifecycle()
   val apkDownloadState by viewModel.apkDownloadState.collectAsStateWithLifecycle()
@@ -105,7 +102,7 @@ fun AurixApp(viewModel: AurixViewModel) {
     else -> systemDark
   }
 
-  val accentColor = parseHexColor(accentHex)
+  val accentColor = parseHexColor(accentHex, darkTheme)
   val isNowPlayingOpen = showNowPlaying && currentSong != null
 
   val pageScale by animateFloatAsState(
@@ -206,6 +203,8 @@ fun AurixApp(viewModel: AurixViewModel) {
               hasCurrentSong = currentSong != null,
               githubOwner = githubOwner,
               githubRepo = githubRepo,
+              installedAppInfo = installedAppInfo,
+              updateCheckStatus = updateCheckStatus,
               updateStatus = updateStatus,
               latestRelease = latestRelease,
               apkDownloadState = apkDownloadState,
@@ -224,11 +223,15 @@ fun AurixApp(viewModel: AurixViewModel) {
           }
         }
 
-        // Bottom Floating MiniPlayer + Glass Navigation Bar
+        // Bottom Floating MiniPlayer + Liquid Glass Navigation Bar
+        val screens = remember { listOf(Screen.Home, Screen.Search, Screen.Library, Screen.Settings) }
+        val navTabs = remember { screens.map { TabItem(it.title, it.icon) } }
+        val selectedIndex = screens.indexOf(currentScreen).coerceAtLeast(0)
+
         Column(
           modifier = Modifier
             .align(Alignment.BottomCenter)
-            .windowInsetsPadding(WindowInsets.navigationBars)
+            .navigationBarsPadding()
             .padding(bottom = 14.dp),
           horizontalAlignment = Alignment.CenterHorizontally
         ) {
@@ -250,20 +253,15 @@ fun AurixApp(viewModel: AurixViewModel) {
             )
           }
 
-          Spacer(modifier = Modifier.height(10.dp))
+          if (currentSong != null && !isNowPlayingOpen) {
+            Spacer(modifier = Modifier.height(10.dp))
+          }
 
-          FloatingGlassNavBar(
-            currentScreen = currentScreen,
-            isPlaying = isPlaying,
-            reducedMotion = reducedMotion,
-            onScreenSelected = { currentScreen = it },
-            onNowPlayingClick = {
-              if (currentSong != null) {
-                showNowPlaying = true
-              } else {
-                Toast.makeText(context, "Play a song first", Toast.LENGTH_SHORT).show()
-              }
-            }
+          LiquidGlassTabBar(
+            tabs = navTabs,
+            selectedIndex = selectedIndex,
+            onSelect = { index -> currentScreen = screens[index] },
+            reducedMotion = reducedMotion
           )
         }
       }
@@ -301,126 +299,71 @@ fun AurixApp(viewModel: AurixViewModel) {
           )
         }
       }
-    }
-  }
-}
 
-@Composable
-fun FloatingGlassNavBar(
-  currentScreen: Screen,
-  isPlaying: Boolean,
-  reducedMotion: Boolean,
-  onScreenSelected: (Screen) -> Unit,
-  onNowPlayingClick: () -> Unit
-) {
-  val screens = listOf(Screen.Home, Screen.Search, Screen.Library, Screen.Settings)
-  val glassOuterBg = MaterialTheme.colorScheme.surface.copy(alpha = 0.86f)
-  val glassBorderBrush = Brush.verticalGradient(
-    colors = listOf(
-      Color.White.copy(alpha = 0.24f),
-      Color.White.copy(alpha = 0.05f)
-    )
-  )
-
-  Surface(
-    shape = RoundedCornerShape(999.dp),
-    color = glassOuterBg,
-    shadowElevation = 18.dp,
-    modifier = Modifier
-      .padding(horizontal = 16.dp)
-      .border(1.dp, glassBorderBrush, RoundedCornerShape(999.dp))
-  ) {
-    Row(
-      modifier = Modifier.padding(horizontal = 8.dp, vertical = 7.dp),
-      horizontalArrangement = Arrangement.spacedBy(10.dp),
-      verticalAlignment = Alignment.CenterVertically
-    ) {
-      // Dark inner pill containing the 4 tabs
-      Row(
-        modifier = Modifier
-          .clip(RoundedCornerShape(999.dp))
-          .background(Color(0xFF1C1C1C))
-          .border(1.5.dp, Color(0xFF2C2C2C), RoundedCornerShape(999.dp))
-          .padding(5.dp)
-          .animateContentSize(
-            animationSpec = if (reducedMotion) snap() else tween(350, easing = AurixEase)
-          ),
-        horizontalArrangement = Arrangement.spacedBy(2.dp),
-        verticalAlignment = Alignment.CenterVertically
-      ) {
-        screens.forEach { screen ->
-          val isSelected = currentScreen == screen
-          Row(
-            modifier = Modifier
-              .height(44.dp)
-              .clip(RoundedCornerShape(999.dp))
-              .background(if (isSelected) Color.White else Color.Transparent)
-              .clickable { onScreenSelected(screen) }
-              .padding(horizontal = if (isSelected) 16.dp else 13.dp)
-              .testTag("nav_tab_${screen.route}"),
-            verticalAlignment = Alignment.CenterVertically
-          ) {
-            Icon(
-              imageVector = screen.icon,
-              contentDescription = screen.title,
-              tint = if (isSelected) Color(0xFF111111) else Color(0xFFB3B3B3),
-              modifier = Modifier.size(21.dp)
-            )
-            AnimatedVisibility(
-              visible = isSelected,
-              enter = if (reducedMotion) fadeIn(snap()) else expandHorizontally(tween(300, easing = AurixEase)) + fadeIn(tween(240)),
-              exit = if (reducedMotion) fadeOut(snap()) else shrinkHorizontally(tween(220, easing = AurixEase)) + fadeOut(tween(140))
-            ) {
-              Row {
-                Spacer(modifier = Modifier.width(8.dp))
+      // Optional Mandatory Critical Update Dialog
+      val mandatoryUpdate = (updateCheckStatus as? UpdateCheckStatus.UpdateAvailable)?.takeIf { it.isMandatory }
+      if (mandatoryUpdate != null) {
+        val isDownloading = apkDownloadState is ApkDownloadState.Downloading
+        val isValidated = apkDownloadState is ApkDownloadState.ValidatedReady
+        AlertDialog(
+          onDismissRequest = {},
+          properties = DialogProperties(dismissOnBackPress = false, dismissOnClickOutside = false),
+          title = { Text("Critical Update Required (${mandatoryUpdate.release.tagName})") },
+          text = {
+            Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+              Text(
+                "Installed: v${mandatoryUpdate.installed.versionName} (code ${mandatoryUpdate.installed.versionCode})\n" +
+                  "Latest: ${mandatoryUpdate.release.tagName} (code ${mandatoryUpdate.release.versionCode})"
+              )
+              if (mandatoryUpdate.release.body.isNotBlank()) {
+                Text(mandatoryUpdate.release.body, style = MaterialTheme.typography.bodySmall)
+              }
+              if (isDownloading) {
+                val dl = apkDownloadState as ApkDownloadState.Downloading
+                LinearProgressIndicator(
+                  progress = { if (dl.progress >= 0f) dl.progress else 0.35f },
+                  modifier = Modifier.fillMaxWidth()
+                )
+              }
+              if (apkDownloadState is ApkDownloadState.Error) {
                 Text(
-                  text = screen.title,
-                  style = MaterialTheme.typography.bodyMedium.copy(fontWeight = FontWeight.SemiBold),
-                  color = Color(0xFF111111),
-                  maxLines = 1
+                  text = (apkDownloadState as ApkDownloadState.Error).message,
+                  color = MaterialTheme.colorScheme.error,
+                  style = MaterialTheme.typography.bodySmall
                 )
               }
             }
+          },
+          confirmButton = {
+            Button(
+              enabled = !isDownloading,
+              onClick = {
+                if (isValidated) viewModel.installDownloadedApk(context)
+                else viewModel.downloadAndInstallUpdate(context)
+              }
+            ) {
+              Text(
+                when {
+                  isDownloading -> "Downloading..."
+                  isValidated -> "Install Update"
+                  else -> "Update Now"
+                }
+              )
+            }
           }
-        }
-      }
-
-      // Right circular Now Playing button with animated equalizer bars when playing
-      Box(
-        modifier = Modifier
-          .size(52.dp)
-          .clip(CircleShape)
-          .background(Color(0xFF1C1C1C))
-          .border(1.5.dp, Color(0xFF2C2C2C), CircleShape)
-          .clickable { onNowPlayingClick() }
-          .testTag("nav_now_playing_fab"),
-        contentAlignment = Alignment.Center
-      ) {
-        if (isPlaying) {
-          EqualizerBars(
-            isPlaying = true,
-            color = Color.White,
-            reducedMotion = reducedMotion,
-            barWidth = 3.5.dp,
-            maxHeight = 18.dp
-          )
-        } else {
-          Icon(
-            imageVector = Icons.Rounded.MusicNote,
-            contentDescription = "Now Playing",
-            tint = Color.White,
-            modifier = Modifier.size(22.dp)
-          )
-        }
+        )
       }
     }
   }
 }
 
-fun parseHexColor(hex: String): Color {
+fun parseHexColor(hex: String, darkTheme: Boolean = false): Color {
+  if (hex.equals("#007AFF", ignoreCase = true) || hex.equals("#3B77F5", ignoreCase = true) || hex.equals("#0A84FF", ignoreCase = true)) {
+    return if (darkTheme) AccentBlueDark else AccentBlue
+  }
   return try {
     Color(android.graphics.Color.parseColor(hex))
   } catch (e: Exception) {
-    Color(0xFF3B77F5)
+    if (darkTheme) AccentBlueDark else AccentBlue
   }
 }
