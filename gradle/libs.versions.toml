@@ -44,6 +44,7 @@ media3 = "1.5.1"
 newpipeExtractor = "v0.26.5"
 desugarJdkLibs = "2.1.5"
 recyclerview = "1.4.0"
+palette = "1.0.0"
 
 
 [libraries]
@@ -104,6 +105,7 @@ media3-ui = { group = "androidx.media3", name = "media3-ui", version.ref = "medi
 newpipe-extractor = { group = "com.github.teamnewpipe", name = "NewPipeExtractor", version.ref = "newpipeExtractor" }
 desugar-jdk-libs-nio = { group = "com.android.tools", name = "desugar_jdk_libs_nio", version.ref = "desugarJdkLibs" }
 androidx-recyclerview = { group = "androidx.recyclerview", name = "recyclerview", version.ref = "recyclerview" }
+androidx-palette-ktx = { group = "androidx.palette", name = "palette-ktx", version.ref = "palette" }
 
 
 [plugins]

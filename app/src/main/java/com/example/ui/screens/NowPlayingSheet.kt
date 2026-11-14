@@ -86,7 +86,7 @@ fun NowPlayingSheet(
 
   var showLyrics by remember { mutableStateOf(false) }
   var showDetails by remember { mutableStateOf(false) }
-  val context = LocalContext.current
+  var showShareLyrics by remember { mutableStateOf(false) }
 
   val (c1, c2) = rememberArtworkColors(song.artworkUrl, song.title)
   val bgAlpha by animateFloatAsState(
@@ -283,7 +283,8 @@ fun NowPlayingSheet(
             onAlignLine = onAlignLine,
             onAdjustOffset = onAdjustOffset,
             onResetOffset = onResetOffset,
-            onRetryLyrics = onRetryLyrics
+            onRetryLyrics = onRetryLyrics,
+            onShareLyrics = { showShareLyrics = true }
           )
         } else {
           Column(
@@ -529,14 +530,20 @@ fun NowPlayingSheet(
       },
       onFavorite = onFavorite,
       onShare = {
-        val shareIntent = Intent(Intent.ACTION_SEND).apply {
-          type = "text/plain"
-          putExtra(Intent.EXTRA_TEXT, "Listening to ${song.title} by ${song.artist} on AURIX")
-        }
-        context.startActivity(Intent.createChooser(shareIntent, "Share song"))
         showDetails = false
+        showShareLyrics = true
       },
       onDelete = onDeleteSong
+    )
+  }
+
+  if (showShareLyrics) {
+    ShareLyricsSheet(
+      song = song,
+      lyricsResult = lyricsResult,
+      currentPositionMs = positionProvider(),
+      lyricOffsetMs = lyricOffsetMs,
+      onDismiss = { showShareLyrics = false }
     )
   }
 }

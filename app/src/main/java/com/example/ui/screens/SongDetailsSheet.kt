@@ -85,7 +85,12 @@ fun SongDetailsSheet(
           tint = if (song.isFavorite) MaterialTheme.colorScheme.error else MaterialTheme.colorScheme.onSurface,
           onClick = onFavorite
         )
-        IconButtonAction(icon = Icons.Rounded.Share, label = "Share", onClick = onShare)
+        IconButtonAction(
+          icon = Icons.Rounded.Share,
+          label = "Share lyrics",
+          onClick = onShare,
+          testTag = "details_share_lyrics_button"
+        )
         if (onDelete != null) {
           IconButtonAction(
             icon = Icons.Rounded.DeleteOutline,
@@ -164,10 +169,19 @@ fun SongDetailsSheet(
 }
 
 @Composable
-fun IconButtonAction(icon: androidx.compose.ui.graphics.vector.ImageVector, label: String, tint: Color = MaterialTheme.colorScheme.onSurface, onClick: () -> Unit) {
+fun IconButtonAction(
+  icon: androidx.compose.ui.graphics.vector.ImageVector,
+  label: String,
+  tint: Color = MaterialTheme.colorScheme.onSurface,
+  testTag: String? = null,
+  onClick: () -> Unit
+) {
   Column(
     horizontalAlignment = Alignment.CenterHorizontally,
-    modifier = Modifier.clickable { onClick() }.padding(8.dp)
+    modifier = Modifier
+      .clickable { onClick() }
+      .then(if (testTag != null) Modifier.testTag(testTag) else Modifier)
+      .padding(8.dp)
   ) {
     IconButton(onClick = onClick) {
       Icon(imageVector = icon, contentDescription = label, tint = tint)

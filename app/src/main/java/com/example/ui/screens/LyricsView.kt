@@ -7,10 +7,9 @@ import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.rounded.GraphicEq
 import androidx.compose.material.icons.rounded.Lyrics
 import androidx.compose.material.icons.rounded.Refresh
-import androidx.compose.material.icons.rounded.Sync
+import androidx.compose.material.icons.rounded.Share
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
@@ -42,6 +41,7 @@ fun LyricsView(
   onAdjustOffset: (Long) -> Unit = {},
   onResetOffset: () -> Unit = {},
   onRetryLyrics: () -> Unit = {},
+  onShareLyrics: (() -> Unit)? = null,
   modifier: Modifier = Modifier
 ) {
   if (lyricsResult == null) {
@@ -104,16 +104,34 @@ fun LyricsView(
           color = Color.White.copy(alpha = 0.68f),
           textAlign = TextAlign.Center
         )
-        OutlinedButton(
-          onClick = onRetryLyrics,
-          shape = CircleShape,
-          border = androidx.compose.foundation.BorderStroke(1.dp, Color.White.copy(alpha = 0.35f)),
-          colors = ButtonDefaults.outlinedButtonColors(contentColor = Color.White),
-          modifier = Modifier.testTag("lyrics_retry_button")
+        Row(
+          horizontalArrangement = Arrangement.spacedBy(10.dp),
+          verticalAlignment = Alignment.CenterVertically
         ) {
-          Icon(Icons.Rounded.Refresh, contentDescription = null, modifier = Modifier.size(16.dp))
-          Spacer(modifier = Modifier.width(6.dp))
-          Text("Retry")
+          OutlinedButton(
+            onClick = onRetryLyrics,
+            shape = CircleShape,
+            border = androidx.compose.foundation.BorderStroke(1.dp, Color.White.copy(alpha = 0.35f)),
+            colors = ButtonDefaults.outlinedButtonColors(contentColor = Color.White),
+            modifier = Modifier.testTag("lyrics_retry_button")
+          ) {
+            Icon(Icons.Rounded.Refresh, contentDescription = null, modifier = Modifier.size(16.dp))
+            Spacer(modifier = Modifier.width(6.dp))
+            Text("Retry")
+          }
+          if (onShareLyrics != null) {
+            OutlinedButton(
+              onClick = onShareLyrics,
+              shape = CircleShape,
+              border = androidx.compose.foundation.BorderStroke(1.dp, Color.White.copy(alpha = 0.35f)),
+              colors = ButtonDefaults.outlinedButtonColors(contentColor = Color.White),
+              modifier = Modifier.testTag("lyrics_empty_share_button")
+            ) {
+              Icon(Icons.Rounded.Share, contentDescription = "Share lyrics", modifier = Modifier.size(16.dp))
+              Spacer(modifier = Modifier.width(6.dp))
+              Text("Share card")
+            }
+          }
         }
       }
     }
@@ -160,5 +178,37 @@ fun LyricsView(
         view.clear()
       }
     )
+
+    if (onShareLyrics != null) {
+      Surface(
+        onClick = onShareLyrics,
+        shape = CircleShape,
+        color = Color.White.copy(alpha = 0.14f),
+        border = androidx.compose.foundation.BorderStroke(1.dp, Color.White.copy(alpha = 0.26f)),
+        modifier = Modifier
+          .align(Alignment.BottomEnd)
+          .padding(end = 6.dp, bottom = 8.dp)
+          .minimumInteractiveComponentSize()
+          .testTag("lyrics_share_button")
+      ) {
+        Row(
+          modifier = Modifier.padding(horizontal = 14.dp, vertical = 9.dp),
+          verticalAlignment = Alignment.CenterVertically,
+          horizontalArrangement = Arrangement.spacedBy(6.dp)
+        ) {
+          Icon(
+            imageVector = Icons.Rounded.Share,
+            contentDescription = "Share lyrics",
+            tint = Color.White,
+            modifier = Modifier.size(17.dp)
+          )
+          Text(
+            text = "Share",
+            style = MaterialTheme.typography.labelMedium.copy(fontWeight = FontWeight.Bold),
+            color = Color.White
+          )
+        }
+      }
+    }
   }
 }
