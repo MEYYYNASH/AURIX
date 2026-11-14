@@ -43,6 +43,7 @@ googleid = "1.1.1"
 media3 = "1.5.1"
 newpipeExtractor = "v0.26.5"
 desugarJdkLibs = "2.1.5"
+recyclerview = "1.4.0"
 
 
 [libraries]
@@ -102,6 +103,7 @@ media3-session = { group = "androidx.media3", name = "media3-session", version.r
 media3-ui = { group = "androidx.media3", name = "media3-ui", version.ref = "media3" }
 newpipe-extractor = { group = "com.github.teamnewpipe", name = "NewPipeExtractor", version.ref = "newpipeExtractor" }
 desugar-jdk-libs-nio = { group = "com.android.tools", name = "desugar_jdk_libs_nio", version.ref = "desugarJdkLibs" }
+androidx-recyclerview = { group = "androidx.recyclerview", name = "recyclerview", version.ref = "recyclerview" }
 
 
 [plugins]

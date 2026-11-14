@@ -19,6 +19,7 @@ import androidx.media3.session.MediaController
 import androidx.media3.session.SessionToken
 import androidx.room.Room
 import com.example.data.*
+import com.example.lyrics.LrcParser
 import com.example.model.*
 import com.example.playback.PlaybackService
 import com.google.common.util.concurrent.ListenableFuture
@@ -1206,6 +1207,10 @@ class AurixViewModel(application: Application) : AndroidViewModel(application) {
     }
   }
 
+  fun getLivePlaybackPositionMs(): Long {
+    return mediaController?.currentPosition?.coerceAtLeast(0L) ?: _currentPosition.value
+  }
+
   fun seekTo(positionMs: Long) {
     mediaController?.seekTo(positionMs)
     _currentPosition.value = positionMs
@@ -1330,9 +1335,70 @@ class AurixViewModel(application: Application) : AndroidViewModel(application) {
     viewModelScope.launch {
       withContext(Dispatchers.IO) {
         SongDownloader.deleteAppManagedFileIfOwned(appContext, song.streamUrl)
+        SongDownloader.deleteAppManagedFileIfOwned(appContext, song.artworkUrl)
         dao.deleteLocalSong(song.id)
+        dao.deleteHistoryBySongId(song.id)
+        dao.deleteFavorite(song.id)
+        dao.deleteLyricOffset(song.id)
       }
-      Toast.makeText(appContext, "Removed \"${song.title}\"", Toast.LENGTH_SHORT).show()
+
+      _downloadedSongIds.value = _downloadedSongIds.value - song.id
+      val dlState = _youtubeDownloadState.value
+      if (dlState is YoutubeDownloadState.Saved && dlState.song.id == song.id) {
+        _youtubeDownloadState.value = YoutubeDownloadState.Idle
+      }
+
+      val currentQueue = _queue.value
+      val wasCurrent = _rawCurrentSong.value?.id == song.id
+      val updatedQueue = currentQueue.filterNot { it.id == song.id }
+      _queue.value = updatedQueue
+
+      if (wasCurrent) {
+        if (updatedQueue.isNotEmpty()) {
+          val oldIdx = currentQueue.indexOfFirst { it.id == song.id }.coerceAtLeast(0)
+          val nextSong = updatedQueue[oldIdx.coerceAtMost(updatedQueue.lastIndex)]
+          playSong(nextSong, updatedQueue)
+        } else {
+          mediaController?.stop()
+          mediaController?.clearMediaItems()
+          _rawCurrentSong.value = null
+          _isPlaying.value = false
+          _currentPosition.value = 0L
+          _durationMs.value = 0L
+          _lyrics.value = null
+        }
+      } else {
+        val controller = mediaController
+        if (controller != null) {
+          for (i in controller.mediaItemCount - 1 downTo 0) {
+            if (controller.getMediaItemAt(i).mediaId == song.id) {
+              controller.removeMediaItem(i)
+            }
+          }
+        }
+      }
+
+      Toast.makeText(appContext, "Deleted \"${song.title}\"", Toast.LENGTH_SHORT).show()
+    }
+  }
+
+  fun removeFromHistory(song: Song) {
+    val appContext = getApplication<Application>()
+    viewModelScope.launch {
+      withContext(Dispatchers.IO) {
+        dao.deleteHistoryBySongId(song.id)
+      }
+      Toast.makeText(appContext, "Removed \"${song.title}\" from Recent", Toast.LENGTH_SHORT).show()
+    }
+  }
+
+  fun clearHistory() {
+    val appContext = getApplication<Application>()
+    viewModelScope.launch {
+      withContext(Dispatchers.IO) {
+        dao.clearPlayHistory()
+      }
+      Toast.makeText(appContext, "Cleared recent play history", Toast.LENGTH_SHORT).show()
     }
   }
 
@@ -1482,7 +1548,8 @@ class AurixViewModel(application: Application) : AndroidViewModel(application) {
               synced = parsed,
               plain = direct.plainLyrics,
               matchedTitle = direct.trackName ?: song.title,
-              matchedArtist = direct.artistName ?: song.artist
+              matchedArtist = direct.artistName ?: song.artist,
+              rawLrc = direct.syncedLyrics
             )
             return@launch
           }
@@ -1516,10 +1583,15 @@ class AurixViewModel(application: Application) : AndroidViewModel(application) {
                 synced = parsed,
                 plain = bestSynced.plainLyrics,
                 matchedTitle = bestSynced.trackName,
-                matchedArtist = bestSynced.artistName
+                matchedArtist = bestSynced.artistName,
+                rawLrc = bestSynced.syncedLyrics
               )
             } else {
-              _lyrics.value = LyricsResult(synced = null, plain = bestSynced.plainLyrics ?: "No lyrics found for this track.")
+              _lyrics.value = LyricsResult(
+                synced = null,
+                plain = bestSynced.plainLyrics ?: "No lyrics found for this track.",
+                rawLrc = bestSynced.plainLyrics
+              )
             }
           }
           bestPlain?.plainLyrics != null -> {
@@ -1527,54 +1599,25 @@ class AurixViewModel(application: Application) : AndroidViewModel(application) {
               synced = null,
               plain = bestPlain.plainLyrics,
               matchedTitle = bestPlain.trackName,
-              matchedArtist = bestPlain.artistName
+              matchedArtist = bestPlain.artistName,
+              rawLrc = bestPlain.plainLyrics
             )
           }
           else -> {
-            _lyrics.value = LyricsResult(synced = null, plain = "No lyrics found for this track.")
+            _lyrics.value = LyricsResult(synced = null, plain = "No lyrics found for this track.", rawLrc = null)
           }
         }
       } catch (_: Exception) {
-        _lyrics.value = LyricsResult(synced = null, plain = "No lyrics found for this track.")
+        _lyrics.value = LyricsResult(synced = null, plain = "No lyrics found for this track.", rawLrc = null)
       }
     }
   }
 
   private fun parseSyncedLyrics(raw: String): List<LyricLine> {
-    val lines = raw.lines()
-    val result = mutableListOf<LyricLine>()
-
-    // Respect standard LRC [offset:+/-ms] tag: positive offset means lyrics are shifted earlier
-    var lrcTagOffsetMs = 0L
-    val offsetRegex = Regex("""\[offset\s*:\s*([+-]?\d+)\s*]""", RegexOption.IGNORE_CASE)
-    val timestampRegex = Regex("""\[(\d{1,3}):(\d{2})(?:[.:](\d{1,3}))?]""")
-
-    for (line in lines) {
-      offsetRegex.find(line)?.let { offMatch ->
-        lrcTagOffsetMs = offMatch.groupValues[1].toLongOrNull() ?: 0L
-      }
-
-      val matches = timestampRegex.findAll(line).toList()
-      if (matches.isEmpty()) continue
-
-      val cleanText = timestampRegex.replace(line, "").trim()
-      if (cleanText.isBlank()) continue
-
-      for (match in matches) {
-        val min = match.groupValues[1].toLongOrNull() ?: continue
-        val sec = match.groupValues[2].toLongOrNull() ?: continue
-        val fracRaw = match.groupValues[3]
-        val ms = when (fracRaw.length) {
-          0 -> 0L
-          1 -> (fracRaw.toLongOrNull() ?: 0L) * 100L
-          2 -> (fracRaw.toLongOrNull() ?: 0L) * 10L
-          else -> fracRaw.take(3).toLongOrNull() ?: 0L
-        }
-        val totalMs = ((min * 60L + sec) * 1000L + ms - lrcTagOffsetMs).coerceAtLeast(0L)
-        result.add(LyricLine(totalMs, cleanText))
-      }
+    return LrcParser.parse(raw).let { doc ->
+      if (!doc.isSynced) emptyList()
+      else doc.lines.map { LyricLine(it.timestampMs, it.text) }
     }
-    return result.sortedBy { it.timestampMs }
   }
 
   fun setThemeMode(mode: String) { viewModelScope.launch { prefsManager.setThemeMode(mode) } }

@@ -301,7 +301,17 @@ fun AurixApp(viewModel: AurixViewModel) {
               onTabSelected = { libraryTab = it },
               onAddLocalSong = { viewModel.addLocalSong(it) },
               onCustomizeSongPhoto = { songId, imageUri -> viewModel.updateLocalSongArtwork(songId, imageUri) },
-              onSongClick = { viewModel.playSong(it) },
+              onDeleteLocalSong = { viewModel.deleteLocalSong(it) },
+              onRemoveRecentSong = { viewModel.removeFromHistory(it) },
+              onClearRecentHistory = { viewModel.clearHistory() },
+              onSongClick = { song ->
+                val listQueue = when (libraryTab) {
+                  0 -> localSongs
+                  1 -> favorites
+                  else -> recentlyPlayed
+                }
+                viewModel.playSong(song, listQueue.ifEmpty { listOf(song) })
+              },
               onFavoriteClick = { viewModel.toggleFavorite(it) }
             )
             is Screen.Settings -> SettingsScreen(
@@ -410,6 +420,7 @@ fun AurixApp(viewModel: AurixViewModel) {
             song = song,
             isPlaying = isPlaying,
             currentPositionMs = currentPosition,
+            positionProvider = { viewModel.getLivePlaybackPositionMs() },
             durationMs = durationMs,
             lyricsResult = lyrics,
             lyricOffsetMs = lyricOffsetMs,
@@ -433,7 +444,21 @@ fun AurixApp(viewModel: AurixViewModel) {
             onAlignLine = { viewModel.alignLyricsToTimestamp(it) },
             onAdjustOffset = { viewModel.adjustLyricOffset(it) },
             onResetOffset = { viewModel.resetLyricOffset() },
-            onRetryLyrics = { viewModel.retryLyrics() }
+            onRetryLyrics = { viewModel.retryLyrics() },
+            onDeleteSong = if (
+              localSongs.any { it.id == song.id } ||
+              song.source == "Local" ||
+              song.source == "Downloaded" ||
+              song.streamUrl.startsWith("file://") ||
+              song.streamUrl.startsWith("content://")
+            ) {
+              {
+                viewModel.deleteLocalSong(song)
+                showNowPlaying = false
+              }
+            } else {
+              null
+            }
           )
         }
       }

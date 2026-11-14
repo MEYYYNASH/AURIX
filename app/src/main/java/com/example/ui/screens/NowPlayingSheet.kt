@@ -55,6 +55,7 @@ fun NowPlayingSheet(
   song: Song,
   isPlaying: Boolean,
   currentPositionMs: Long,
+  positionProvider: () -> Long = { currentPositionMs },
   durationMs: Long,
   lyricsResult: LyricsResult?,
   lyricOffsetMs: Long = 0L,
@@ -78,7 +79,8 @@ fun NowPlayingSheet(
   onAlignLine: (Long) -> Unit = {},
   onAdjustOffset: (Long) -> Unit = {},
   onResetOffset: () -> Unit = {},
-  onRetryLyrics: () -> Unit = {}
+  onRetryLyrics: () -> Unit = {},
+  onDeleteSong: (() -> Unit)? = null
 ) {
   BackHandler { onClose() }
 
@@ -272,6 +274,7 @@ fun NowPlayingSheet(
           LyricsView(
             lyricsResult = lyricsResult,
             currentPositionMs = currentPositionMs,
+            positionProvider = positionProvider,
             lyricOffsetMs = lyricOffsetMs,
             isPreviewClip = isPreviewClip,
             accentColor = c1,
@@ -532,7 +535,8 @@ fun NowPlayingSheet(
         }
         context.startActivity(Intent.createChooser(shareIntent, "Share song"))
         showDetails = false
-      }
+      },
+      onDelete = onDeleteSong
     )
   }
 }

@@ -82,6 +82,9 @@ interface AurixDao {
   @Query("DELETE FROM play_history WHERE songId = :songId")
   suspend fun deleteHistoryBySongId(songId: String)
 
+  @Query("DELETE FROM play_history")
+  suspend fun clearPlayHistory()
+
   @Query("UPDATE play_history SET artworkUrl = :artworkUrl WHERE songId = :songId")
   suspend fun updateHistoryArtwork(songId: String, artworkUrl: String)
 

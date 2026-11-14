@@ -10,9 +10,9 @@ on:
   workflow_dispatch:
     inputs:
       tag:
-        description: 'Release tag (e.g. v1.3.8)'
+        description: 'Release tag (e.g. v1.4.0)'
         required: false
-        default: 'v1.3.8'
+        default: 'v1.4.0'
 
 permissions:
   contents: write
@@ -52,11 +52,11 @@ jobs:
             RELEASE_TAG="${{ github.ref_name }}"
           else
             VERSION=$(grep -m1 'versionName' app/build.gradle.kts | sed -E 's/.*"([^"]+)".*/\1/')
-            RELEASE_TAG="v${VERSION:-1.3.8}"
+            RELEASE_TAG="v${VERSION:-1.4.0}"
           fi
           VCODE=$(grep -m1 'versionCode' app/build.gradle.kts | sed -E 's/[^0-9]*([0-9]+).*/\1/')
           echo "RELEASE_TAG=${RELEASE_TAG}" >> "$GITHUB_ENV"
-          echo "RELEASE_VERSION_CODE=${VCODE:-10308}" >> "$GITHUB_ENV"
+          echo "RELEASE_VERSION_CODE=${VCODE:-10400}" >> "$GITHUB_ENV"
 
       - name: Ensure keystores exist
         run: |
@@ -100,9 +100,9 @@ jobs:
             mandatory: false
 
             What's New in AURIX ${{ env.RELEASE_TAG }}:
+            - Added Song Delete feature across Library ("My songs", "Favorites", and "Recent" play history with "Clear" button) and Now Playing song details menu, with confirmation dialog and automatic cleanup of saved audio files, custom covers, and active queue
+            - Real-time Choreographer-synced RecyclerView lyrics engine with 37% top active-line framing, distance dimming, manual scroll pause/resume, and grapheme-safe word-by-word highlight (Khmer & emoji safe)
             - Integrated NewPipeExtractor (v0.26.5) with full JS signature & n-parameter deciphering as primary YouTube extractor to eliminate HTTP 403 download errors
-            - Multi-point chunk verification and automatic fallback across NewPipeExtractor, InnerTube clients, Piped, and Invidious proxies
-            - Full-length YouTube audio download (M4A/WEBM) with accurate duration metadata and audio-to-lyrics synchronization
           files: |
             app/build/outputs/apk/release/app-release.apk
             AURIX-${{ env.RELEASE_TAG }}.apk

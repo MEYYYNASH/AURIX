@@ -4,6 +4,7 @@ import android.net.Uri
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.PickVisualMediaRequest
 import androidx.activity.result.contract.ActivityResultContracts
+import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.layout.*
@@ -14,6 +15,8 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.rounded.Add
 import androidx.compose.material.icons.rounded.AddPhotoAlternate
+import androidx.compose.material.icons.rounded.DeleteOutline
+import androidx.compose.material.icons.rounded.DeleteSweep
 import androidx.compose.material.icons.rounded.FavoriteBorder
 import androidx.compose.material.icons.rounded.History
 import androidx.compose.material.icons.rounded.LibraryMusic
@@ -26,6 +29,7 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.example.model.Song
@@ -43,10 +47,14 @@ fun LibraryScreen(
   onTabSelected: (Int) -> Unit = {},
   onAddLocalSong: (Uri) -> Unit,
   onCustomizeSongPhoto: (String, Uri) -> Unit,
+  onDeleteLocalSong: (Song) -> Unit = {},
+  onRemoveRecentSong: (Song) -> Unit = {},
+  onClearRecentHistory: () -> Unit = {},
   onSongClick: (Song) -> Unit,
   onFavoriteClick: (Song) -> Unit
 ) {
   var pendingPhotoSongId by remember { mutableStateOf<String?>(null) }
+  var songPendingDelete by remember { mutableStateOf<Song?>(null) }
 
   val audioLauncher = rememberLauncherForActivityResult(ActivityResultContracts.OpenDocument()) { uri ->
     if (uri != null) {
@@ -74,7 +82,7 @@ fun LibraryScreen(
       horizontalArrangement = Arrangement.SpaceBetween,
       verticalAlignment = Alignment.CenterVertically
     ) {
-      Column {
+      Column(modifier = Modifier.weight(1f).padding(end = 8.dp)) {
         Text(
           text = "Library",
           style = MaterialTheme.typography.displayLarge.copy(fontSize = 28.sp, fontWeight = FontWeight.Bold),
@@ -83,19 +91,36 @@ fun LibraryScreen(
         Text(
           text = "Local audio, saved downloads & custom covers",
           style = MaterialTheme.typography.bodySmall,
-          color = MaterialTheme.colorScheme.onSurfaceVariant
+          color = MaterialTheme.colorScheme.onSurfaceVariant,
+          maxLines = 1,
+          overflow = TextOverflow.Ellipsis
         )
       }
-      if (selectedTab == 0) {
-        Button(
-          onClick = { audioLauncher.launch(arrayOf("audio/*")) },
-          shape = CircleShape,
-          colors = ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.primary),
-          modifier = Modifier.testTag("library_add_local_button")
-        ) {
-          Icon(Icons.Rounded.Add, contentDescription = null, modifier = Modifier.size(18.dp))
-          Spacer(modifier = Modifier.width(4.dp))
-          Text("Add local", fontWeight = FontWeight.SemiBold)
+      when {
+        selectedTab == 0 -> {
+          Button(
+            onClick = { audioLauncher.launch(arrayOf("audio/*")) },
+            shape = CircleShape,
+            colors = ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.primary),
+            modifier = Modifier.testTag("library_add_local_button")
+          ) {
+            Icon(Icons.Rounded.Add, contentDescription = null, modifier = Modifier.size(18.dp))
+            Spacer(modifier = Modifier.width(4.dp))
+            Text("Add local", fontWeight = FontWeight.SemiBold)
+          }
+        }
+        selectedTab == 2 && recentlyPlayed.isNotEmpty() -> {
+          OutlinedButton(
+            onClick = onClearRecentHistory,
+            shape = CircleShape,
+            border = BorderStroke(1.dp, MaterialTheme.colorScheme.error.copy(alpha = 0.45f)),
+            colors = ButtonDefaults.outlinedButtonColors(contentColor = MaterialTheme.colorScheme.error),
+            modifier = Modifier.testTag("library_clear_recent_button")
+          ) {
+            Icon(Icons.Rounded.DeleteSweep, contentDescription = null, modifier = Modifier.size(18.dp))
+            Spacer(modifier = Modifier.width(4.dp))
+            Text("Clear", fontWeight = FontWeight.SemiBold)
+          }
         }
       }
     }
@@ -225,7 +250,7 @@ fun LibraryScreen(
                 modifier = Modifier.size(18.dp)
               )
               Text(
-                text = "Tap the photo icon on any song to set a custom cover image",
+                text = "Tap photo icon to set cover • Tap trash icon to delete song",
                 style = MaterialTheme.typography.bodySmall.copy(fontWeight = FontWeight.Medium),
                 color = MaterialTheme.colorScheme.onSurface
               )
@@ -250,10 +275,61 @@ fun LibraryScreen(
               }
             } else {
               null
+            },
+            onDeleteClick = when (selectedTab) {
+              0 -> { { songPendingDelete = song } }
+              1 -> { { onFavoriteClick(song) } }
+              else -> { { onRemoveRecentSong(song) } }
             }
           )
         }
       }
     }
+  }
+
+  songPendingDelete?.let { target ->
+    AlertDialog(
+      onDismissRequest = { songPendingDelete = null },
+      icon = {
+        Icon(
+          imageVector = Icons.Rounded.DeleteOutline,
+          contentDescription = null,
+          tint = MaterialTheme.colorScheme.error
+        )
+      },
+      title = {
+        Text(
+          text = "Delete song?",
+          style = MaterialTheme.typography.titleMedium.copy(fontWeight = FontWeight.Bold)
+        )
+      },
+      text = {
+        Text(
+          text = "Remove \"${target.title}\" by ${target.artist} from My songs and delete its saved audio file from AURIX?",
+          style = MaterialTheme.typography.bodyMedium
+        )
+      },
+      confirmButton = {
+        Button(
+          onClick = {
+            songPendingDelete = null
+            onDeleteLocalSong(target)
+          },
+          colors = ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.error),
+          shape = CircleShape,
+          modifier = Modifier.testTag("confirm_delete_song_button")
+        ) {
+          Text("Delete", color = Color.White, fontWeight = FontWeight.Bold)
+        }
+      },
+      dismissButton = {
+        TextButton(
+          onClick = { songPendingDelete = null },
+          modifier = Modifier.testTag("cancel_delete_song_button")
+        ) {
+          Text("Cancel")
+        }
+      }
+    )
   }
 }

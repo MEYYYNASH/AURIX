@@ -650,7 +650,8 @@ fun SongRow(
   showSourceBadge: Boolean = true,
   onSongClick: () -> Unit,
   onFavoriteClick: () -> Unit,
-  onEditPhotoClick: (() -> Unit)? = null
+  onEditPhotoClick: (() -> Unit)? = null,
+  onDeleteClick: (() -> Unit)? = null
 ) {
   val heartScale by animateFloatAsState(
     targetValue = if (song.isFavorite) 1.15f else 1.0f,
@@ -757,7 +758,7 @@ fun SongRow(
         text = "${song.durationSeconds / 60}:${String.format("%02d", song.durationSeconds % 60)}",
         style = MaterialTheme.typography.bodySmall,
         color = MaterialTheme.colorScheme.onSurfaceVariant,
-        modifier = Modifier.padding(horizontal = 6.dp)
+        modifier = Modifier.padding(horizontal = 4.dp)
       )
     }
     if (onEditPhotoClick != null) {
@@ -765,12 +766,14 @@ fun SongRow(
         onClick = onEditPhotoClick,
         modifier = Modifier
           .minimumInteractiveComponentSize()
+          .size(40.dp)
           .testTag("song_edit_photo_button_${song.id}")
       ) {
         Icon(
           imageVector = Icons.Rounded.AddPhotoAlternate,
           contentDescription = "Customize song photo",
-          tint = MaterialTheme.colorScheme.primary
+          tint = MaterialTheme.colorScheme.primary,
+          modifier = Modifier.size(20.dp)
         )
       }
     }
@@ -778,14 +781,31 @@ fun SongRow(
       onClick = onFavoriteClick,
       modifier = Modifier
         .minimumInteractiveComponentSize()
+        .size(40.dp)
         .testTag("song_favorite_button_${song.id}")
     ) {
       Icon(
         imageVector = if (song.isFavorite) Icons.Rounded.Favorite else Icons.Rounded.FavoriteBorder,
         contentDescription = "Favorite",
         tint = if (song.isFavorite) MaterialTheme.colorScheme.error else MaterialTheme.colorScheme.onSurfaceVariant,
-        modifier = Modifier.scale(heartScale)
+        modifier = Modifier.scale(heartScale).size(20.dp)
       )
+    }
+    if (onDeleteClick != null) {
+      IconButton(
+        onClick = onDeleteClick,
+        modifier = Modifier
+          .minimumInteractiveComponentSize()
+          .size(40.dp)
+          .testTag("song_delete_button_${song.id}")
+      ) {
+        Icon(
+          imageVector = Icons.Rounded.DeleteOutline,
+          contentDescription = "Delete song",
+          tint = MaterialTheme.colorScheme.error.copy(alpha = 0.85f),
+          modifier = Modifier.size(20.dp)
+        )
+      }
     }
   }
 }
