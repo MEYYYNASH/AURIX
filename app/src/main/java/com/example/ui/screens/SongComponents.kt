@@ -646,13 +646,20 @@ fun SongRow(
   isPlaying: Boolean = false,
   isCurrent: Boolean = false,
   reducedMotion: Boolean = false,
+  darkTheme: Boolean = true,
+  hasLyrics: Boolean = false,
   rank: Int? = null,
   showSourceBadge: Boolean = true,
+  onCheckLyrics: ((Song) -> Unit)? = null,
   onSongClick: () -> Unit,
   onFavoriteClick: () -> Unit,
   onEditPhotoClick: (() -> Unit)? = null,
   onDeleteClick: (() -> Unit)? = null
 ) {
+  LaunchedEffect(song.id) {
+    onCheckLyrics?.invoke(song)
+  }
+
   val heartScale by animateFloatAsState(
     targetValue = if (song.isFavorite) 1.15f else 1.0f,
     animationSpec = if (reducedMotion) snap() else spring(dampingRatio = Spring.DampingRatioMediumBouncy),
@@ -723,7 +730,15 @@ fun SongRow(
           style = MaterialTheme.typography.bodyMedium.copy(fontWeight = FontWeight.Bold),
           maxLines = 1,
           overflow = TextOverflow.Ellipsis,
-          color = if (isCurrent) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onBackground
+          color = if (isCurrent) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onBackground,
+          modifier = Modifier.weight(1f, fill = false)
+        )
+        LyricsTag(
+          visible = hasLyrics,
+          size = LyricsTagSize.Standard,
+          darkTheme = darkTheme,
+          reducedMotion = reducedMotion,
+          modifier = Modifier.padding(start = 8.dp)
         )
       }
       Row(
@@ -817,12 +832,18 @@ fun SongDownloadRow(
   isPlaying: Boolean = false,
   isCurrent: Boolean = false,
   reducedMotion: Boolean = false,
+  darkTheme: Boolean = true,
+  hasLyrics: Boolean = false,
   downloadProgress: Float? = null,
   isDownloaded: Boolean = false,
+  onCheckLyrics: ((Song) -> Unit)? = null,
   onSongClick: () -> Unit,
   onFavoriteClick: () -> Unit,
   onDownloadClick: () -> Unit = {}
 ) {
+  LaunchedEffect(song.id) {
+    onCheckLyrics?.invoke(song)
+  }
   Surface(
     modifier = Modifier
       .fillMaxWidth()
@@ -863,13 +884,23 @@ fun SongDownloadRow(
 
       Spacer(modifier = Modifier.width(12.dp))
       Column(modifier = Modifier.weight(1f)) {
-        Text(
-          text = song.title,
-          style = MaterialTheme.typography.bodyMedium.copy(fontWeight = FontWeight.Bold),
-          maxLines = 1,
-          overflow = TextOverflow.Ellipsis,
-          color = if (isCurrent) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onBackground
-        )
+        Row(verticalAlignment = Alignment.CenterVertically) {
+          Text(
+            text = song.title,
+            style = MaterialTheme.typography.bodyMedium.copy(fontWeight = FontWeight.Bold),
+            maxLines = 1,
+            overflow = TextOverflow.Ellipsis,
+            color = if (isCurrent) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onBackground,
+            modifier = Modifier.weight(1f, fill = false)
+          )
+          LyricsTag(
+            visible = hasLyrics,
+            size = LyricsTagSize.Standard,
+            darkTheme = darkTheme,
+            reducedMotion = reducedMotion,
+            modifier = Modifier.padding(start = 8.dp)
+          )
+        }
         Row(
           verticalAlignment = Alignment.CenterVertically,
           horizontalArrangement = Arrangement.spacedBy(6.dp)

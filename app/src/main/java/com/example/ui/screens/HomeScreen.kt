@@ -13,6 +13,7 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.rounded.*
 import androidx.compose.material3.*
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.alpha
@@ -46,6 +47,8 @@ fun HomeScreen(
   isPlaying: Boolean,
   darkTheme: Boolean,
   reducedMotion: Boolean,
+  verifiedLyricsIds: Set<String> = emptySet(),
+  onCheckLyrics: (Song) -> Unit = {},
   onSelectFeed: (DailyFeedCategory) -> Unit,
   onRefreshDailyFeed: () -> Unit,
   onOpenSearch: () -> Unit,
@@ -206,7 +209,11 @@ fun HomeScreen(
               horizontalArrangement = Arrangement.spacedBy(12.dp)
             ) {
               recentlyPlayed.take(6).forEach { recent ->
+                LaunchedEffect(recent.id) {
+                  onCheckLyrics(recent)
+                }
                 val isRecentPlaying = currentSong?.id == recent.id
+                val recentHasLyrics = recent.id in verifiedLyricsIds
                 GlassCard(
                   darkTheme = darkTheme,
                   cornerRadius = 20.dp,
@@ -229,6 +236,17 @@ fun HomeScreen(
                         cornerRadius = 14.dp,
                         iconSize = 26.dp
                       )
+                      if (recentHasLyrics) {
+                        LyricsTag(
+                          visible = true,
+                          size = LyricsTagSize.Mini,
+                          darkTheme = darkTheme,
+                          reducedMotion = reducedMotion,
+                          modifier = Modifier
+                            .align(Alignment.TopEnd)
+                            .padding(6.dp)
+                        )
+                      }
                       if (isRecentPlaying) {
                         Box(
                           modifier = Modifier
@@ -426,6 +444,8 @@ fun HomeScreen(
               isPlaying = isPlaying,
               darkTheme = darkTheme,
               reducedMotion = reducedMotion,
+              hasLyrics = heroSong.id in verifiedLyricsIds,
+              onCheckLyrics = onCheckLyrics,
               onPlayClick = { onSongClick(heroSong, featuredTracks) },
               onFavoriteClick = { onFavoriteClick(heroSong) }
             )
@@ -446,8 +466,11 @@ fun HomeScreen(
                       isPlaying = isPlaying,
                       isCurrent = currentSong?.id == song.id,
                       reducedMotion = reducedMotion,
+                      darkTheme = darkTheme,
+                      hasLyrics = song.id in verifiedLyricsIds,
                       rank = idx + 2,
                       showSourceBadge = false,
+                      onCheckLyrics = onCheckLyrics,
                       onSongClick = { onSongClick(song, featuredTracks) },
                       onFavoriteClick = { onFavoriteClick(song) }
                     )
@@ -494,9 +517,14 @@ private fun ViralSpotlightCard(
   isPlaying: Boolean,
   darkTheme: Boolean,
   reducedMotion: Boolean,
+  hasLyrics: Boolean = false,
+  onCheckLyrics: (Song) -> Unit = {},
   onPlayClick: () -> Unit,
   onFavoriteClick: () -> Unit
 ) {
+  LaunchedEffect(song.id) {
+    onCheckLyrics(song)
+  }
   val (c1, c2) = rememberArtworkColors(song.artworkUrl, song.title)
   val shape = RoundedCornerShape(26.dp)
 
@@ -575,13 +603,23 @@ private fun ViralSpotlightCard(
           )
         }
 
-        Text(
-          text = song.title,
-          style = MaterialTheme.typography.titleMedium.copy(fontWeight = FontWeight.ExtraBold),
-          color = MaterialTheme.colorScheme.onSurface,
-          maxLines = 1,
-          overflow = TextOverflow.Ellipsis
-        )
+        Row(verticalAlignment = Alignment.CenterVertically) {
+          Text(
+            text = song.title,
+            style = MaterialTheme.typography.titleMedium.copy(fontWeight = FontWeight.ExtraBold),
+            color = MaterialTheme.colorScheme.onSurface,
+            maxLines = 1,
+            overflow = TextOverflow.Ellipsis,
+            modifier = Modifier.weight(1f, fill = false)
+          )
+          LyricsTag(
+            visible = hasLyrics,
+            size = LyricsTagSize.Standard,
+            darkTheme = darkTheme,
+            reducedMotion = reducedMotion,
+            modifier = Modifier.padding(start = 8.dp)
+          )
+        }
         Text(
           text = song.artist,
           style = MaterialTheme.typography.bodySmall,

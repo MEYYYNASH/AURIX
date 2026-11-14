@@ -25,4 +25,12 @@
     <string name="try_again">ព្យាយាមម្តងទៀត</string>
     <string name="add_local_song">បន្ថែមតន្ត្រីក្នុងទូរសព្ទ</string>
     <string name="empty_library">គ្មានបទចម្រៀងក្នុងបណ្ណាល័យទេ។ បន្ថែមតន្ត្រី ឬចុចបេះដូងលើបទ iTunes!</string>
+    <string name="lyrics_tag_label">ទំនុកច្រៀង</string>
+    <string name="report_wrong_lyrics">ទំនុកច្រៀងខុស? រាយការណ៍ / Wrong lyrics? Report</string>
+    <string name="report_wrong_lyrics_short">ទំនុកច្រៀងខុស? រាយការណ៍</string>
+    <string name="lyrics_removed_toast">ទំនុកច្រៀងត្រូវបានលាក់ / Lyrics removed</string>
+    <string name="no_lyrics_found">រកមិនឃើញទំនុកច្រៀងសម្រាប់បទនេះទេ</string>
+    <string name="settings_bad_lyrics_title">សម្អាតបញ្ជីទំនុកច្រៀងខុស</string>
+    <string name="settings_bad_lyrics_subtitle">កំណត់បទដែលបានលាក់ឡើងវិញ ដើម្បីស្វែងរកទំនុកច្រៀងម្តងទៀត (បានលាក់ %d)</string>
+    <string name="settings_bad_lyrics_cleared">បានសម្អាតបញ្ជីទំនុកច្រៀងខុសរួចរាល់</string>
 </resources>

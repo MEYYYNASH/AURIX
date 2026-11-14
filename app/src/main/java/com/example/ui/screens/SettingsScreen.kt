@@ -29,10 +29,12 @@ import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.testTag
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import com.example.R
 import com.example.data.ApkDownloadState
 import com.example.data.GitHubRelease
 import com.example.data.InstalledAppInfo
@@ -66,7 +68,9 @@ fun SettingsScreen(
   onAccentChanged: (String) -> Unit,
   onLanguageChanged: (String) -> Unit,
   onDynamicBgChanged: (Boolean) -> Unit,
-  onReducedMotionChanged: (Boolean) -> Unit
+  onReducedMotionChanged: (Boolean) -> Unit,
+  badLyricsCount: Int = 0,
+  onClearBadLyrics: () -> Unit = {}
 ) {
   val context = LocalContext.current
   val accents = listOf(
@@ -408,7 +412,7 @@ fun SettingsScreen(
               modifier = Modifier.fillMaxWidth()
             ) {
               Row(modifier = Modifier.padding(4.dp)) {
-                listOf("system" to "System", "light" to "Light", "dark" to "Dark").forEach { (key, label) ->
+                listOf("system" to "System", "light" to "Light", "dark" to "Dark", "amoled" to "AMOLED").forEach { (key, label) ->
                   val selected = currentTheme == key
                   Box(
                     modifier = Modifier
@@ -422,7 +426,8 @@ fun SettingsScreen(
                     Text(
                       text = label,
                       style = MaterialTheme.typography.bodySmall.copy(fontWeight = FontWeight.SemiBold),
-                      color = if (selected) MaterialTheme.colorScheme.onSurface else MaterialTheme.colorScheme.onSurfaceVariant
+                      color = if (selected) MaterialTheme.colorScheme.onSurface else MaterialTheme.colorScheme.onSurfaceVariant,
+                      maxLines = 1
                     )
                   }
                 }
@@ -521,6 +526,49 @@ fun SettingsScreen(
               onCheckedChange = onReducedMotionChanged,
               modifier = Modifier.testTag("reduced_motion_toggle")
             )
+          }
+
+          HorizontalDivider(color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.08f))
+
+          Row(
+            modifier = Modifier
+              .fillMaxWidth()
+              .clickable(enabled = badLyricsCount > 0) { onClearBadLyrics() }
+              .padding(horizontal = 18.dp, vertical = 14.dp)
+              .testTag("settings_clear_bad_lyrics_row"),
+            horizontalArrangement = Arrangement.SpaceBetween,
+            verticalAlignment = Alignment.CenterVertically
+          ) {
+            Column(modifier = Modifier.weight(1f).padding(end = 12.dp)) {
+              Text(
+                text = stringResource(id = R.string.settings_bad_lyrics_title),
+                style = MaterialTheme.typography.bodyLarge.copy(fontWeight = FontWeight.Medium),
+                color = MaterialTheme.colorScheme.onSurface
+              )
+              Text(
+                text = stringResource(id = R.string.settings_bad_lyrics_subtitle, badLyricsCount),
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant
+              )
+            }
+            OutlinedButton(
+              onClick = onClearBadLyrics,
+              enabled = badLyricsCount > 0,
+              shape = CircleShape,
+              contentPadding = PaddingValues(horizontal = 14.dp, vertical = 6.dp),
+              modifier = Modifier.testTag("settings_clear_bad_lyrics_button")
+            ) {
+              Icon(
+                imageVector = Icons.Rounded.RestartAlt,
+                contentDescription = null,
+                modifier = Modifier.size(16.dp)
+              )
+              Spacer(modifier = Modifier.width(4.dp))
+              Text(
+                text = "Clear",
+                style = MaterialTheme.typography.labelMedium.copy(fontWeight = FontWeight.Bold)
+              )
+            }
           }
         }
       }

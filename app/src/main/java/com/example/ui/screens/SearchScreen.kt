@@ -68,6 +68,8 @@ fun SearchScreen(
   reducedMotion: Boolean,
   songDownloadProgress: Map<String, Float>,
   downloadedSongIds: Set<String>,
+  verifiedLyricsIds: Set<String> = emptySet(),
+  onCheckLyrics: (Song) -> Unit = {},
   onSearchModeChanged: (String) -> Unit,
   onSearchQueryChanged: (String) -> Unit,
   onYoutubeUrlChanged: (String) -> Unit,
@@ -336,6 +338,9 @@ fun SearchScreen(
                   selectedFormatId = selectedYoutubeFormatId,
                   downloadState = youtubeDownloadState,
                   darkTheme = darkTheme,
+                  reducedMotion = reducedMotion,
+                  verifiedLyricsIds = verifiedLyricsIds,
+                  onCheckLyrics = onCheckLyrics,
                   onSelectFormat = onSelectYoutubeFormat,
                   onDownload = onDownloadYoutube,
                   onPlaySaved = { saved -> onSongClick(saved, listOf(saved)) },
@@ -547,8 +552,11 @@ fun SearchScreen(
                       isPlaying = isPlaying,
                       isCurrent = currentSong?.id == song.id,
                       reducedMotion = reducedMotion,
+                      darkTheme = darkTheme,
+                      hasLyrics = song.id in verifiedLyricsIds,
                       downloadProgress = songDownloadProgress[song.id],
                       isDownloaded = song.id in downloadedSongIds,
+                      onCheckLyrics = onCheckLyrics,
                       onSongClick = { onSongClick(song, searchResults) },
                       onFavoriteClick = { onFavoriteClick(song) },
                       onDownloadClick = { onDownloadClick(song) }
@@ -570,11 +578,30 @@ private fun YoutubeAnalysisResultCard(
   selectedFormatId: String?,
   downloadState: YoutubeDownloadState,
   darkTheme: Boolean,
+  reducedMotion: Boolean = false,
+  verifiedLyricsIds: Set<String> = emptySet(),
+  onCheckLyrics: (Song) -> Unit = {},
   onSelectFormat: (String) -> Unit,
   onDownload: () -> Unit,
   onPlaySaved: (Song) -> Unit,
   onOpenMySongs: () -> Unit
 ) {
+  val probeSong = remember(analysis.videoId, analysis.matchedTrackTitle, analysis.matchedArtist, analysis.durationSeconds) {
+    Song(
+      id = "yt_${analysis.videoId}",
+      title = analysis.matchedTrackTitle,
+      artist = analysis.matchedArtist,
+      artworkUrl = analysis.thumbnailUrl,
+      durationSeconds = analysis.durationSeconds,
+      streamUrl = analysis.originalUrl,
+      source = "Downloaded",
+      fullDurationSeconds = analysis.durationSeconds
+    )
+  }
+  LaunchedEffect(probeSong.id) {
+    onCheckLyrics(probeSong)
+  }
+  val hasLyrics = probeSong.id in verifiedLyricsIds
   val (c1, c2) = rememberArtworkColors(analysis.thumbnailUrl, analysis.videoTitle)
   val cardShape = RoundedCornerShape(28.dp)
   val selectedFormat = analysis.formats.firstOrNull { it.id == selectedFormatId } ?: analysis.formats.firstOrNull()
@@ -652,13 +679,23 @@ private fun YoutubeAnalysisResultCard(
       }
 
       Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
-        Text(
-          text = analysis.videoTitle,
-          style = MaterialTheme.typography.titleMedium.copy(fontWeight = FontWeight.ExtraBold),
-          color = MaterialTheme.colorScheme.onSurface,
-          maxLines = 2,
-          overflow = TextOverflow.Ellipsis
-        )
+        Row(verticalAlignment = Alignment.CenterVertically) {
+          Text(
+            text = analysis.videoTitle,
+            style = MaterialTheme.typography.titleMedium.copy(fontWeight = FontWeight.ExtraBold),
+            color = MaterialTheme.colorScheme.onSurface,
+            maxLines = 2,
+            overflow = TextOverflow.Ellipsis,
+            modifier = Modifier.weight(1f, fill = false)
+          )
+          LyricsTag(
+            visible = hasLyrics,
+            size = LyricsTagSize.Standard,
+            darkTheme = darkTheme,
+            reducedMotion = reducedMotion,
+            modifier = Modifier.padding(start = 8.dp)
+          )
+        }
         Text(
           text = analysis.channelName,
           style = MaterialTheme.typography.bodySmall,

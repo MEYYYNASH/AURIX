@@ -118,11 +118,14 @@ fun AurixApp(viewModel: AurixViewModel) {
   val currentLanguage by viewModel.language.collectAsStateWithLifecycle()
   val dynamicBg by viewModel.dynamicBg.collectAsStateWithLifecycle()
   val reducedMotion by viewModel.reducedMotion.collectAsStateWithLifecycle()
+  val verifiedLyricsIds by viewModel.verifiedLyricsIds.collectAsStateWithLifecycle()
+  val badLyricsCount by viewModel.badLyricsCount.collectAsStateWithLifecycle()
 
   val systemDark = isSystemInDarkTheme()
+  val amoledTheme = themeMode == "amoled"
   val darkTheme = when (themeMode) {
     "light" -> false
-    "dark" -> true
+    "dark", "amoled" -> true
     else -> systemDark
   }
 
@@ -189,7 +192,7 @@ fun AurixApp(viewModel: AurixViewModel) {
     retainedSheetSong = currentSong
   }
 
-  AurixTheme(darkTheme = darkTheme, accentColor = accentColor) {
+  AurixTheme(darkTheme = darkTheme, amoledTheme = amoledTheme, accentColor = accentColor) {
     Box(
       modifier = Modifier
         .fillMaxSize()
@@ -212,7 +215,7 @@ fun AurixApp(viewModel: AurixViewModel) {
       ) {
         DynamicArtworkBackdrop(
           song = currentSong,
-          enabled = dynamicBg,
+          enabled = dynamicBg && !amoledTheme,
           darkTheme = darkTheme,
           reducedMotion = reducedMotion
         )
@@ -244,6 +247,8 @@ fun AurixApp(viewModel: AurixViewModel) {
               isPlaying = isPlaying,
               darkTheme = darkTheme,
               reducedMotion = reducedMotion,
+              verifiedLyricsIds = verifiedLyricsIds,
+              onCheckLyrics = { viewModel.ensureLyricsVerified(it) },
               onSelectFeed = { viewModel.selectDailyFeed(it) },
               onRefreshDailyFeed = { viewModel.loadDailyRecommendations(selectedDailyFeed, forceRefresh = true) },
               onOpenSearch = {
@@ -275,6 +280,8 @@ fun AurixApp(viewModel: AurixViewModel) {
               reducedMotion = reducedMotion,
               songDownloadProgress = songDownloadProgress,
               downloadedSongIds = downloadedSongIds,
+              verifiedLyricsIds = verifiedLyricsIds,
+              onCheckLyrics = { viewModel.ensureLyricsVerified(it) },
               onSearchModeChanged = { viewModel.setSearchMode(it) },
               onSearchQueryChanged = { viewModel.search(it) },
               onYoutubeUrlChanged = { viewModel.setYoutubeUrl(it) },
@@ -297,8 +304,10 @@ fun AurixApp(viewModel: AurixViewModel) {
               isPlaying = isPlaying,
               darkTheme = darkTheme,
               reducedMotion = reducedMotion,
+              verifiedLyricsIds = verifiedLyricsIds,
               selectedTab = libraryTab,
               onTabSelected = { libraryTab = it },
+              onCheckLyrics = { viewModel.ensureLyricsVerified(it) },
               onAddLocalSong = { viewModel.addLocalSong(it) },
               onCustomizeSongPhoto = { songId, imageUri -> viewModel.updateLocalSongArtwork(songId, imageUri) },
               onDeleteLocalSong = { viewModel.deleteLocalSong(it) },
@@ -339,7 +348,9 @@ fun AurixApp(viewModel: AurixViewModel) {
               onAccentChanged = { viewModel.setAccentColor(it) },
               onLanguageChanged = { viewModel.setLanguage(it) },
               onDynamicBgChanged = { viewModel.setDynamicBg(it) },
-              onReducedMotionChanged = { viewModel.setReducedMotion(it) }
+              onReducedMotionChanged = { viewModel.setReducedMotion(it) },
+              badLyricsCount = badLyricsCount,
+              onClearBadLyrics = { viewModel.clearBadLyricsList() }
             )
           }
         }
@@ -392,6 +403,8 @@ fun AurixApp(viewModel: AurixViewModel) {
                 durationMs = durationMs,
                 darkTheme = darkTheme,
                 reducedMotion = reducedMotion,
+                hasLyrics = currentSong?.id?.let { it in verifiedLyricsIds } == true,
+                onCheckLyrics = { viewModel.ensureLyricsVerified(it) },
                 onPlayPauseClick = { viewModel.togglePlayPause() },
                 onFavoriteClick = { currentSong?.let { viewModel.toggleFavorite(it) } },
                 onClick = { showNowPlaying = true }
@@ -445,6 +458,9 @@ fun AurixApp(viewModel: AurixViewModel) {
             onAdjustOffset = { viewModel.adjustLyricOffset(it) },
             onResetOffset = { viewModel.resetLyricOffset() },
             onRetryLyrics = { viewModel.retryLyrics() },
+            hasLyrics = song.id in verifiedLyricsIds,
+            onCheckLyrics = { viewModel.ensureLyricsVerified(it) },
+            onReportWrongLyrics = { viewModel.reportWrongLyrics(song) },
             onDeleteSong = if (
               localSongs.any { it.id == song.id } ||
               song.source == "Local" ||

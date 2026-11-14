@@ -200,6 +200,12 @@ interface LrcLibApiService {
   suspend fun searchLyrics(
     @Query("q") query: String
   ): List<LrcLibResponse>?
+
+  @GET("api/search")
+  suspend fun searchLyricsByTrackAndArtist(
+    @Query("track_name") trackName: String,
+    @Query("artist_name") artistName: String
+  ): List<LrcLibResponse>?
 }
 
 object NetworkClient {

@@ -18,8 +18,11 @@ import androidx.media3.common.Player
 import androidx.media3.session.MediaController
 import androidx.media3.session.SessionToken
 import androidx.room.Room
+import com.example.R
 import com.example.data.*
 import com.example.lyrics.LrcParser
+import com.example.lyrics.LyricsMatchOutcome
+import com.example.lyrics.LyricsMatcher
 import com.example.model.*
 import com.example.playback.PlaybackService
 import com.google.common.util.concurrent.ListenableFuture
@@ -30,10 +33,13 @@ import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.*
 import kotlinx.coroutines.isActive
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.sync.Semaphore
+import kotlinx.coroutines.sync.withPermit
 import kotlinx.coroutines.withContext
 import java.text.SimpleDateFormat
 import java.util.Date
 import java.util.Locale
+import java.util.concurrent.ConcurrentHashMap
 
 enum class DailyFeedCategory(
   val id: String,
@@ -54,7 +60,7 @@ class AurixViewModel(application: Application) : AndroidViewModel(application) {
     AurixDatabase::class.java,
     "aurix_db"
   )
-    .addMigrations(AURIX_MIGRATION_1_2, AURIX_MIGRATION_2_3)
+    .addMigrations(AURIX_MIGRATION_1_2, AURIX_MIGRATION_2_3, AURIX_MIGRATION_3_4)
     .build()
   private val dao = database.aurixDao()
 
@@ -219,6 +225,16 @@ class AurixViewModel(application: Application) : AndroidViewModel(application) {
 
   private val _lyricOffsetMs = MutableStateFlow(0L)
   val lyricOffsetMs: StateFlow<Long> = _lyricOffsetMs
+
+  val verifiedLyricsIds: StateFlow<Set<String>> = dao.observeVerifiedLyricsSongIds()
+    .map { it.toSet() }
+    .stateIn(viewModelScope, SharingStarted.Eagerly, emptySet())
+
+  val badLyricsCount: StateFlow<Int> = dao.observeBadLyricsCount()
+    .stateIn(viewModelScope, SharingStarted.Lazily, 0)
+
+  private val lyricsCheckSemaphore = Semaphore(3)
+  private val inFlightLyricsChecks = ConcurrentHashMap<String, Job>()
 
   private var sleepTimerJob: Job? = null
   private var searchJob: Job? = null
@@ -1430,185 +1446,260 @@ class AurixViewModel(application: Application) : AndroidViewModel(application) {
   }
 
   fun retryLyrics() {
-    _rawCurrentSong.value?.let { fetchLyrics(it) }
+    _rawCurrentSong.value?.let { fetchLyrics(it, forceRetry = true) }
+  }
+
+  fun reportWrongLyrics(song: Song? = _rawCurrentSong.value) {
+    val targetSong = song ?: return
+    val songKey = LyricsMatcher.songIdentityKey(targetSong)
+    val appContext = getApplication<Application>()
+    lyricsJob?.cancel()
+    _lyrics.value = LyricsResult(
+      synced = null,
+      plain = appContext.getString(R.string.no_lyrics_found),
+      rawLrc = null
+    )
+    viewModelScope.launch {
+      withContext(Dispatchers.IO) {
+        dao.insertBadLyrics(
+          BadLyricsEntity(
+            songKey = songKey,
+            songId = targetSong.id,
+            title = targetSong.title,
+            artist = targetSong.artist
+          )
+        )
+        dao.markLyricsCacheBad(songId = targetSong.id, songKey = songKey)
+        // Ensure a cache row exists for this songId marked reported-bad
+        if (dao.getLyricsCache(targetSong.id) == null) {
+          dao.insertLyricsCache(
+            LyricsCacheEntity(
+              songId = targetSong.id,
+              songKey = songKey,
+              hasLyrics = false,
+              isReportedBad = true
+            )
+          )
+        }
+      }
+      Toast.makeText(
+        appContext,
+        appContext.getString(R.string.lyrics_removed_toast),
+        Toast.LENGTH_SHORT
+      ).show()
+    }
+  }
+
+  fun clearBadLyricsList() {
+    val appContext = getApplication<Application>()
+    viewModelScope.launch {
+      withContext(Dispatchers.IO) {
+        dao.clearAllBadLyrics()
+        dao.clearReportedLyricsCache()
+      }
+      Toast.makeText(
+        appContext,
+        appContext.getString(R.string.settings_bad_lyrics_cleared),
+        Toast.LENGTH_SHORT
+      ).show()
+      _rawCurrentSong.value?.let { fetchLyrics(it, forceRetry = true) }
+    }
+  }
+
+  fun ensureLyricsVerified(song: Song) {
+    if (song.id.isBlank() || song.title.isBlank() || song.artist.isBlank()) return
+    if (song.id in verifiedLyricsIds.value) return
+    val existingJob = inFlightLyricsChecks[song.id]
+    if (existingJob != null && existingJob.isActive) return
+
+    val job = viewModelScope.launch(Dispatchers.IO) {
+      try {
+        val songKey = LyricsMatcher.songIdentityKey(song)
+        if (dao.isBadLyrics(song.id, songKey)) {
+          return@launch
+        }
+
+        val cached = dao.getLyricsCache(song.id) ?: dao.getLyricsCacheByKey(songKey)?.also { keyHit ->
+          // Mirror positive/negative cache under current songId if resolved by songKey
+          if (!keyHit.isReportedBad && keyHit.songId != song.id) {
+            dao.insertLyricsCache(keyHit.copy(songId = song.id))
+          }
+        }
+        if (cached != null) {
+          return@launch
+        }
+
+        lyricsCheckSemaphore.withPermit {
+          // Re-check bad list & cache after acquiring semaphore
+          if (dao.isBadLyrics(song.id, songKey) || dao.getLyricsCache(song.id) != null) {
+            return@withPermit
+          }
+          val outcome = LyricsMatcher.matchWithOutcome(
+            song = song,
+            context = getApplication()
+          )
+          when (outcome) {
+            is LyricsMatchOutcome.Verified -> {
+              dao.insertLyricsCache(
+                LyricsCacheEntity(
+                  songId = song.id,
+                  songKey = songKey,
+                  hasLyrics = true,
+                  rawLrc = outcome.lyricsResult.rawLrc,
+                  plainLyrics = outcome.lyricsResult.plain,
+                  matchedTitle = outcome.lyricsResult.matchedTitle,
+                  matchedArtist = outcome.lyricsResult.matchedArtist,
+                  isReportedBad = false
+                )
+              )
+            }
+            LyricsMatchOutcome.NoLyrics -> {
+              dao.insertLyricsCache(
+                LyricsCacheEntity(
+                  songId = song.id,
+                  songKey = songKey,
+                  hasLyrics = false,
+                  isReportedBad = false
+                )
+              )
+            }
+            LyricsMatchOutcome.NetworkError -> {
+              // Do NOT cache network errors so they retry later
+            }
+          }
+        }
+      } finally {
+        inFlightLyricsChecks.remove(song.id)
+      }
+    }
+    inFlightLyricsChecks[song.id] = job
   }
 
   private fun cleanTrackTitle(raw: String): String {
-    return raw
-      .replace(Regex("""\(.*?\)"""), "")
-      .replace(Regex("""\[.*?\]"""), "")
-      .replace(Regex("""\bfeat\.?.*$""", RegexOption.IGNORE_CASE), "")
-      .replace(Regex("""\bft\.?.*$""", RegexOption.IGNORE_CASE), "")
-      .replace(Regex("""\s+-\s+(single|ep|remix|phonk|mix|live|version).*$""", RegexOption.IGNORE_CASE), "")
-      .trim()
+    return LyricsMatcher.cleanForApiQuery(raw)
   }
 
   private fun normalizeForMatch(raw: String?): String {
-    return raw.orEmpty()
-      .lowercase(Locale.US)
-      .replace(Regex("""[^\p{L}\p{N}\s]"""), " ")
-      .replace(Regex("""\s+"""), " ")
-      .trim()
+    return LyricsMatcher.normalizeText(raw)
   }
 
-  private fun scoreLyricsCandidate(
-    candidate: LrcLibResponse,
-    targetTitle: String,
-    targetArtist: String,
-    targetDurationSec: Long
-  ): Int {
-    if (candidate.instrumental) return -1000
-    val hasSynced = !candidate.syncedLyrics.isNullOrBlank()
-    val hasPlain = !candidate.plainLyrics.isNullOrBlank()
-    if (!hasSynced && !hasPlain) return -1000
-
-    var score = if (hasSynced) 120 else 20
-
-    val normTargetTitle = normalizeForMatch(targetTitle)
-    val normCandTitle = normalizeForMatch(cleanTrackTitle(candidate.trackName.orEmpty()).ifBlank { candidate.trackName })
-    val normFullCandTitle = normalizeForMatch(candidate.trackName)
-
-    when {
-      normTargetTitle.isNotBlank() && normCandTitle == normTargetTitle -> score += 80
-      normTargetTitle.isNotBlank() && normFullCandTitle == normTargetTitle -> score += 80
-      normTargetTitle.isNotBlank() && (normCandTitle.contains(normTargetTitle) || normTargetTitle.contains(normCandTitle)) -> score += 40
-    }
-
-    val normTargetArtist = normalizeForMatch(targetArtist)
-    val normCandArtist = normalizeForMatch(candidate.artistName)
-    if (normTargetArtist.isNotBlank() && normCandArtist.isNotBlank()) {
-      when {
-        normCandArtist == normTargetArtist -> score += 70
-        normCandArtist.contains(normTargetArtist) || normTargetArtist.contains(normCandArtist) -> score += 45
-        else -> {
-          val targetTokens = normTargetArtist.split(" ").filter { it.length >= 2 }.toSet()
-          val candTokens = normCandArtist.split(" ").filter { it.length >= 2 }.toSet()
-          if (targetTokens.any { it in candTokens }) score += 25
-        }
+  private fun buildLyricsResultFromCache(cached: LyricsCacheEntity, song: Song): LyricsResult? {
+    val rawLrc = cached.rawLrc?.takeIf { it.isNotBlank() }
+    val plain = cached.plainLyrics?.takeIf { it.isNotBlank() }
+    if (rawLrc != null) {
+      val parsed = parseSyncedLyrics(rawLrc)
+      if (parsed.isNotEmpty()) {
+        return LyricsResult(
+          synced = parsed,
+          plain = plain,
+          matchedTitle = cached.matchedTitle ?: song.title,
+          matchedArtist = cached.matchedArtist ?: song.artist,
+          rawLrc = rawLrc
+        )
       }
     }
-
-    // Penalize variant versions (remix, slowed, sped up, nightcore, karaoke, live) unless original title asks for them
-    val variants = listOf("remix", "sped up", "speed up", "slowed", "reverb", "nightcore", "karaoke", "live", "instrumental", "8d", "cover")
-    val origTitleLower = targetTitle.lowercase(Locale.US)
-    val candTitleLower = candidate.trackName.orEmpty().lowercase(Locale.US)
-    for (v in variants) {
-      if (candTitleLower.contains(v) && !origTitleLower.contains(v)) {
-        score -= 90
-      }
+    if (plain != null) {
+      return LyricsResult(
+        synced = null,
+        plain = plain,
+        matchedTitle = cached.matchedTitle ?: song.title,
+        matchedArtist = cached.matchedArtist ?: song.artist,
+        rawLrc = rawLrc ?: plain
+      )
     }
-
-    // Score duration closeness against full track duration (prevents sped-up/slowed/live timing drift)
-    val candDur = candidate.duration?.toLong()
-    if (targetDurationSec > 35L && candDur != null && candDur > 0L) {
-      val diff = kotlin.math.abs(candDur - targetDurationSec)
-      score += when {
-        diff <= 2L -> 100
-        diff <= 5L -> 70
-        diff <= 10L -> 35
-        diff <= 20L -> 5
-        else -> -80
-      }
-    }
-
-    return score
+    return null
   }
 
-  private fun fetchLyrics(song: Song) {
+  private fun fetchLyrics(song: Song, forceRetry: Boolean = false) {
     lyricsJob?.cancel()
     _lyrics.value = null
     lyricsJob = viewModelScope.launch {
+      val appContext = getApplication<Application>()
+      val noLyricsMsg = appContext.getString(R.string.no_lyrics_found)
+      val songKey = LyricsMatcher.songIdentityKey(song)
+
       try {
-        val cleanTitle = cleanTrackTitle(song.title).ifBlank { song.title }
-        val cleanArtist = song.artist.substringBefore(',').substringBefore('&').trim().ifBlank { song.artist }
+        // 1. Respect persistent bad-lyrics blacklist
+        val isBad = withContext(Dispatchers.IO) { dao.isBadLyrics(song.id, songKey) }
+        if (isBad) {
+          _lyrics.value = LyricsResult(synced = null, plain = noLyricsMsg, rawLrc = null)
+          return@launch
+        }
 
         val activeControllerDurSec = mediaController
           ?.takeIf { it.currentMediaItem?.mediaId == song.id && it.duration > 0L }
           ?.duration?.div(1000L) ?: 0L
-        val targetDurationSec = when {
-          activeControllerDurSec > 35L -> activeControllerDurSec
-          song.fullDurationSeconds > 35L -> song.fullDurationSeconds
-          song.durationSeconds > 35L -> song.durationSeconds
-          else -> 0L
+
+        // 2. Serve verified cache if available (reusing exact same result as LyricsTag)
+        val cached = withContext(Dispatchers.IO) {
+          dao.getLyricsCache(song.id) ?: dao.getLyricsCacheByKey(songKey)
         }
-
-        // 1. Exact /api/get when full track duration is known (matches exact studio recording timing)
-        val direct = if (targetDurationSec > 35L) {
-          runCatching {
-            NetworkClient.lrcLibApi.getLyrics(song.artist, song.title, targetDurationSec)
-          }.getOrNull() ?: if (cleanTitle != song.title || cleanArtist != song.artist) {
-            runCatching { NetworkClient.lrcLibApi.getLyrics(cleanArtist, cleanTitle, targetDurationSec) }.getOrNull()
-          } else null
-        } else null
-
-        if (direct != null && !direct.syncedLyrics.isNullOrBlank()) {
-          val parsed = parseSyncedLyrics(direct.syncedLyrics)
-          if (parsed.isNotEmpty()) {
-            _lyrics.value = LyricsResult(
-              synced = parsed,
-              plain = direct.plainLyrics,
-              matchedTitle = direct.trackName ?: song.title,
-              matchedArtist = direct.artistName ?: song.artist,
-              rawLrc = direct.syncedLyrics
-            )
+        if (cached != null) {
+          if (cached.isReportedBad) {
+            _lyrics.value = LyricsResult(synced = null, plain = noLyricsMsg, rawLrc = null)
+            return@launch
+          }
+          if (cached.hasLyrics) {
+            val fromCache = buildLyricsResultFromCache(cached, song)
+            if (fromCache != null) {
+              _lyrics.value = fromCache
+              if (cached.songId != song.id) {
+                withContext(Dispatchers.IO) { dao.insertLyricsCache(cached.copy(songId = song.id)) }
+              }
+              return@launch
+            }
+          } else if (!forceRetry && activeControllerDurSec <= 35L) {
+            _lyrics.value = LyricsResult(synced = null, plain = noLyricsMsg, rawLrc = null)
             return@launch
           }
         }
 
-        // 2. Search LRCLIB candidates and rank by exact track, artist, non-remix, and full duration closeness
-        val candidates = buildList {
-          runCatching { NetworkClient.lrcLibApi.searchLyrics("$cleanArtist $cleanTitle") }
-            .getOrNull()?.let { addAll(it) }
-          if (isEmpty() || none { !it.syncedLyrics.isNullOrBlank() }) {
-            runCatching { NetworkClient.lrcLibApi.searchLyrics(cleanTitle) }
-              .getOrNull()?.let { addAll(it) }
-          }
-        }.distinctBy { "${it.id}_${it.trackName}_${it.duration}" }
+        // 3. Query LRCLIB & strictly verify candidates with LyricsMatcher
+        val overrideDurSec = activeControllerDurSec.takeIf { it > 35L }?.toDouble()
+        val outcome = LyricsMatcher.matchWithOutcome(
+          song = song,
+          context = appContext,
+          overrideDurationSec = overrideDurSec
+        )
 
-        val bestSynced = candidates
-          .filter { !it.syncedLyrics.isNullOrBlank() }
-          .maxByOrNull { scoreLyricsCandidate(it, cleanTitle, cleanArtist, targetDurationSec) }
-          ?.takeIf { scoreLyricsCandidate(it, cleanTitle, cleanArtist, targetDurationSec) > 0 }
-
-        val bestPlain = direct?.takeIf { !it.plainLyrics.isNullOrBlank() }
-          ?: candidates
-            .filter { !it.plainLyrics.isNullOrBlank() }
-            .maxByOrNull { scoreLyricsCandidate(it, cleanTitle, cleanArtist, targetDurationSec) }
-
-        when {
-          bestSynced?.syncedLyrics != null -> {
-            val parsed = parseSyncedLyrics(bestSynced.syncedLyrics)
-            if (parsed.isNotEmpty()) {
-              _lyrics.value = LyricsResult(
-                synced = parsed,
-                plain = bestSynced.plainLyrics,
-                matchedTitle = bestSynced.trackName,
-                matchedArtist = bestSynced.artistName,
-                rawLrc = bestSynced.syncedLyrics
-              )
-            } else {
-              _lyrics.value = LyricsResult(
-                synced = null,
-                plain = bestSynced.plainLyrics ?: "No lyrics found for this track.",
-                rawLrc = bestSynced.plainLyrics
+        when (outcome) {
+          is LyricsMatchOutcome.Verified -> {
+            withContext(Dispatchers.IO) {
+              dao.insertLyricsCache(
+                LyricsCacheEntity(
+                  songId = song.id,
+                  songKey = songKey,
+                  hasLyrics = true,
+                  rawLrc = outcome.lyricsResult.rawLrc,
+                  plainLyrics = outcome.lyricsResult.plain,
+                  matchedTitle = outcome.lyricsResult.matchedTitle,
+                  matchedArtist = outcome.lyricsResult.matchedArtist,
+                  isReportedBad = false
+                )
               )
             }
+            _lyrics.value = outcome.lyricsResult
           }
-          bestPlain?.plainLyrics != null -> {
-            _lyrics.value = LyricsResult(
-              synced = null,
-              plain = bestPlain.plainLyrics,
-              matchedTitle = bestPlain.trackName,
-              matchedArtist = bestPlain.artistName,
-              rawLrc = bestPlain.plainLyrics
-            )
+          LyricsMatchOutcome.NoLyrics -> {
+            withContext(Dispatchers.IO) {
+              dao.insertLyricsCache(
+                LyricsCacheEntity(
+                  songId = song.id,
+                  songKey = songKey,
+                  hasLyrics = false,
+                  isReportedBad = false
+                )
+              )
+            }
+            _lyrics.value = LyricsResult(synced = null, plain = noLyricsMsg, rawLrc = null)
           }
-          else -> {
-            _lyrics.value = LyricsResult(synced = null, plain = "No lyrics found for this track.", rawLrc = null)
+          LyricsMatchOutcome.NetworkError -> {
+            // Do NOT cache network errors so they retry later
+            _lyrics.value = LyricsResult(synced = null, plain = noLyricsMsg, rawLrc = null)
           }
         }
       } catch (_: Exception) {
-        _lyrics.value = LyricsResult(synced = null, plain = "No lyrics found for this track.", rawLrc = null)
+        _lyrics.value = LyricsResult(synced = null, plain = noLyricsMsg, rawLrc = null)
       }
     }
   }

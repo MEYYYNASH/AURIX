@@ -25,4 +25,12 @@
     <string name="try_again">Try again</string>
     <string name="add_local_song">Add local music</string>
     <string name="empty_library">No songs in library. Add local music or like songs from iTunes Search!</string>
+    <string name="lyrics_tag_label">Lyrics</string>
+    <string name="report_wrong_lyrics">ទំនុកច្រៀងខុស? រាយការណ៍ / Wrong lyrics? Report</string>
+    <string name="report_wrong_lyrics_short">Wrong lyrics? Report</string>
+    <string name="lyrics_removed_toast">ទំនុកច្រៀងត្រូវបានលាក់ / Lyrics removed</string>
+    <string name="no_lyrics_found">No lyrics found for this track</string>
+    <string name="settings_bad_lyrics_title">Clear reported wrong lyrics</string>
+    <string name="settings_bad_lyrics_subtitle">Reset hidden tracks so lyrics can be searched again (%d hidden)</string>
+    <string name="settings_bad_lyrics_cleared">Cleared reported wrong lyrics list</string>
 </resources>

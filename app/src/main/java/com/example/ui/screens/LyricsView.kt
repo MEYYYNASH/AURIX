@@ -7,6 +7,7 @@ import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.rounded.Flag
 import androidx.compose.material.icons.rounded.Lyrics
 import androidx.compose.material.icons.rounded.Refresh
 import androidx.compose.material.icons.rounded.Share
@@ -18,11 +19,14 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.toArgb
 import androidx.compose.ui.platform.testTag
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.sp
 import androidx.compose.ui.viewinterop.AndroidView
+import com.example.R
 import com.example.lyrics.SyncedLyricsView
 import com.example.model.LyricsResult
 import java.util.Locale
@@ -41,9 +45,11 @@ fun LyricsView(
   onAdjustOffset: (Long) -> Unit = {},
   onResetOffset: () -> Unit = {},
   onRetryLyrics: () -> Unit = {},
+  onReportWrongLyrics: (() -> Unit)? = null,
   onShareLyrics: (() -> Unit)? = null,
   modifier: Modifier = Modifier
 ) {
+  val noLyricsLocalized = stringResource(id = R.string.no_lyrics_found)
   if (lyricsResult == null) {
     Box(
       modifier = modifier.fillMaxSize(),
@@ -66,8 +72,11 @@ fun LyricsView(
 
   val synced = lyricsResult.synced
   val plainText = lyricsResult.plain?.takeIf { it.isNotBlank() }
-  val isMissing = synced.isNullOrEmpty() &&
-    (plainText == null || plainText.startsWith("No lyrics found", ignoreCase = true))
+  val isMissing = synced.isNullOrEmpty() && (
+    plainText == null ||
+      plainText.startsWith("No lyrics found", ignoreCase = true) ||
+      plainText == noLyricsLocalized
+    )
 
   if (isMissing) {
     Box(
@@ -93,7 +102,7 @@ fun LyricsView(
           modifier = Modifier.size(34.dp)
         )
         Text(
-          text = "No lyrics found for this track",
+          text = noLyricsLocalized,
           style = MaterialTheme.typography.titleMedium.copy(fontWeight = FontWeight.Bold),
           color = Color.White,
           textAlign = TextAlign.Center
@@ -179,34 +188,82 @@ fun LyricsView(
       }
     )
 
-    if (onShareLyrics != null) {
-      Surface(
-        onClick = onShareLyrics,
-        shape = CircleShape,
-        color = Color.White.copy(alpha = 0.14f),
-        border = androidx.compose.foundation.BorderStroke(1.dp, Color.White.copy(alpha = 0.26f)),
+    if (onReportWrongLyrics != null || onShareLyrics != null) {
+      Row(
         modifier = Modifier
-          .align(Alignment.BottomEnd)
-          .padding(end = 6.dp, bottom = 8.dp)
-          .minimumInteractiveComponentSize()
-          .testTag("lyrics_share_button")
+          .align(Alignment.BottomCenter)
+          .fillMaxWidth()
+          .padding(horizontal = 4.dp, vertical = 8.dp),
+        horizontalArrangement = Arrangement.SpaceBetween,
+        verticalAlignment = Alignment.CenterVertically
       ) {
-        Row(
-          modifier = Modifier.padding(horizontal = 14.dp, vertical = 9.dp),
-          verticalAlignment = Alignment.CenterVertically,
-          horizontalArrangement = Arrangement.spacedBy(6.dp)
-        ) {
-          Icon(
-            imageVector = Icons.Rounded.Share,
-            contentDescription = "Share lyrics",
-            tint = Color.White,
-            modifier = Modifier.size(17.dp)
-          )
-          Text(
-            text = "Share",
-            style = MaterialTheme.typography.labelMedium.copy(fontWeight = FontWeight.Bold),
-            color = Color.White
-          )
+        if (onReportWrongLyrics != null) {
+          Surface(
+            onClick = onReportWrongLyrics,
+            shape = CircleShape,
+            color = Color(0xFF151F30).copy(alpha = 0.84f),
+            border = androidx.compose.foundation.BorderStroke(1.dp, Color(0xFF273348)),
+            modifier = Modifier
+              .weight(1f, fill = false)
+              .padding(end = 8.dp)
+              .minimumInteractiveComponentSize()
+              .testTag("lyrics_report_wrong_button")
+          ) {
+            Row(
+              modifier = Modifier.padding(horizontal = 12.dp, vertical = 8.dp),
+              verticalAlignment = Alignment.CenterVertically,
+              horizontalArrangement = Arrangement.spacedBy(6.dp)
+            ) {
+              Icon(
+                imageVector = Icons.Rounded.Flag,
+                contentDescription = stringResource(id = R.string.report_wrong_lyrics),
+                tint = Color(0xFFFCA5A5),
+                modifier = Modifier.size(15.dp)
+              )
+              Text(
+                text = stringResource(id = R.string.report_wrong_lyrics),
+                style = MaterialTheme.typography.labelSmall.copy(
+                  fontSize = 11.sp,
+                  fontWeight = FontWeight.SemiBold
+                ),
+                color = Color.White.copy(alpha = 0.92f),
+                maxLines = 1,
+                overflow = TextOverflow.Ellipsis
+              )
+            }
+          }
+        } else {
+          Spacer(modifier = Modifier.width(1.dp))
+        }
+
+        if (onShareLyrics != null) {
+          Surface(
+            onClick = onShareLyrics,
+            shape = CircleShape,
+            color = Color.White.copy(alpha = 0.14f),
+            border = androidx.compose.foundation.BorderStroke(1.dp, Color.White.copy(alpha = 0.26f)),
+            modifier = Modifier
+              .minimumInteractiveComponentSize()
+              .testTag("lyrics_share_button")
+          ) {
+            Row(
+              modifier = Modifier.padding(horizontal = 14.dp, vertical = 9.dp),
+              verticalAlignment = Alignment.CenterVertically,
+              horizontalArrangement = Arrangement.spacedBy(6.dp)
+            ) {
+              Icon(
+                imageVector = Icons.Rounded.Share,
+                contentDescription = "Share lyrics",
+                tint = Color.White,
+                modifier = Modifier.size(17.dp)
+              )
+              Text(
+                text = "Share",
+                style = MaterialTheme.typography.labelMedium.copy(fontWeight = FontWeight.Bold),
+                color = Color.White
+              )
+            }
+          }
         }
       }
     }

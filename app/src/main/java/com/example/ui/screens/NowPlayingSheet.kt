@@ -80,9 +80,15 @@ fun NowPlayingSheet(
   onAdjustOffset: (Long) -> Unit = {},
   onResetOffset: () -> Unit = {},
   onRetryLyrics: () -> Unit = {},
+  hasLyrics: Boolean = false,
+  onCheckLyrics: ((Song) -> Unit)? = null,
+  onReportWrongLyrics: (() -> Unit)? = null,
   onDeleteSong: (() -> Unit)? = null
 ) {
   BackHandler { onClose() }
+  LaunchedEffect(song.id) {
+    onCheckLyrics?.invoke(song)
+  }
 
   var showLyrics by remember { mutableStateOf(false) }
   var showDetails by remember { mutableStateOf(false) }
@@ -284,6 +290,7 @@ fun NowPlayingSheet(
             onAdjustOffset = onAdjustOffset,
             onResetOffset = onResetOffset,
             onRetryLyrics = onRetryLyrics,
+            onReportWrongLyrics = onReportWrongLyrics,
             onShareLyrics = { showShareLyrics = true }
           )
         } else {
@@ -322,13 +329,24 @@ fun NowPlayingSheet(
               verticalAlignment = Alignment.CenterVertically
             ) {
               Column(modifier = Modifier.weight(1f)) {
-                Text(
-                  text = song.title,
-                  style = MaterialTheme.typography.titleLarge.copy(fontSize = 22.sp, fontWeight = FontWeight.Bold),
-                  maxLines = 2,
-                  overflow = TextOverflow.Ellipsis,
-                  color = Color.White
-                )
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                  Text(
+                    text = song.title,
+                    style = MaterialTheme.typography.titleLarge.copy(fontSize = 22.sp, fontWeight = FontWeight.Bold),
+                    maxLines = 2,
+                    overflow = TextOverflow.Ellipsis,
+                    color = Color.White,
+                    modifier = Modifier.weight(1f, fill = false)
+                  )
+                  LyricsTag(
+                    visible = hasLyrics,
+                    size = LyricsTagSize.Full,
+                    darkTheme = true,
+                    reducedMotion = reducedMotion,
+                    onClick = { showLyrics = true },
+                    modifier = Modifier.padding(start = 8.dp)
+                  )
+                }
                 Spacer(modifier = Modifier.height(4.dp))
                 Text(
                   text = song.artist,

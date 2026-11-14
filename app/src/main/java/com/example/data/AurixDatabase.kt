@@ -56,6 +56,28 @@ data class LyricOffsetEntity(
   val offsetMs: Long
 )
 
+@Entity(tableName = "lyrics_cache")
+data class LyricsCacheEntity(
+  @PrimaryKey val songId: String,
+  val songKey: String,
+  val hasLyrics: Boolean,
+  val rawLrc: String? = null,
+  val plainLyrics: String? = null,
+  val matchedTitle: String? = null,
+  val matchedArtist: String? = null,
+  val isReportedBad: Boolean = false,
+  val updatedAt: Long = System.currentTimeMillis()
+)
+
+@Entity(tableName = "bad_lyrics")
+data class BadLyricsEntity(
+  @PrimaryKey val songKey: String,
+  val songId: String,
+  val title: String,
+  val artist: String,
+  val reportedAt: Long = System.currentTimeMillis()
+)
+
 @Dao
 interface AurixDao {
   @Query("SELECT * FROM favorite_songs ORDER BY timestamp DESC")
@@ -117,6 +139,39 @@ interface AurixDao {
 
   @Query("DELETE FROM lyric_offsets WHERE songId = :songId")
   suspend fun deleteLyricOffset(songId: String)
+
+  @Query("SELECT songId FROM lyrics_cache WHERE hasLyrics = 1 AND isReportedBad = 0")
+  fun observeVerifiedLyricsSongIds(): Flow<List<String>>
+
+  @Query("SELECT * FROM lyrics_cache WHERE songId = :songId LIMIT 1")
+  suspend fun getLyricsCache(songId: String): LyricsCacheEntity?
+
+  @Query("SELECT * FROM lyrics_cache WHERE songKey = :songKey AND isReportedBad = 0 LIMIT 1")
+  suspend fun getLyricsCacheByKey(songKey: String): LyricsCacheEntity?
+
+  @Insert(onConflict = OnConflictStrategy.REPLACE)
+  suspend fun insertLyricsCache(entry: LyricsCacheEntity)
+
+  @Query("UPDATE lyrics_cache SET hasLyrics = 0, isReportedBad = 1, rawLrc = NULL, plainLyrics = NULL, updatedAt = :updatedAt WHERE songId = :songId OR songKey = :songKey")
+  suspend fun markLyricsCacheBad(songId: String, songKey: String, updatedAt: Long = System.currentTimeMillis())
+
+  @Query("DELETE FROM lyrics_cache WHERE isReportedBad = 1")
+  suspend fun clearReportedLyricsCache()
+
+  @Query("SELECT songKey FROM bad_lyrics")
+  fun observeBadLyricsKeys(): Flow<List<String>>
+
+  @Query("SELECT COUNT(*) FROM bad_lyrics")
+  fun observeBadLyricsCount(): Flow<Int>
+
+  @Query("SELECT EXISTS(SELECT 1 FROM bad_lyrics WHERE songKey = :songKey OR songId = :songId)")
+  suspend fun isBadLyrics(songId: String, songKey: String): Boolean
+
+  @Insert(onConflict = OnConflictStrategy.REPLACE)
+  suspend fun insertBadLyrics(entry: BadLyricsEntity)
+
+  @Query("DELETE FROM bad_lyrics")
+  suspend fun clearAllBadLyrics()
 }
 
 val AURIX_MIGRATION_1_2 = object : Migration(1, 2) {
@@ -153,9 +208,49 @@ val AURIX_MIGRATION_2_3 = object : Migration(2, 3) {
   }
 }
 
+val AURIX_MIGRATION_3_4 = object : Migration(3, 4) {
+  override fun migrate(db: SupportSQLiteDatabase) {
+    db.execSQL(
+      """
+      CREATE TABLE IF NOT EXISTS `lyrics_cache` (
+        `songId` TEXT NOT NULL,
+        `songKey` TEXT NOT NULL,
+        `hasLyrics` INTEGER NOT NULL,
+        `rawLrc` TEXT,
+        `plainLyrics` TEXT,
+        `matchedTitle` TEXT,
+        `matchedArtist` TEXT,
+        `isReportedBad` INTEGER NOT NULL DEFAULT 0,
+        `updatedAt` INTEGER NOT NULL,
+        PRIMARY KEY(`songId`)
+      )
+      """.trimIndent()
+    )
+    db.execSQL(
+      """
+      CREATE TABLE IF NOT EXISTS `bad_lyrics` (
+        `songKey` TEXT NOT NULL,
+        `songId` TEXT NOT NULL,
+        `title` TEXT NOT NULL,
+        `artist` TEXT NOT NULL,
+        `reportedAt` INTEGER NOT NULL,
+        PRIMARY KEY(`songKey`)
+      )
+      """.trimIndent()
+    )
+  }
+}
+
 @Database(
-  entities = [FavoriteSongEntity::class, PlayHistoryEntity::class, LocalSongEntity::class, LyricOffsetEntity::class],
-  version = 3,
+  entities = [
+    FavoriteSongEntity::class,
+    PlayHistoryEntity::class,
+    LocalSongEntity::class,
+    LyricOffsetEntity::class,
+    LyricsCacheEntity::class,
+    BadLyricsEntity::class
+  ],
+  version = 4,
   exportSchema = false
 )
 abstract class AurixDatabase : RoomDatabase() {

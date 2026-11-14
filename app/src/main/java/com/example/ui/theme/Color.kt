@@ -25,3 +25,8 @@ val AccentGreen = Color(0xFF22C55E)
 val AccentAmber = Color(0xFFF59E0B)
 val AccentTeal = Color(0xFF14B8A6)
 val AccentPurple = Color(0xFF8B5CF6)
+
+val AurixAccentCyan = Color(0xFF43C7F4)
+val AurixAccentViolet = Color(0xFF7965FF)
+val AurixCardDark = Color(0xFF151F30)
+val AurixBorderDark = Color(0xFF273348)

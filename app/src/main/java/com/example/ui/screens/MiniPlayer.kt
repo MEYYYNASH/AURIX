@@ -46,11 +46,17 @@ fun MiniPlayer(
   durationMs: Long,
   darkTheme: Boolean,
   reducedMotion: Boolean = false,
+  hasLyrics: Boolean = false,
+  onCheckLyrics: ((Song) -> Unit)? = null,
   onPlayPauseClick: () -> Unit,
   onFavoriteClick: () -> Unit,
   onClick: () -> Unit
 ) {
   if (song == null) return
+
+  LaunchedEffect(song.id) {
+    onCheckLyrics?.invoke(song)
+  }
 
   val (artC1, artC2) = rememberArtworkColors(song.artworkUrl, song.title)
   val accentColor = MaterialTheme.colorScheme.primary
@@ -196,7 +202,15 @@ fun MiniPlayer(
               style = MaterialTheme.typography.bodyMedium.copy(fontWeight = FontWeight.Bold),
               maxLines = 1,
               overflow = TextOverflow.Ellipsis,
-              color = primaryTextColor
+              color = primaryTextColor,
+              modifier = Modifier.weight(1f, fill = false)
+            )
+            LyricsTag(
+              visible = hasLyrics,
+              size = LyricsTagSize.Mini,
+              darkTheme = darkTheme,
+              reducedMotion = reducedMotion,
+              modifier = Modifier.padding(start = 2.dp)
             )
           }
           Text(

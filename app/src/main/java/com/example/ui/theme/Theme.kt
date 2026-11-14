@@ -10,12 +10,25 @@ import androidx.compose.ui.graphics.Color
 @Composable
 fun AurixTheme(
   darkTheme: Boolean = isSystemInDarkTheme(),
+  amoledTheme: Boolean = false,
   accentColor: Color = AccentBlue,
   content: @Composable () -> Unit,
 ) {
   val colorScheme =
-    if (darkTheme) {
-      darkColorScheme(
+    when {
+      amoledTheme -> darkColorScheme(
+        primary = accentColor,
+        onPrimary = Color.White,
+        background = Color.Black,
+        onBackground = DarkText,
+        surface = AurixCardDark,
+        onSurface = DarkText,
+        surfaceVariant = AurixBorderDark,
+        onSurfaceVariant = DarkMuted,
+        outline = AurixBorderDark,
+        error = HeartRed,
+      )
+      darkTheme -> darkColorScheme(
         primary = accentColor,
         onPrimary = Color.White,
         background = DarkBackground,
@@ -24,10 +37,10 @@ fun AurixTheme(
         onSurface = DarkText,
         surfaceVariant = DarkSurfaceVariant,
         onSurfaceVariant = DarkMuted,
+        outline = AurixBorderDark,
         error = HeartRed,
       )
-    } else {
-      lightColorScheme(
+      else -> lightColorScheme(
         primary = accentColor,
         onPrimary = Color.White,
         background = LightBackground,
