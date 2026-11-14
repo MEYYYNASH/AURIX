@@ -1,5 +1,7 @@
 package com.example.model
 
+const val APP_ICON_ARTWORK = "app_icon"
+
 data class Song(
   val id: String,
   val title: String,
@@ -8,7 +10,8 @@ data class Song(
   val durationSeconds: Long,
   val streamUrl: String,
   val source: String = "iTunes 30s", // "iTunes 30s", "Local", or "Downloaded"
-  val isFavorite: Boolean = false
+  val isFavorite: Boolean = false,
+  val fullDurationSeconds: Long = durationSeconds
 )
 
 data class LyricLine(
@@ -18,5 +21,42 @@ data class LyricLine(
 
 data class LyricsResult(
   val synced: List<LyricLine>?,
-  val plain: String?
+  val plain: String?,
+  val matchedTitle: String? = null,
+  val matchedArtist: String? = null
 )
+
+data class AudioFormatOption(
+  val id: String,
+  val formatLabel: String,
+  val qualityLabel: String,
+  val detailLabel: String,
+  val extension: String,
+  val mimeType: String,
+  val streamUrl: String,
+  val durationSeconds: Long,
+  val contentLengthBytes: Long = -1L
+)
+
+data class YoutubeAnalysisResult(
+  val videoId: String,
+  val originalUrl: String,
+  val videoTitle: String,
+  val channelName: String,
+  val thumbnailUrl: String,
+  val matchedTrackTitle: String,
+  val matchedArtist: String,
+  val formats: List<AudioFormatOption>
+)
+
+sealed interface YoutubeDownloadState {
+  data object Idle : YoutubeDownloadState
+  data class Downloading(
+    val progress: Float,
+    val downloadedBytes: Long,
+    val totalBytes: Long,
+    val formatLabel: String
+  ) : YoutubeDownloadState
+  data class Saved(val song: Song) : YoutubeDownloadState
+  data class Error(val message: String) : YoutubeDownloadState
+}

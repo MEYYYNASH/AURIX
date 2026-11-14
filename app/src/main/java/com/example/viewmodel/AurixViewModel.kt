@@ -22,11 +22,14 @@ import com.example.data.*
 import com.example.model.*
 import com.example.playback.PlaybackService
 import com.google.common.util.concurrent.ListenableFuture
+import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
+import kotlinx.coroutines.async
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.*
 import kotlinx.coroutines.isActive
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.withContext
 import java.text.SimpleDateFormat
 import java.util.Date
 import java.util.Locale
@@ -49,7 +52,9 @@ class AurixViewModel(application: Application) : AndroidViewModel(application) {
     application,
     AurixDatabase::class.java,
     "aurix_db"
-  ).build()
+  )
+    .addMigrations(AURIX_MIGRATION_1_2, AURIX_MIGRATION_2_3)
+    .build()
   private val dao = database.aurixDao()
 
   private var controllerFuture: ListenableFuture<MediaController>? = null
@@ -66,7 +71,7 @@ class AurixViewModel(application: Application) : AndroidViewModel(application) {
   val githubOwner = prefsManager.githubOwner.stateIn(viewModelScope, SharingStarted.Lazily, "MEYYYNASH")
   val githubRepo = prefsManager.githubRepo.stateIn(viewModelScope, SharingStarted.Lazily, "AURIX")
 
-  // Search-Only Mode & YouTube Link Matcher States
+  // Search-Only Mode & YouTube Analyze/Download States
   private val _searchMode = MutableStateFlow("itunes") // "itunes" | "youtube"
   val searchMode: StateFlow<String> = _searchMode
 
@@ -76,8 +81,14 @@ class AurixViewModel(application: Application) : AndroidViewModel(application) {
   private val _youtubeUrl = MutableStateFlow("")
   val youtubeUrl: StateFlow<String> = _youtubeUrl
 
-  private val _analyzedSong = MutableStateFlow<Song?>(null)
-  val analyzedSong: StateFlow<Song?> = _analyzedSong
+  private val _youtubeAnalysis = MutableStateFlow<YoutubeAnalysisResult?>(null)
+  val youtubeAnalysis: StateFlow<YoutubeAnalysisResult?> = _youtubeAnalysis
+
+  private val _selectedYoutubeFormatId = MutableStateFlow<String?>(null)
+  val selectedYoutubeFormatId: StateFlow<String?> = _selectedYoutubeFormatId
+
+  private val _youtubeDownloadState = MutableStateFlow<YoutubeDownloadState>(YoutubeDownloadState.Idle)
+  val youtubeDownloadState: StateFlow<YoutubeDownloadState> = _youtubeDownloadState
 
   private val _isAnalyzingYoutube = MutableStateFlow(false)
   val isAnalyzingYoutube: StateFlow<Boolean> = _isAnalyzingYoutube
@@ -135,8 +146,6 @@ class AurixViewModel(application: Application) : AndroidViewModel(application) {
   private val _searchError = MutableStateFlow<String?>(null)
   val searchError: StateFlow<String?> = _searchError
 
-  private val _localSongs = MutableStateFlow<List<Song>>(emptyList())
-
   val favorites: StateFlow<List<Song>> = dao.getFavorites().map { list ->
     list.map { Song(it.id, it.title, it.artist, it.artworkUrl, it.durationSeconds, it.streamUrl, it.source, true) }
   }.stateIn(viewModelScope, SharingStarted.Lazily, emptyList())
@@ -153,8 +162,19 @@ class AurixViewModel(application: Application) : AndroidViewModel(application) {
     tracks.map { it.copy(isFavorite = it.id in favs) }
   }.stateIn(viewModelScope, SharingStarted.Lazily, emptyList())
 
-  val localSongs: StateFlow<List<Song>> = combine(_localSongs, favoriteIds) { tracks, favs ->
-    tracks.map { it.copy(isFavorite = it.id in favs) }
+  val localSongs: StateFlow<List<Song>> = combine(dao.getLocalSongs(), favoriteIds) { list, favs ->
+    list.map {
+      Song(
+        id = it.id,
+        title = it.title,
+        artist = it.artist,
+        artworkUrl = it.artworkUrl.ifBlank { APP_ICON_ARTWORK },
+        durationSeconds = it.durationSeconds,
+        streamUrl = it.streamUrl,
+        source = it.source,
+        isFavorite = it.id in favs
+      )
+    }
   }.stateIn(viewModelScope, SharingStarted.Lazily, emptyList())
 
   // Deduplicated by songId so playing a track 2-4 times updates its position at the front without spamming
@@ -196,6 +216,9 @@ class AurixViewModel(application: Application) : AndroidViewModel(application) {
   private val _lyrics = MutableStateFlow<LyricsResult?>(null)
   val lyrics: StateFlow<LyricsResult?> = _lyrics
 
+  private val _lyricOffsetMs = MutableStateFlow(0L)
+  val lyricOffsetMs: StateFlow<Long> = _lyricOffsetMs
+
   private var sleepTimerJob: Job? = null
   private var searchJob: Job? = null
   private var lyricsJob: Job? = null
@@ -203,6 +226,15 @@ class AurixViewModel(application: Application) : AndroidViewModel(application) {
   private val playerListener = object : Player.Listener {
     override fun onIsPlayingChanged(isPlayingVal: Boolean) {
       _isPlaying.value = isPlayingVal
+      mediaController?.let { _currentPosition.value = it.currentPosition.coerceAtLeast(0L) }
+    }
+
+    override fun onPositionDiscontinuity(
+      oldPosition: Player.PositionInfo,
+      newPosition: Player.PositionInfo,
+      reason: Int
+    ) {
+      _currentPosition.value = newPosition.positionMs.coerceAtLeast(0L)
     }
 
     override fun onMediaItemTransition(mediaItem: MediaItem?, reason: Int) {
@@ -218,6 +250,7 @@ class AurixViewModel(application: Application) : AndroidViewModel(application) {
       if (playbackState == Player.STATE_READY && controller.duration > 0L) {
         _durationMs.value = controller.duration
       }
+      _currentPosition.value = controller.currentPosition.coerceAtLeast(0L)
     }
   }
 
@@ -264,8 +297,8 @@ class AurixViewModel(application: Application) : AndroidViewModel(application) {
             _durationMs.value = playerDur
           }
         }
-        // 100ms cadence keeps synced lyrics highlighting snappy with ExoPlayer position
-        delay(if (_isPlaying.value) 100L else 300L)
+        // 50ms cadence keeps synced lyrics tightly locked to ExoPlayer's audio clock
+        delay(if (_isPlaying.value) 50L else 250L)
       }
     }
   }
@@ -274,8 +307,10 @@ class AurixViewModel(application: Application) : AndroidViewModel(application) {
     _rawCurrentSong.value = song
     _currentPosition.value = 0L
     _durationMs.value = (song.durationSeconds * 1000L).coerceAtLeast(1000L)
+    _lyricOffsetMs.value = 0L
 
     viewModelScope.launch {
+      _lyricOffsetMs.value = dao.getLyricOffset(song.id) ?: 0L
       dao.recordPlay(
         PlayHistoryEntity(
           songId = song.id,
@@ -292,12 +327,21 @@ class AurixViewModel(application: Application) : AndroidViewModel(application) {
   }
 
   private fun buildMediaItem(song: Song): MediaItem {
+    val pkg = getApplication<Application>().packageName
+    val resolvedArtworkUri = when {
+      song.artworkUrl == APP_ICON_ARTWORK ||
+        (song.artworkUrl.isBlank() && (song.source == "Local" || song.source == "Imported")) -> {
+        Uri.parse("android.resource://$pkg/${com.example.R.drawable.aurix_clean_logo_1794625921343}")
+      }
+      song.artworkUrl.isNotBlank() -> Uri.parse(song.artworkUrl)
+      else -> null
+    }
     val metadata = MediaMetadata.Builder()
       .setTitle(song.title)
       .setArtist(song.artist)
       .apply {
-        if (song.artworkUrl.isNotBlank()) {
-          setArtworkUri(Uri.parse(song.artworkUrl))
+        if (resolvedArtworkUri != null) {
+          setArtworkUri(resolvedArtworkUri)
         }
       }
       .build()
@@ -332,10 +376,29 @@ class AurixViewModel(application: Application) : AndroidViewModel(application) {
     _youtubeError.value = null
   }
 
+  fun selectYoutubeFormat(formatId: String) {
+    _selectedYoutubeFormatId.value = formatId
+    if (_youtubeDownloadState.value is YoutubeDownloadState.Error) {
+      _youtubeDownloadState.value = YoutubeDownloadState.Idle
+    }
+  }
+
+  private fun extractYoutubeVideoId(rawUrl: String): String? {
+    val uri = runCatching { Uri.parse(rawUrl.trim()) }.getOrNull() ?: return null
+    val host = uri.host.orEmpty().lowercase(Locale.US)
+    val segments = uri.pathSegments.orEmpty()
+    return when {
+      host.contains("youtu.be") -> segments.firstOrNull()?.takeIf { it.isNotBlank() }
+      uri.getQueryParameter("v")?.isNotBlank() == true -> uri.getQueryParameter("v")
+      segments.size >= 2 && segments[0] in listOf("shorts", "embed", "live", "v") -> segments[1]
+      else -> null
+    }?.substringBefore('?')?.substringBefore('&')?.takeIf { it.length in 8..16 }
+  }
+
   fun analyzeYoutubeUrl() {
     val rawUrl = _youtubeUrl.value.trim()
     if (rawUrl.isBlank()) {
-      _youtubeError.value = "Paste a YouTube link first."
+      _youtubeError.value = "Paste a YouTube URL first."
       return
     }
     if (!rawUrl.contains("youtube.com", ignoreCase = true) && !rawUrl.contains("youtu.be", ignoreCase = true)) {
@@ -346,36 +409,205 @@ class AurixViewModel(application: Application) : AndroidViewModel(application) {
     viewModelScope.launch {
       _isAnalyzingYoutube.value = true
       _youtubeError.value = null
-      _analyzedSong.value = null
+      _youtubeAnalysis.value = null
+      _selectedYoutubeFormatId.value = null
+      _youtubeDownloadState.value = YoutubeDownloadState.Idle
+
       try {
-        val info = NetworkClient.youtubeOEmbedApi.getVideoInfo(rawUrl)
-        val rawTitle = info.title?.trim().orEmpty()
-        val rawAuthor = info.authorName?.trim().orEmpty()
-        val cleanedTitle = cleanTrackTitle(rawTitle)
+        val videoId = extractYoutubeVideoId(rawUrl)
+        val oembedDeferred = async {
+          runCatching { NetworkClient.youtubeOEmbedApi.getVideoInfo(rawUrl) }.getOrNull()
+        }
+        val pipedDeferred = async {
+          if (!videoId.isNullOrBlank()) NetworkClient.fetchPipedStreams(videoId) else null
+        }
+
+        val info = oembedDeferred.await()
+        val piped = pipedDeferred.await()
+
+        val rawTitle = info?.title?.trim()?.takeIf { it.isNotBlank() }
+          ?: piped?.title?.trim().orEmpty()
+        val rawAuthor = info?.authorName?.trim()?.takeIf { it.isNotBlank() }
+          ?: piped?.uploader?.trim().orEmpty()
+        val thumbnailUrl = info?.thumbnailUrl?.trim()?.takeIf { it.isNotBlank() }
+          ?: piped?.thumbnailUrl?.trim()?.takeIf { it.isNotBlank() }
+          ?: videoId?.let { "https://i.ytimg.com/vi/$it/hqdefault.jpg" }
+          ?: ""
+
+        if (rawTitle.isBlank()) {
+          _youtubeError.value = "Unable to load video info from this YouTube link."
+          return@launch
+        }
+
+        val cleanedTitle = cleanTrackTitle(rawTitle).ifBlank { rawTitle }
         val searchTerm = listOf(cleanedTitle, rawAuthor)
           .filter { it.isNotBlank() }
           .joinToString(" ")
           .ifBlank { rawTitle }
 
-        if (searchTerm.isBlank()) {
-          _youtubeError.value = "Could not extract track title from link."
+        val itunesDeferred = async {
+          runCatching { NetworkClient.itunesApi.searchSongs(term = searchTerm, limit = 5) }.getOrNull()
+        }
+        val deezerDeferred = async {
+          runCatching { NetworkClient.deezerApi.searchTracks(query = searchTerm, limit = 5) }.getOrNull()
+        }
+
+        val formats = mutableListOf<AudioFormatOption>()
+
+        // 1. Add real direct YouTube audio streams if a Piped mirror resolved them
+        if (piped != null) {
+          val pipedDuration = piped.duration.coerceAtLeast(30L)
+          piped.audioStreams
+            .filter { !it.url.isNullOrBlank() }
+            .sortedByDescending { it.bitrate }
+            .forEachIndexed { idx, stream ->
+              val mime = stream.mimeType.orEmpty().substringBefore(';').trim()
+              val upperFormat = stream.format.orEmpty().uppercase(Locale.US)
+              val isM4a = upperFormat.contains("M4A") || mime.contains("mp4", ignoreCase = true)
+              val ext = if (isM4a) "m4a" else "webm"
+              val fmtLabel = if (isM4a) "M4A" else "WEBM"
+              val kbps = if (stream.bitrate > 0) "${stream.bitrate / 1000} kbps" else stream.quality.orEmpty().ifBlank { "Standard" }
+              val codecNote = stream.codec?.uppercase(Locale.US)?.takeIf { it.isNotBlank() } ?: if (isM4a) "AAC" else "Opus"
+              val sizeMb = if (stream.contentLength > 0L) {
+                String.format(Locale.US, " • %.1f MB", stream.contentLength / (1024f * 1024f))
+              } else ""
+              formats.add(
+                AudioFormatOption(
+                  id = "piped_${idx}_${ext}_${stream.bitrate}",
+                  formatLabel = fmtLabel,
+                  qualityLabel = "$kbps $codecNote",
+                  detailLabel = "Full Audio$sizeMb",
+                  extension = ext,
+                  mimeType = mime.ifBlank { if (isM4a) "audio/mp4" else "audio/webm" },
+                  streamUrl = stream.url.orEmpty(),
+                  durationSeconds = pipedDuration,
+                  contentLengthBytes = stream.contentLength
+                )
+              )
+            }
+        }
+
+        // 2. Add real matched iTunes M4A (AAC) & Deezer MP3 formats for this track
+        val itunesMatch = itunesDeferred.await()?.results?.let { mapItunesTracks(it) }?.firstOrNull()
+        val deezerMatch = deezerDeferred.await()?.data?.let { mapDeezerTracks(it, "Deezer MP3") }?.firstOrNull()
+
+        if (itunesMatch != null && itunesMatch.streamUrl.isNotBlank()) {
+          formats.add(
+            AudioFormatOption(
+              id = "itunes_${itunesMatch.id}",
+              formatLabel = "M4A",
+              qualityLabel = "256 kbps AAC",
+              detailLabel = "30s High Quality",
+              extension = "m4a",
+              mimeType = "audio/mp4",
+              streamUrl = itunesMatch.streamUrl,
+              durationSeconds = 30L
+            )
+          )
+        }
+        if (deezerMatch != null && deezerMatch.streamUrl.isNotBlank()) {
+          formats.add(
+            AudioFormatOption(
+              id = "deezer_${deezerMatch.id}",
+              formatLabel = "MP3",
+              qualityLabel = "128 kbps MP3",
+              detailLabel = "30s Preview",
+              extension = "mp3",
+              mimeType = "audio/mpeg",
+              streamUrl = deezerMatch.streamUrl,
+              durationSeconds = 30L
+            )
+          )
+        }
+
+        val uniqueFormats = formats.distinctBy { "${it.formatLabel}_${it.qualityLabel}_${it.detailLabel}" }
+        if (uniqueFormats.isEmpty()) {
+          _youtubeError.value = "No downloadable audio formats available for \"$cleanedTitle\"."
           return@launch
         }
 
-        val itunesRes = NetworkClient.itunesApi.searchSongs(term = searchTerm, limit = 8)
-        val matched = mapItunesTracks(itunesRes.results).firstOrNull()
-        if (matched != null) {
-          _analyzedSong.value = matched.copy(
-            artworkUrl = matched.artworkUrl.ifBlank { info.thumbnailUrl.orEmpty() },
-            source = "iTunes 30s"
-          )
-        } else {
-          _youtubeError.value = "No 30-second iTunes preview found for \"$cleanedTitle\"."
-        }
+        val trackTitle = itunesMatch?.title ?: deezerMatch?.title ?: cleanedTitle
+        val trackArtist = itunesMatch?.artist ?: deezerMatch?.artist ?: rawAuthor.ifBlank { "YouTube Audio" }
+        val displayThumb = thumbnailUrl.ifBlank { itunesMatch?.artworkUrl.orEmpty() }.ifBlank { deezerMatch?.artworkUrl.orEmpty() }
+
+        val analysis = YoutubeAnalysisResult(
+          videoId = videoId.orEmpty(),
+          originalUrl = rawUrl,
+          videoTitle = rawTitle,
+          channelName = rawAuthor.ifBlank { trackArtist },
+          thumbnailUrl = displayThumb,
+          matchedTrackTitle = trackTitle,
+          matchedArtist = trackArtist,
+          formats = uniqueFormats
+        )
+        _youtubeAnalysis.value = analysis
+        _selectedYoutubeFormatId.value = uniqueFormats.first().id
       } catch (_: Exception) {
-        _youtubeError.value = "Unable to look up YouTube link. Check your network connection."
+        _youtubeError.value = "Unable to analyze YouTube link. Check your network connection."
       } finally {
         _isAnalyzingYoutube.value = false
+      }
+    }
+  }
+
+  fun downloadAnalyzedTrack(context: Context) {
+    val analysis = _youtubeAnalysis.value ?: return
+    val selectedId = _selectedYoutubeFormatId.value
+    val format = analysis.formats.firstOrNull { it.id == selectedId } ?: analysis.formats.firstOrNull() ?: return
+    if (_youtubeDownloadState.value is YoutubeDownloadState.Downloading) return
+
+    viewModelScope.launch {
+      val formatLabel = "${format.formatLabel} (${format.qualityLabel})"
+      _youtubeDownloadState.value = YoutubeDownloadState.Downloading(0.02f, 0L, format.contentLengthBytes, formatLabel)
+
+      val downloadRes = SongDownloader.downloadFormatToApp(
+        context = context,
+        title = analysis.matchedTrackTitle,
+        artist = analysis.matchedArtist,
+        format = format
+      ) { progressInfo ->
+        _youtubeDownloadState.value = YoutubeDownloadState.Downloading(
+          progress = progressInfo.fraction,
+          downloadedBytes = progressInfo.downloadedBytes,
+          totalBytes = progressInfo.totalBytes,
+          formatLabel = formatLabel
+        )
+      }
+
+      downloadRes.onSuccess { savedUri ->
+        val cachedCover = SongDownloader.cacheRemoteArtwork(
+          context = context,
+          songId = savedUri.toString(),
+          imageUrl = analysis.thumbnailUrl
+        )
+        val artwork = cachedCover ?: analysis.thumbnailUrl.ifBlank { APP_ICON_ARTWORK }
+        val entity = LocalSongEntity(
+          id = savedUri.toString(),
+          title = analysis.matchedTrackTitle,
+          artist = analysis.matchedArtist,
+          artworkUrl = artwork,
+          durationSeconds = format.durationSeconds,
+          streamUrl = savedUri.toString(),
+          source = "Downloaded"
+        )
+        dao.insertLocalSong(entity)
+
+        val savedSong = Song(
+          id = entity.id,
+          title = entity.title,
+          artist = entity.artist,
+          artworkUrl = entity.artworkUrl,
+          durationSeconds = entity.durationSeconds,
+          streamUrl = entity.streamUrl,
+          source = entity.source,
+          isFavorite = entity.id in favoriteIds.value
+        )
+        _youtubeDownloadState.value = YoutubeDownloadState.Saved(savedSong)
+        Toast.makeText(context, "Saved to App (My songs): ${savedSong.title}", Toast.LENGTH_LONG).show()
+      }.onFailure { err ->
+        val msg = err.localizedMessage ?: "Download failed"
+        _youtubeDownloadState.value = YoutubeDownloadState.Error(msg)
+        Toast.makeText(context, msg, Toast.LENGTH_LONG).show()
       }
     }
   }
@@ -535,7 +767,7 @@ class AurixViewModel(application: Application) : AndroidViewModel(application) {
     if (_songDownloadProgress.value.containsKey(song.id)) return
     viewModelScope.launch {
       _songDownloadProgress.value = _songDownloadProgress.value + (song.id to 0.05f)
-      Toast.makeText(context, "Saving 30s preview: ${song.title}...", Toast.LENGTH_SHORT).show()
+      Toast.makeText(context, "Saving to app: ${song.title}...", Toast.LENGTH_SHORT).show()
 
       val result = SongDownloader.downloadSongToDevice(context, song) { progress ->
         _songDownloadProgress.value = _songDownloadProgress.value + (song.id to progress)
@@ -544,15 +776,18 @@ class AurixViewModel(application: Application) : AndroidViewModel(application) {
       _songDownloadProgress.value = _songDownloadProgress.value - song.id
       result.onSuccess { savedUri ->
         _downloadedSongIds.value = _downloadedSongIds.value + song.id
-        val localTrack = song.copy(
+        val cachedCover = SongDownloader.cacheRemoteArtwork(context, savedUri.toString(), song.artworkUrl)
+        val entity = LocalSongEntity(
           id = savedUri.toString(),
+          title = song.title,
+          artist = song.artist,
+          artworkUrl = cachedCover ?: song.artworkUrl.ifBlank { APP_ICON_ARTWORK },
+          durationSeconds = song.durationSeconds,
           streamUrl = savedUri.toString(),
           source = "Downloaded"
         )
-        if (_localSongs.value.none { it.title == song.title && it.artist == song.artist }) {
-          _localSongs.value = listOf(localTrack) + _localSongs.value
-        }
-        Toast.makeText(context, "Saved to Music/AURIX: ${song.title}", Toast.LENGTH_LONG).show()
+        dao.insertLocalSong(entity)
+        Toast.makeText(context, "Saved to My songs & Music/AURIX: ${song.title}", Toast.LENGTH_LONG).show()
       }.onFailure { err ->
         Toast.makeText(context, err.localizedMessage ?: "Download failed", Toast.LENGTH_LONG).show()
       }
@@ -598,6 +833,7 @@ class AurixViewModel(application: Application) : AndroidViewModel(application) {
           ?.replace("100x100bb", "600x600bb")
           ?.replace("60x60bb", "600x600bb")
           ?: ""
+        val fullDurSec = (track.trackTimeMillis ?: 0L) / 1000L
         Song(
           id = "itunes_${track.trackId}",
           title = track.trackName ?: "Untitled",
@@ -605,7 +841,8 @@ class AurixViewModel(application: Application) : AndroidViewModel(application) {
           artworkUrl = art,
           durationSeconds = 30L,
           streamUrl = track.previewUrl.orEmpty(),
-          source = sourceTag
+          source = sourceTag,
+          fullDurationSeconds = if (fullDurSec > 0L) fullDurSec else 30L
         )
       }
   }
@@ -630,7 +867,8 @@ class AurixViewModel(application: Application) : AndroidViewModel(application) {
           artworkUrl = art,
           durationSeconds = 30L,
           streamUrl = track.preview.orEmpty(),
-          source = sourceTag
+          source = sourceTag,
+          fullDurationSeconds = if (track.duration > 0L) track.duration else 30L
         )
       }
   }
@@ -960,50 +1198,132 @@ class AurixViewModel(application: Application) : AndroidViewModel(application) {
 
   fun addLocalSong(uri: Uri) {
     val appContext = getApplication<Application>()
-    var displayTitle: String? = null
-    var artist = "Device Storage"
-    var durationSec = 180L
+    viewModelScope.launch {
+      val entity = withContext(Dispatchers.IO) {
+        try {
+          appContext.contentResolver.takePersistableUriPermission(
+            uri,
+            Intent.FLAG_GRANT_READ_URI_PERMISSION
+          )
+        } catch (_: Exception) { }
 
-    try {
-      appContext.contentResolver.query(uri, arrayOf(OpenableColumns.DISPLAY_NAME), null, null, null)?.use { cursor ->
-        if (cursor.moveToFirst()) {
-          val idx = cursor.getColumnIndex(OpenableColumns.DISPLAY_NAME)
-          if (idx >= 0) {
-            displayTitle = cursor.getString(idx)?.substringBeforeLast('.')
+        val existing = dao.getLocalSongById(uri.toString())
+        if (existing != null) return@withContext null
+
+        var displayTitle: String? = null
+        var artist = "Device Storage"
+        var durationSec = 180L
+
+        try {
+          appContext.contentResolver.query(uri, arrayOf(OpenableColumns.DISPLAY_NAME), null, null, null)?.use { cursor ->
+            if (cursor.moveToFirst()) {
+              val idx = cursor.getColumnIndex(OpenableColumns.DISPLAY_NAME)
+              if (idx >= 0) {
+                displayTitle = cursor.getString(idx)?.substringBeforeLast('.')
+              }
+            }
           }
-        }
+        } catch (_: Exception) { }
+
+        try {
+          val retriever = MediaMetadataRetriever()
+          retriever.setDataSource(appContext, uri)
+          val metaTitle = retriever.extractMetadata(MediaMetadataRetriever.METADATA_KEY_TITLE)
+          val metaArtist = retriever.extractMetadata(MediaMetadataRetriever.METADATA_KEY_ARTIST)
+          val metaDuration = retriever.extractMetadata(MediaMetadataRetriever.METADATA_KEY_DURATION)?.toLongOrNull()
+          if (!metaTitle.isNullOrBlank()) displayTitle = metaTitle
+          if (!metaArtist.isNullOrBlank()) artist = metaArtist
+          if (metaDuration != null && metaDuration > 0L) durationSec = metaDuration / 1000L
+          retriever.release()
+        } catch (_: Exception) { }
+
+        val fallbackName = uri.lastPathSegment
+          ?.substringAfterLast('/')
+          ?.substringBeforeLast('.')
+          ?.takeIf { !it.startsWith("audio:") }
+          ?: "Local Audio Track"
+
+        LocalSongEntity(
+          id = uri.toString(),
+          title = displayTitle?.ifBlank { null } ?: fallbackName,
+          artist = artist,
+          artworkUrl = APP_ICON_ARTWORK,
+          durationSeconds = durationSec,
+          streamUrl = uri.toString(),
+          source = "Local"
+        )
       }
-    } catch (_: Exception) { }
 
-    try {
-      val retriever = MediaMetadataRetriever()
-      retriever.setDataSource(appContext, uri)
-      val metaTitle = retriever.extractMetadata(MediaMetadataRetriever.METADATA_KEY_TITLE)
-      val metaArtist = retriever.extractMetadata(MediaMetadataRetriever.METADATA_KEY_ARTIST)
-      val metaDuration = retriever.extractMetadata(MediaMetadataRetriever.METADATA_KEY_DURATION)?.toLongOrNull()
-      if (!metaTitle.isNullOrBlank()) displayTitle = metaTitle
-      if (!metaArtist.isNullOrBlank()) artist = metaArtist
-      if (metaDuration != null && metaDuration > 0L) durationSec = metaDuration / 1000L
-      retriever.release()
-    } catch (_: Exception) { }
+      if (entity != null) {
+        dao.insertLocalSong(entity)
+        Toast.makeText(appContext, "Imported \"${entity.title}\" to My songs", Toast.LENGTH_SHORT).show()
+      } else {
+        Toast.makeText(appContext, "Song is already in My songs", Toast.LENGTH_SHORT).show()
+      }
+    }
+  }
 
-    val fallbackName = uri.lastPathSegment
-      ?.substringAfterLast('/')
-      ?.substringBeforeLast('.')
-      ?.takeIf { !it.startsWith("audio:") }
-      ?: "Local Audio Track"
+  fun updateLocalSongArtwork(songId: String, imageUri: Uri) {
+    val appContext = getApplication<Application>()
+    viewModelScope.launch {
+      val result = SongDownloader.saveCustomCoverImage(appContext, songId, imageUri)
+      result.onSuccess { savedCoverUri ->
+        dao.updateLocalSongArtwork(songId, savedCoverUri)
+        dao.updateFavoriteArtwork(songId, savedCoverUri)
+        dao.updateHistoryArtwork(songId, savedCoverUri)
 
-    val song = Song(
-      id = uri.toString(),
-      title = displayTitle?.ifBlank { null } ?: fallbackName,
-      artist = artist,
-      artworkUrl = "",
-      durationSeconds = durationSec,
-      streamUrl = uri.toString(),
-      source = "Local"
-    )
-    if (_localSongs.value.none { it.id == song.id }) {
-      _localSongs.value = listOf(song) + _localSongs.value
+        if (_rawCurrentSong.value?.id == songId) {
+          _rawCurrentSong.value = _rawCurrentSong.value?.copy(artworkUrl = savedCoverUri)
+        }
+        _queue.value = _queue.value.map {
+          if (it.id == songId) it.copy(artworkUrl = savedCoverUri) else it
+        }
+        val dlState = _youtubeDownloadState.value
+        if (dlState is YoutubeDownloadState.Saved && dlState.song.id == songId) {
+          _youtubeDownloadState.value = YoutubeDownloadState.Saved(dlState.song.copy(artworkUrl = savedCoverUri))
+        }
+        Toast.makeText(appContext, "Custom cover photo saved", Toast.LENGTH_SHORT).show()
+      }.onFailure {
+        Toast.makeText(appContext, "Unable to update cover photo", Toast.LENGTH_SHORT).show()
+      }
+    }
+  }
+
+  fun deleteLocalSong(song: Song) {
+    val appContext = getApplication<Application>()
+    viewModelScope.launch {
+      withContext(Dispatchers.IO) {
+        SongDownloader.deleteAppManagedFileIfOwned(appContext, song.streamUrl)
+        dao.deleteLocalSong(song.id)
+      }
+      Toast.makeText(appContext, "Removed \"${song.title}\"", Toast.LENGTH_SHORT).show()
+    }
+  }
+
+  fun adjustLyricOffset(deltaMs: Long) {
+    val songId = _rawCurrentSong.value?.id ?: return
+    val nextOffset = (_lyricOffsetMs.value + deltaMs).coerceIn(-300_000L, 300_000L)
+    _lyricOffsetMs.value = nextOffset
+    viewModelScope.launch {
+      dao.saveLyricOffset(LyricOffsetEntity(songId = songId, offsetMs = nextOffset))
+    }
+  }
+
+  fun alignLyricsToTimestamp(targetLineTimestampMs: Long) {
+    val songId = _rawCurrentSong.value?.id ?: return
+    val playerPos = mediaController?.currentPosition?.coerceAtLeast(0L) ?: _currentPosition.value
+    val nextOffset = (targetLineTimestampMs - playerPos).coerceIn(-300_000L, 300_000L)
+    _lyricOffsetMs.value = nextOffset
+    viewModelScope.launch {
+      dao.saveLyricOffset(LyricOffsetEntity(songId = songId, offsetMs = nextOffset))
+    }
+  }
+
+  fun resetLyricOffset() {
+    val songId = _rawCurrentSong.value?.id ?: return
+    _lyricOffsetMs.value = 0L
+    viewModelScope.launch {
+      dao.deleteLyricOffset(songId)
     }
   }
 
@@ -1021,6 +1341,77 @@ class AurixViewModel(application: Application) : AndroidViewModel(application) {
       .trim()
   }
 
+  private fun normalizeForMatch(raw: String?): String {
+    return raw.orEmpty()
+      .lowercase(Locale.US)
+      .replace(Regex("""[^\p{L}\p{N}\s]"""), " ")
+      .replace(Regex("""\s+"""), " ")
+      .trim()
+  }
+
+  private fun scoreLyricsCandidate(
+    candidate: LrcLibResponse,
+    targetTitle: String,
+    targetArtist: String,
+    targetDurationSec: Long
+  ): Int {
+    if (candidate.instrumental) return -1000
+    val hasSynced = !candidate.syncedLyrics.isNullOrBlank()
+    val hasPlain = !candidate.plainLyrics.isNullOrBlank()
+    if (!hasSynced && !hasPlain) return -1000
+
+    var score = if (hasSynced) 120 else 20
+
+    val normTargetTitle = normalizeForMatch(targetTitle)
+    val normCandTitle = normalizeForMatch(cleanTrackTitle(candidate.trackName.orEmpty()).ifBlank { candidate.trackName })
+    val normFullCandTitle = normalizeForMatch(candidate.trackName)
+
+    when {
+      normTargetTitle.isNotBlank() && normCandTitle == normTargetTitle -> score += 80
+      normTargetTitle.isNotBlank() && normFullCandTitle == normTargetTitle -> score += 80
+      normTargetTitle.isNotBlank() && (normCandTitle.contains(normTargetTitle) || normTargetTitle.contains(normCandTitle)) -> score += 40
+    }
+
+    val normTargetArtist = normalizeForMatch(targetArtist)
+    val normCandArtist = normalizeForMatch(candidate.artistName)
+    if (normTargetArtist.isNotBlank() && normCandArtist.isNotBlank()) {
+      when {
+        normCandArtist == normTargetArtist -> score += 70
+        normCandArtist.contains(normTargetArtist) || normTargetArtist.contains(normCandArtist) -> score += 45
+        else -> {
+          val targetTokens = normTargetArtist.split(" ").filter { it.length >= 2 }.toSet()
+          val candTokens = normCandArtist.split(" ").filter { it.length >= 2 }.toSet()
+          if (targetTokens.any { it in candTokens }) score += 25
+        }
+      }
+    }
+
+    // Penalize variant versions (remix, slowed, sped up, nightcore, karaoke, live) unless original title asks for them
+    val variants = listOf("remix", "sped up", "speed up", "slowed", "reverb", "nightcore", "karaoke", "live", "instrumental", "8d", "cover")
+    val origTitleLower = targetTitle.lowercase(Locale.US)
+    val candTitleLower = candidate.trackName.orEmpty().lowercase(Locale.US)
+    for (v in variants) {
+      if (candTitleLower.contains(v) && !origTitleLower.contains(v)) {
+        score -= 90
+      }
+    }
+
+    // Score duration closeness against full track duration (prevents sped-up/slowed/live timing drift)
+    val candDur = candidate.duration?.toLong()
+    if (targetDurationSec > 35L && candDur != null && candDur > 0L) {
+      val diff = kotlin.math.abs(candDur - targetDurationSec)
+      score += when {
+        diff <= 2L -> 100
+        diff <= 5L -> 70
+        diff <= 10L -> 35
+        diff <= 20L -> 5
+        else -> -80
+      }
+    }
+
+    return score
+  }
+
   private fun fetchLyrics(song: Song) {
     lyricsJob?.cancel()
     _lyrics.value = null
@@ -1029,39 +1420,77 @@ class AurixViewModel(application: Application) : AndroidViewModel(application) {
         val cleanTitle = cleanTrackTitle(song.title).ifBlank { song.title }
         val cleanArtist = song.artist.substringBefore(',').substringBefore('&').trim().ifBlank { song.artist }
 
-        // iTunes previews are locked to 30s, which won't match full-length durations on /api/get
-        val direct = if (song.source != "iTunes 30s" && song.durationSeconds > 35L) {
+        val controllerDurSec = mediaController?.duration?.takeIf { it > 0L }?.div(1000L) ?: 0L
+        val targetDurationSec = when {
+          controllerDurSec > 35L -> controllerDurSec
+          song.fullDurationSeconds > 35L -> song.fullDurationSeconds
+          song.durationSeconds > 35L -> song.durationSeconds
+          else -> 0L
+        }
+
+        // 1. Exact /api/get when full track duration is known (matches exact studio recording timing)
+        val direct = if (targetDurationSec > 35L) {
           runCatching {
-            NetworkClient.lrcLibApi.getLyrics(song.artist, song.title, song.durationSeconds)
+            NetworkClient.lrcLibApi.getLyrics(song.artist, song.title, targetDurationSec)
           }.getOrNull() ?: if (cleanTitle != song.title || cleanArtist != song.artist) {
-            runCatching { NetworkClient.lrcLibApi.getLyrics(cleanArtist, cleanTitle, song.durationSeconds) }.getOrNull()
+            runCatching { NetworkClient.lrcLibApi.getLyrics(cleanArtist, cleanTitle, targetDurationSec) }.getOrNull()
           } else null
         } else null
 
         if (direct != null && !direct.syncedLyrics.isNullOrBlank()) {
-          _lyrics.value = LyricsResult(synced = parseSyncedLyrics(direct.syncedLyrics), plain = direct.plainLyrics)
-          return@launch
-        }
-        if (direct != null && !direct.plainLyrics.isNullOrBlank()) {
-          _lyrics.value = LyricsResult(synced = null, plain = direct.plainLyrics)
-          return@launch
-        }
-
-        val searchResults = runCatching {
-          NetworkClient.lrcLibApi.searchLyrics("$cleanArtist $cleanTitle")
-        }.getOrNull().takeIf { !it.isNullOrEmpty() }
-          ?: runCatching {
-            NetworkClient.lrcLibApi.searchLyrics(cleanTitle)
-          }.getOrNull().takeIf { !it.isNullOrEmpty() }
-
-        val firstSynced = searchResults?.firstOrNull { !it.syncedLyrics.isNullOrBlank() }
-        val firstPlain = searchResults?.firstOrNull { !it.plainLyrics.isNullOrBlank() }
-        when {
-          firstSynced?.syncedLyrics != null -> {
-            _lyrics.value = LyricsResult(synced = parseSyncedLyrics(firstSynced.syncedLyrics), plain = firstSynced.plainLyrics)
+          val parsed = parseSyncedLyrics(direct.syncedLyrics)
+          if (parsed.isNotEmpty()) {
+            _lyrics.value = LyricsResult(
+              synced = parsed,
+              plain = direct.plainLyrics,
+              matchedTitle = direct.trackName ?: song.title,
+              matchedArtist = direct.artistName ?: song.artist
+            )
+            return@launch
           }
-          firstPlain?.plainLyrics != null -> {
-            _lyrics.value = LyricsResult(synced = null, plain = firstPlain.plainLyrics)
+        }
+
+        // 2. Search LRCLIB candidates and rank by exact track, artist, non-remix, and full duration closeness
+        val candidates = buildList {
+          runCatching { NetworkClient.lrcLibApi.searchLyrics("$cleanArtist $cleanTitle") }
+            .getOrNull()?.let { addAll(it) }
+          if (isEmpty() || none { !it.syncedLyrics.isNullOrBlank() }) {
+            runCatching { NetworkClient.lrcLibApi.searchLyrics(cleanTitle) }
+              .getOrNull()?.let { addAll(it) }
+          }
+        }.distinctBy { "${it.id}_${it.trackName}_${it.duration}" }
+
+        val bestSynced = candidates
+          .filter { !it.syncedLyrics.isNullOrBlank() }
+          .maxByOrNull { scoreLyricsCandidate(it, cleanTitle, cleanArtist, targetDurationSec) }
+          ?.takeIf { scoreLyricsCandidate(it, cleanTitle, cleanArtist, targetDurationSec) > 0 }
+
+        val bestPlain = direct?.takeIf { !it.plainLyrics.isNullOrBlank() }
+          ?: candidates
+            .filter { !it.plainLyrics.isNullOrBlank() }
+            .maxByOrNull { scoreLyricsCandidate(it, cleanTitle, cleanArtist, targetDurationSec) }
+
+        when {
+          bestSynced?.syncedLyrics != null -> {
+            val parsed = parseSyncedLyrics(bestSynced.syncedLyrics)
+            if (parsed.isNotEmpty()) {
+              _lyrics.value = LyricsResult(
+                synced = parsed,
+                plain = bestSynced.plainLyrics,
+                matchedTitle = bestSynced.trackName,
+                matchedArtist = bestSynced.artistName
+              )
+            } else {
+              _lyrics.value = LyricsResult(synced = null, plain = bestSynced.plainLyrics ?: "No lyrics found for this track.")
+            }
+          }
+          bestPlain?.plainLyrics != null -> {
+            _lyrics.value = LyricsResult(
+              synced = null,
+              plain = bestPlain.plainLyrics,
+              matchedTitle = bestPlain.trackName,
+              matchedArtist = bestPlain.artistName
+            )
           }
           else -> {
             _lyrics.value = LyricsResult(synced = null, plain = "No lyrics found for this track.")
@@ -1076,19 +1505,35 @@ class AurixViewModel(application: Application) : AndroidViewModel(application) {
   private fun parseSyncedLyrics(raw: String): List<LyricLine> {
     val lines = raw.lines()
     val result = mutableListOf<LyricLine>()
-    val regex = Regex("""\[(\d{1,2}):(\d{2})\.(\d{2,3})\](.*)""")
+
+    // Respect standard LRC [offset:+/-ms] tag: positive offset means lyrics are shifted earlier
+    var lrcTagOffsetMs = 0L
+    val offsetRegex = Regex("""\[offset\s*:\s*([+-]?\d+)\s*]""", RegexOption.IGNORE_CASE)
+    val timestampRegex = Regex("""\[(\d{1,3}):(\d{2})(?:[.:](\d{1,3}))?]""")
+
     for (line in lines) {
-      val match = regex.find(line)
-      if (match != null) {
-        val min = match.groupValues[1].toLong()
-        val sec = match.groupValues[2].toLong()
-        val millisPart = match.groupValues[3]
-        val ms = millisPart.toLong() * if (millisPart.length == 2) 10 else 1
-        val totalMs = (min * 60 + sec) * 1000 + ms
-        val text = match.groupValues[4].trim()
-        if (text.isNotBlank()) {
-          result.add(LyricLine(totalMs, text))
+      offsetRegex.find(line)?.let { offMatch ->
+        lrcTagOffsetMs = offMatch.groupValues[1].toLongOrNull() ?: 0L
+      }
+
+      val matches = timestampRegex.findAll(line).toList()
+      if (matches.isEmpty()) continue
+
+      val cleanText = timestampRegex.replace(line, "").trim()
+      if (cleanText.isBlank()) continue
+
+      for (match in matches) {
+        val min = match.groupValues[1].toLongOrNull() ?: continue
+        val sec = match.groupValues[2].toLongOrNull() ?: continue
+        val fracRaw = match.groupValues[3]
+        val ms = when (fracRaw.length) {
+          0 -> 0L
+          1 -> (fracRaw.toLongOrNull() ?: 0L) * 100L
+          2 -> (fracRaw.toLongOrNull() ?: 0L) * 10L
+          else -> fracRaw.take(3).toLongOrNull() ?: 0L
         }
+        val totalMs = ((min * 60L + sec) * 1000L + ms - lrcTagOffsetMs).coerceAtLeast(0L)
+        result.add(LyricLine(totalMs, cleanText))
       }
     }
     return result.sortedBy { it.timestampMs }

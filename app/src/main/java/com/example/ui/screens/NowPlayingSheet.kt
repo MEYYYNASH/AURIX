@@ -57,6 +57,7 @@ fun NowPlayingSheet(
   currentPositionMs: Long,
   durationMs: Long,
   lyricsResult: LyricsResult?,
+  lyricOffsetMs: Long = 0L,
   dynamicBg: Boolean,
   reducedMotion: Boolean,
   shuffleEnabled: Boolean,
@@ -74,6 +75,9 @@ fun NowPlayingSheet(
   onFavorite: () -> Unit,
   onClose: () -> Unit,
   onLineClick: (Long) -> Unit,
+  onAlignLine: (Long) -> Unit = {},
+  onAdjustOffset: (Long) -> Unit = {},
+  onResetOffset: () -> Unit = {},
   onRetryLyrics: () -> Unit = {}
 ) {
   BackHandler { onClose() }
@@ -125,9 +129,10 @@ fun NowPlayingSheet(
     // True Dynamic Artwork Background sampled from actual album cover colors + blurred drifting art
     if (bgAlpha > 0.01f) {
       Box(modifier = Modifier.fillMaxSize().alpha(bgAlpha)) {
-        if (song.artworkUrl.isNotBlank()) {
+        val bgModel = resolveArtworkModel(song.artworkUrl, song.source)
+        if (bgModel != null) {
           AsyncImage(
-            model = song.artworkUrl,
+            model = bgModel,
             contentDescription = null,
             contentScale = ContentScale.Crop,
             modifier = Modifier
@@ -241,8 +246,14 @@ fun NowPlayingSheet(
       Spacer(modifier = Modifier.height(12.dp))
 
       val syncedLines = lyricsResult?.synced
-      val activeLyricLine = remember(syncedLines, currentPositionMs) {
-        syncedLines?.lastOrNull { it.timestampMs <= currentPositionMs } ?: syncedLines?.firstOrNull()
+      val effectivePositionMs = (currentPositionMs + lyricOffsetMs).coerceAtLeast(0L)
+      val isPreviewClip = song.durationSeconds <= 35L &&
+        !song.streamUrl.startsWith("file://") &&
+        !song.streamUrl.startsWith("content://")
+      val activeLyricLine = remember(syncedLines, effectivePositionMs) {
+        val firstTs = syncedLines?.firstOrNull()?.timestampMs ?: 0L
+        if (syncedLines.isNullOrEmpty() || effectivePositionMs + 150L < firstTs) null
+        else syncedLines.lastOrNull { it.timestampMs <= effectivePositionMs + 150L }
       }
 
       // Pane Switcher with smooth fade
@@ -259,9 +270,14 @@ fun NowPlayingSheet(
           LyricsView(
             lyricsResult = lyricsResult,
             currentPositionMs = currentPositionMs,
+            lyricOffsetMs = lyricOffsetMs,
+            isPreviewClip = isPreviewClip,
             accentColor = c1,
             reducedMotion = reducedMotion,
             onLineClick = onLineClick,
+            onAlignLine = onAlignLine,
+            onAdjustOffset = onAdjustOffset,
+            onResetOffset = onResetOffset,
             onRetryLyrics = onRetryLyrics
           )
         } else {

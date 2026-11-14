@@ -8,6 +8,7 @@ import androidx.compose.animation.core.tween
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
 import androidx.compose.animation.togetherWith
+import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
@@ -42,7 +43,11 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import coil.compose.AsyncImage
+import com.example.model.AudioFormatOption
 import com.example.model.Song
+import com.example.model.YoutubeAnalysisResult
+import com.example.model.YoutubeDownloadState
+import java.util.Locale
 
 @Composable
 fun SearchScreen(
@@ -52,7 +57,9 @@ fun SearchScreen(
   isSearching: Boolean,
   searchError: String?,
   youtubeUrl: String,
-  analyzedSong: Song?,
+  youtubeAnalysis: YoutubeAnalysisResult?,
+  selectedYoutubeFormatId: String?,
+  youtubeDownloadState: YoutubeDownloadState,
   isAnalyzingYoutube: Boolean,
   youtubeError: String?,
   currentSong: Song?,
@@ -65,6 +72,9 @@ fun SearchScreen(
   onSearchQueryChanged: (String) -> Unit,
   onYoutubeUrlChanged: (String) -> Unit,
   onAnalyzeYoutube: () -> Unit,
+  onSelectYoutubeFormat: (String) -> Unit,
+  onDownloadYoutube: () -> Unit,
+  onOpenMySongs: () -> Unit,
   onSongClick: (Song, List<Song>) -> Unit,
   onFavoriteClick: (Song) -> Unit,
   onDownloadClick: (Song) -> Unit
@@ -88,7 +98,7 @@ fun SearchScreen(
         color = MaterialTheme.colorScheme.onBackground
       )
       Text(
-        text = "Find songs, artists & YouTube links",
+        text = "Find songs, analyze YouTube links & save to app",
         style = MaterialTheme.typography.bodySmall,
         color = MaterialTheme.colorScheme.onSurfaceVariant
       )
@@ -165,25 +175,24 @@ fun SearchScreen(
                     }
                     Column(modifier = Modifier.weight(1f)) {
                       Text(
-                        text = "YouTube Link Matcher",
+                        text = "YouTube Audio Downloader",
                         style = MaterialTheme.typography.titleMedium.copy(fontWeight = FontWeight.ExtraBold),
                         color = MaterialTheme.colorScheme.onSurface
                       )
                       Text(
-                        text = "Identify any music video & play its 30s preview",
+                        text = "Analyze URL, choose format & save to AURIX",
                         style = MaterialTheme.typography.bodySmall,
                         color = MaterialTheme.colorScheme.onSurfaceVariant
                       )
                     }
                   }
 
-                  // Sleek single-line Liquid Glass URL input
                   TextField(
                     value = youtubeUrl,
                     onValueChange = onYoutubeUrlChanged,
                     placeholder = {
                       Text(
-                        text = "Paste YouTube or youtu.be link...",
+                        text = "Paste YouTube URL (youtube.com / youtu.be)...",
                         maxLines = 1,
                         overflow = TextOverflow.Ellipsis
                       )
@@ -198,7 +207,7 @@ fun SearchScreen(
                     trailingIcon = {
                       if (youtubeUrl.isNotEmpty()) {
                         IconButton(onClick = { onYoutubeUrlChanged("") }) {
-                          Icon(Icons.Rounded.Close, contentDescription = "Clear link")
+                          Icon(Icons.Rounded.Close, contentDescription = "Clear URL")
                         }
                       }
                     },
@@ -256,7 +265,7 @@ fun SearchScreen(
                           modifier = Modifier.size(17.dp)
                         )
                         Text(
-                          text = "Paste Link",
+                          text = "Paste URL",
                           style = MaterialTheme.typography.bodySmall.copy(fontWeight = FontWeight.Bold),
                           color = MaterialTheme.colorScheme.onSurface
                         )
@@ -283,11 +292,11 @@ fun SearchScreen(
                           color = Color.White
                         )
                       } else {
-                        Icon(Icons.Rounded.GraphicEq, contentDescription = null, modifier = Modifier.size(17.dp))
+                        Icon(Icons.Rounded.Analytics, contentDescription = null, modifier = Modifier.size(17.dp))
                       }
                       Spacer(modifier = Modifier.width(6.dp))
                       Text(
-                        text = if (isAnalyzingYoutube) "Matching..." else "Match Track",
+                        text = if (isAnalyzingYoutube) "Analyzing..." else "Analyze",
                         fontWeight = FontWeight.Bold
                       )
                     }
@@ -320,137 +329,20 @@ fun SearchScreen(
               }
             }
 
-            if (analyzedSong != null) {
+            if (youtubeAnalysis != null) {
               item {
-                val (c1, c2) = rememberArtworkColors(analyzedSong.artworkUrl, analyzedSong.title)
-                val cardShape = RoundedCornerShape(28.dp)
-                val isMatchedCurrent = currentSong?.id == analyzedSong.id
-                val dlProgress = songDownloadProgress[analyzedSong.id]
-                val isSaved = analyzedSong.id in downloadedSongIds
-
-                Box(
-                  modifier = Modifier
-                    .fillMaxWidth()
-                    .clip(cardShape)
-                    .background(if (darkTheme) Color(0xFF172034).copy(alpha = 0.80f) else Color.White.copy(alpha = 0.88f))
-                    .border(1.dp, Color.White.copy(alpha = if (darkTheme) 0.28f else 0.96f), cardShape)
-                ) {
-                  if (analyzedSong.artworkUrl.isNotBlank()) {
-                    AsyncImage(
-                      model = analyzedSong.artworkUrl,
-                      contentDescription = null,
-                      contentScale = ContentScale.Crop,
-                      modifier = Modifier
-                        .matchParentSize()
-                        .alpha(if (darkTheme) 0.25f else 0.16f)
-                        .blur(34.dp)
-                    )
-                  }
-                  Box(
-                    modifier = Modifier
-                      .matchParentSize()
-                      .background(
-                        Brush.horizontalGradient(
-                          colors = listOf(c1.copy(alpha = 0.22f), c2.copy(alpha = 0.12f), Color.Transparent)
-                        )
-                      )
-                  )
-
-                  Column(
-                    modifier = Modifier.padding(18.dp),
-                    verticalArrangement = Arrangement.spacedBy(16.dp)
-                  ) {
-                    Row(
-                      modifier = Modifier.fillMaxWidth(),
-                      verticalAlignment = Alignment.CenterVertically
-                    ) {
-                      Box(
-                        modifier = Modifier
-                          .size(76.dp)
-                          .clip(RoundedCornerShape(18.dp))
-                          .border(1.dp, Color.White.copy(alpha = 0.34f), RoundedCornerShape(18.dp))
-                      ) {
-                        SongArtwork(song = analyzedSong, modifier = Modifier.fillMaxSize(), cornerRadius = 18.dp)
-                      }
-                      Spacer(modifier = Modifier.width(14.dp))
-                      Column(modifier = Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(3.dp)) {
-                        Surface(
-                          shape = CircleShape,
-                          color = MaterialTheme.colorScheme.primary.copy(alpha = 0.18f)
-                        ) {
-                          Text(
-                            text = "MATCHED PREVIEW",
-                            style = MaterialTheme.typography.labelSmall.copy(fontWeight = FontWeight.Bold, fontSize = 10.sp),
-                            color = MaterialTheme.colorScheme.primary,
-                            modifier = Modifier.padding(horizontal = 8.dp, vertical = 3.dp)
-                          )
-                        }
-                        Text(
-                          text = analyzedSong.title,
-                          style = MaterialTheme.typography.titleMedium.copy(fontWeight = FontWeight.ExtraBold),
-                          color = MaterialTheme.colorScheme.onSurface,
-                          maxLines = 1,
-                          overflow = TextOverflow.Ellipsis
-                        )
-                        Text(
-                          text = analyzedSong.artist,
-                          style = MaterialTheme.typography.bodySmall,
-                          color = MaterialTheme.colorScheme.onSurfaceVariant,
-                          maxLines = 1,
-                          overflow = TextOverflow.Ellipsis
-                        )
-                      }
-                    }
-
-                    Row(
-                      modifier = Modifier.fillMaxWidth(),
-                      horizontalArrangement = Arrangement.spacedBy(10.dp)
-                    ) {
-                      Button(
-                        onClick = { onSongClick(analyzedSong, listOf(analyzedSong)) },
-                        modifier = Modifier.weight(1f).height(46.dp),
-                        shape = CircleShape
-                      ) {
-                        Icon(
-                          imageVector = if (isMatchedCurrent && isPlaying) Icons.Rounded.Pause else Icons.Rounded.PlayArrow,
-                          contentDescription = null,
-                          modifier = Modifier.size(18.dp)
-                        )
-                        Spacer(modifier = Modifier.width(6.dp))
-                        Text(if (isMatchedCurrent && isPlaying) "Playing" else "Play 30s", fontWeight = FontWeight.Bold)
-                      }
-
-                      OutlinedButton(
-                        onClick = { onDownloadClick(analyzedSong) },
-                        modifier = Modifier.weight(1f).height(46.dp),
-                        shape = CircleShape,
-                        border = androidx.compose.foundation.BorderStroke(
-                          1.dp,
-                          MaterialTheme.colorScheme.primary.copy(alpha = 0.55f)
-                        )
-                      ) {
-                        if (dlProgress != null) {
-                          CircularProgressIndicator(
-                            progress = { dlProgress.coerceIn(0f, 1f) },
-                            modifier = Modifier.size(16.dp),
-                            strokeWidth = 2.dp
-                          )
-                        } else {
-                          Icon(
-                            imageVector = if (isSaved) Icons.Rounded.DownloadDone else Icons.Rounded.Download,
-                            contentDescription = null,
-                            modifier = Modifier.size(18.dp)
-                          )
-                        }
-                        Spacer(modifier = Modifier.width(6.dp))
-                        Text(if (isSaved) "Saved" else "Save 30s", fontWeight = FontWeight.Bold)
-                      }
-                    }
-                  }
-                }
+                YoutubeAnalysisResultCard(
+                  analysis = youtubeAnalysis,
+                  selectedFormatId = selectedYoutubeFormatId,
+                  downloadState = youtubeDownloadState,
+                  darkTheme = darkTheme,
+                  onSelectFormat = onSelectYoutubeFormat,
+                  onDownload = onDownloadYoutube,
+                  onPlaySaved = { saved -> onSongClick(saved, listOf(saved)) },
+                  onOpenMySongs = onOpenMySongs
+                )
               }
             } else {
-              // Intentional, sleek tips card so the lower canvas feels balanced rather than empty
               item {
                 GlassCard(
                   darkTheme = darkTheme,
@@ -462,26 +354,26 @@ fun SearchScreen(
                     verticalArrangement = Arrangement.spacedBy(12.dp)
                   ) {
                     Text(
-                      text = "How it works",
+                      text = "How download works",
                       style = MaterialTheme.typography.titleSmall.copy(fontWeight = FontWeight.Bold),
                       color = MaterialTheme.colorScheme.onSurface
                     )
                     MatcherGuideRow(
-                      icon = Icons.Rounded.ContentCopy,
-                      title = "Copy any YouTube share link",
-                      subtitle = "Supports youtube.com, youtu.be, and music.youtube.com",
+                      icon = Icons.Rounded.Link,
+                      title = "1. Paste YouTube URL & tap Analyze",
+                      subtitle = "Loads the video title, channel and cover thumbnail",
                       iconTint = MaterialTheme.colorScheme.primary
                     )
                     MatcherGuideRow(
-                      icon = Icons.Rounded.GraphicEq,
-                      title = "Instant 30s audio match",
-                      subtitle = "Matches the official track with cover art & synced lyrics",
+                      icon = Icons.Rounded.Tune,
+                      title = "2. Select available format & quality",
+                      subtitle = "Choose M4A, MP3, or high-bitrate audio streams",
                       iconTint = Color(0xFF14B8A6)
                     )
                     MatcherGuideRow(
                       icon = Icons.Rounded.Download,
-                      title = "Save offline anytime",
-                      subtitle = "Keep matched 30s clips directly in Music/AURIX",
+                      title = "3. Download & save to the app",
+                      subtitle = "Live progress bar saves tracks straight to My songs",
                       iconTint = Color(0xFFEC4899)
                     )
                   }
@@ -669,6 +561,344 @@ fun SearchScreen(
         }
       }
     }
+  }
+}
+
+@Composable
+private fun YoutubeAnalysisResultCard(
+  analysis: YoutubeAnalysisResult,
+  selectedFormatId: String?,
+  downloadState: YoutubeDownloadState,
+  darkTheme: Boolean,
+  onSelectFormat: (String) -> Unit,
+  onDownload: () -> Unit,
+  onPlaySaved: (Song) -> Unit,
+  onOpenMySongs: () -> Unit
+) {
+  val (c1, c2) = rememberArtworkColors(analysis.thumbnailUrl, analysis.videoTitle)
+  val cardShape = RoundedCornerShape(28.dp)
+  val selectedFormat = analysis.formats.firstOrNull { it.id == selectedFormatId } ?: analysis.formats.firstOrNull()
+  val isDownloading = downloadState is YoutubeDownloadState.Downloading
+
+  Box(
+    modifier = Modifier
+      .fillMaxWidth()
+      .clip(cardShape)
+      .background(if (darkTheme) Color(0xFF172034).copy(alpha = 0.84f) else Color.White.copy(alpha = 0.90f))
+      .border(1.dp, Color.White.copy(alpha = if (darkTheme) 0.28f else 0.96f), cardShape)
+  ) {
+    if (analysis.thumbnailUrl.isNotBlank()) {
+      AsyncImage(
+        model = analysis.thumbnailUrl,
+        contentDescription = null,
+        contentScale = ContentScale.Crop,
+        modifier = Modifier
+          .matchParentSize()
+          .alpha(if (darkTheme) 0.22f else 0.14f)
+          .blur(34.dp)
+      )
+    }
+    Box(
+      modifier = Modifier
+        .matchParentSize()
+        .background(
+          Brush.horizontalGradient(
+            colors = listOf(c1.copy(alpha = 0.22f), c2.copy(alpha = 0.12f), Color.Transparent)
+          )
+        )
+    )
+
+    Column(
+      modifier = Modifier.padding(18.dp),
+      verticalArrangement = Arrangement.spacedBy(16.dp)
+    ) {
+      // Video Thumbnail + Title + Channel
+      if (analysis.thumbnailUrl.isNotBlank()) {
+        Box(
+          modifier = Modifier
+            .fillMaxWidth()
+            .height(176.dp)
+            .clip(RoundedCornerShape(20.dp))
+            .border(1.dp, Color.White.copy(alpha = 0.30f), RoundedCornerShape(20.dp))
+        ) {
+          AsyncImage(
+            model = analysis.thumbnailUrl,
+            contentDescription = analysis.videoTitle,
+            contentScale = ContentScale.Crop,
+            modifier = Modifier.fillMaxSize()
+          )
+          Surface(
+            shape = CircleShape,
+            color = Color.Black.copy(alpha = 0.65f),
+            modifier = Modifier
+              .align(Alignment.TopStart)
+              .padding(10.dp)
+          ) {
+            Text(
+              text = "VIDEO ANALYZED",
+              style = MaterialTheme.typography.labelSmall.copy(fontWeight = FontWeight.Bold, fontSize = 10.sp),
+              color = Color.White,
+              modifier = Modifier.padding(horizontal = 10.dp, vertical = 4.dp)
+            )
+          }
+        }
+      }
+
+      Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
+        Text(
+          text = analysis.videoTitle,
+          style = MaterialTheme.typography.titleMedium.copy(fontWeight = FontWeight.ExtraBold),
+          color = MaterialTheme.colorScheme.onSurface,
+          maxLines = 2,
+          overflow = TextOverflow.Ellipsis
+        )
+        Text(
+          text = analysis.channelName,
+          style = MaterialTheme.typography.bodySmall,
+          color = MaterialTheme.colorScheme.onSurfaceVariant,
+          maxLines = 1,
+          overflow = TextOverflow.Ellipsis
+        )
+      }
+
+      // Format / Quality Selector
+      Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+        Text(
+          text = "Select format & quality",
+          style = MaterialTheme.typography.labelLarge.copy(fontWeight = FontWeight.Bold),
+          color = MaterialTheme.colorScheme.onSurface
+        )
+        Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+          analysis.formats.forEach { option ->
+            val selected = option.id == selectedFormat?.id
+            FormatOptionRow(
+              option = option,
+              selected = selected,
+              enabled = !isDownloading,
+              darkTheme = darkTheme,
+              onClick = { onSelectFormat(option.id) }
+            )
+          }
+        }
+      }
+
+      // Live Download Progress Section
+      when (downloadState) {
+        is YoutubeDownloadState.Downloading -> {
+          val pct = (downloadState.progress * 100f).toInt().coerceIn(0, 100)
+          val bytesText = if (downloadState.totalBytes > 0L) {
+            String.format(
+              Locale.US,
+              "%.2f / %.2f MB",
+              downloadState.downloadedBytes / (1024f * 1024f),
+              downloadState.totalBytes / (1024f * 1024f)
+            )
+          } else {
+            String.format(Locale.US, "%.2f MB", downloadState.downloadedBytes / (1024f * 1024f))
+          }
+          Column(
+            modifier = Modifier
+              .fillMaxWidth()
+              .clip(RoundedCornerShape(18.dp))
+              .background(MaterialTheme.colorScheme.primary.copy(alpha = 0.14f))
+              .border(1.dp, MaterialTheme.colorScheme.primary.copy(alpha = 0.35f), RoundedCornerShape(18.dp))
+              .padding(14.dp),
+            verticalArrangement = Arrangement.spacedBy(8.dp)
+          ) {
+            Row(
+              modifier = Modifier.fillMaxWidth(),
+              horizontalArrangement = Arrangement.SpaceBetween,
+              verticalAlignment = Alignment.CenterVertically
+            ) {
+              Text(
+                text = "Downloading ${downloadState.formatLabel}",
+                style = MaterialTheme.typography.bodySmall.copy(fontWeight = FontWeight.Bold),
+                color = MaterialTheme.colorScheme.onSurface,
+                maxLines = 1,
+                overflow = TextOverflow.Ellipsis,
+                modifier = Modifier.weight(1f)
+              )
+              Spacer(modifier = Modifier.width(8.dp))
+              Text(
+                text = "$pct% ($bytesText)",
+                style = MaterialTheme.typography.labelMedium.copy(fontWeight = FontWeight.Bold),
+                color = MaterialTheme.colorScheme.primary
+              )
+            }
+            LinearProgressIndicator(
+              progress = { downloadState.progress.coerceIn(0f, 1f) },
+              modifier = Modifier
+                .fillMaxWidth()
+                .height(8.dp)
+                .clip(CircleShape),
+              color = MaterialTheme.colorScheme.primary,
+              trackColor = MaterialTheme.colorScheme.primary.copy(alpha = 0.20f)
+            )
+          }
+        }
+        is YoutubeDownloadState.Saved -> {
+          Column(
+            modifier = Modifier
+              .fillMaxWidth()
+              .clip(RoundedCornerShape(18.dp))
+              .background(Color(0xFF10B981).copy(alpha = 0.14f))
+              .border(1.dp, Color(0xFF10B981).copy(alpha = 0.40f), RoundedCornerShape(18.dp))
+              .padding(14.dp),
+            verticalArrangement = Arrangement.spacedBy(10.dp)
+          ) {
+            Row(
+              verticalAlignment = Alignment.CenterVertically,
+              horizontalArrangement = Arrangement.spacedBy(8.dp)
+            ) {
+              Icon(
+                imageVector = Icons.Rounded.DownloadDone,
+                contentDescription = null,
+                tint = Color(0xFF10B981),
+                modifier = Modifier.size(20.dp)
+              )
+              Text(
+                text = "Saved to App (My songs) & Music/AURIX",
+                style = MaterialTheme.typography.bodySmall.copy(fontWeight = FontWeight.Bold),
+                color = MaterialTheme.colorScheme.onSurface
+              )
+            }
+            Row(
+              modifier = Modifier.fillMaxWidth(),
+              horizontalArrangement = Arrangement.spacedBy(10.dp)
+            ) {
+              Button(
+                onClick = { onPlaySaved(downloadState.song) },
+                modifier = Modifier.weight(1f).height(44.dp),
+                shape = CircleShape
+              ) {
+                Icon(Icons.Rounded.PlayArrow, contentDescription = null, modifier = Modifier.size(18.dp))
+                Spacer(modifier = Modifier.width(4.dp))
+                Text("Play Now", fontWeight = FontWeight.Bold)
+              }
+              OutlinedButton(
+                onClick = onOpenMySongs,
+                modifier = Modifier.weight(1f).height(44.dp),
+                shape = CircleShape,
+                border = BorderStroke(1.dp, MaterialTheme.colorScheme.primary.copy(alpha = 0.50f))
+              ) {
+                Icon(Icons.Rounded.LibraryMusic, contentDescription = null, modifier = Modifier.size(17.dp))
+                Spacer(modifier = Modifier.width(6.dp))
+                Text("My songs", fontWeight = FontWeight.Bold)
+              }
+            }
+          }
+        }
+        is YoutubeDownloadState.Error -> {
+          Row(
+            modifier = Modifier
+              .fillMaxWidth()
+              .clip(RoundedCornerShape(14.dp))
+              .background(MaterialTheme.colorScheme.error.copy(alpha = 0.14f))
+              .padding(horizontal = 12.dp, vertical = 10.dp),
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.spacedBy(8.dp)
+          ) {
+            Icon(Icons.Rounded.ErrorOutline, contentDescription = null, tint = MaterialTheme.colorScheme.error, modifier = Modifier.size(18.dp))
+            Text(downloadState.message, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.error)
+          }
+        }
+        YoutubeDownloadState.Idle -> Unit
+      }
+
+      // Download CTA
+      Button(
+        onClick = onDownload,
+        enabled = !isDownloading && selectedFormat != null,
+        modifier = Modifier
+          .fillMaxWidth()
+          .height(50.dp)
+          .testTag("youtube_download_button"),
+        shape = CircleShape,
+        colors = ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.primary)
+      ) {
+        if (isDownloading) {
+          CircularProgressIndicator(
+            modifier = Modifier.size(18.dp),
+            strokeWidth = 2.dp,
+            color = Color.White
+          )
+        } else {
+          Icon(Icons.Rounded.Download, contentDescription = null, modifier = Modifier.size(19.dp))
+        }
+        Spacer(modifier = Modifier.width(8.dp))
+        val ctaLabel = when {
+          isDownloading -> "Downloading..."
+          downloadState is YoutubeDownloadState.Saved -> "Download Another Format"
+          selectedFormat != null -> "Download ${selectedFormat.formatLabel} (${selectedFormat.qualityLabel})"
+          else -> "Download"
+        }
+        Text(text = ctaLabel, fontWeight = FontWeight.Bold, maxLines = 1, overflow = TextOverflow.Ellipsis)
+      }
+    }
+  }
+}
+
+@Composable
+private fun FormatOptionRow(
+  option: AudioFormatOption,
+  selected: Boolean,
+  enabled: Boolean,
+  darkTheme: Boolean,
+  onClick: () -> Unit
+) {
+  val bg = when {
+    selected -> MaterialTheme.colorScheme.primary.copy(alpha = if (darkTheme) 0.22f else 0.14f)
+    darkTheme -> Color.White.copy(alpha = 0.06f)
+    else -> Color.White.copy(alpha = 0.72f)
+  }
+  val borderColor = when {
+    selected -> MaterialTheme.colorScheme.primary
+    darkTheme -> Color.White.copy(alpha = 0.14f)
+    else -> Color.White
+  }
+
+  Row(
+    modifier = Modifier
+      .fillMaxWidth()
+      .clip(RoundedCornerShape(16.dp))
+      .background(bg)
+      .border(if (selected) 1.5.dp else 1.dp, borderColor, RoundedCornerShape(16.dp))
+      .clickable(enabled = enabled) { onClick() }
+      .testTag("youtube_format_${option.id}")
+      .padding(horizontal = 14.dp, vertical = 12.dp),
+    verticalAlignment = Alignment.CenterVertically,
+    horizontalArrangement = Arrangement.spacedBy(12.dp)
+  ) {
+    Surface(
+      shape = RoundedCornerShape(10.dp),
+      color = if (selected) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.primary.copy(alpha = 0.14f)
+    ) {
+      Text(
+        text = option.formatLabel,
+        style = MaterialTheme.typography.labelMedium.copy(fontWeight = FontWeight.ExtraBold),
+        color = if (selected) Color.White else MaterialTheme.colorScheme.primary,
+        modifier = Modifier.padding(horizontal = 10.dp, vertical = 5.dp)
+      )
+    }
+
+    Column(modifier = Modifier.weight(1f)) {
+      Text(
+        text = option.qualityLabel,
+        style = MaterialTheme.typography.bodyMedium.copy(fontWeight = FontWeight.Bold),
+        color = MaterialTheme.colorScheme.onSurface
+      )
+      Text(
+        text = option.detailLabel,
+        style = MaterialTheme.typography.bodySmall,
+        color = MaterialTheme.colorScheme.onSurfaceVariant
+      )
+    }
+
+    Icon(
+      imageVector = if (selected) Icons.Rounded.RadioButtonChecked else Icons.Rounded.RadioButtonUnchecked,
+      contentDescription = if (selected) "Selected" else "Select format",
+      tint = if (selected) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurfaceVariant
+    )
   }
 }
 

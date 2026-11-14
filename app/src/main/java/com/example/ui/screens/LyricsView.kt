@@ -16,6 +16,7 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.rounded.GraphicEq
 import androidx.compose.material.icons.rounded.Lyrics
 import androidx.compose.material.icons.rounded.Refresh
+import androidx.compose.material.icons.rounded.Sync
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
@@ -30,17 +31,24 @@ import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.example.model.LyricsResult
+import java.util.Locale
 
 @Composable
 fun LyricsView(
   lyricsResult: LyricsResult?,
   currentPositionMs: Long,
+  lyricOffsetMs: Long = 0L,
+  isPreviewClip: Boolean = false,
   accentColor: Color = Color.White,
   reducedMotion: Boolean = false,
   onLineClick: (Long) -> Unit,
+  onAlignLine: (Long) -> Unit = {},
+  onAdjustOffset: (Long) -> Unit = {},
+  onResetOffset: () -> Unit = {},
   onRetryLyrics: () -> Unit = {},
   modifier: Modifier = Modifier
 ) {
@@ -135,7 +143,7 @@ fun LyricsView(
               modifier = Modifier.size(15.dp)
             )
             Text(
-              text = "Plain lyrics",
+              text = "Plain lyrics (unsynced)",
               style = MaterialTheme.typography.labelMedium.copy(fontWeight = FontWeight.SemiBold),
               color = Color.White.copy(alpha = 0.68f)
             )
@@ -155,7 +163,14 @@ fun LyricsView(
     return
   }
 
-  val activeIndex = synced.indexOfLast { it.timestampMs <= currentPositionMs }.coerceAtLeast(0)
+  val effectivePositionMs = (currentPositionMs + lyricOffsetMs).coerceAtLeast(0L)
+  val firstTimestampMs = synced.first().timestampMs
+  val activeIndex = if (effectivePositionMs + 150L < firstTimestampMs) {
+    -1
+  } else {
+    synced.indexOfLast { it.timestampMs <= effectivePositionMs + 150L }
+  }
+
   val listState = rememberLazyListState()
   val density = LocalDensity.current
 
@@ -165,13 +180,15 @@ fun LyricsView(
 
     LaunchedEffect(activeIndex, centerOffsetPx) {
       if (activeIndex in synced.indices) {
-        // +1 accounts for the "Synced with player" header item at index 0
+        // +1 accounts for the sticky sync header item at index 0
         val targetListIndex = activeIndex + 1
         if (reducedMotion) {
           listState.scrollToItem(targetListIndex, centerOffsetPx)
         } else {
           listState.animateScrollToItem(targetListIndex, centerOffsetPx)
         }
+      } else if (activeIndex == -1 && listState.firstVisibleItemIndex > 1) {
+        listState.animateScrollToItem(0)
       }
     }
 
@@ -179,44 +196,98 @@ fun LyricsView(
       state = listState,
       modifier = Modifier.fillMaxSize(),
       verticalArrangement = Arrangement.spacedBy(10.dp),
-      contentPadding = PaddingValues(top = 10.dp, bottom = 140.dp)
+      contentPadding = PaddingValues(top = 6.dp, bottom = 140.dp)
     ) {
       item(key = "lyrics_header") {
-        Row(
-          verticalAlignment = Alignment.CenterVertically,
-          horizontalArrangement = Arrangement.spacedBy(6.dp),
-          modifier = Modifier.padding(horizontal = 6.dp, vertical = 4.dp)
+        Column(
+          modifier = Modifier
+            .fillMaxWidth()
+            .padding(horizontal = 4.dp, vertical = 4.dp),
+          verticalArrangement = Arrangement.spacedBy(8.dp)
         ) {
-          Icon(
-            imageVector = Icons.Rounded.GraphicEq,
-            contentDescription = null,
-            tint = Color.White.copy(alpha = 0.78f),
-            modifier = Modifier.size(15.dp)
-          )
-          Text(
-            text = "Synced with player • Tap any line to seek",
-            style = MaterialTheme.typography.labelMedium.copy(fontWeight = FontWeight.SemiBold),
-            color = Color.White.copy(alpha = 0.72f)
-          )
+          Row(
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.spacedBy(6.dp)
+          ) {
+            Icon(
+              imageVector = if (isPreviewClip) Icons.Rounded.Sync else Icons.Rounded.GraphicEq,
+              contentDescription = null,
+              tint = Color.White.copy(alpha = 0.78f),
+              modifier = Modifier.size(15.dp)
+            )
+            Text(
+              text = if (isPreviewClip) {
+                "30s preview • Tap any line to align lyrics with the chorus"
+              } else {
+                "Synced with player • Tap any line to seek"
+              },
+              style = MaterialTheme.typography.labelMedium.copy(fontWeight = FontWeight.SemiBold),
+              color = Color.White.copy(alpha = 0.78f),
+              maxLines = 2,
+              overflow = TextOverflow.Ellipsis
+            )
+          }
+
+          // Compact Sync Timing Fine-Tune Strip
+          Row(
+            modifier = Modifier
+              .fillMaxWidth()
+              .clip(CircleShape)
+              .background(Color.White.copy(alpha = 0.10f))
+              .border(1.dp, Color.White.copy(alpha = 0.18f), CircleShape)
+              .padding(horizontal = 8.dp, vertical = 5.dp),
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.SpaceBetween
+          ) {
+            if (isPreviewClip) {
+              SyncNudgeChip(label = "-5s", onClick = { onAdjustOffset(-5000L) })
+            }
+            SyncNudgeChip(label = "-0.5s", onClick = { onAdjustOffset(-500L) })
+
+            val offsetLabel = if (lyricOffsetMs == 0L) {
+              "Sync 0.0s"
+            } else {
+              val sec = lyricOffsetMs / 1000.0
+              String.format(Locale.US, "%+.1fs (Reset)", sec)
+            }
+            Box(
+              modifier = Modifier
+                .clip(CircleShape)
+                .clickable(enabled = lyricOffsetMs != 0L) { onResetOffset() }
+                .padding(horizontal = 10.dp, vertical = 4.dp),
+              contentAlignment = Alignment.Center
+            ) {
+              Text(
+                text = offsetLabel,
+                style = MaterialTheme.typography.labelSmall.copy(fontWeight = FontWeight.Bold),
+                color = if (lyricOffsetMs == 0L) Color.White.copy(alpha = 0.80f) else accentColor.copy(alpha = 0.95f)
+              )
+            }
+
+            SyncNudgeChip(label = "+0.5s", onClick = { onAdjustOffset(500L) })
+            if (isPreviewClip) {
+              SyncNudgeChip(label = "+5s", onClick = { onAdjustOffset(5000L) })
+            }
+          }
         }
       }
 
       itemsIndexed(synced, key = { idx, line -> "${idx}_${line.timestampMs}" }) { index, line ->
         val isActive = index == activeIndex
-        val distance = kotlin.math.abs(index - activeIndex)
+        val distance = if (activeIndex == -1) index + 1 else kotlin.math.abs(index - activeIndex)
         val targetAlpha = when {
           isActive -> 1.0f
-          distance == 1 -> 0.56f
-          else -> 0.34f
+          distance == 1 -> 0.58f
+          else -> 0.36f
         }
         val lineAlpha by animateFloatAsState(
           targetValue = targetAlpha,
-          animationSpec = if (reducedMotion) snap() else tween(260),
+          animationSpec = if (reducedMotion) snap() else tween(220),
           label = "lyric_alpha_$index"
         )
         val lineScale by animateFloatAsState(
           targetValue = if (isActive && !reducedMotion) 1.02f else 0.98f,
-          animationSpec = if (reducedMotion) snap() else tween(260),
+          animationSpec = if (reducedMotion) snap() else tween(220),
           label = "lyric_scale_$index"
         )
 
@@ -246,7 +317,13 @@ fun LyricsView(
             .scale(lineScale)
             .clip(RoundedCornerShape(18.dp))
             .then(pillModifier)
-            .clickable { onLineClick(line.timestampMs) }
+            .clickable {
+              if (isPreviewClip) {
+                onAlignLine(line.timestampMs)
+              } else {
+                onLineClick((line.timestampMs - lyricOffsetMs).coerceAtLeast(0L))
+              }
+            }
             .padding(horizontal = 14.dp, vertical = if (isActive) 12.dp else 8.dp)
         ) {
           Text(
@@ -266,5 +343,26 @@ fun LyricsView(
         }
       }
     }
+  }
+}
+
+@Composable
+private fun SyncNudgeChip(
+  label: String,
+  onClick: () -> Unit
+) {
+  Box(
+    modifier = Modifier
+      .clip(CircleShape)
+      .background(Color.White.copy(alpha = 0.14f))
+      .clickable { onClick() }
+      .padding(horizontal = 10.dp, vertical = 5.dp),
+    contentAlignment = Alignment.Center
+  ) {
+    Text(
+      text = label,
+      style = MaterialTheme.typography.labelSmall.copy(fontWeight = FontWeight.Bold),
+      color = Color.White
+    )
   }
 }

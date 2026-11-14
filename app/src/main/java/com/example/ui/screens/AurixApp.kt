@@ -75,7 +75,9 @@ fun AurixApp(viewModel: AurixViewModel) {
   val searchMode by viewModel.searchMode.collectAsStateWithLifecycle()
   val searchQuery by viewModel.searchQuery.collectAsStateWithLifecycle()
   val youtubeUrl by viewModel.youtubeUrl.collectAsStateWithLifecycle()
-  val analyzedSong by viewModel.analyzedSong.collectAsStateWithLifecycle()
+  val youtubeAnalysis by viewModel.youtubeAnalysis.collectAsStateWithLifecycle()
+  val selectedYoutubeFormatId by viewModel.selectedYoutubeFormatId.collectAsStateWithLifecycle()
+  val youtubeDownloadState by viewModel.youtubeDownloadState.collectAsStateWithLifecycle()
   val isAnalyzingYoutube by viewModel.isAnalyzingYoutube.collectAsStateWithLifecycle()
   val youtubeError by viewModel.youtubeError.collectAsStateWithLifecycle()
 
@@ -106,6 +108,7 @@ fun AurixApp(viewModel: AurixViewModel) {
   val currentPosition by viewModel.currentPosition.collectAsStateWithLifecycle()
   val durationMs by viewModel.durationMs.collectAsStateWithLifecycle()
   val lyrics by viewModel.lyrics.collectAsStateWithLifecycle()
+  val lyricOffsetMs by viewModel.lyricOffsetMs.collectAsStateWithLifecycle()
   val shuffleEnabled by viewModel.shuffleEnabled.collectAsStateWithLifecycle()
   val repeatEnabled by viewModel.repeatEnabled.collectAsStateWithLifecycle()
   val playbackSpeed by viewModel.playbackSpeed.collectAsStateWithLifecycle()
@@ -246,7 +249,9 @@ fun AurixApp(viewModel: AurixViewModel) {
               isSearching = isSearching,
               searchError = searchError,
               youtubeUrl = youtubeUrl,
-              analyzedSong = analyzedSong,
+              youtubeAnalysis = youtubeAnalysis,
+              selectedYoutubeFormatId = selectedYoutubeFormatId,
+              youtubeDownloadState = youtubeDownloadState,
               isAnalyzingYoutube = isAnalyzingYoutube,
               youtubeError = youtubeError,
               currentSong = currentSong,
@@ -259,6 +264,12 @@ fun AurixApp(viewModel: AurixViewModel) {
               onSearchQueryChanged = { viewModel.search(it) },
               onYoutubeUrlChanged = { viewModel.setYoutubeUrl(it) },
               onAnalyzeYoutube = { viewModel.analyzeYoutubeUrl() },
+              onSelectYoutubeFormat = { viewModel.selectYoutubeFormat(it) },
+              onDownloadYoutube = { viewModel.downloadAnalyzedTrack(context) },
+              onOpenMySongs = {
+                libraryTab = 0
+                currentScreen = Screen.Library
+              },
               onSongClick = { song, queue -> viewModel.playSong(song, queue) },
               onFavoriteClick = { viewModel.toggleFavorite(it) },
               onDownloadClick = { viewModel.downloadSong(context, it) }
@@ -274,6 +285,7 @@ fun AurixApp(viewModel: AurixViewModel) {
               selectedTab = libraryTab,
               onTabSelected = { libraryTab = it },
               onAddLocalSong = { viewModel.addLocalSong(it) },
+              onCustomizeSongPhoto = { songId, imageUri -> viewModel.updateLocalSongArtwork(songId, imageUri) },
               onSongClick = { viewModel.playSong(it) },
               onFavoriteClick = { viewModel.toggleFavorite(it) }
             )
@@ -381,6 +393,7 @@ fun AurixApp(viewModel: AurixViewModel) {
             currentPositionMs = currentPosition,
             durationMs = durationMs,
             lyricsResult = lyrics,
+            lyricOffsetMs = lyricOffsetMs,
             dynamicBg = dynamicBg,
             reducedMotion = reducedMotion,
             shuffleEnabled = shuffleEnabled,
@@ -398,6 +411,9 @@ fun AurixApp(viewModel: AurixViewModel) {
             onFavorite = { viewModel.toggleFavorite(song) },
             onClose = { showNowPlaying = false },
             onLineClick = { viewModel.seekTo(it) },
+            onAlignLine = { viewModel.alignLyricsToTimestamp(it) },
+            onAdjustOffset = { viewModel.adjustLyricOffset(it) },
+            onResetOffset = { viewModel.resetLyricOffset() },
             onRetryLyrics = { viewModel.retryLyrics() }
           )
         }

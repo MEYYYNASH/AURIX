@@ -45,9 +45,19 @@ import coil.imageLoader
 import coil.request.ImageRequest
 import coil.request.SuccessResult
 import com.example.R
+import com.example.model.APP_ICON_ARTWORK
 import com.example.model.Song
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
+
+fun resolveArtworkModel(artworkUrl: String, source: String = ""): Any? {
+  return when {
+    artworkUrl == APP_ICON_ARTWORK ||
+      (artworkUrl.isBlank() && (source == "Local" || source == "Imported")) -> R.drawable.aurix_clean_logo_1794625921343
+    artworkUrl.isNotBlank() -> artworkUrl
+    else -> null
+  }
+}
 
 fun artworkHueColors(title: String): Pair<Color, Color> {
   var h = 0
@@ -69,14 +79,15 @@ fun rememberArtworkColors(
   var extracted by remember(artworkUrl, fallbackTitle) { mutableStateOf(fallback) }
 
   LaunchedEffect(artworkUrl, fallbackTitle) {
-    if (artworkUrl.isBlank()) {
+    val model = resolveArtworkModel(artworkUrl)
+    if (model == null) {
       extracted = fallback
       return@LaunchedEffect
     }
     val sampled = withContext(Dispatchers.IO) {
       try {
         val request = ImageRequest.Builder(context)
-          .data(artworkUrl)
+          .data(model)
           .allowHardware(false)
           .size(64)
           .build()
@@ -217,26 +228,40 @@ fun SongArtwork(
     Brush.linearGradient(colors = listOf(c1, c2, Color(0xFF0B1020)))
   }
 
+  val usesAppIcon = song.artworkUrl == APP_ICON_ARTWORK ||
+    (song.artworkUrl.isBlank() && (song.source == "Local" || song.source == "Imported"))
+
   Box(
     modifier = modifier
       .clip(RoundedCornerShape(cornerRadius))
       .background(gradient),
     contentAlignment = Alignment.Center
   ) {
-    if (song.artworkUrl.isNotBlank()) {
-      AsyncImage(
-        model = song.artworkUrl,
-        contentDescription = song.title,
-        contentScale = ContentScale.Crop,
-        modifier = Modifier.fillMaxSize()
-      )
-    } else {
-      Icon(
-        imageVector = Icons.Rounded.MusicNote,
-        contentDescription = null,
-        tint = Color.White.copy(alpha = 0.85f),
-        modifier = Modifier.size(iconSize)
-      )
+    when {
+      usesAppIcon -> {
+        Image(
+          painter = painterResource(id = R.drawable.aurix_clean_logo_1794625921343),
+          contentDescription = song.title,
+          contentScale = ContentScale.Crop,
+          modifier = Modifier.fillMaxSize()
+        )
+      }
+      song.artworkUrl.isNotBlank() -> {
+        AsyncImage(
+          model = song.artworkUrl,
+          contentDescription = song.title,
+          contentScale = ContentScale.Crop,
+          modifier = Modifier.fillMaxSize()
+        )
+      }
+      else -> {
+        Icon(
+          imageVector = Icons.Rounded.MusicNote,
+          contentDescription = null,
+          tint = Color.White.copy(alpha = 0.85f),
+          modifier = Modifier.size(iconSize)
+        )
+      }
     }
   }
 }
@@ -561,9 +586,10 @@ fun DynamicArtworkBackdrop(
 
     if (animatedAlpha > 0.01f && song != null) {
       Box(modifier = Modifier.fillMaxSize().alpha(animatedAlpha)) {
-        if (song.artworkUrl.isNotBlank()) {
+        val bgModel = resolveArtworkModel(song.artworkUrl, song.source)
+        if (bgModel != null) {
           AsyncImage(
-            model = song.artworkUrl,
+            model = bgModel,
             contentDescription = null,
             contentScale = ContentScale.Crop,
             modifier = Modifier
@@ -623,7 +649,8 @@ fun SongRow(
   rank: Int? = null,
   showSourceBadge: Boolean = true,
   onSongClick: () -> Unit,
-  onFavoriteClick: () -> Unit
+  onFavoriteClick: () -> Unit,
+  onEditPhotoClick: (() -> Unit)? = null
 ) {
   val heartScale by animateFloatAsState(
     targetValue = if (song.isFavorite) 1.15f else 1.0f,
@@ -732,6 +759,20 @@ fun SongRow(
         color = MaterialTheme.colorScheme.onSurfaceVariant,
         modifier = Modifier.padding(horizontal = 6.dp)
       )
+    }
+    if (onEditPhotoClick != null) {
+      IconButton(
+        onClick = onEditPhotoClick,
+        modifier = Modifier
+          .minimumInteractiveComponentSize()
+          .testTag("song_edit_photo_button_${song.id}")
+      ) {
+        Icon(
+          imageVector = Icons.Rounded.AddPhotoAlternate,
+          contentDescription = "Customize song photo",
+          tint = MaterialTheme.colorScheme.primary
+        )
+      }
     }
     IconButton(
       onClick = onFavoriteClick,

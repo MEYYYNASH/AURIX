@@ -2,7 +2,11 @@ package com.example.data
 
 import com.squareup.moshi.Json
 import com.squareup.moshi.JsonClass
+import com.squareup.moshi.Moshi
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.withContext
 import okhttp3.OkHttpClient
+import okhttp3.Request
 import retrofit2.Retrofit
 import retrofit2.converter.moshi.MoshiConverterFactory
 import retrofit2.http.GET
@@ -97,7 +101,33 @@ data class YouTubeOEmbedResponse(
 )
 
 @JsonClass(generateAdapter = true)
+data class PipedStreamsResponse(
+  @param:Json(name = "title") val title: String? = null,
+  @param:Json(name = "uploader") val uploader: String? = null,
+  @param:Json(name = "thumbnailUrl") val thumbnailUrl: String? = null,
+  @param:Json(name = "duration") val duration: Long = 0L,
+  @param:Json(name = "audioStreams") val audioStreams: List<PipedAudioStream> = emptyList()
+)
+
+@JsonClass(generateAdapter = true)
+data class PipedAudioStream(
+  @param:Json(name = "url") val url: String? = null,
+  @param:Json(name = "format") val format: String? = null,
+  @param:Json(name = "quality") val quality: String? = null,
+  @param:Json(name = "mimeType") val mimeType: String? = null,
+  @param:Json(name = "codec") val codec: String? = null,
+  @param:Json(name = "bitrate") val bitrate: Int = 0,
+  @param:Json(name = "contentLength") val contentLength: Long = -1L
+)
+
+@JsonClass(generateAdapter = true)
 data class LrcLibResponse(
+  @param:Json(name = "id") val id: Long = 0L,
+  @param:Json(name = "trackName") val trackName: String? = null,
+  @param:Json(name = "artistName") val artistName: String? = null,
+  @param:Json(name = "albumName") val albumName: String? = null,
+  @param:Json(name = "duration") val duration: Double? = null,
+  @param:Json(name = "instrumental") val instrumental: Boolean = false,
   @param:Json(name = "syncedLyrics") val syncedLyrics: String? = null,
   @param:Json(name = "plainLyrics") val plainLyrics: String? = null
 )
@@ -178,6 +208,20 @@ object NetworkClient {
     .readTimeout(20, TimeUnit.SECONDS)
     .build()
 
+  private val fastStreamClient = OkHttpClient.Builder()
+    .connectTimeout(5, TimeUnit.SECONDS)
+    .readTimeout(7, TimeUnit.SECONDS)
+    .build()
+
+  private val moshi = Moshi.Builder().build()
+  private val pipedAdapter = moshi.adapter(PipedStreamsResponse::class.java)
+
+  private val pipedMirrors = listOf(
+    "https://pipedapi.kavin.rocks",
+    "https://api.piped.private.coffee",
+    "https://pipedapi.adminforge.de"
+  )
+
   private val itunesRetrofit = Retrofit.Builder()
     .baseUrl("https://itunes.apple.com/")
     .client(httpClient)
@@ -213,4 +257,26 @@ object NetworkClient {
   val appleChartsApi: AppleChartsApiService = appleChartsRetrofit.create(AppleChartsApiService::class.java)
   val youtubeOEmbedApi: YouTubeOEmbedService = youtubeRetrofit.create(YouTubeOEmbedService::class.java)
   val lrcLibApi: LrcLibApiService = lrcLibRetrofit.create(LrcLibApiService::class.java)
+
+  suspend fun fetchPipedStreams(videoId: String): PipedStreamsResponse? = withContext(Dispatchers.IO) {
+    if (videoId.isBlank()) return@withContext null
+    for (base in pipedMirrors) {
+      val req = Request.Builder()
+        .url("$base/streams/$videoId")
+        .header("User-Agent", "AURIX-Android")
+        .build()
+      val parsed = runCatching {
+        fastStreamClient.newCall(req).execute().use { resp ->
+          if (!resp.isSuccessful) return@use null
+          val body = resp.body?.string().orEmpty()
+          if (body.isBlank()) return@use null
+          pipedAdapter.fromJson(body)
+        }
+      }.getOrNull()
+      if (parsed != null && parsed.audioStreams.any { !it.url.isNullOrBlank() }) {
+        return@withContext parsed
+      }
+    }
+    null
+  }
 }

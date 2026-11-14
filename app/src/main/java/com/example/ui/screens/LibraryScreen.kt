@@ -2,8 +2,10 @@ package com.example.ui.screens
 
 import android.net.Uri
 import androidx.activity.compose.rememberLauncherForActivityResult
+import androidx.activity.result.PickVisualMediaRequest
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.background
+import androidx.compose.foundation.border
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
@@ -11,6 +13,7 @@ import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.rounded.Add
+import androidx.compose.material.icons.rounded.AddPhotoAlternate
 import androidx.compose.material.icons.rounded.FavoriteBorder
 import androidx.compose.material.icons.rounded.History
 import androidx.compose.material.icons.rounded.LibraryMusic
@@ -20,6 +23,7 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
@@ -38,12 +42,23 @@ fun LibraryScreen(
   selectedTab: Int = 0,
   onTabSelected: (Int) -> Unit = {},
   onAddLocalSong: (Uri) -> Unit,
+  onCustomizeSongPhoto: (String, Uri) -> Unit,
   onSongClick: (Song) -> Unit,
   onFavoriteClick: (Song) -> Unit
 ) {
-  val launcher = rememberLauncherForActivityResult(ActivityResultContracts.OpenDocument()) { uri ->
+  var pendingPhotoSongId by remember { mutableStateOf<String?>(null) }
+
+  val audioLauncher = rememberLauncherForActivityResult(ActivityResultContracts.OpenDocument()) { uri ->
     if (uri != null) {
       onAddLocalSong(uri)
+    }
+  }
+
+  val photoPickerLauncher = rememberLauncherForActivityResult(ActivityResultContracts.PickVisualMedia()) { imageUri ->
+    val targetId = pendingPhotoSongId
+    pendingPhotoSongId = null
+    if (imageUri != null && targetId != null) {
+      onCustomizeSongPhoto(targetId, imageUri)
     }
   }
 
@@ -66,16 +81,17 @@ fun LibraryScreen(
           color = MaterialTheme.colorScheme.onBackground
         )
         Text(
-          text = "Local audio, favorites & history",
+          text = "Local audio, saved downloads & custom covers",
           style = MaterialTheme.typography.bodySmall,
           color = MaterialTheme.colorScheme.onSurfaceVariant
         )
       }
       if (selectedTab == 0) {
         Button(
-          onClick = { launcher.launch(arrayOf("audio/*")) },
+          onClick = { audioLauncher.launch(arrayOf("audio/*")) },
           shape = CircleShape,
-          colors = ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.primary)
+          colors = ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.primary),
+          modifier = Modifier.testTag("library_add_local_button")
         ) {
           Icon(Icons.Rounded.Add, contentDescription = null, modifier = Modifier.size(18.dp))
           Spacer(modifier = Modifier.width(4.dp))
@@ -97,7 +113,7 @@ fun LibraryScreen(
       onSelect = onTabSelected
     )
 
-    Spacer(modifier = Modifier.height(16.dp))
+    Spacer(modifier = Modifier.height(14.dp))
 
     val currentList = when (selectedTab) {
       0 -> localSongs
@@ -128,7 +144,7 @@ fun LibraryScreen(
               0 -> Triple(
                 Icons.Rounded.LibraryMusic,
                 "No local songs yet",
-                "Import audio files from your device storage to play them offline."
+                "Import audio from your phone (uses the AURIX icon by default) or download analyzed tracks."
               )
               1 -> Triple(
                 Icons.Rounded.FavoriteBorder,
@@ -172,7 +188,7 @@ fun LibraryScreen(
             if (selectedTab == 0) {
               Spacer(modifier = Modifier.height(4.dp))
               Button(
-                onClick = { launcher.launch(arrayOf("audio/*")) },
+                onClick = { audioLauncher.launch(arrayOf("audio/*")) },
                 shape = CircleShape
               ) {
                 Icon(Icons.Rounded.Add, contentDescription = null, modifier = Modifier.size(18.dp))
@@ -189,14 +205,52 @@ fun LibraryScreen(
         verticalArrangement = Arrangement.spacedBy(4.dp),
         contentPadding = PaddingValues(bottom = if (currentSong != null) 195.dp else 125.dp)
       ) {
-        items(currentList, key = { "${selectedTab}_${it.id}_${it.title}" }) { song ->
+        if (selectedTab == 0) {
+          item(key = "local_cover_tip") {
+            Row(
+              modifier = Modifier
+                .fillMaxWidth()
+                .padding(bottom = 8.dp)
+                .clip(RoundedCornerShape(14.dp))
+                .background(MaterialTheme.colorScheme.primary.copy(alpha = if (darkTheme) 0.14f else 0.10f))
+                .border(1.dp, Color.White.copy(alpha = if (darkTheme) 0.16f else 0.70f), RoundedCornerShape(14.dp))
+                .padding(horizontal = 12.dp, vertical = 9.dp),
+              verticalAlignment = Alignment.CenterVertically,
+              horizontalArrangement = Arrangement.spacedBy(8.dp)
+            ) {
+              Icon(
+                imageVector = Icons.Rounded.AddPhotoAlternate,
+                contentDescription = null,
+                tint = MaterialTheme.colorScheme.primary,
+                modifier = Modifier.size(18.dp)
+              )
+              Text(
+                text = "Tap the photo icon on any song to set a custom cover image",
+                style = MaterialTheme.typography.bodySmall.copy(fontWeight = FontWeight.Medium),
+                color = MaterialTheme.colorScheme.onSurface
+              )
+            }
+          }
+        }
+
+        items(currentList, key = { "${selectedTab}_${it.id}_${it.artworkUrl}" }) { song ->
           SongRow(
             song = song,
             isPlaying = isPlaying,
             isCurrent = currentSong?.id == song.id,
             reducedMotion = reducedMotion,
             onSongClick = { onSongClick(song) },
-            onFavoriteClick = { onFavoriteClick(song) }
+            onFavoriteClick = { onFavoriteClick(song) },
+            onEditPhotoClick = if (selectedTab == 0) {
+              {
+                pendingPhotoSongId = song.id
+                photoPickerLauncher.launch(
+                  PickVisualMediaRequest(ActivityResultContracts.PickVisualMedia.ImageOnly)
+                )
+              }
+            } else {
+              null
+            }
           )
         }
       }
