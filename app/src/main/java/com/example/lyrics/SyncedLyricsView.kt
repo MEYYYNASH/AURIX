@@ -55,6 +55,7 @@ class SyncedLyricsView @JvmOverloads constructor(
   private var userDragging = false
   private var resumeAutoFollowAtMs = 0L
   private var needsAutoFollowResume = false
+  private var pendingViewportAlign = false
 
   private fun createSmoothScroller(targetPos: Int): LinearSmoothScroller {
     return object : LinearSmoothScroller(context) {
@@ -65,9 +66,9 @@ class SyncedLyricsView @JvmOverloads constructor(
         boxEnd: Int,
         snapPreference: Int
       ): Int {
-        val boxHeight = boxEnd - boxStart
+        val visibleHeight = recyclerView.height.takeIf { it > 0 } ?: (boxEnd - boxStart)
         val viewHeight = viewEnd - viewStart
-        val desiredTop = boxStart + (boxHeight * ACTIVE_TOP_FRACTION - viewHeight * 0.5f).toInt()
+        val desiredTop = (visibleHeight * ACTIVE_TOP_FRACTION - viewHeight * 0.5f).toInt()
         return desiredTop - viewStart
       }
 
@@ -107,7 +108,7 @@ class SyncedLyricsView @JvmOverloads constructor(
       isVerticalFadingEdgeEnabled = true
       setFadingEdgeLength((24f * dp).toInt())
       itemAnimator = null
-      setPadding((4f * dp).toInt(), (12f * dp).toInt(), (4f * dp).toInt(), (160f * dp).toInt())
+      setPadding((4f * dp).toInt(), (72f * dp).toInt(), (4f * dp).toInt(), (180f * dp).toInt())
     }
 
     recyclerView.addOnScrollListener(object : RecyclerView.OnScrollListener() {
@@ -156,6 +157,7 @@ class SyncedLyricsView @JvmOverloads constructor(
     userDragging = false
     resumeAutoFollowAtMs = 0L
     needsAutoFollowResume = false
+    pendingViewportAlign = true
 
     adapter.submitDocument(parsed)
     layoutManager.scrollToPositionWithOffset(0, 0)
@@ -177,6 +179,7 @@ class SyncedLyricsView @JvmOverloads constructor(
     userDragging = false
     resumeAutoFollowAtMs = 0L
     needsAutoFollowResume = false
+    pendingViewportAlign = false
     adapter.clear()
   }
 
@@ -257,15 +260,22 @@ class SyncedLyricsView @JvmOverloads constructor(
 
     val nowUptime = SystemClock.uptimeMillis()
     val canAutoFollow = !userDragging && nowUptime >= resumeAutoFollowAtMs
+    val hasViewportHeight = recyclerView.height > 0
 
     if (newIndex != prevIndex) {
       adapter.setActiveIndex(newIndex)
       if (canAutoFollow) {
-        needsAutoFollowResume = false
-        scrollToActiveLine(newIndex, isJump = isJump)
+        if (hasViewportHeight) {
+          needsAutoFollowResume = false
+          pendingViewportAlign = false
+          scrollToActiveLine(newIndex, isJump = isJump)
+        } else {
+          pendingViewportAlign = true
+        }
       }
-    } else if (needsAutoFollowResume && canAutoFollow) {
+    } else if ((needsAutoFollowResume || pendingViewportAlign) && canAutoFollow && hasViewportHeight) {
       needsAutoFollowResume = false
+      pendingViewportAlign = false
       scrollToActiveLine(newIndex, isJump = true)
     }
 

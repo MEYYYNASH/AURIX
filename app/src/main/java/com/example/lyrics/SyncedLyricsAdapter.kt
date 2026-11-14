@@ -5,12 +5,10 @@ import android.graphics.Canvas
 import android.graphics.Color
 import android.graphics.Rect
 import android.graphics.Typeface
-import android.graphics.drawable.GradientDrawable
 import android.os.Build
 import android.text.Layout
 import android.util.TypedValue
 import android.view.Gravity
-import android.view.View
 import android.view.ViewGroup
 import android.widget.FrameLayout
 import android.widget.TextView
@@ -213,15 +211,12 @@ class SyncedLyricsAdapter(
 
   override fun onCreateViewHolder(parent: ViewGroup, viewType: Int): LyricViewHolder {
     val dp = parent.resources.displayMetrics.density
-    val hMargin = (4f * dp).toInt()
     val container = FrameLayout(parent.context).apply {
       layoutParams = RecyclerView.LayoutParams(
         ViewGroup.LayoutParams.MATCH_PARENT,
         ViewGroup.LayoutParams.WRAP_CONTENT
       ).apply {
-        leftMargin = hMargin
-        rightMargin = hMargin
-        bottomMargin = (8f * dp).toInt()
+        bottomMargin = (6f * dp).toInt()
       }
       minimumHeight = (48f * dp).toInt()
       clipChildren = false
@@ -258,12 +253,6 @@ class SyncedLyricsAdapter(
     private val density: Float
   ) : RecyclerView.ViewHolder(container) {
 
-    private val activePillDrawable = GradientDrawable().apply {
-      shape = GradientDrawable.RECTANGLE
-      cornerRadius = 20f * density
-      orientation = GradientDrawable.Orientation.LEFT_RIGHT
-    }
-
     private var currentBoundLine: ParsedLyricLine? = null
     private var lastAppliedActive: Boolean? = null
     private var lastAppliedAlpha: Float = -1f
@@ -289,9 +278,9 @@ class SyncedLyricsAdapter(
       val targetAlpha = when {
         !isSynced -> 0.90f
         isActive -> 1.0f
-        distance == 1 -> 0.58f
-        distance == 2 -> 0.38f
-        else -> 0.24f
+        distance == 1 -> 0.56f
+        distance == 2 -> 0.36f
+        else -> 0.22f
       }
 
       if (fullBind) {
@@ -303,7 +292,7 @@ class SyncedLyricsAdapter(
       }
 
       val dimmedHighlight = Color.argb(
-        115,
+        110,
         Color.red(textColor),
         Color.green(textColor),
         Color.blue(textColor)
@@ -312,30 +301,28 @@ class SyncedLyricsAdapter(
 
       if (lastAppliedActive != isActive) {
         lastAppliedActive = isActive
-        val hPad = (16f * density).toInt()
-        val vPad = ((if (isActive) 14f else 9f) * density).toInt()
+        val hPad = (8f * density).toInt()
+        val vPad = ((if (isActive) 12f else 9f) * density).toInt()
         container.setPadding(hPad, vPad, hPad, vPad)
+        container.background = null
 
         if (isActive) {
-          val startTint = Color.argb(56, Color.red(accentColor), Color.green(accentColor), Color.blue(accentColor))
-          val endTint = Color.argb(28, 255, 255, 255)
-          activePillDrawable.colors = intArrayOf(startTint, endTint)
-          activePillDrawable.setStroke((1f * density).toInt().coerceAtLeast(1), Color.argb(72, 255, 255, 255))
-          container.background = activePillDrawable
-          textView.setTextSize(TypedValue.COMPLEX_UNIT_SP, 22f)
+          textView.setTextSize(TypedValue.COMPLEX_UNIT_SP, 24f)
           textView.setLineSpacing((8f * density), 1f)
           textView.typeface = extraBoldTypeface
+          val glowColor = Color.argb(
+            110,
+            Color.red(accentColor),
+            Color.green(accentColor),
+            Color.blue(accentColor)
+          )
+          textView.setShadowLayer(18f * density, 0f, 0f, glowColor)
         } else {
-          container.background = null
           textView.setTextSize(TypedValue.COMPLEX_UNIT_SP, 20f)
           textView.setLineSpacing((7f * density), 1f)
           textView.typeface = semiBoldTypeface
+          textView.setShadowLayer(0f, 0f, 0f, Color.TRANSPARENT)
         }
-
-        // Keep horizontal scale at 1.0f so the left/right rounded corners of the active pill are never clipped
-        container.animate().cancel()
-        container.scaleX = 1.0f
-        container.scaleY = 1.0f
       }
 
       if (lastAppliedAlpha != targetAlpha) {
@@ -346,7 +333,7 @@ class SyncedLyricsAdapter(
         } else {
           textView.animate()
             .alpha(targetAlpha)
-            .setDuration(220L)
+            .setDuration(200L)
             .start()
         }
       }
