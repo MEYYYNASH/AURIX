@@ -555,14 +555,15 @@ class AurixViewModel(application: Application) : AndroidViewModel(application) {
     if (_youtubeDownloadState.value is YoutubeDownloadState.Downloading) return
 
     viewModelScope.launch {
-      val formatLabel = "${format.formatLabel} (${format.qualityLabel})"
-      _youtubeDownloadState.value = YoutubeDownloadState.Downloading(0.02f, 0L, format.contentLengthBytes, formatLabel)
+      var activeFormat = format
+      var formatLabel = "${activeFormat.formatLabel} (${activeFormat.qualityLabel})"
+      _youtubeDownloadState.value = YoutubeDownloadState.Downloading(0.02f, 0L, activeFormat.contentLengthBytes, formatLabel)
 
-      val downloadRes = SongDownloader.downloadFormatToApp(
+      var downloadRes = SongDownloader.downloadFormatToApp(
         context = context,
         title = analysis.matchedTrackTitle,
         artist = analysis.matchedArtist,
-        format = format
+        format = activeFormat
       ) { progressInfo ->
         _youtubeDownloadState.value = YoutubeDownloadState.Downloading(
           progress = progressInfo.fraction,
@@ -570,6 +571,37 @@ class AurixViewModel(application: Application) : AndroidViewModel(application) {
           totalBytes = progressInfo.totalBytes,
           formatLabel = formatLabel
         )
+      }
+
+      if (downloadRes.isFailure) {
+        _youtubeDownloadState.value = YoutubeDownloadState.Downloading(
+          progress = 0.04f,
+          downloadedBytes = 0L,
+          totalBytes = activeFormat.contentLengthBytes,
+          formatLabel = "Switching stream mirror..."
+        )
+        val refreshed = YoutubeExtractor.extractFreshWorkingFormat(
+          videoId = analysis.videoId,
+          preferredExtension = activeFormat.extension,
+          failedFormatId = activeFormat.id
+        )
+        if (refreshed != null) {
+          activeFormat = refreshed
+          formatLabel = "${activeFormat.formatLabel} (${activeFormat.qualityLabel})"
+          downloadRes = SongDownloader.downloadFormatToApp(
+            context = context,
+            title = analysis.matchedTrackTitle,
+            artist = analysis.matchedArtist,
+            format = activeFormat
+          ) { progressInfo ->
+            _youtubeDownloadState.value = YoutubeDownloadState.Downloading(
+              progress = progressInfo.fraction,
+              downloadedBytes = progressInfo.downloadedBytes,
+              totalBytes = progressInfo.totalBytes,
+              formatLabel = formatLabel
+            )
+          }
+        }
       }
 
       downloadRes.onSuccess { savedAudio ->
@@ -581,8 +613,8 @@ class AurixViewModel(application: Application) : AndroidViewModel(application) {
         val artwork = cachedCover ?: analysis.thumbnailUrl.ifBlank { APP_ICON_ARTWORK }
         val finalDuration = savedAudio.durationSeconds
           .takeIf { it > 0L }
-          ?: analysis.durationSeconds
-          ?: format.durationSeconds
+          ?: analysis.durationSeconds.takeIf { it > 0L }
+          ?: activeFormat.durationSeconds
 
         val entity = LocalSongEntity(
           id = savedAudio.uri.toString(),

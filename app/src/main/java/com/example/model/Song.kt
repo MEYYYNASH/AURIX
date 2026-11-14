@@ -26,6 +26,18 @@ data class LyricsResult(
   val matchedArtist: String? = null
 )
 
+enum class StreamDownloadMode {
+  DIRECT,
+  QUERY_RANGE,
+  HEADER_RANGE
+}
+
+data class StreamCandidate(
+  val url: String,
+  val userAgent: String,
+  val downloadMode: StreamDownloadMode = StreamDownloadMode.DIRECT
+)
+
 data class AudioFormatOption(
   val id: String,
   val formatLabel: String,
@@ -36,7 +48,9 @@ data class AudioFormatOption(
   val streamUrl: String,
   val durationSeconds: Long,
   val contentLengthBytes: Long = -1L,
-  val requiredUserAgent: String? = null
+  val requiredUserAgent: String? = null,
+  val downloadMode: StreamDownloadMode = StreamDownloadMode.DIRECT,
+  val fallbackCandidates: List<StreamCandidate> = emptyList()
 )
 
 data class YoutubeAnalysisResult(

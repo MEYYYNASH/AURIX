@@ -11,12 +11,15 @@ import android.provider.MediaStore
 import android.media.MediaMetadataRetriever
 import com.example.model.AudioFormatOption
 import com.example.model.Song
+import com.example.model.StreamCandidate
+import com.example.model.StreamDownloadMode
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 import okhttp3.OkHttpClient
 import okhttp3.Request
 import java.io.File
 import java.io.FileOutputStream
+import java.util.Locale
 import java.util.concurrent.TimeUnit
 
 data class DownloadProgressInfo(
@@ -30,7 +33,14 @@ data class SavedAudioResult(
   val durationSeconds: Long
 )
 
+private data class DownloadAttemptResult(
+  val succeeded: Boolean,
+  val httpCode: Int
+)
+
 object SongDownloader {
+  private const val CHUNK_SIZE_BYTES = 512L * 1024L // 512 KB bounded chunks for YouTube range compliance
+
   private val client = OkHttpClient.Builder()
     .connectTimeout(20, TimeUnit.SECONDS)
     .readTimeout(120, TimeUnit.SECONDS)
@@ -122,30 +132,107 @@ object SongDownloader {
     }
   }
 
-  private fun downloadWithChunks(
+  private fun isHtmlResponse(contentType: String?): Boolean {
+    return contentType?.lowercase(Locale.US)?.contains("text/html") == true
+  }
+
+  private fun parseTotalFromContentRange(headerValue: String?): Long {
+    if (headerValue.isNullOrBlank()) return -1L
+    val slashIdx = headerValue.lastIndexOf('/')
+    if (slashIdx == -1 || slashIdx >= headerValue.lastIndex) return -1L
+    return headerValue.substring(slashIdx + 1).trim().toLongOrNull() ?: -1L
+  }
+
+  private fun downloadDirect(
     streamUrl: String,
     userAgent: String,
-    totalBytes: Long,
+    initialTotalBytes: Long,
     appFile: File,
     onProgress: (DownloadProgressInfo) -> Unit
-  ): Boolean {
-    if (totalBytes <= 0L) return false
-    val chunkSize = 1_048_576L // 1 MB chunks
+  ): DownloadAttemptResult {
+    if (appFile.exists()) appFile.delete()
+    val request = Request.Builder()
+      .url(streamUrl)
+      .header("User-Agent", userAgent)
+      .header("Accept", "*/*")
+      .build()
+
+    var lastCode = 0
+    client.newCall(request).execute().use { response ->
+      lastCode = response.code
+      if (!response.isSuccessful || isHtmlResponse(response.header("Content-Type"))) {
+        return DownloadAttemptResult(false, lastCode)
+      }
+      val body = response.body ?: return DownloadAttemptResult(false, lastCode)
+      val totalBytes = body.contentLength().let { if (it > 0L) it else initialTotalBytes }
+      var downloadedBytes = 0L
+
+      FileOutputStream(appFile).use { output ->
+        body.byteStream().use { input ->
+          val buffer = ByteArray(16 * 1024)
+          while (true) {
+            val read = input.read(buffer)
+            if (read == -1) break
+            output.write(buffer, 0, read)
+            downloadedBytes += read
+            val progress = if (totalBytes > 0L) {
+              (downloadedBytes.toFloat() / totalBytes.toFloat()).coerceIn(0.02f, 0.98f)
+            } else {
+              0.5f
+            }
+            onProgress(DownloadProgressInfo(progress, downloadedBytes, totalBytes))
+          }
+          output.flush()
+        }
+      }
+    }
+
+    val ok = appFile.exists() && appFile.length() > 0L
+    if (!ok && appFile.exists()) appFile.delete()
+    return DownloadAttemptResult(ok, lastCode)
+  }
+
+  private fun downloadWithQueryRangeChunks(
+    streamUrl: String,
+    userAgent: String,
+    initialTotalBytes: Long,
+    appFile: File,
+    onProgress: (DownloadProgressInfo) -> Unit
+  ): DownloadAttemptResult {
+    if (appFile.exists()) appFile.delete()
+    var knownTotal = initialTotalBytes
     var offset = 0L
+    var lastCode = 0
+
     FileOutputStream(appFile).use { output ->
-      while (offset < totalBytes) {
-        val end = minOf(offset + chunkSize - 1L, totalBytes - 1L)
+      while (knownTotal <= 0L || offset < knownTotal) {
+        val end = if (knownTotal > 0L) {
+          minOf(offset + CHUNK_SIZE_BYTES - 1L, knownTotal - 1L)
+        } else {
+          offset + CHUNK_SIZE_BYTES - 1L
+        }
+        val rangedUrl = YoutubeExtractor.appendRangeQueryParam(streamUrl, offset, end)
         val req = Request.Builder()
-          .url(streamUrl)
+          .url(rangedUrl)
           .header("User-Agent", userAgent)
           .header("Accept", "*/*")
-          .header("Range", "bytes=$offset-$end")
           .build()
+
+        var chunkBytes = 0L
+        var reachedEof = false
         client.newCall(req).execute().use { resp ->
-          if (!resp.isSuccessful && resp.code != 206) {
-            return false
+          lastCode = resp.code
+          if (resp.code == 416 && offset > 0L) {
+            reachedEof = true
+            return@use
           }
-          val body = resp.body ?: return false
+          if ((!resp.isSuccessful && resp.code != 206) || isHtmlResponse(resp.header("Content-Type"))) {
+            return DownloadAttemptResult(false, lastCode)
+          }
+          val crTotal = parseTotalFromContentRange(resp.header("Content-Range"))
+          if (crTotal > 0L) knownTotal = crTotal
+
+          val body = resp.body ?: return DownloadAttemptResult(false, lastCode)
           body.byteStream().use { input ->
             val buf = ByteArray(16 * 1024)
             while (true) {
@@ -153,15 +240,118 @@ object SongDownloader {
               if (read == -1) break
               output.write(buf, 0, read)
               offset += read
-              val progress = (offset.toFloat() / totalBytes.toFloat()).coerceIn(0.02f, 0.98f)
-              onProgress(DownloadProgressInfo(progress, offset, totalBytes))
+              chunkBytes += read
+              val progress = if (knownTotal > 0L) {
+                (offset.toFloat() / knownTotal.toFloat()).coerceIn(0.02f, 0.98f)
+              } else {
+                (0.15f + (offset / (6f * 1024f * 1024f)) * 0.8f).coerceIn(0.15f, 0.96f)
+              }
+              onProgress(DownloadProgressInfo(progress, offset, knownTotal))
             }
           }
+        }
+
+        if (reachedEof) break
+        if (chunkBytes == 0L) {
+          if (knownTotal <= 0L && offset > 0L) break
+          return DownloadAttemptResult(false, lastCode)
+        }
+        if (knownTotal <= 0L && chunkBytes < CHUNK_SIZE_BYTES) {
+          break
         }
       }
       output.flush()
     }
-    return appFile.exists() && appFile.length() > 0L
+
+    val ok = appFile.exists() && appFile.length() > 0L
+    if (!ok && appFile.exists()) appFile.delete()
+    return DownloadAttemptResult(ok, lastCode)
+  }
+
+  private fun downloadWithHeaderRangeChunks(
+    streamUrl: String,
+    userAgent: String,
+    initialTotalBytes: Long,
+    appFile: File,
+    onProgress: (DownloadProgressInfo) -> Unit
+  ): DownloadAttemptResult {
+    if (appFile.exists()) appFile.delete()
+    var knownTotal = initialTotalBytes
+    var offset = 0L
+    var lastCode = 0
+
+    FileOutputStream(appFile).use { output ->
+      while (knownTotal <= 0L || offset < knownTotal) {
+        val end = if (knownTotal > 0L) {
+          minOf(offset + CHUNK_SIZE_BYTES - 1L, knownTotal - 1L)
+        } else {
+          offset + CHUNK_SIZE_BYTES - 1L
+        }
+        val req = Request.Builder()
+          .url(streamUrl)
+          .header("User-Agent", userAgent)
+          .header("Accept", "*/*")
+          .header("Range", "bytes=$offset-$end")
+          .build()
+
+        var chunkBytes = 0L
+        var fullFile200 = false
+        var reachedEof = false
+
+        client.newCall(req).execute().use { resp ->
+          lastCode = resp.code
+          if (resp.code == 416 && offset > 0L) {
+            reachedEof = true
+            return@use
+          }
+          if ((!resp.isSuccessful && resp.code != 206) || isHtmlResponse(resp.header("Content-Type"))) {
+            return DownloadAttemptResult(false, lastCode)
+          }
+
+          val crTotal = parseTotalFromContentRange(resp.header("Content-Range"))
+          if (crTotal > 0L) knownTotal = crTotal
+
+          // If server ignored Range header and sent the whole stream with HTTP 200 on chunk 0
+          if (resp.code == 200 && offset == 0L && crTotal <= 0L) {
+            fullFile200 = true
+            val contentLen = resp.body?.contentLength() ?: -1L
+            if (contentLen > 0L) knownTotal = contentLen
+          }
+
+          val body = resp.body ?: return DownloadAttemptResult(false, lastCode)
+          body.byteStream().use { input ->
+            val buf = ByteArray(16 * 1024)
+            while (true) {
+              val read = input.read(buf)
+              if (read == -1) break
+              output.write(buf, 0, read)
+              offset += read
+              chunkBytes += read
+              val progress = if (knownTotal > 0L) {
+                (offset.toFloat() / knownTotal.toFloat()).coerceIn(0.02f, 0.98f)
+              } else {
+                (0.15f + (offset / (6f * 1024f * 1024f)) * 0.8f).coerceIn(0.15f, 0.96f)
+              }
+              onProgress(DownloadProgressInfo(progress, offset, knownTotal))
+            }
+          }
+        }
+
+        if (fullFile200 || reachedEof) break
+        if (chunkBytes == 0L) {
+          if (knownTotal <= 0L && offset > 0L) break
+          return DownloadAttemptResult(false, lastCode)
+        }
+        if (knownTotal <= 0L && chunkBytes < CHUNK_SIZE_BYTES) {
+          break
+        }
+      }
+      output.flush()
+    }
+
+    val ok = appFile.exists() && appFile.length() > 0L
+    if (!ok && appFile.exists()) appFile.delete()
+    return DownloadAttemptResult(ok, lastCode)
   }
 
   suspend fun downloadFormatToApp(
@@ -185,73 +375,81 @@ object SongDownloader {
 
     val downloadsDir = File(context.filesDir, "downloads").apply { if (!exists()) mkdirs() }
     val appFile = File(downloadsDir, fileName)
-    val userAgent = format.requiredUserAgent?.takeIf { it.isNotBlank() } ?: "AURIX-Android"
+    val defaultUa = format.requiredUserAgent?.takeIf { it.isNotBlank() } ?: "AURIX-Android"
 
     try {
       onProgress(DownloadProgressInfo(0.02f, 0L, format.contentLengthBytes))
-      val requestBuilder = Request.Builder()
-        .url(streamUrl)
-        .header("User-Agent", userAgent)
-        .header("Accept", "*/*")
-      if (streamUrl.contains("googlevideo.com", ignoreCase = true)) {
-        requestBuilder.header("Referer", "https://www.youtube.com/")
-      }
-      val request = requestBuilder.build()
 
-      var directSucceeded = false
+      val candidates = buildList {
+        add(StreamCandidate(streamUrl, defaultUa, format.downloadMode))
+        addAll(format.fallbackCandidates)
+      }.distinctBy { "${it.url}__${it.userAgent}" }
+
+      var succeeded = false
       var lastHttpCode = 0
-      client.newCall(request).execute().use { response ->
-        lastHttpCode = response.code
-        if (response.isSuccessful) {
-          val body = response.body ?: return@withContext Result.failure(Exception("Empty audio stream"))
-          val totalBytes = body.contentLength().let { if (it > 0L) it else format.contentLengthBytes }
-          var downloadedBytes = 0L
 
-          FileOutputStream(appFile).use { output ->
-            body.byteStream().use { input ->
-              val buffer = ByteArray(16 * 1024)
-              while (true) {
-                val read = input.read(buffer)
-                if (read == -1) break
-                output.write(buffer, 0, read)
-                downloadedBytes += read
-                val progress = if (totalBytes > 0L) {
-                  (downloadedBytes.toFloat() / totalBytes.toFloat()).coerceIn(0.02f, 0.98f)
-                } else {
-                  0.5f
-                }
-                onProgress(DownloadProgressInfo(progress, downloadedBytes, totalBytes))
-              }
-              output.flush()
+      candidateLoop@ for (candidate in candidates) {
+        val isGoogleVideo = candidate.url.contains("googlevideo.com", ignoreCase = true)
+        val modesToTry = buildList {
+          add(candidate.downloadMode)
+          if (isGoogleVideo) add(StreamDownloadMode.QUERY_RANGE)
+          add(StreamDownloadMode.HEADER_RANGE)
+          add(StreamDownloadMode.DIRECT)
+        }.distinct()
+
+        for (mode in modesToTry) {
+          val attempt = runCatching {
+            when (mode) {
+              StreamDownloadMode.QUERY_RANGE -> downloadWithQueryRangeChunks(
+                streamUrl = candidate.url,
+                userAgent = candidate.userAgent,
+                initialTotalBytes = format.contentLengthBytes,
+                appFile = appFile,
+                onProgress = onProgress
+              )
+              StreamDownloadMode.HEADER_RANGE -> downloadWithHeaderRangeChunks(
+                streamUrl = candidate.url,
+                userAgent = candidate.userAgent,
+                initialTotalBytes = format.contentLengthBytes,
+                appFile = appFile,
+                onProgress = onProgress
+              )
+              StreamDownloadMode.DIRECT -> downloadDirect(
+                streamUrl = candidate.url,
+                userAgent = candidate.userAgent,
+                initialTotalBytes = format.contentLengthBytes,
+                appFile = appFile,
+                onProgress = onProgress
+              )
             }
+          }.getOrElse {
+            if (appFile.exists()) appFile.delete()
+            DownloadAttemptResult(false, lastHttpCode)
           }
-          directSucceeded = appFile.exists() && appFile.length() > 0L
-        }
-      }
 
-      if (!directSucceeded) {
-        if (appFile.exists()) appFile.delete()
-        val chunkedOk = if (format.contentLengthBytes > 0L) {
-          runCatching {
-            downloadWithChunks(streamUrl, userAgent, format.contentLengthBytes, appFile, onProgress)
-          }.getOrDefault(false)
-        } else false
-
-        if (!chunkedOk) {
+          if (attempt.httpCode > 0) lastHttpCode = attempt.httpCode
+          if (attempt.succeeded && appFile.exists() && appFile.length() > 0L) {
+            succeeded = true
+            break@candidateLoop
+          }
           if (appFile.exists()) appFile.delete()
-          return@withContext Result.failure(Exception("Download failed (HTTP $lastHttpCode)"))
         }
       }
 
-      if (!appFile.exists() || appFile.length() == 0L) {
-        appFile.delete()
-        return@withContext Result.failure(Exception("Downloaded file was empty"))
+      if (!succeeded || !appFile.exists() || appFile.length() == 0L) {
+        if (appFile.exists()) appFile.delete()
+        val msg = if (lastHttpCode > 0) {
+          "Download failed (HTTP $lastHttpCode)"
+        } else {
+          "Download failed. Please try again."
+        }
+        return@withContext Result.failure(Exception(msg))
       }
 
       val actualDurationSec = measureDurationSeconds(appFile, format.durationSeconds)
 
       // Also export a copy to shared Music/AURIX for user convenience when format is MediaStore-friendly
-      if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q && (ext == "m4a" || ext == "mp3")) {
+      if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q && (ext == "m4a" || ext == "mp3" || ext == "mp4")) {
         runCatching {
           val resolver = context.contentResolver
           val values = ContentValues().apply {
