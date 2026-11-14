@@ -241,6 +241,13 @@ val AURIX_MIGRATION_3_4 = object : Migration(3, 4) {
   }
 }
 
+val AURIX_MIGRATION_4_5 = object : Migration(4, 5) {
+  override fun migrate(db: SupportSQLiteDatabase) {
+    db.execSQL("DELETE FROM bad_lyrics")
+    db.execSQL("DELETE FROM lyrics_cache WHERE isReportedBad = 1")
+  }
+}
+
 @Database(
   entities = [
     FavoriteSongEntity::class,
@@ -250,7 +257,7 @@ val AURIX_MIGRATION_3_4 = object : Migration(3, 4) {
     LyricsCacheEntity::class,
     BadLyricsEntity::class
   ],
-  version = 4,
+  version = 5,
   exportSchema = false
 )
 abstract class AurixDatabase : RoomDatabase() {

@@ -119,7 +119,6 @@ fun AurixApp(viewModel: AurixViewModel) {
   val dynamicBg by viewModel.dynamicBg.collectAsStateWithLifecycle()
   val reducedMotion by viewModel.reducedMotion.collectAsStateWithLifecycle()
   val verifiedLyricsIds by viewModel.verifiedLyricsIds.collectAsStateWithLifecycle()
-  val badLyricsCount by viewModel.badLyricsCount.collectAsStateWithLifecycle()
 
   val systemDark = isSystemInDarkTheme()
   val amoledTheme = themeMode == "amoled"
@@ -348,9 +347,7 @@ fun AurixApp(viewModel: AurixViewModel) {
               onAccentChanged = { viewModel.setAccentColor(it) },
               onLanguageChanged = { viewModel.setLanguage(it) },
               onDynamicBgChanged = { viewModel.setDynamicBg(it) },
-              onReducedMotionChanged = { viewModel.setReducedMotion(it) },
-              badLyricsCount = badLyricsCount,
-              onClearBadLyrics = { viewModel.clearBadLyricsList() }
+              onReducedMotionChanged = { viewModel.setReducedMotion(it) }
             )
           }
         }
@@ -460,7 +457,6 @@ fun AurixApp(viewModel: AurixViewModel) {
             onRetryLyrics = { viewModel.retryLyrics() },
             hasLyrics = song.id in verifiedLyricsIds,
             onCheckLyrics = { viewModel.ensureLyricsVerified(it) },
-            onReportWrongLyrics = { viewModel.reportWrongLyrics(song) },
             onDeleteSong = if (
               localSongs.any { it.id == song.id } ||
               song.source == "Local" ||

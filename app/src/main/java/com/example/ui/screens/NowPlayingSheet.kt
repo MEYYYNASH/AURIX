@@ -82,7 +82,6 @@ fun NowPlayingSheet(
   onRetryLyrics: () -> Unit = {},
   hasLyrics: Boolean = false,
   onCheckLyrics: ((Song) -> Unit)? = null,
-  onReportWrongLyrics: (() -> Unit)? = null,
   onDeleteSong: (() -> Unit)? = null
 ) {
   BackHandler { onClose() }
@@ -290,7 +289,6 @@ fun NowPlayingSheet(
             onAdjustOffset = onAdjustOffset,
             onResetOffset = onResetOffset,
             onRetryLyrics = onRetryLyrics,
-            onReportWrongLyrics = onReportWrongLyrics,
             onShareLyrics = { showShareLyrics = true }
           )
         } else {

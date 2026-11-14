@@ -60,7 +60,7 @@ class AurixViewModel(application: Application) : AndroidViewModel(application) {
     AurixDatabase::class.java,
     "aurix_db"
   )
-    .addMigrations(AURIX_MIGRATION_1_2, AURIX_MIGRATION_2_3, AURIX_MIGRATION_3_4)
+    .addMigrations(AURIX_MIGRATION_1_2, AURIX_MIGRATION_2_3, AURIX_MIGRATION_3_4, AURIX_MIGRATION_4_5)
     .build()
   private val dao = database.aurixDao()
 
@@ -230,9 +230,6 @@ class AurixViewModel(application: Application) : AndroidViewModel(application) {
     .map { it.toSet() }
     .stateIn(viewModelScope, SharingStarted.Eagerly, emptySet())
 
-  val badLyricsCount: StateFlow<Int> = dao.observeBadLyricsCount()
-    .stateIn(viewModelScope, SharingStarted.Lazily, 0)
-
   private val lyricsCheckSemaphore = Semaphore(3)
   private val inFlightLyricsChecks = ConcurrentHashMap<String, Job>()
 
@@ -289,6 +286,10 @@ class AurixViewModel(application: Application) : AndroidViewModel(application) {
   }
 
   init {
+    viewModelScope.launch(Dispatchers.IO) {
+      dao.clearAllBadLyrics()
+      dao.clearReportedLyricsCache()
+    }
     connectPlaybackController(application)
     loadDailyRecommendations(DailyFeedCategory.TIKTOK_VIRAL)
     startPositionTicker()
@@ -1449,63 +1450,6 @@ class AurixViewModel(application: Application) : AndroidViewModel(application) {
     _rawCurrentSong.value?.let { fetchLyrics(it, forceRetry = true) }
   }
 
-  fun reportWrongLyrics(song: Song? = _rawCurrentSong.value) {
-    val targetSong = song ?: return
-    val songKey = LyricsMatcher.songIdentityKey(targetSong)
-    val appContext = getApplication<Application>()
-    lyricsJob?.cancel()
-    _lyrics.value = LyricsResult(
-      synced = null,
-      plain = appContext.getString(R.string.no_lyrics_found),
-      rawLrc = null
-    )
-    viewModelScope.launch {
-      withContext(Dispatchers.IO) {
-        dao.insertBadLyrics(
-          BadLyricsEntity(
-            songKey = songKey,
-            songId = targetSong.id,
-            title = targetSong.title,
-            artist = targetSong.artist
-          )
-        )
-        dao.markLyricsCacheBad(songId = targetSong.id, songKey = songKey)
-        // Ensure a cache row exists for this songId marked reported-bad
-        if (dao.getLyricsCache(targetSong.id) == null) {
-          dao.insertLyricsCache(
-            LyricsCacheEntity(
-              songId = targetSong.id,
-              songKey = songKey,
-              hasLyrics = false,
-              isReportedBad = true
-            )
-          )
-        }
-      }
-      Toast.makeText(
-        appContext,
-        appContext.getString(R.string.lyrics_removed_toast),
-        Toast.LENGTH_SHORT
-      ).show()
-    }
-  }
-
-  fun clearBadLyricsList() {
-    val appContext = getApplication<Application>()
-    viewModelScope.launch {
-      withContext(Dispatchers.IO) {
-        dao.clearAllBadLyrics()
-        dao.clearReportedLyricsCache()
-      }
-      Toast.makeText(
-        appContext,
-        appContext.getString(R.string.settings_bad_lyrics_cleared),
-        Toast.LENGTH_SHORT
-      ).show()
-      _rawCurrentSong.value?.let { fetchLyrics(it, forceRetry = true) }
-    }
-  }
-
   fun ensureLyricsVerified(song: Song) {
     if (song.id.isBlank() || song.title.isBlank() || song.artist.isBlank()) return
     if (song.id in verifiedLyricsIds.value) return
@@ -1515,23 +1459,19 @@ class AurixViewModel(application: Application) : AndroidViewModel(application) {
     val job = viewModelScope.launch(Dispatchers.IO) {
       try {
         val songKey = LyricsMatcher.songIdentityKey(song)
-        if (dao.isBadLyrics(song.id, songKey)) {
-          return@launch
-        }
 
         val cached = dao.getLyricsCache(song.id) ?: dao.getLyricsCacheByKey(songKey)?.also { keyHit ->
-          // Mirror positive/negative cache under current songId if resolved by songKey
           if (!keyHit.isReportedBad && keyHit.songId != song.id) {
             dao.insertLyricsCache(keyHit.copy(songId = song.id))
           }
         }
-        if (cached != null) {
+        if (cached != null && !cached.isReportedBad) {
           return@launch
         }
 
         lyricsCheckSemaphore.withPermit {
-          // Re-check bad list & cache after acquiring semaphore
-          if (dao.isBadLyrics(song.id, songKey) || dao.getLyricsCache(song.id) != null) {
+          val latestCached = dao.getLyricsCache(song.id)
+          if (latestCached != null && !latestCached.isReportedBad) {
             return@withPermit
           }
           val outcome = LyricsMatcher.matchWithOutcome(
@@ -1619,26 +1559,15 @@ class AurixViewModel(application: Application) : AndroidViewModel(application) {
       val songKey = LyricsMatcher.songIdentityKey(song)
 
       try {
-        // 1. Respect persistent bad-lyrics blacklist
-        val isBad = withContext(Dispatchers.IO) { dao.isBadLyrics(song.id, songKey) }
-        if (isBad) {
-          _lyrics.value = LyricsResult(synced = null, plain = noLyricsMsg, rawLrc = null)
-          return@launch
-        }
-
         val activeControllerDurSec = mediaController
           ?.takeIf { it.currentMediaItem?.mediaId == song.id && it.duration > 0L }
           ?.duration?.div(1000L) ?: 0L
 
-        // 2. Serve verified cache if available (reusing exact same result as LyricsTag)
+        // Serve verified cache if available (reusing exact same result as LyricsTag)
         val cached = withContext(Dispatchers.IO) {
           dao.getLyricsCache(song.id) ?: dao.getLyricsCacheByKey(songKey)
         }
-        if (cached != null) {
-          if (cached.isReportedBad) {
-            _lyrics.value = LyricsResult(synced = null, plain = noLyricsMsg, rawLrc = null)
-            return@launch
-          }
+        if (cached != null && !cached.isReportedBad) {
           if (cached.hasLyrics) {
             val fromCache = buildLyricsResultFromCache(cached, song)
             if (fromCache != null) {
