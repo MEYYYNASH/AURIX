@@ -3,25 +3,33 @@ package com.example.ui.screens
 import android.net.Uri
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
+import androidx.compose.foundation.background
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.rounded.Add
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clip
+import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.example.model.Song
 
-@OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun LibraryScreen(
   localSongs: List<Song>,
   favorites: List<Song>,
   recentlyPlayed: List<Song>,
+  currentSong: Song?,
+  isPlaying: Boolean,
+  reducedMotion: Boolean,
   onAddLocalSong: (Uri) -> Unit,
   onSongClick: (Song) -> Unit,
   onFavoriteClick: (Song) -> Unit
@@ -38,10 +46,10 @@ fun LibraryScreen(
   Column(
     modifier = Modifier
       .fillMaxSize()
-      .padding(horizontal = 16.dp)
-      .windowInsetsPadding(WindowInsets.safeDrawing),
+      .padding(horizontal = 20.dp)
+      .windowInsetsPadding(WindowInsets.statusBars),
   ) {
-    Spacer(modifier = Modifier.height(16.dp))
+    Spacer(modifier = Modifier.height(18.dp))
     Row(
       modifier = Modifier.fillMaxWidth(),
       horizontalArrangement = Arrangement.SpaceBetween,
@@ -49,11 +57,14 @@ fun LibraryScreen(
     ) {
       Text(
         text = "Library",
-        style = MaterialTheme.typography.displayLarge.copy(fontSize = 28.sp),
+        style = MaterialTheme.typography.displayLarge.copy(fontSize = 28.sp, fontWeight = FontWeight.Bold),
         color = MaterialTheme.colorScheme.onBackground
       )
       if (selectedTab == 0) {
-        Button(onClick = { launcher.launch(arrayOf("audio/*")) }) {
+        Button(
+          onClick = { launcher.launch(arrayOf("audio/*")) },
+          shape = RoundedCornerShape(999.dp)
+        ) {
           Icon(Icons.Rounded.Add, contentDescription = null)
           Spacer(modifier = Modifier.width(4.dp))
           Text("Add local")
@@ -63,14 +74,29 @@ fun LibraryScreen(
 
     Spacer(modifier = Modifier.height(16.dp))
 
-    SingleChoiceSegmentedButtonRow(modifier = Modifier.fillMaxWidth()) {
-      tabs.forEachIndexed { index, title ->
-        SegmentedButton(
-          selected = selectedTab == index,
-          onClick = { selectedTab = index },
-          shape = SegmentedButtonDefaults.itemShape(index = index, count = tabs.size)
-        ) {
-          Text(title)
+    Surface(
+      shape = RoundedCornerShape(999.dp),
+      color = MaterialTheme.colorScheme.surfaceVariant,
+      modifier = Modifier.fillMaxWidth()
+    ) {
+      Row(modifier = Modifier.padding(4.dp)) {
+        tabs.forEachIndexed { index, title ->
+          val selected = selectedTab == index
+          Box(
+            modifier = Modifier
+              .weight(1f)
+              .clip(RoundedCornerShape(999.dp))
+              .background(if (selected) MaterialTheme.colorScheme.surface else Color.Transparent)
+              .clickable { selectedTab = index }
+              .padding(vertical = 10.dp),
+            contentAlignment = Alignment.Center
+          ) {
+            Text(
+              text = title,
+              style = MaterialTheme.typography.bodySmall.copy(fontWeight = FontWeight.SemiBold),
+              color = if (selected) MaterialTheme.colorScheme.onSurface else MaterialTheme.colorScheme.onSurfaceVariant
+            )
+          }
         }
       }
     }
@@ -90,19 +116,31 @@ fun LibraryScreen(
           .padding(32.dp),
         contentAlignment = Alignment.Center
       ) {
+        val emptyMsg = when (selectedTab) {
+          0 -> "Songs you add to the app show up here."
+          1 -> "Tap the heart on any song to keep it here."
+          else -> "Songs you play show up here."
+        }
         Text(
-          text = "No songs found in this tab. Add local music or like songs!",
+          text = emptyMsg,
           color = MaterialTheme.colorScheme.onSurfaceVariant
         )
       }
     } else {
       LazyColumn(
         modifier = Modifier.fillMaxSize(),
-        verticalArrangement = Arrangement.spacedBy(12.dp),
-        contentPadding = PaddingValues(bottom = 100.dp)
+        verticalArrangement = Arrangement.spacedBy(6.dp),
+        contentPadding = PaddingValues(bottom = if (currentSong != null) 190.dp else 120.dp)
       ) {
-        items(currentList) { song ->
-          SongRow(song = song, onSongClick = { onSongClick(song) }, onFavoriteClick = { onFavoriteClick(song) })
+        items(currentList, key = { "${selectedTab}_${it.id}_${it.title}" }) { song ->
+          SongRow(
+            song = song,
+            isPlaying = isPlaying,
+            isCurrent = currentSong?.id == song.id,
+            reducedMotion = reducedMotion,
+            onSongClick = { onSongClick(song) },
+            onFavoriteClick = { onFavoriteClick(song) }
+          )
         }
       }
     }

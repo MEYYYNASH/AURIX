@@ -2,6 +2,7 @@ package com.example.ui.screens
 
 import android.content.Context
 import androidx.compose.foundation.background
+import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
@@ -14,13 +15,13 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.example.data.GitHubRelease
 import com.example.ui.theme.*
 
-@OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun SettingsScreen(
   currentTheme: String,
@@ -28,6 +29,7 @@ fun SettingsScreen(
   currentLanguage: String,
   dynamicBg: Boolean,
   reducedMotion: Boolean,
+  hasCurrentSong: Boolean,
   githubOwner: String,
   githubRepo: String,
   updateStatus: String,
@@ -45,9 +47,9 @@ fun SettingsScreen(
 ) {
   val context = LocalContext.current
   val accents = listOf(
-    "#3B77F5" to AccentBlue,
     "#EF4444" to AccentRed,
     "#EC4899" to AccentPink,
+    "#3B77F5" to AccentBlue,
     "#22C55E" to AccentGreen,
     "#F59E0B" to AccentAmber,
     "#14B8A6" to AccentTeal,
@@ -60,127 +62,50 @@ fun SettingsScreen(
   LazyColumn(
     modifier = Modifier
       .fillMaxSize()
-      .padding(horizontal = 16.dp)
-      .windowInsetsPadding(WindowInsets.safeDrawing),
-    verticalArrangement = Arrangement.spacedBy(24.dp),
-    contentPadding = PaddingValues(top = 16.dp, bottom = 120.dp)
+      .padding(horizontal = 20.dp),
+    verticalArrangement = Arrangement.spacedBy(20.dp),
+    contentPadding = PaddingValues(
+      top = WindowInsets.statusBars.asPaddingValues().calculateTopPadding() + 18.dp,
+      bottom = if (hasCurrentSong) 190.dp else 120.dp
+    )
   ) {
     item {
       Text(
         text = "Settings",
-        style = MaterialTheme.typography.displayLarge.copy(fontSize = 28.sp),
+        style = MaterialTheme.typography.displayLarge.copy(fontSize = 28.sp, fontWeight = FontWeight.Bold),
         color = MaterialTheme.colorScheme.onBackground
       )
     }
 
-    // GitHub Updates & Repository Config
+    // Theme segmented pill matching HTML design
     item {
-      SettingsSection(title = "GitHub Updates & Releases") {
-        Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
-          OutlinedTextField(
-            value = ownerInput,
-            onValueChange = { ownerInput = it; onGithubOwnerChanged(it) },
-            label = { Text("GitHub Username / Owner") },
-            modifier = Modifier.fillMaxWidth(),
-            shape = RoundedCornerShape(16.dp),
-            singleLine = true
-          )
-          OutlinedTextField(
-            value = repoInput,
-            onValueChange = { repoInput = it; onGithubRepoChanged(it) },
-            label = { Text("GitHub Repository Name") },
-            modifier = Modifier.fillMaxWidth(),
-            shape = RoundedCornerShape(16.dp),
-            singleLine = true
-          )
-          Text(text = "Status: $updateStatus", style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
-          if (latestRelease != null && latestRelease.body.isNotBlank()) {
-            Text(
-              text = latestRelease.body,
-              style = MaterialTheme.typography.bodySmall,
-              color = MaterialTheme.colorScheme.onSurfaceVariant
-            )
-          }
-          Row(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
-            Button(
-              onClick = { onCheckUpdate(context) },
-              shape = RoundedCornerShape(20.dp)
-            ) {
-              Text("Check for Update")
-            }
-            if (latestRelease != null) {
-              Button(
-                onClick = { onDownloadUpdate(context) },
-                shape = RoundedCornerShape(20.dp),
-                colors = ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.primary)
-              ) {
-                Text("Download APK")
-              }
-              Button(
-                onClick = { onInstallUpdate(context) },
-                shape = RoundedCornerShape(20.dp),
-                colors = ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.tertiary)
-              ) {
-                Text("Install Update")
-              }
-            }
-          }
-        }
-      }
-    }
-
-    item {
-      SettingsSection(title = "Language") {
-        Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-          FilterChip(
-            selected = currentLanguage == "en",
-            onClick = { onLanguageChanged("en") },
-            label = { Text("English") }
-          )
-          FilterChip(
-            selected = currentLanguage == "km",
-            onClick = { onLanguageChanged("km") },
-            label = { Text("ភាសាខ្មែរ") }
-          )
-        }
-      }
-    }
-
-    item {
-      SettingsSection(title = "Theme") {
-        Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-          listOf("system" to "System", "light" to "Light", "dark" to "Dark").forEach { (key, label) ->
-            FilterChip(
-              selected = currentTheme == key,
-              onClick = { onThemeChanged(key) },
-              label = { Text(label) }
-            )
-          }
-        }
-      }
-    }
-
-    item {
-      SettingsSection(title = "Accent color") {
-        Row(
-          modifier = Modifier.fillMaxWidth(),
-          horizontalArrangement = Arrangement.spacedBy(12.dp)
+      Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
+        Text(
+          text = "Theme",
+          style = MaterialTheme.typography.titleLarge.copy(fontSize = 18.sp, fontWeight = FontWeight.SemiBold),
+          color = MaterialTheme.colorScheme.onBackground
+        )
+        Surface(
+          shape = RoundedCornerShape(999.dp),
+          color = MaterialTheme.colorScheme.surfaceVariant,
+          modifier = Modifier.fillMaxWidth()
         ) {
-          accents.forEach { (hex, color) ->
-            Box(
-              modifier = Modifier
-                .size(40.dp)
-                .clip(CircleShape)
-                .background(color)
-                .clickable { onAccentChanged(hex) },
-              contentAlignment = Alignment.Center
-            ) {
-              if (currentAccentHex == hex) {
-                Box(
-                  modifier = Modifier
-                    .size(16.dp)
-                    .clip(CircleShape)
-                    .background(Color.White)
+          Row(modifier = Modifier.padding(4.dp)) {
+            listOf("system" to "System", "light" to "Light", "dark" to "Dark").forEach { (key, label) ->
+              val selected = currentTheme == key
+              Box(
+                modifier = Modifier
+                  .weight(1f)
+                  .clip(RoundedCornerShape(999.dp))
+                  .background(if (selected) MaterialTheme.colorScheme.surface else Color.Transparent)
+                  .clickable { onThemeChanged(key) }
+                  .padding(vertical = 10.dp),
+                contentAlignment = Alignment.Center
+              ) {
+                Text(
+                  text = label,
+                  style = MaterialTheme.typography.bodySmall.copy(fontWeight = FontWeight.SemiBold),
+                  color = if (selected) MaterialTheme.colorScheme.onSurface else MaterialTheme.colorScheme.onSurfaceVariant
                 )
               }
             }
@@ -189,52 +114,218 @@ fun SettingsScreen(
       }
     }
 
+    // Accent color circular dots
     item {
-      SettingsSection(title = "Preferences") {
-        Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
-          Row(
-            modifier = Modifier.fillMaxWidth(),
-            horizontalArrangement = Arrangement.SpaceBetween,
-            verticalAlignment = Alignment.CenterVertically
-          ) {
-            Text("Dynamic artwork background", style = MaterialTheme.typography.bodyLarge, color = MaterialTheme.colorScheme.onBackground)
-            Switch(checked = dynamicBg, onCheckedChange = onDynamicBgChanged)
-          }
-          Row(
-            modifier = Modifier.fillMaxWidth(),
-            horizontalArrangement = Arrangement.SpaceBetween,
-            verticalAlignment = Alignment.CenterVertically
-          ) {
-            Text("Reduced motion", style = MaterialTheme.typography.bodyLarge, color = MaterialTheme.colorScheme.onBackground)
-            Switch(checked = reducedMotion, onCheckedChange = onReducedMotionChanged)
+      Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
+        Text(
+          text = "Accent color",
+          style = MaterialTheme.typography.titleLarge.copy(fontSize = 18.sp, fontWeight = FontWeight.SemiBold),
+          color = MaterialTheme.colorScheme.onBackground
+        )
+        Row(
+          modifier = Modifier.fillMaxWidth(),
+          horizontalArrangement = Arrangement.spacedBy(12.dp)
+        ) {
+          accents.forEach { (hex, color) ->
+            val selected = currentAccentHex.equals(hex, ignoreCase = true)
+            Box(
+              modifier = Modifier
+                .size(36.dp)
+                .clip(CircleShape)
+                .then(
+                  if (selected) Modifier.border(2.5.dp, MaterialTheme.colorScheme.onBackground, CircleShape).padding(3.dp)
+                  else Modifier
+                )
+                .clip(CircleShape)
+                .background(color)
+                .clickable { onAccentChanged(hex) }
+                .testTag("accent_dot_$hex")
+            )
           }
         }
       }
     }
 
+    // Now Playing toggles (Dynamic artwork background & Reduced motion)
     item {
-      SettingsSection(title = "About") {
-        Column {
-          Text("AURIX / All Sound Finder v1.2.6", style = MaterialTheme.typography.bodyMedium.copy(fontWeight = FontWeight.Bold), color = MaterialTheme.colorScheme.onBackground)
-          Spacer(modifier = Modifier.height(4.dp))
-          Text("Powered by Audius and LRCLIB. GitHub OTA Update Enabled.", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+      Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
+        Text(
+          text = "Now Playing",
+          style = MaterialTheme.typography.titleLarge.copy(fontSize = 18.sp, fontWeight = FontWeight.SemiBold),
+          color = MaterialTheme.colorScheme.onBackground
+        )
+        Surface(
+          shape = RoundedCornerShape(18.dp),
+          color = MaterialTheme.colorScheme.surface.copy(alpha = 0.88f),
+          modifier = Modifier.fillMaxWidth().clickable { onDynamicBgChanged(!dynamicBg) }
+        ) {
+          Row(
+            modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 10.dp),
+            horizontalArrangement = Arrangement.SpaceBetween,
+            verticalAlignment = Alignment.CenterVertically
+          ) {
+            Text(
+              "Dynamic artwork background",
+              style = MaterialTheme.typography.bodyLarge,
+              color = MaterialTheme.colorScheme.onSurface
+            )
+            Checkbox(
+              checked = dynamicBg,
+              onCheckedChange = onDynamicBgChanged,
+              modifier = Modifier.testTag("dynamic_bg_toggle")
+            )
+          }
+        }
+
+        Surface(
+          shape = RoundedCornerShape(18.dp),
+          color = MaterialTheme.colorScheme.surface.copy(alpha = 0.88f),
+          modifier = Modifier.fillMaxWidth().clickable { onReducedMotionChanged(!reducedMotion) }
+        ) {
+          Row(
+            modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 10.dp),
+            horizontalArrangement = Arrangement.SpaceBetween,
+            verticalAlignment = Alignment.CenterVertically
+          ) {
+            Text(
+              "Reduced motion",
+              style = MaterialTheme.typography.bodyLarge,
+              color = MaterialTheme.colorScheme.onSurface
+            )
+            Checkbox(
+              checked = reducedMotion,
+              onCheckedChange = onReducedMotionChanged,
+              modifier = Modifier.testTag("reduced_motion_toggle")
+            )
+          }
         }
       }
     }
-  }
-}
 
-@Composable
-fun SettingsSection(title: String, content: @Composable () -> Unit) {
-  Column(
-    modifier = Modifier
-      .fillMaxWidth()
-      .clip(RoundedCornerShape(22.dp))
-      .background(MaterialTheme.colorScheme.surfaceVariant)
-      .padding(16.dp),
-    verticalArrangement = Arrangement.spacedBy(12.dp)
-  ) {
-    Text(text = title, style = MaterialTheme.typography.titleLarge.copy(fontSize = 18.sp), color = MaterialTheme.colorScheme.onSurface)
-    content()
+    // Language
+    item {
+      Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
+        Text(
+          text = "Language",
+          style = MaterialTheme.typography.titleLarge.copy(fontSize = 18.sp, fontWeight = FontWeight.SemiBold),
+          color = MaterialTheme.colorScheme.onBackground
+        )
+        Surface(
+          shape = RoundedCornerShape(999.dp),
+          color = MaterialTheme.colorScheme.surfaceVariant,
+          modifier = Modifier.fillMaxWidth()
+        ) {
+          Row(modifier = Modifier.padding(4.dp)) {
+            listOf("en" to "English", "km" to "ភាសាខ្មែរ").forEach { (code, label) ->
+              val selected = currentLanguage == code
+              Box(
+                modifier = Modifier
+                  .weight(1f)
+                  .clip(RoundedCornerShape(999.dp))
+                  .background(if (selected) MaterialTheme.colorScheme.surface else Color.Transparent)
+                  .clickable { onLanguageChanged(code) }
+                  .padding(vertical = 10.dp),
+                contentAlignment = Alignment.Center
+              ) {
+                Text(
+                  text = label,
+                  style = MaterialTheme.typography.bodySmall.copy(fontWeight = FontWeight.SemiBold),
+                  color = if (selected) MaterialTheme.colorScheme.onSurface else MaterialTheme.colorScheme.onSurfaceVariant
+                )
+              }
+            }
+          }
+        }
+      }
+    }
+
+    // GitHub Updates & Releases
+    item {
+      Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
+        Text(
+          text = "GitHub Updates & Releases",
+          style = MaterialTheme.typography.titleLarge.copy(fontSize = 18.sp, fontWeight = FontWeight.SemiBold),
+          color = MaterialTheme.colorScheme.onBackground
+        )
+        Surface(
+          shape = RoundedCornerShape(22.dp),
+          color = MaterialTheme.colorScheme.surface.copy(alpha = 0.88f),
+          modifier = Modifier.fillMaxWidth()
+        ) {
+          Column(
+            modifier = Modifier.padding(16.dp),
+            verticalArrangement = Arrangement.spacedBy(12.dp)
+          ) {
+            OutlinedTextField(
+              value = ownerInput,
+              onValueChange = { ownerInput = it; onGithubOwnerChanged(it) },
+              label = { Text("GitHub Username / Owner") },
+              modifier = Modifier.fillMaxWidth(),
+              shape = RoundedCornerShape(16.dp),
+              singleLine = true
+            )
+            OutlinedTextField(
+              value = repoInput,
+              onValueChange = { repoInput = it; onGithubRepoChanged(it) },
+              label = { Text("GitHub Repository Name") },
+              modifier = Modifier.fillMaxWidth(),
+              shape = RoundedCornerShape(16.dp),
+              singleLine = true
+            )
+            Text(
+              text = "Status: $updateStatus",
+              style = MaterialTheme.typography.bodyMedium,
+              color = MaterialTheme.colorScheme.onSurfaceVariant
+            )
+            if (latestRelease != null && latestRelease.body.isNotBlank()) {
+              Text(
+                text = latestRelease.body,
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant
+              )
+            }
+            Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
+              Button(
+                onClick = { onCheckUpdate(context) },
+                shape = RoundedCornerShape(20.dp),
+                modifier = Modifier.testTag("check_update_button")
+              ) {
+                Text("Check for Update")
+              }
+              if (latestRelease != null) {
+                Button(
+                  onClick = { onDownloadUpdate(context) },
+                  shape = RoundedCornerShape(20.dp)
+                ) {
+                  Text("Download APK")
+                }
+                Button(
+                  onClick = { onInstallUpdate(context) },
+                  shape = RoundedCornerShape(20.dp)
+                ) {
+                  Text("Install")
+                }
+              }
+            }
+          }
+        }
+      }
+    }
+
+    // About
+    item {
+      Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
+        Text(
+          text = "About",
+          style = MaterialTheme.typography.titleLarge.copy(fontSize = 18.sp, fontWeight = FontWeight.SemiBold),
+          color = MaterialTheme.colorScheme.onBackground
+        )
+        Text(
+          text = "AURIX 1.2.7. Music from Audius, lyrics from LRCLIB. GitHub OTA updates enabled.",
+          style = MaterialTheme.typography.bodyMedium,
+          color = MaterialTheme.colorScheme.onSurfaceVariant
+        )
+      }
+    }
   }
 }

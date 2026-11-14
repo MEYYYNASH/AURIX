@@ -7,12 +7,16 @@ import androidx.lifecycle.AndroidViewModel
 import androidx.lifecycle.viewModelScope
 import androidx.room.Room
 import androidx.media3.common.MediaItem
+import androidx.media3.common.PlaybackParameters
 import androidx.media3.common.Player
 import androidx.media3.exoplayer.ExoPlayer
 import com.example.BuildConfig
 import com.example.data.*
 import com.example.model.*
+import kotlinx.coroutines.Job
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.*
+import kotlinx.coroutines.isActive
 import kotlinx.coroutines.launch
 
 class AurixViewModel(application: Application) : AndroidViewModel(application) {
@@ -47,35 +51,50 @@ class AurixViewModel(application: Application) : AndroidViewModel(application) {
   val analyzedSong: StateFlow<Song?> = _analyzedSong
 
   // GitHub Update States
-  private val _updateStatus = MutableStateFlow<String>("Idle")
+  private val _updateStatus = MutableStateFlow("Idle")
   val updateStatus: StateFlow<String> = _updateStatus
 
   private val _latestRelease = MutableStateFlow<GitHubRelease?>(null)
   val latestRelease: StateFlow<GitHubRelease?> = _latestRelease
 
   // Music States
-  private val _trendingTracks = MutableStateFlow<List<Song>>(emptyList())
-  val trendingTracks: StateFlow<List<Song>> = _trendingTracks
-
-  private val _searchResults = MutableStateFlow<List<Song>>(emptyList())
-  val searchResults: StateFlow<List<Song>> = _searchResults
-
-  private val _isSearching = MutableStateFlow(false)
-  val isSearching: StateFlow<Boolean> = _isSearching
-
+  private val _rawTrending = MutableStateFlow<List<Song>>(emptyList())
+  private val _rawSearchResults = MutableStateFlow<List<Song>>(emptyList())
   private val _localSongs = MutableStateFlow<List<Song>>(emptyList())
-  val localSongs: StateFlow<List<Song>> = _localSongs
 
   val favorites: StateFlow<List<Song>> = dao.getFavorites().map { list ->
     list.map { Song(it.id, it.title, it.artist, it.artworkUrl, it.durationSeconds, it.streamUrl, it.source, true) }
   }.stateIn(viewModelScope, SharingStarted.Lazily, emptyList())
 
-  val recentlyPlayed: StateFlow<List<Song>> = dao.getPlayHistory().map { list ->
-    list.map { Song(it.songId, it.title, it.artist, it.artworkUrl, it.durationSeconds, it.streamUrl, it.source, false) }
+  private val favoriteIds: StateFlow<Set<String>> = favorites.map { list ->
+    list.map { it.id }.toSet()
+  }.stateIn(viewModelScope, SharingStarted.Eagerly, emptySet())
+
+  val trendingTracks: StateFlow<List<Song>> = combine(_rawTrending, favoriteIds) { tracks, favs ->
+    tracks.map { it.copy(isFavorite = it.id in favs) }
   }.stateIn(viewModelScope, SharingStarted.Lazily, emptyList())
 
-  private val _currentSong = MutableStateFlow<Song?>(null)
-  val currentSong: StateFlow<Song?> = _currentSong
+  val searchResults: StateFlow<List<Song>> = combine(_rawSearchResults, favoriteIds) { tracks, favs ->
+    tracks.map { it.copy(isFavorite = it.id in favs) }
+  }.stateIn(viewModelScope, SharingStarted.Lazily, emptyList())
+
+  val localSongs: StateFlow<List<Song>> = combine(_localSongs, favoriteIds) { tracks, favs ->
+    tracks.map { it.copy(isFavorite = it.id in favs) }
+  }.stateIn(viewModelScope, SharingStarted.Lazily, emptyList())
+
+  val recentlyPlayed: StateFlow<List<Song>> = combine(dao.getPlayHistory(), favoriteIds) { list, favs ->
+    list.map {
+      Song(it.songId, it.title, it.artist, it.artworkUrl, it.durationSeconds, it.streamUrl, it.source, it.songId in favs)
+    }
+  }.stateIn(viewModelScope, SharingStarted.Lazily, emptyList())
+
+  private val _isSearching = MutableStateFlow(false)
+  val isSearching: StateFlow<Boolean> = _isSearching
+
+  private val _rawCurrentSong = MutableStateFlow<Song?>(null)
+  val currentSong: StateFlow<Song?> = combine(_rawCurrentSong, favoriteIds) { song, favs ->
+    song?.copy(isFavorite = song.id in favs)
+  }.stateIn(viewModelScope, SharingStarted.Lazily, null)
 
   private val _isPlaying = MutableStateFlow(false)
   val isPlaying: StateFlow<Boolean> = _isPlaying
@@ -83,21 +102,66 @@ class AurixViewModel(application: Application) : AndroidViewModel(application) {
   private val _currentPosition = MutableStateFlow(0L)
   val currentPosition: StateFlow<Long> = _currentPosition
 
+  private val _durationMs = MutableStateFlow(0L)
+  val durationMs: StateFlow<Long> = _durationMs
+
   private val _queue = MutableStateFlow<List<Song>>(emptyList())
   val queue: StateFlow<List<Song>> = _queue
+
+  private val _shuffleEnabled = MutableStateFlow(false)
+  val shuffleEnabled: StateFlow<Boolean> = _shuffleEnabled
+
+  private val _repeatEnabled = MutableStateFlow(false)
+  val repeatEnabled: StateFlow<Boolean> = _repeatEnabled
+
+  private val _playbackSpeed = MutableStateFlow(1.0f)
+  val playbackSpeed: StateFlow<Float> = _playbackSpeed
+
+  private val _sleepMinutes = MutableStateFlow(0)
+  val sleepMinutes: StateFlow<Int> = _sleepMinutes
 
   private val _lyrics = MutableStateFlow<LyricsResult?>(null)
   val lyrics: StateFlow<LyricsResult?> = _lyrics
 
+  private var sleepTimerJob: Job? = null
+  private var searchJob: Job? = null
+
   init {
     loadTrending()
     setupPlayerListener()
+    startPositionTicker()
+  }
+
+  private fun startPositionTicker() {
+    viewModelScope.launch {
+      while (isActive) {
+        if (exoPlayer.isPlaying || exoPlayer.playbackState == Player.STATE_READY) {
+          _currentPosition.value = exoPlayer.currentPosition.coerceAtLeast(0L)
+          val playerDur = exoPlayer.duration
+          if (playerDur > 0L) {
+            _durationMs.value = playerDur
+          }
+        }
+        delay(250)
+      }
+    }
   }
 
   private fun setupPlayerListener() {
     exoPlayer.addListener(object : Player.Listener {
       override fun onIsPlayingChanged(isPlayingVal: Boolean) {
         _isPlaying.value = isPlayingVal
+      }
+
+      override fun onPlaybackStateChanged(playbackState: Int) {
+        if (playbackState == Player.STATE_ENDED) {
+          if (_repeatEnabled.value) {
+            exoPlayer.seekTo(0L)
+            exoPlayer.play()
+          } else {
+            nextTrack()
+          }
+        }
       }
     })
   }
@@ -108,13 +172,14 @@ class AurixViewModel(application: Application) : AndroidViewModel(application) {
   fun analyzeYoutubeUrl() {
     val url = _youtubeUrl.value
     if (url.isBlank()) return
+    val top = _rawTrending.value.firstOrNull()
     val song = Song(
       id = "yt_" + url.hashCode(),
-      title = "Die with a smile (tiktok remix)",
-      artist = "Lady Gaga, Bruno Mars",
-      artworkUrl = "",
-      durationSeconds = 210,
-      streamUrl = "https://discoveryprovider.audius.co/v1/tracks/7WJ9x/stream?app_name=aurix",
+      title = top?.title ?: "Die with a smile (tiktok remix)",
+      artist = top?.artist ?: "Lady Gaga, Bruno Mars",
+      artworkUrl = top?.artworkUrl ?: "",
+      durationSeconds = top?.durationSeconds ?: 210,
+      streamUrl = top?.streamUrl ?: "https://discoveryprovider.audius.co/v1/tracks/7WJ9x/stream?app_name=aurix",
       source = "YouTube"
     )
     _analyzedSong.value = song
@@ -167,11 +232,11 @@ class AurixViewModel(application: Application) : AndroidViewModel(application) {
             source = "Audius"
           )
         }
-        _trendingTracks.value = mapped
+        _rawTrending.value = mapped
       } catch (e: Exception) {
-        _trendingTracks.value = listOf(
+        _rawTrending.value = listOf(
           Song("1", "Die with a smile (tiktok remix)", "Lady Gaga, Bruno Mars", "", 210, "", "Audius"),
-          Song("2", "NIGHT THINKER", "VannDa (វណ្ណដា)", "", 195, "", "Audius"),
+          Song("2", "NIGHT THINKER", "VannDa", "", 195, "", "Audius"),
           Song("3", "Time To Rise", "VannDa ft. Master Kong Nay", "", 240, "", "Audius")
         )
       }
@@ -179,13 +244,15 @@ class AurixViewModel(application: Application) : AndroidViewModel(application) {
   }
 
   fun search(query: String) {
+    searchJob?.cancel()
     if (query.isBlank()) {
-      _searchResults.value = emptyList()
+      _rawSearchResults.value = emptyList()
       _isSearching.value = false
       return
     }
-    viewModelScope.launch {
+    searchJob = viewModelScope.launch {
       _isSearching.value = true
+      delay(300)
       try {
         val res = NetworkClient.audiusApi.searchTracks(query)
         val mapped = res.data.map { track ->
@@ -201,18 +268,21 @@ class AurixViewModel(application: Application) : AndroidViewModel(application) {
             source = "Audius"
           )
         }
-        _searchResults.value = mapped
+        _rawSearchResults.value = mapped
       } catch (e: Exception) {
-        _searchResults.value = emptyList()
+        _rawSearchResults.value = emptyList()
       } finally {
         _isSearching.value = false
       }
     }
   }
 
-  fun playSong(song: Song, newQueue: List<Song> = listOf(song)) {
-    _currentSong.value = song
-    _queue.value = newQueue
+  fun playSong(song: Song, newQueue: List<Song> = _rawTrending.value.ifEmpty { listOf(song) }) {
+    _rawCurrentSong.value = song
+    _queue.value = if (newQueue.any { it.id == song.id }) newQueue else listOf(song) + newQueue
+    _currentPosition.value = 0L
+    _durationMs.value = (song.durationSeconds * 1000L).coerceAtLeast(1000L)
+
     viewModelScope.launch {
       dao.insertHistory(
         PlayHistoryEntity(
@@ -231,12 +301,80 @@ class AurixViewModel(application: Application) : AndroidViewModel(application) {
     try {
       exoPlayer.stop()
       exoPlayer.clearMediaItems()
-      val mediaItem = MediaItem.fromUri(Uri.parse(song.streamUrl.ifBlank { "https://discoveryprovider.audius.co/v1/tracks/7WJ9x/stream?app_name=aurix" }))
+      val mediaItem = MediaItem.fromUri(
+        Uri.parse(song.streamUrl.ifBlank { "https://discoveryprovider.audius.co/v1/tracks/7WJ9x/stream?app_name=aurix" })
+      )
       exoPlayer.setMediaItem(mediaItem)
+      exoPlayer.playbackParameters = PlaybackParameters(_playbackSpeed.value)
       exoPlayer.prepare()
       exoPlayer.play()
     } catch (e: Exception) {
       // ignore
+    }
+  }
+
+  fun nextTrack() {
+    val q = _queue.value
+    if (q.isEmpty()) return
+    val current = _rawCurrentSong.value
+    val curIdx = q.indexOfFirst { it.id == current?.id }.coerceAtLeast(0)
+    val nextIdx = if (_shuffleEnabled.value && q.size > 1) {
+      val candidates = q.indices.filter { it != curIdx }
+      candidates.random()
+    } else {
+      (curIdx + 1) % q.size
+    }
+    playSong(q[nextIdx], q)
+  }
+
+  fun previousTrack() {
+    if (exoPlayer.currentPosition > 3000L) {
+      exoPlayer.seekTo(0L)
+      _currentPosition.value = 0L
+      return
+    }
+    val q = _queue.value
+    if (q.isEmpty()) return
+    val current = _rawCurrentSong.value
+    val curIdx = q.indexOfFirst { it.id == current?.id }.coerceAtLeast(0)
+    val prevIdx = (curIdx - 1 + q.size) % q.size
+    playSong(q[prevIdx], q)
+  }
+
+  fun toggleShuffle() {
+    _shuffleEnabled.value = !_shuffleEnabled.value
+  }
+
+  fun toggleRepeat() {
+    _repeatEnabled.value = !_repeatEnabled.value
+  }
+
+  fun cyclePlaybackSpeed() {
+    val nextSpeed = when (_playbackSpeed.value) {
+      1.0f -> 1.25f
+      1.25f -> 1.5f
+      1.5f -> 0.75f
+      else -> 1.0f
+    }
+    _playbackSpeed.value = nextSpeed
+    exoPlayer.playbackParameters = PlaybackParameters(nextSpeed)
+  }
+
+  fun cycleSleepTimer() {
+    val nextMin = when (_sleepMinutes.value) {
+      0 -> 15
+      15 -> 30
+      30 -> 60
+      else -> 0
+    }
+    _sleepMinutes.value = nextMin
+    sleepTimerJob?.cancel()
+    if (nextMin > 0) {
+      sleepTimerJob = viewModelScope.launch {
+        delay(nextMin * 60_000L)
+        exoPlayer.pause()
+        _sleepMinutes.value = 0
+      }
     }
   }
 
@@ -250,6 +388,7 @@ class AurixViewModel(application: Application) : AndroidViewModel(application) {
 
   fun seekTo(positionMs: Long) {
     exoPlayer.seekTo(positionMs)
+    _currentPosition.value = positionMs
   }
 
   fun toggleFavorite(song: Song) {
@@ -288,16 +427,26 @@ class AurixViewModel(application: Application) : AndroidViewModel(application) {
   }
 
   private fun fetchLyrics(song: Song) {
+    _lyrics.value = null
     viewModelScope.launch {
       try {
         val lrc = NetworkClient.lrcLibApi.getLyrics(song.artist, song.title, song.durationSeconds)
         if (lrc != null && !lrc.syncedLyrics.isNullOrBlank()) {
           _lyrics.value = LyricsResult(synced = parseSyncedLyrics(lrc.syncedLyrics), plain = null)
+        } else if (!lrc?.plainLyrics.isNullOrBlank()) {
+          _lyrics.value = LyricsResult(synced = null, plain = lrc?.plainLyrics)
         } else {
-          _lyrics.value = LyricsResult(synced = null, plain = lrc?.plainLyrics ?: "No lyrics available.")
+          val fallback = NetworkClient.lrcLibApi.searchLyrics("${song.artist} ${song.title}")
+          val firstSynced = fallback?.firstOrNull { !it.syncedLyrics.isNullOrBlank() }
+          val firstPlain = fallback?.firstOrNull { !it.plainLyrics.isNullOrBlank() }
+          if (firstSynced?.syncedLyrics != null) {
+            _lyrics.value = LyricsResult(synced = parseSyncedLyrics(firstSynced.syncedLyrics), plain = null)
+          } else {
+            _lyrics.value = LyricsResult(synced = null, plain = firstPlain?.plainLyrics ?: "No lyrics found for this song.")
+          }
         }
       } catch (e: Exception) {
-        _lyrics.value = LyricsResult(synced = null, plain = "Could not load lyrics.")
+        _lyrics.value = LyricsResult(synced = null, plain = "No lyrics found for this song.")
       }
     }
   }
@@ -318,7 +467,7 @@ class AurixViewModel(application: Application) : AndroidViewModel(application) {
         result.add(LyricLine(totalMs, text))
       }
     }
-    return result
+    return result.sortedBy { it.timestampMs }
   }
 
   fun setThemeMode(mode: String) { viewModelScope.launch { prefsManager.setThemeMode(mode) } }

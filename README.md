@@ -1,6 +1,6 @@
 # AURIX — ONE APP. ALL YOUR MUSIC.
 
-AURIX (`v1.2.6`) is a modern Android music player and sound finder app built with Kotlin, Jetpack Compose, and Material 3.
+AURIX (`v1.2.7`) is a modern Android music player and sound finder app built with Kotlin, Jetpack Compose, and Material 3.
 
 ## Features
 
