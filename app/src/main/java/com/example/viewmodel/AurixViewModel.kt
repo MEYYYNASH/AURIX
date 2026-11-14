@@ -2,7 +2,11 @@ package com.example.viewmodel
 
 import android.app.Application
 import android.content.Context
+import android.content.Intent
+import android.media.MediaMetadataRetriever
 import android.net.Uri
+import android.provider.OpenableColumns
+import android.widget.Toast
 import androidx.lifecycle.AndroidViewModel
 import androidx.lifecycle.viewModelScope
 import androidx.room.Room
@@ -51,11 +55,27 @@ class AurixViewModel(application: Application) : AndroidViewModel(application) {
   val analyzedSong: StateFlow<Song?> = _analyzedSong
 
   // GitHub Update States
-  private val _updateStatus = MutableStateFlow("Idle")
+  private val _updateStatus = MutableStateFlow("Ready to check")
   val updateStatus: StateFlow<String> = _updateStatus
 
   private val _latestRelease = MutableStateFlow<GitHubRelease?>(null)
   val latestRelease: StateFlow<GitHubRelease?> = _latestRelease
+
+  private val _apkDownloadState = MutableStateFlow<ApkDownloadState>(
+    if (GitHubUpdater.hasDownloadedApk(application)) {
+      ApkDownloadState.Downloaded("", "Ready")
+    } else {
+      ApkDownloadState.Idle
+    }
+  )
+  val apkDownloadState: StateFlow<ApkDownloadState> = _apkDownloadState
+
+  // Song Download States (songId -> 0f..1f)
+  private val _songDownloadProgress = MutableStateFlow<Map<String, Float>>(emptyMap())
+  val songDownloadProgress: StateFlow<Map<String, Float>> = _songDownloadProgress
+
+  private val _downloadedSongIds = MutableStateFlow<Set<String>>(emptySet())
+  val downloadedSongIds: StateFlow<Set<String>> = _downloadedSongIds
 
   // Music States
   private val _rawTrending = MutableStateFlow<List<Song>>(emptyList())
@@ -187,32 +207,122 @@ class AurixViewModel(application: Application) : AndroidViewModel(application) {
 
   fun checkForUpdates(context: Context) {
     viewModelScope.launch {
-      _updateStatus.value = "Checking..."
-      val owner = githubOwner.value
-      val repo = githubRepo.value
-      val release = GitHubUpdater.checkForUpdates(owner, repo)
-      if (release != null) {
-        if (GitHubUpdater.isNewerVersion(release.tagName, BuildConfig.VERSION_NAME)) {
+      _updateStatus.value = "Checking GitHub releases..."
+      val owner = githubOwner.value.trim().ifBlank { "MEYYYNASH" }
+      val repo = githubRepo.value.trim().ifBlank { "AURIX" }
+      when (val result = GitHubUpdater.checkForUpdates(owner, repo)) {
+        is UpdateCheckResult.Success -> {
+          val release = result.release
           _latestRelease.value = release
-          _updateStatus.value = "Update available: ${release.tagName}"
-        } else {
-          _latestRelease.value = null
-          _updateStatus.value = "Up to date (v${BuildConfig.VERSION_NAME})"
+          if (GitHubUpdater.isNewerVersion(release.tagName, BuildConfig.VERSION_NAME)) {
+            _updateStatus.value = "Update available: ${release.tagName}"
+          } else {
+            _updateStatus.value = "Up to date (v${BuildConfig.VERSION_NAME})"
+          }
         }
-      } else {
-        _latestRelease.value = null
-        _updateStatus.value = "No APK release found"
+        is UpdateCheckResult.Failure -> {
+          _updateStatus.value = result.message
+        }
       }
     }
   }
 
   fun downloadAndInstallUpdate(context: Context) {
-    val release = _latestRelease.value ?: return
-    GitHubUpdater.downloadAndInstall(context, release.apkUrl, release.tagName)
+    if (_apkDownloadState.value is ApkDownloadState.Downloading) return
+    viewModelScope.launch {
+      var release = _latestRelease.value
+      if (release == null) {
+        _updateStatus.value = "Fetching latest APK link..."
+        val owner = githubOwner.value.trim().ifBlank { "MEYYYNASH" }
+        val repo = githubRepo.value.trim().ifBlank { "AURIX" }
+        when (val result = GitHubUpdater.checkForUpdates(owner, repo)) {
+          is UpdateCheckResult.Success -> {
+            release = result.release
+            _latestRelease.value = release
+          }
+          is UpdateCheckResult.Failure -> {
+            _apkDownloadState.value = ApkDownloadState.Error(result.message)
+            _updateStatus.value = result.message
+            Toast.makeText(context, result.message, Toast.LENGTH_SHORT).show()
+            return@launch
+          }
+        }
+      }
+
+      val targetRelease = release ?: return@launch
+      _updateStatus.value = "Downloading ${targetRelease.tagName}..."
+      val finalState = GitHubUpdater.downloadApk(context, targetRelease.apkUrl, targetRelease.tagName) { state ->
+        _apkDownloadState.value = state
+        when (state) {
+          is ApkDownloadState.Downloading -> {
+            val pct = if (state.progress >= 0f) "${(state.progress * 100).toInt()}%" else "${state.downloadedBytes / (1024 * 1024)} MB"
+            _updateStatus.value = "Downloading ${targetRelease.tagName} ($pct)"
+          }
+          is ApkDownloadState.Downloaded -> {
+            _updateStatus.value = "Downloaded ${targetRelease.tagName}. Ready to install."
+          }
+          is ApkDownloadState.Error -> {
+            _updateStatus.value = state.message
+          }
+          else -> Unit
+        }
+      }
+
+      if (finalState is ApkDownloadState.Downloaded) {
+        val installMsg = GitHubUpdater.installDownloadedApk(context)
+        _updateStatus.value = installMsg
+        Toast.makeText(context, installMsg, Toast.LENGTH_LONG).show()
+      } else if (finalState is ApkDownloadState.Error) {
+        Toast.makeText(context, finalState.message, Toast.LENGTH_LONG).show()
+      }
+    }
   }
 
   fun installDownloadedApk(context: Context) {
-    GitHubUpdater.installDownloadedApk(context)
+    val msg = GitHubUpdater.installDownloadedApk(context)
+    _updateStatus.value = msg
+    Toast.makeText(context, msg, Toast.LENGTH_LONG).show()
+  }
+
+  fun openGitHubRepo(context: Context) {
+    try {
+      val owner = githubOwner.value.trim().ifBlank { "MEYYYNASH" }
+      val repo = githubRepo.value.trim().ifBlank { "AURIX" }
+      val intent = Intent(Intent.ACTION_VIEW, Uri.parse("https://github.com/$owner/$repo/releases")).apply {
+        addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+      }
+      context.startActivity(intent)
+    } catch (_: Exception) {
+      Toast.makeText(context, "Unable to open browser", Toast.LENGTH_SHORT).show()
+    }
+  }
+
+  fun downloadSong(context: Context, song: Song) {
+    if (_songDownloadProgress.value.containsKey(song.id)) return
+    viewModelScope.launch {
+      _songDownloadProgress.value = _songDownloadProgress.value + (song.id to 0.05f)
+      Toast.makeText(context, "Downloading ${song.title}...", Toast.LENGTH_SHORT).show()
+
+      val result = SongDownloader.downloadSongToDevice(context, song) { progress ->
+        _songDownloadProgress.value = _songDownloadProgress.value + (song.id to progress)
+      }
+
+      _songDownloadProgress.value = _songDownloadProgress.value - song.id
+      result.onSuccess { savedUri ->
+        _downloadedSongIds.value = _downloadedSongIds.value + song.id
+        val localTrack = song.copy(
+          id = savedUri.toString(),
+          streamUrl = savedUri.toString(),
+          source = "Downloaded"
+        )
+        if (_localSongs.value.none { it.title == song.title && it.artist == song.artist }) {
+          _localSongs.value = listOf(localTrack) + _localSongs.value
+        }
+        Toast.makeText(context, "Saved to Music/AURIX: ${song.title}", Toast.LENGTH_LONG).show()
+      }.onFailure { err ->
+        Toast.makeText(context, err.localizedMessage ?: "Download failed", Toast.LENGTH_LONG).show()
+      }
+    }
   }
 
   fun loadTrending() {
@@ -413,17 +523,52 @@ class AurixViewModel(application: Application) : AndroidViewModel(application) {
   }
 
   fun addLocalSong(uri: Uri) {
-    val title = uri.lastPathSegment ?: "Local Song"
+    val appContext = getApplication<Application>()
+    var displayTitle: String? = null
+    var artist = "Device Storage"
+    var durationSec = 180L
+
+    try {
+      appContext.contentResolver.query(uri, arrayOf(OpenableColumns.DISPLAY_NAME), null, null, null)?.use { cursor ->
+        if (cursor.moveToFirst()) {
+          val idx = cursor.getColumnIndex(OpenableColumns.DISPLAY_NAME)
+          if (idx >= 0) {
+            displayTitle = cursor.getString(idx)?.substringBeforeLast('.')
+          }
+        }
+      }
+    } catch (_: Exception) { }
+
+    try {
+      val retriever = MediaMetadataRetriever()
+      retriever.setDataSource(appContext, uri)
+      val metaTitle = retriever.extractMetadata(MediaMetadataRetriever.METADATA_KEY_TITLE)
+      val metaArtist = retriever.extractMetadata(MediaMetadataRetriever.METADATA_KEY_ARTIST)
+      val metaDuration = retriever.extractMetadata(MediaMetadataRetriever.METADATA_KEY_DURATION)?.toLongOrNull()
+      if (!metaTitle.isNullOrBlank()) displayTitle = metaTitle
+      if (!metaArtist.isNullOrBlank()) artist = metaArtist
+      if (metaDuration != null && metaDuration > 0L) durationSec = metaDuration / 1000L
+      retriever.release()
+    } catch (_: Exception) { }
+
+    val fallbackName = uri.lastPathSegment
+      ?.substringAfterLast('/')
+      ?.substringBeforeLast('.')
+      ?.takeIf { !it.startsWith("audio:") }
+      ?: "Local Audio Track"
+
     val song = Song(
       id = uri.toString(),
-      title = title,
-      artist = "Device Storage",
+      title = displayTitle?.ifBlank { null } ?: fallbackName,
+      artist = artist,
       artworkUrl = "",
-      durationSeconds = 180,
+      durationSeconds = durationSec,
       streamUrl = uri.toString(),
       source = "Local"
     )
-    _localSongs.value = _localSongs.value + song
+    if (_localSongs.value.none { it.id == song.id }) {
+      _localSongs.value = listOf(song) + _localSongs.value
+    }
   }
 
   private fun fetchLyrics(song: Song) {

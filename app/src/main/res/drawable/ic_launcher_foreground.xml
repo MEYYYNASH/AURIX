@@ -3,6 +3,6 @@
     <item
         android:width="66dp"
         android:height="66dp"
-        android:drawable="@drawable/aurix_icon_1794614627709"
+        android:drawable="@drawable/aurix_clean_logo_1794625921343"
         android:gravity="center" />
 </layer-list>

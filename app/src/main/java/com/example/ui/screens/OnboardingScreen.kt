@@ -7,7 +7,7 @@ import androidx.compose.foundation.pager.rememberPagerState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.rounded.ArrowForward
+import androidx.compose.material.icons.automirrored.rounded.ArrowForward
 import androidx.compose.material.icons.rounded.Equalizer
 import androidx.compose.material.icons.rounded.MusicNote
 import androidx.compose.material.icons.rounded.Palette
@@ -84,26 +84,35 @@ fun OnboardingScreen(onFinished: () -> Unit) {
           horizontalAlignment = Alignment.CenterHorizontally,
           verticalArrangement = Arrangement.Center
         ) {
-          Box(
-            modifier = Modifier
-              .size(240.dp)
-              .clip(RoundedCornerShape(32.dp))
-              .background(
-                Brush.linearGradient(
-                  colors = listOf(
-                    MaterialTheme.colorScheme.primary,
-                    MaterialTheme.colorScheme.primary.copy(alpha = 0.5f)
-                  )
-                )
-              ),
-            contentAlignment = Alignment.Center
-          ) {
-            Icon(
-              imageVector = page.icon,
-              contentDescription = null,
-              tint = Color.White,
-              modifier = Modifier.size(80.dp)
+          if (pageIndex == 0) {
+            AurixBrandLogo(
+              size = 200.dp,
+              cornerRadius = 40.dp,
+              animated = true,
+              reducedMotion = false
             )
+          } else {
+            Box(
+              modifier = Modifier
+                .size(200.dp)
+                .clip(RoundedCornerShape(36.dp))
+                .background(
+                  Brush.linearGradient(
+                    colors = listOf(
+                      MaterialTheme.colorScheme.primary,
+                      MaterialTheme.colorScheme.primary.copy(alpha = 0.55f)
+                    )
+                  )
+                ),
+              contentAlignment = Alignment.Center
+            ) {
+              Icon(
+                imageVector = page.icon,
+                contentDescription = null,
+                tint = Color.White,
+                modifier = Modifier.size(76.dp)
+              )
+            }
           }
 
           Spacer(modifier = Modifier.height(48.dp))
@@ -157,7 +166,7 @@ fun OnboardingScreen(onFinished: () -> Unit) {
           ) {
             Text("Get started", style = MaterialTheme.typography.bodyMedium.copy(fontWeight = FontWeight.Bold))
             Spacer(modifier = Modifier.width(8.dp))
-            Icon(Icons.Rounded.ArrowForward, contentDescription = null)
+            Icon(Icons.AutoMirrored.Rounded.ArrowForward, contentDescription = null)
           }
         } else {
           FloatingActionButton(
@@ -169,7 +178,7 @@ fun OnboardingScreen(onFinished: () -> Unit) {
             shape = CircleShape,
             containerColor = MaterialTheme.colorScheme.primary
           ) {
-            Icon(Icons.Rounded.ArrowForward, contentDescription = "Next", tint = Color.White)
+            Icon(Icons.AutoMirrored.Rounded.ArrowForward, contentDescription = "Next", tint = Color.White)
           }
         }
       }

@@ -40,12 +40,15 @@ fun HomeScreen(
   currentSong: Song?,
   isPlaying: Boolean,
   reducedMotion: Boolean,
+  songDownloadProgress: Map<String, Float>,
+  downloadedSongIds: Set<String>,
   onAppModeChanged: (String) -> Unit,
   onYoutubeUrlChanged: (String) -> Unit,
   onAnalyzeYoutube: () -> Unit,
   onSongClick: (Song) -> Unit,
   onMoodClick: (String) -> Unit,
-  onFavoriteClick: (Song) -> Unit
+  onFavoriteClick: (Song) -> Unit,
+  onDownloadClick: (Song) -> Unit
 ) {
   val quickFilters = listOf(
     "បទថ្មី 2026 · New Khmer" to "Khmer",
@@ -84,22 +87,34 @@ fun HomeScreen(
         horizontalArrangement = Arrangement.SpaceBetween,
         verticalAlignment = Alignment.CenterVertically
       ) {
-        Column(modifier = Modifier.weight(1f).padding(end = 8.dp)) {
-          Text(
-            text = if (appMode == "search") "All Sound Finder & Search" else "All Sound & Link Downloader",
-            style = MaterialTheme.typography.titleLarge.copy(fontWeight = FontWeight.Bold, fontSize = 21.sp),
-            color = MaterialTheme.colorScheme.onBackground,
-            maxLines = 1,
-            overflow = TextOverflow.Ellipsis
+        Row(
+          modifier = Modifier.weight(1f).padding(end = 8.dp),
+          verticalAlignment = Alignment.CenterVertically,
+          horizontalArrangement = Arrangement.spacedBy(10.dp)
+        ) {
+          AurixBrandLogo(
+            size = 38.dp,
+            cornerRadius = 11.dp,
+            animated = true,
+            reducedMotion = reducedMotion
           )
-          Spacer(modifier = Modifier.height(2.dp))
-          Text(
-            text = "Songs, Remixes, Lyrics & Links (Audius · LRCLIB · YouTube)",
-            style = MaterialTheme.typography.bodySmall,
-            color = MaterialTheme.colorScheme.onSurfaceVariant,
-            maxLines = 1,
-            overflow = TextOverflow.Ellipsis
-          )
+          Column {
+            Text(
+              text = if (appMode == "search") "All Sound Finder" else "Link Downloader",
+              style = MaterialTheme.typography.titleLarge.copy(fontWeight = FontWeight.Bold, fontSize = 20.sp),
+              color = MaterialTheme.colorScheme.onBackground,
+              maxLines = 1,
+              overflow = TextOverflow.Ellipsis
+            )
+            Spacer(modifier = Modifier.height(2.dp))
+            Text(
+              text = "Songs, Remixes, Lyrics & MP3",
+              style = MaterialTheme.typography.bodySmall,
+              color = MaterialTheme.colorScheme.onSurfaceVariant,
+              maxLines = 1,
+              overflow = TextOverflow.Ellipsis
+            )
+          }
         }
         Surface(
           shape = RoundedCornerShape(20.dp),
@@ -288,7 +303,7 @@ fun HomeScreen(
                       Text("Play Audio")
                     }
                     Button(
-                      onClick = { onSongClick(analyzedSong) },
+                      onClick = { onDownloadClick(analyzedSong) },
                       modifier = Modifier.weight(1f),
                       shape = RoundedCornerShape(20.dp),
                       colors = ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.primary)
@@ -480,8 +495,11 @@ fun HomeScreen(
             isPlaying = isPlaying,
             isCurrent = currentSong?.id == song.id,
             reducedMotion = reducedMotion,
+            downloadProgress = songDownloadProgress[song.id],
+            isDownloaded = song.id in downloadedSongIds,
             onSongClick = { onSongClick(song) },
-            onFavoriteClick = { onFavoriteClick(song) }
+            onFavoriteClick = { onFavoriteClick(song) },
+            onDownloadClick = { onDownloadClick(song) }
           )
         }
       }

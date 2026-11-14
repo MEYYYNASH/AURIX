@@ -70,6 +70,9 @@ fun AurixApp(viewModel: AurixViewModel) {
   val analyzedSong by viewModel.analyzedSong.collectAsStateWithLifecycle()
   val updateStatus by viewModel.updateStatus.collectAsStateWithLifecycle()
   val latestRelease by viewModel.latestRelease.collectAsStateWithLifecycle()
+  val apkDownloadState by viewModel.apkDownloadState.collectAsStateWithLifecycle()
+  val songDownloadProgress by viewModel.songDownloadProgress.collectAsStateWithLifecycle()
+  val downloadedSongIds by viewModel.downloadedSongIds.collectAsStateWithLifecycle()
   val githubOwner by viewModel.githubOwner.collectAsStateWithLifecycle()
   val githubRepo by viewModel.githubRepo.collectAsStateWithLifecycle()
 
@@ -162,12 +165,15 @@ fun AurixApp(viewModel: AurixViewModel) {
               currentSong = currentSong,
               isPlaying = isPlaying,
               reducedMotion = reducedMotion,
+              songDownloadProgress = songDownloadProgress,
+              downloadedSongIds = downloadedSongIds,
               onAppModeChanged = { viewModel.setAppMode(it) },
               onYoutubeUrlChanged = { viewModel.setYoutubeUrl(it) },
               onAnalyzeYoutube = { viewModel.analyzeYoutubeUrl() },
               onSongClick = { viewModel.playSong(it) },
               onMoodClick = { viewModel.search(it); currentScreen = Screen.Search },
-              onFavoriteClick = { viewModel.toggleFavorite(it) }
+              onFavoriteClick = { viewModel.toggleFavorite(it) },
+              onDownloadClick = { viewModel.downloadSong(context, it) }
             )
             is Screen.Search -> SearchScreen(
               searchResults = searchResults,
@@ -196,16 +202,19 @@ fun AurixApp(viewModel: AurixViewModel) {
               currentLanguage = currentLanguage,
               dynamicBg = dynamicBg,
               reducedMotion = reducedMotion,
+              darkTheme = darkTheme,
               hasCurrentSong = currentSong != null,
               githubOwner = githubOwner,
               githubRepo = githubRepo,
               updateStatus = updateStatus,
               latestRelease = latestRelease,
+              apkDownloadState = apkDownloadState,
               onGithubOwnerChanged = { viewModel.setGithubOwner(it) },
               onGithubRepoChanged = { viewModel.setGithubRepo(it) },
               onCheckUpdate = { viewModel.checkForUpdates(it) },
               onDownloadUpdate = { viewModel.downloadAndInstallUpdate(it) },
               onInstallUpdate = { viewModel.installDownloadedApk(it) },
+              onOpenGitHubRepo = { viewModel.openGitHubRepo(it) },
               onThemeChanged = { viewModel.setThemeMode(it) },
               onAccentChanged = { viewModel.setAccentColor(it) },
               onLanguageChanged = { viewModel.setLanguage(it) },

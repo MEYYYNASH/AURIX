@@ -4,9 +4,12 @@ import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.core.*
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
+import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
+import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
+import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.rounded.*
@@ -22,12 +25,14 @@ import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.testTag
+import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import coil.compose.AsyncImage
+import com.example.R
 import com.example.model.Song
 
 fun artworkHueColors(title: String): Pair<Color, Color> {
@@ -136,6 +141,106 @@ fun EqualizerBars(
 }
 
 @Composable
+fun GlassCard(
+  modifier: Modifier = Modifier,
+  darkTheme: Boolean,
+  cornerRadius: Dp = 24.dp,
+  content: @Composable ColumnScope.() -> Unit
+) {
+  val shape = RoundedCornerShape(cornerRadius)
+  val fillColor = if (darkTheme) {
+    Color(0xFF1A202E).copy(alpha = 0.72f)
+  } else {
+    Color.White.copy(alpha = 0.78f)
+  }
+  val borderBrush = Brush.verticalGradient(
+    colors = if (darkTheme) {
+      listOf(Color.White.copy(alpha = 0.22f), Color.White.copy(alpha = 0.05f))
+    } else {
+      listOf(Color.White.copy(alpha = 0.90f), Color.White.copy(alpha = 0.35f))
+    }
+  )
+
+  Surface(
+    shape = shape,
+    color = fillColor,
+    tonalElevation = 0.dp,
+    shadowElevation = if (darkTheme) 10.dp else 6.dp,
+    modifier = modifier.border(1.dp, borderBrush, shape)
+  ) {
+    Column(content = content)
+  }
+}
+
+@Composable
+fun AurixBrandLogo(
+  size: Dp = 56.dp,
+  cornerRadius: Dp = 18.dp,
+  animated: Boolean = true,
+  reducedMotion: Boolean = false,
+  modifier: Modifier = Modifier
+) {
+  val infiniteTransition = rememberInfiniteTransition(label = "aurix_logo_anim")
+  val pulseScale by infiniteTransition.animateFloat(
+    initialValue = 1.0f,
+    targetValue = 1.06f,
+    animationSpec = infiniteRepeatable(
+      animation = tween(durationMillis = 1900, easing = FastOutSlowInEasing),
+      repeatMode = RepeatMode.Reverse
+    ),
+    label = "logo_scale"
+  )
+  val glowAlpha by infiniteTransition.animateFloat(
+    initialValue = 0.28f,
+    targetValue = 0.65f,
+    animationSpec = infiniteRepeatable(
+      animation = tween(durationMillis = 1900, easing = FastOutSlowInEasing),
+      repeatMode = RepeatMode.Reverse
+    ),
+    label = "logo_glow"
+  )
+
+  val activeScale = if (animated && !reducedMotion) pulseScale else 1.0f
+  val activeGlow = if (animated && !reducedMotion) glowAlpha else 0.35f
+
+  Box(
+    modifier = modifier.size(size),
+    contentAlignment = Alignment.Center
+  ) {
+    Box(
+      modifier = Modifier
+        .matchParentSize()
+        .scale(activeScale * 1.08f)
+        .clip(RoundedCornerShape(cornerRadius + 4.dp))
+        .background(
+          Brush.radialGradient(
+            colors = listOf(
+              MaterialTheme.colorScheme.primary.copy(alpha = activeGlow),
+              Color.Transparent
+            )
+          )
+        )
+    )
+    Image(
+      painter = painterResource(id = R.drawable.aurix_clean_logo_1794625921343),
+      contentDescription = "AURIX Logo",
+      contentScale = ContentScale.Crop,
+      modifier = Modifier
+        .matchParentSize()
+        .scale(activeScale)
+        .clip(RoundedCornerShape(cornerRadius))
+        .border(
+          width = 1.dp,
+          brush = Brush.verticalGradient(
+            listOf(Color.White.copy(alpha = 0.45f), Color.White.copy(alpha = 0.08f))
+          ),
+          shape = RoundedCornerShape(cornerRadius)
+        )
+    )
+  }
+}
+
+@Composable
 fun DynamicArtworkBackdrop(
   song: Song?,
   enabled: Boolean,
@@ -143,53 +248,71 @@ fun DynamicArtworkBackdrop(
   reducedMotion: Boolean,
   modifier: Modifier = Modifier
 ) {
-  val targetAlpha = if (enabled && song != null) (if (darkTheme) 0.34f else 0.22f) else 0f
+  val accentColor = MaterialTheme.colorScheme.primary
+  val targetAlpha = if (enabled && song != null) (if (darkTheme) 0.36f else 0.26f) else 0f
   val animatedAlpha by animateFloatAsState(
     targetValue = targetAlpha,
     animationSpec = if (reducedMotion) snap() else tween(durationMillis = 700),
     label = "dynamic_bg_alpha"
   )
 
-  if (animatedAlpha > 0.01f && song != null) {
-    val (c1, c2) = remember(song.title) { artworkHueColors(song.title) }
-    Box(modifier = modifier.fillMaxSize().alpha(animatedAlpha)) {
-      if (song.artworkUrl.isNotBlank()) {
-        AsyncImage(
-          model = song.artworkUrl,
-          contentDescription = null,
-          contentScale = ContentScale.Crop,
+  // Soft ambient glass mesh background (always visible for clean frosted glass depth)
+  Box(modifier = modifier.fillMaxSize()) {
+    Box(
+      modifier = Modifier
+        .fillMaxSize()
+        .background(
+          Brush.radialGradient(
+            colors = if (darkTheme) {
+              listOf(accentColor.copy(alpha = 0.20f), Color(0xFF1A103D).copy(alpha = 0.16f), Color.Transparent)
+            } else {
+              listOf(accentColor.copy(alpha = 0.16f), Color(0xFFE0D7FF).copy(alpha = 0.35f), Color.Transparent)
+            }
+          )
+        )
+    )
+
+    if (animatedAlpha > 0.01f && song != null) {
+      val (c1, c2) = remember(song.title) { artworkHueColors(song.title) }
+      Box(modifier = Modifier.fillMaxSize().alpha(animatedAlpha)) {
+        if (song.artworkUrl.isNotBlank()) {
+          AsyncImage(
+            model = song.artworkUrl,
+            contentDescription = null,
+            contentScale = ContentScale.Crop,
+            modifier = Modifier
+              .fillMaxSize()
+              .scale(1.25f)
+              .blur(72.dp)
+          )
+        }
+        Box(
           modifier = Modifier
             .fillMaxSize()
-            .scale(1.25f)
-            .blur(72.dp)
+            .background(
+              Brush.radialGradient(
+                colors = listOf(
+                  c1.copy(alpha = 0.55f),
+                  c2.copy(alpha = 0.30f),
+                  Color.Transparent
+                )
+              )
+            )
+        )
+        Box(
+          modifier = Modifier
+            .fillMaxSize()
+            .background(
+              Brush.verticalGradient(
+                colors = listOf(
+                  Color.Transparent,
+                  MaterialTheme.colorScheme.background.copy(alpha = 0.85f),
+                  MaterialTheme.colorScheme.background
+                )
+              )
+            )
         )
       }
-      Box(
-        modifier = Modifier
-          .fillMaxSize()
-          .background(
-            Brush.radialGradient(
-              colors = listOf(
-                c1.copy(alpha = 0.55f),
-                c2.copy(alpha = 0.30f),
-                Color.Transparent
-              )
-            )
-          )
-      )
-      Box(
-        modifier = Modifier
-          .fillMaxSize()
-          .background(
-            Brush.verticalGradient(
-              colors = listOf(
-                Color.Transparent,
-                MaterialTheme.colorScheme.background.copy(alpha = 0.85f),
-                MaterialTheme.colorScheme.background
-              )
-            )
-          )
-      )
     }
   }
 }
@@ -279,8 +402,11 @@ fun SongDownloadRow(
   isPlaying: Boolean = false,
   isCurrent: Boolean = false,
   reducedMotion: Boolean = false,
+  downloadProgress: Float? = null,
+  isDownloaded: Boolean = false,
   onSongClick: () -> Unit,
-  onFavoriteClick: () -> Unit
+  onFavoriteClick: () -> Unit,
+  onDownloadClick: () -> Unit = {}
 ) {
   Surface(
     modifier = Modifier
@@ -288,12 +414,17 @@ fun SongDownloadRow(
       .padding(vertical = 4.dp)
       .clip(RoundedCornerShape(20.dp))
       .clickable { onSongClick() },
-    color = if (isCurrent) MaterialTheme.colorScheme.primary.copy(alpha = 0.14f) else MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.65f),
+    color = if (isCurrent) MaterialTheme.colorScheme.primary.copy(alpha = 0.16f) else MaterialTheme.colorScheme.surface.copy(alpha = 0.72f),
     shape = RoundedCornerShape(20.dp)
   ) {
     Row(
       modifier = Modifier
         .fillMaxWidth()
+        .border(
+          1.dp,
+          Color.White.copy(alpha = 0.14f),
+          RoundedCornerShape(20.dp)
+        )
         .padding(horizontal = 12.dp, vertical = 10.dp),
       verticalAlignment = Alignment.CenterVertically
     ) {
@@ -333,17 +464,26 @@ fun SongDownloadRow(
         )
       }
 
-      Surface(
-        shape = RoundedCornerShape(12.dp),
-        color = MaterialTheme.colorScheme.surface,
-        modifier = Modifier.padding(horizontal = 4.dp)
+      IconButton(
+        onClick = onDownloadClick,
+        modifier = Modifier
+          .minimumInteractiveComponentSize()
+          .testTag("song_download_button_${song.id}")
       ) {
-        Text(
-          text = "MP3",
-          style = MaterialTheme.typography.bodySmall.copy(fontWeight = FontWeight.Bold, fontSize = 11.sp),
-          color = MaterialTheme.colorScheme.primary,
-          modifier = Modifier.padding(horizontal = 8.dp, vertical = 4.dp)
-        )
+        if (downloadProgress != null) {
+          CircularProgressIndicator(
+            progress = { downloadProgress.coerceIn(0f, 1f) },
+            modifier = Modifier.size(20.dp),
+            strokeWidth = 2.5.dp,
+            color = MaterialTheme.colorScheme.primary
+          )
+        } else {
+          Icon(
+            imageVector = if (isDownloaded) Icons.Rounded.DownloadDone else Icons.Rounded.Download,
+            contentDescription = "Download MP3",
+            tint = if (isDownloaded) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurfaceVariant
+          )
+        }
       }
 
       IconButton(

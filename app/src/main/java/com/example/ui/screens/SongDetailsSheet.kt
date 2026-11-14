@@ -74,7 +74,7 @@ fun SongDetailsSheet(
 
       Spacer(modifier = Modifier.height(24.dp))
 
-      Divider(color = MaterialTheme.colorScheme.surfaceVariant)
+      HorizontalDivider(color = MaterialTheme.colorScheme.surfaceVariant)
 
       Spacer(modifier = Modifier.height(16.dp))
 
