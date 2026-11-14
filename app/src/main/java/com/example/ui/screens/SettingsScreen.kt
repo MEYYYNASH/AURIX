@@ -184,7 +184,7 @@ fun SettingsScreen(
     item {
       SettingsSection(title = "About") {
         Column {
-          Text("AURIX / All Sound Finder v1.0", style = MaterialTheme.typography.bodyMedium.copy(fontWeight = FontWeight.Bold), color = MaterialTheme.colorScheme.onBackground)
+          Text("AURIX / All Sound Finder v0.1.1", style = MaterialTheme.typography.bodyMedium.copy(fontWeight = FontWeight.Bold), color = MaterialTheme.colorScheme.onBackground)
           Spacer(modifier = Modifier.height(4.dp))
           Text("Powered by Audius and LRCLIB. GitHub OTA Update Enabled.", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
         }
