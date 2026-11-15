@@ -51,6 +51,7 @@ sealed class Screen(val route: String, val title: String, val icon: ImageVector)
   object Search : Screen("search", "Search", Icons.Outlined.Search)
   object Library : Screen("library", "Library", Icons.Outlined.Folder)
   object Settings : Screen("settings", "Settings", Icons.Outlined.Settings)
+  object Album : Screen("album", "Album", Icons.Outlined.Folder)
 }
 
 private val AurixEase = CubicBezierEasing(0.2f, 0.8f, 0.2f, 1.0f)
@@ -197,6 +198,10 @@ private fun AurixMainShell(
   val crossfadeSettings by viewModel.crossfadeSettings.collectAsStateWithLifecycle()
   val hiddenSongIds by viewModel.hiddenSongIds.collectAsStateWithLifecycle()
   val blockedArtists by viewModel.blockedArtists.collectAsStateWithLifecycle()
+  val albumTracks by viewModel.albumTracks.collectAsStateWithLifecycle()
+  val isAlbumAddedToLibrary by viewModel.isAlbumAddedToLibrary.collectAsStateWithLifecycle()
+  val isAlbumDownloaded by viewModel.isAlbumDownloaded.collectAsStateWithLifecycle()
+  var albumDetailSong by remember { mutableStateOf<com.example.model.Song?>(null) }
 
   val isNowPlayingOpen = showNowPlaying && currentSong != null
 
@@ -327,8 +332,32 @@ private fun AurixMainShell(
                 libraryTab = tab
                 currentScreen = Screen.Library
               },
+              onOpenAlbum = {
+                currentScreen = Screen.Album
+              },
               onSongClick = { song, queue -> viewModel.playSong(song, queue) },
               onFavoriteClick = { viewModel.toggleFavorite(it) }
+            )
+            is Screen.Album -> AlbumTrackListSection(
+              albumTitle = stringResource(id = R.string.album_placeholder_title),
+              artistName = stringResource(id = R.string.album_placeholder_artist),
+              coverUrl = null,
+              tracks = albumTracks,
+              currentSong = currentSong,
+              isPlaying = isPlaying,
+              isShuffleEnabled = shuffleEnabled,
+              isAddedToLibrary = isAlbumAddedToLibrary,
+              isAlbumDownloaded = isAlbumDownloaded,
+              hasCurrentSong = currentSong != null,
+              reducedMotion = reducedMotion,
+              onAddToLibraryClick = { viewModel.toggleAlbumInLibrary(albumTracks) },
+              onDownloadAlbumClick = { viewModel.downloadAlbum(context, albumTracks) },
+              onPlayClick = { viewModel.playAlbumFromStart(albumTracks) },
+              onShuffleClick = { viewModel.shuffleAlbum(albumTracks) },
+              onTrackClick = { song -> viewModel.onAlbumTrackClick(song, albumTracks) },
+              onTrackFavoriteClick = { song -> viewModel.toggleFavorite(song) },
+              onTrackDownloadClick = { song -> viewModel.downloadSong(context, song) },
+              onTrackDetailsClick = { song -> albumDetailSong = song }
             )
             is Screen.Search -> SearchScreen(
               searchMode = searchMode,
@@ -573,6 +602,37 @@ private fun AurixMainShell(
             }
           )
         }
+      }
+
+      albumDetailSong?.let { detailTarget ->
+        SongDetailsSheet(
+          song = detailTarget,
+          hasLyrics = detailTarget.id in verifiedLyricsIds,
+          isPlaying = currentSong?.id == detailTarget.id && isPlaying,
+          reducedMotion = reducedMotion,
+          onDismiss = { albumDetailSong = null },
+          onPlay = {
+            albumDetailSong = null
+            viewModel.playSong(detailTarget, albumTracks)
+          },
+          onFavorite = { viewModel.toggleFavorite(detailTarget) },
+          onShare = {
+            albumDetailSong = null
+            val shareIntent = android.content.Intent(android.content.Intent.ACTION_SEND).apply {
+              type = "text/plain"
+              putExtra(android.content.Intent.EXTRA_TEXT, "${detailTarget.title} — ${detailTarget.artist}")
+            }
+            context.startActivity(android.content.Intent.createChooser(shareIntent, null))
+          },
+          onHideSong = {
+            albumDetailSong = null
+            viewModel.hideSong(detailTarget)
+          },
+          onBlockArtist = {
+            albumDetailSong = null
+            viewModel.blockArtist(detailTarget.artist)
+          }
+        )
       }
 
       // Optional Mandatory Critical Update Dialog

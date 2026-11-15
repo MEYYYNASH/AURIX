@@ -10,9 +10,9 @@ on:
   workflow_dispatch:
     inputs:
       tag:
-        description: 'Release tag (e.g. v1.5.8)'
+        description: 'Release tag (e.g. v1.5.9)'
         required: false
-        default: 'v1.5.8'
+        default: 'v1.5.9'
 
 permissions:
   contents: write
@@ -52,11 +52,11 @@ jobs:
             RELEASE_TAG="${{ github.ref_name }}"
           else
             VERSION=$(grep -m1 'versionName' app/build.gradle.kts | sed -E 's/.*"([^"]+)".*/\1/')
-            RELEASE_TAG="v${VERSION:-1.5.8}"
+            RELEASE_TAG="v${VERSION:-1.5.9}"
           fi
           VCODE=$(grep -m1 'versionCode' app/build.gradle.kts | sed -E 's/[^0-9]*([0-9]+).*/\1/')
           echo "RELEASE_TAG=${RELEASE_TAG}" >> "$GITHUB_ENV"
-          echo "RELEASE_VERSION_CODE=${VCODE:-10508}" >> "$GITHUB_ENV"
+          echo "RELEASE_VERSION_CODE=${VCODE:-10509}" >> "$GITHUB_ENV"
 
       - name: Ensure keystores exist
         run: |
@@ -100,8 +100,9 @@ jobs:
             mandatory: false
 
             What's New in AURIX ${{ env.RELEASE_TAG }}:
-            - Replaced the Search screen spinner with the Orbit loader using offscreen BlendMode.Clear compositing on gradient backgrounds, 400ms debounced/cancellable SearchUiState, static empty state, and teal pill Retry
-            - Added the animated 84dp UpdateLogo (Intro, Idle, Checking with blue comet, Done with green check badge) to the Settings App Update & Release card with liveRegion status announcements
+            - Added modular Album Header + Track List section (AlbumHeader, ActionButtons, PlayShuffleRow, TrackRow) connected to AURIX playback, shuffle, library, and download state
+            - Replaced the Search screen spinner with the Orbit loader using offscreen BlendMode.Clear compositing on gradient backgrounds and 400ms debounced SearchUiState
+            - Added the animated 84dp UpdateLogo to the Settings App Update & Release card
           files: |
             app/build/outputs/apk/release/app-release.apk
             AURIX-${{ env.RELEASE_TAG }}.apk

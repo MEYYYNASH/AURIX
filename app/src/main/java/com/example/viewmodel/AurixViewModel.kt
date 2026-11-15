@@ -289,6 +289,50 @@ class AurixViewModel(application: Application) : AndroidViewModel(application) {
     }.filter { isTrackVisible(it, hidden, blocked) }
   }.stateIn(viewModelScope, SharingStarted.Lazily, emptyList())
 
+  val albumTracks: StateFlow<List<Song>> = combine(
+    localSongs,
+    featuredTracks,
+    favoriteIds,
+    hiddenSongIds
+  ) { local, featured, favs, hidden ->
+    val sourcePool = local.ifEmpty { featured }.take(8)
+    val defaultDurations = listOf(192L, 218L, 174L, 245L, 203L, 189L, 231L, 260L)
+    val count = if (sourcePool.isNotEmpty()) sourcePool.size else defaultDurations.size
+    (0 until count).mapNotNull { idx ->
+      val id = "album_track_${idx + 1}"
+      if (id in hidden) return@mapNotNull null
+      val backing = sourcePool.getOrNull(idx)
+      val duration = backing?.fullDurationSeconds?.takeIf { it > 0L }
+        ?: backing?.durationSeconds?.takeIf { it > 0L }
+        ?: defaultDurations[idx % defaultDurations.size]
+      Song(
+        id = id,
+        title = "Track Title ${idx + 1}",
+        artist = "Artist Name",
+        artworkUrl = "",
+        durationSeconds = duration,
+        streamUrl = backing?.streamUrl.orEmpty(),
+        source = backing?.source ?: "Album",
+        isFavorite = id in favs,
+        fullDurationSeconds = duration
+      )
+    }
+  }.stateIn(viewModelScope, SharingStarted.Eagerly, emptyList())
+
+  val isAlbumAddedToLibrary: StateFlow<Boolean> = combine(
+    albumTracks,
+    favoriteIds
+  ) { tracks, favs ->
+    tracks.isNotEmpty() && tracks.all { it.id in favs }
+  }.stateIn(viewModelScope, SharingStarted.Eagerly, false)
+
+  val isAlbumDownloaded: StateFlow<Boolean> = combine(
+    albumTracks,
+    downloadedSongIds
+  ) { tracks, downloaded ->
+    tracks.isNotEmpty() && tracks.all { it.id in downloaded }
+  }.stateIn(viewModelScope, SharingStarted.Eagerly, false)
+
   private val _rawCurrentSong = MutableStateFlow<Song?>(null)
   val currentSong: StateFlow<Song?> = combine(_rawCurrentSong, favoriteIds) { song, favs ->
     song?.copy(isFavorite = song.id in favs)
@@ -1503,6 +1547,75 @@ class AurixViewModel(application: Application) : AndroidViewModel(application) {
       }
       controller.play()
     }
+  }
+
+  fun onAlbumTrackClick(track: Song, tracks: List<Song>) {
+    if (_rawCurrentSong.value?.id == track.id) {
+      togglePlayPause()
+    } else {
+      playSong(track, tracks)
+    }
+  }
+
+  fun playAlbumFromStart(tracks: List<Song>) {
+    val first = tracks.firstOrNull() ?: return
+    _shuffleEnabled.value = false
+    mediaController?.shuffleModeEnabled = false
+    playSong(first, tracks)
+  }
+
+  fun shuffleAlbum(tracks: List<Song>) {
+    if (tracks.isEmpty()) return
+    _shuffleEnabled.value = true
+    mediaController?.shuffleModeEnabled = true
+    val randomTrack = tracks.random()
+    playSong(randomTrack, tracks)
+  }
+
+  fun toggleAlbumInLibrary(tracks: List<Song>) {
+    if (tracks.isEmpty()) return
+    val appContext = getApplication<Application>()
+    viewModelScope.launch {
+      val currentFavs = favoriteIds.value
+      val allAdded = tracks.all { it.id in currentFavs }
+      if (allAdded) {
+        tracks.forEach { dao.deleteFavorite(it.id) }
+        Toast.makeText(appContext, "Removed Album Title from library", Toast.LENGTH_SHORT).show()
+      } else {
+        tracks.forEach { song ->
+          dao.insertFavorite(
+            FavoriteSongEntity(
+              id = song.id,
+              title = song.title,
+              artist = song.artist,
+              artworkUrl = song.artworkUrl,
+              durationSeconds = song.durationSeconds,
+              streamUrl = song.streamUrl,
+              source = song.source
+            )
+          )
+        }
+        Toast.makeText(appContext, "Added Album Title to library", Toast.LENGTH_SHORT).show()
+      }
+    }
+  }
+
+  fun downloadAlbum(context: Context, tracks: List<Song>) {
+    val pending = tracks.filter {
+      it.streamUrl.isNotBlank() &&
+        it.id !in _downloadedSongIds.value &&
+        !_songDownloadProgress.value.containsKey(it.id)
+    }
+    if (pending.isEmpty()) {
+      val msg = if (tracks.any { it.streamUrl.isNotBlank() }) {
+        "Album tracks are already saved"
+      } else {
+        "No downloadable audio stream available yet"
+      }
+      Toast.makeText(context, msg, Toast.LENGTH_SHORT).show()
+      return
+    }
+    pending.forEach { song -> downloadSong(context, song) }
   }
 
   fun getLivePlaybackPositionMs(): Long {

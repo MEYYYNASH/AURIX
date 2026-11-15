@@ -184,4 +184,21 @@
     <string name="onboarding_p3_desc">Personalize themes, custom accent colors, language, and immersive backgrounds.</string>
     <string name="onboarding_p4_title">Ready to listen?</string>
     <string name="onboarding_p4_desc">Dive into your personalized music journey with AURIX today.</string>
+    <string name="album_nav_label">Album</string>
+    <string name="album_placeholder_title">Album Title</string>
+    <string name="album_placeholder_artist">Artist Name</string>
+    <string name="album_meta_single">Album, 1 song</string>
+    <string name="album_meta_plural">Album, %1$d songs</string>
+    <string name="album_add_to_library">Add to library</string>
+    <string name="album_remove_from_library">Remove from library</string>
+    <string name="album_download">Download album</string>
+    <string name="album_more_options">More album options</string>
+    <string name="album_action_play">Play</string>
+    <string name="album_action_shuffle">Shuffle</string>
+    <string name="album_track_more_cd">More options for %1$s</string>
+    <string name="album_track_pause">Pause</string>
+    <string name="album_track_favorite">Add to favorites</string>
+    <string name="album_track_unfavorite">Remove from favorites</string>
+    <string name="album_track_download">Download track</string>
+    <string name="album_track_details">Track details</string>
 </resources>

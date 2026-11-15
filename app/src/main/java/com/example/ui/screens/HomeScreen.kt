@@ -71,6 +71,7 @@ fun HomeScreen(
   onRefreshDailyFeed: () -> Unit,
   onOpenSearch: () -> Unit,
   onOpenLibraryTab: (Int) -> Unit,
+  onOpenAlbum: () -> Unit = {},
   onSongClick: (Song, List<Song>) -> Unit,
   onFavoriteClick: (Song) -> Unit
 ) {
@@ -214,6 +215,16 @@ fun HomeScreen(
             onClick = { onOpenLibraryTab(1) }
           )
         }
+        Spacer(modifier = Modifier.height(10.dp))
+        HomeLibraryPill(
+          title = stringResource(id = R.string.album_placeholder_title),
+          countLabel = stringResource(id = R.string.album_nav_label),
+          icon = Icons.Rounded.Album,
+          iconTint = Color(0xFFC4B5FF),
+          darkTheme = darkTheme,
+          modifier = Modifier.fillMaxWidth().testTag("home_album_tile"),
+          onClick = onOpenAlbum
+        )
       }
 
       // Recently Played Shelf (Deduplicated & Live Playing Ring)
