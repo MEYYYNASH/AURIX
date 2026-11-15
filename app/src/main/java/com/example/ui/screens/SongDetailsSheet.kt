@@ -16,6 +16,7 @@ import androidx.compose.material.icons.rounded.DeleteOutline
 import androidx.compose.material.icons.rounded.Favorite
 import androidx.compose.material.icons.rounded.FavoriteBorder
 import androidx.compose.material.icons.rounded.PlayArrow
+import androidx.compose.material.icons.rounded.PlaylistAdd
 import androidx.compose.material.icons.rounded.Share
 import androidx.compose.material.icons.rounded.VisibilityOff
 import androidx.compose.material3.*
@@ -57,6 +58,7 @@ fun SongDetailsSheet(
   onShare: () -> Unit,
   onHideSong: () -> Unit,
   onBlockArtist: () -> Unit,
+  onAddToAlbum: (() -> Unit)? = null,
   onDelete: (() -> Unit)? = null
 ) {
   val enrichedSong = remember(song) { TrackMetadataClassifier.enrich(song) }
@@ -230,6 +232,20 @@ fun SongDetailsSheet(
             modifier = Modifier.weight(1f),
             onClick = onShare
           )
+          if (onAddToAlbum != null) {
+            SheetActionCircleButton(
+              icon = Icons.Rounded.PlaylistAdd,
+              label = stringResource(id = R.string.details_add_to_album),
+              isDark = isDark,
+              active = false,
+              testTag = "details_add_to_album_button",
+              modifier = Modifier.weight(1f),
+              onClick = {
+                onDismiss()
+                onAddToAlbum()
+              }
+            )
+          }
           SheetActionCircleButton(
             icon = Icons.Rounded.VisibilityOff,
             label = stringResource(id = R.string.action_hide_song),

@@ -96,6 +96,7 @@ fun NowPlayingSheet(
   onBlockArtist: () -> Unit = {},
   onCheckLyrics: ((Song) -> Unit)? = null,
   onDeleteSong: (() -> Unit)? = null,
+  onAddToAlbum: ((Song) -> Unit)? = null,
   similarSongsProvider: (Song) -> List<SimilarTrack> = { emptyList() },
   onPlaySimilarSong: (Song) -> Unit = {}
 ) {
@@ -630,6 +631,7 @@ fun NowPlayingSheet(
           showDetails = false
           onBlockArtist()
         },
+        onAddToAlbum = onAddToAlbum?.let { cb -> { cb(song) } },
         onDelete = onDeleteSong
       )
     }

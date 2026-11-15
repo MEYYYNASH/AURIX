@@ -752,6 +752,7 @@ fun SongRow(
   onCheckLyrics: ((Song) -> Unit)? = null,
   onSongClick: () -> Unit,
   onFavoriteClick: () -> Unit,
+  onAddToAlbumClick: (() -> Unit)? = null,
   onEditPhotoClick: (() -> Unit)? = null,
   onDeleteClick: (() -> Unit)? = null
 ) {
@@ -874,6 +875,22 @@ fun SongRow(
         color = MaterialTheme.colorScheme.onSurfaceVariant,
         modifier = Modifier.padding(horizontal = 4.dp)
       )
+    }
+    if (onAddToAlbumClick != null) {
+      IconButton(
+        onClick = onAddToAlbumClick,
+        modifier = Modifier
+          .minimumInteractiveComponentSize()
+          .size(40.dp)
+          .testTag("song_add_album_button_${song.id}")
+      ) {
+        Icon(
+          imageVector = Icons.Rounded.PlaylistAdd,
+          contentDescription = "Add to album",
+          tint = MaterialTheme.colorScheme.primary,
+          modifier = Modifier.size(20.dp)
+        )
+      }
     }
     if (onEditPhotoClick != null) {
       IconButton(

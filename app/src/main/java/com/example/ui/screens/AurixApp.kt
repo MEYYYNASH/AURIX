@@ -205,9 +205,11 @@ private fun AurixMainShell(
   val albumTracks by viewModel.albumTracks.collectAsStateWithLifecycle()
   val activeAlbumInfo by viewModel.activeAlbumInfo.collectAsStateWithLifecycle()
   val libraryAlbums by viewModel.libraryAlbums.collectAsStateWithLifecycle()
+  val allSongsForAlbumPicker by viewModel.allSongsForAlbumPicker.collectAsStateWithLifecycle()
   val isAlbumAddedToLibrary by viewModel.isAlbumAddedToLibrary.collectAsStateWithLifecycle()
   val isAlbumDownloaded by viewModel.isAlbumDownloaded.collectAsStateWithLifecycle()
   var albumDetailSong by remember { mutableStateOf<com.example.model.Song?>(null) }
+  var songForAlbumPicker by remember { mutableStateOf<com.example.model.Song?>(null) }
   val smartRecommendations by viewModel.smartRecommendations.collectAsStateWithLifecycle()
   val discoverWeekly by viewModel.discoverWeekly.collectAsStateWithLifecycle()
   val moodPlaylists by viewModel.moodPlaylists.collectAsStateWithLifecycle()
@@ -493,7 +495,15 @@ private fun AurixMainShell(
               onTrackFavoriteClick = { song -> viewModel.toggleFavorite(song) },
               onTrackDownloadClick = { song -> viewModel.downloadSong(context, song) },
               onTrackDetailsClick = { song -> albumDetailSong = song },
-              onImportAudioFiles = { uris -> viewModel.importLocalSongs(uris) },
+              onImportAudioFiles = { uris -> viewModel.importLocalSongs(uris, activeAlbumInfo) },
+              availableSongsToAdd = allSongsForAlbumPicker,
+              onAddSongsToAlbum = { songs -> viewModel.addSongsToAlbum(activeAlbumInfo.albumId, songs) },
+              onRemoveTrackFromAlbum = { song -> viewModel.removeSongFromAlbum(activeAlbumInfo, song) },
+              onDeleteAlbum = { alsoDeleteLocal ->
+                viewModel.deleteAlbum(activeAlbumInfo, alsoDeleteLocal)
+                libraryTab = 3
+                currentScreen = Screen.Library
+              },
               onSaveCoverPhoto = { uri, ox, oy, zoom ->
                 viewModel.saveAlbumCoverPhoto(activeAlbumInfo.albumId, uri, ox, oy, zoom)
               },
@@ -546,6 +556,7 @@ private fun AurixMainShell(
               favorites = favorites,
               recentlyPlayed = recentlyPlayed,
               albums = libraryAlbums,
+              allAvailableSongs = allSongsForAlbumPicker,
               currentSong = currentSong,
               isPlaying = isPlaying,
               darkTheme = darkTheme,
@@ -565,6 +576,22 @@ private fun AurixMainShell(
                 viewModel.openAlbum(album.albumId)
                 currentScreen = Screen.Album
               },
+              onCreateAlbum = { title, artist, year ->
+                val createdId = viewModel.createAlbum(title, artist, year)
+                if (createdId != null) {
+                  currentScreen = Screen.Album
+                }
+              },
+              onAddSongsToAlbum = { album, songs ->
+                viewModel.addSongsToAlbum(album.albumId, songs)
+              },
+              onImportAudioToAlbum = { uris, album ->
+                viewModel.importLocalSongs(uris, album)
+              },
+              onDeleteAlbum = { album, alsoDeleteLocal ->
+                viewModel.deleteAlbum(album, alsoDeleteLocal)
+              },
+              onAddSongToAlbumClick = { song -> songForAlbumPicker = song },
               onSongClick = { song ->
                 val listQueue = when (libraryTab) {
                   0 -> localSongs
@@ -760,6 +787,7 @@ private fun AurixMainShell(
               } else {
                 null
               },
+            onAddToAlbum = { targetSong -> songForAlbumPicker = targetSong },
             similarSongsProvider = { target -> viewModel.getSimilarSongs(target) },
             onPlaySimilarSong = { similar ->
               val queue = listOf(similar) + viewModel.getSimilarSongs(similar).map { it.song }
@@ -802,6 +830,22 @@ private fun AurixMainShell(
           onBlockArtist = {
             albumDetailSong = null
             viewModel.blockArtist(detailTarget.artist)
+          },
+          onAddToAlbum = {
+            albumDetailSong = null
+            songForAlbumPicker = detailTarget
+          }
+        )
+      }
+
+      songForAlbumPicker?.let { pickerSong ->
+        AddSongToAlbumSheet(
+          song = pickerSong,
+          albums = libraryAlbums,
+          onDismiss = { songForAlbumPicker = null },
+          onSelectAlbum = { album -> viewModel.addSongToAlbum(album.albumId, pickerSong) },
+          onCreateAlbumWithSong = { title, artist, year ->
+            viewModel.createAlbumWithSong(title, artist, year, pickerSong)
           }
         )
       }

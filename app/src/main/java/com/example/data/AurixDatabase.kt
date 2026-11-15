@@ -62,6 +62,43 @@ data class AlbumCoverEntity(
   val updatedAt: Long = System.currentTimeMillis()
 )
 
+@Entity(tableName = "custom_albums")
+data class CustomAlbumEntity(
+  @PrimaryKey val albumId: String,
+  val title: String,
+  val artist: String,
+  val year: String = "",
+  val createdAt: Long = System.currentTimeMillis()
+)
+
+@Entity(
+  tableName = "album_tracks",
+  primaryKeys = ["albumId", "songId"]
+)
+data class AlbumTrackEntity(
+  val albumId: String,
+  val songId: String,
+  val title: String,
+  val artist: String,
+  val artworkUrl: String,
+  val durationSeconds: Long,
+  val streamUrl: String,
+  val source: String,
+  val genre: String = "",
+  val bpm: Int = 0,
+  val mood: String = "",
+  val albumName: String = "",
+  val trackNumber: Int = 0,
+  val year: String = "",
+  val addedAt: Long = System.currentTimeMillis()
+)
+
+@Entity(tableName = "deleted_albums")
+data class DeletedAlbumEntity(
+  @PrimaryKey val albumId: String,
+  val deletedAt: Long = System.currentTimeMillis()
+)
+
 @Entity(tableName = "lyric_offsets")
 data class LyricOffsetEntity(
   @PrimaryKey val songId: String,
@@ -212,6 +249,45 @@ interface AurixDao {
 
   @Query("DELETE FROM album_covers WHERE albumId = :albumId")
   suspend fun deleteAlbumCover(albumId: String)
+
+  @Query("SELECT * FROM custom_albums ORDER BY createdAt DESC")
+  fun observeCustomAlbums(): Flow<List<CustomAlbumEntity>>
+
+  @Query("SELECT * FROM custom_albums WHERE albumId = :albumId LIMIT 1")
+  suspend fun getCustomAlbum(albumId: String): CustomAlbumEntity?
+
+  @Insert(onConflict = OnConflictStrategy.REPLACE)
+  suspend fun upsertCustomAlbum(entity: CustomAlbumEntity)
+
+  @Query("DELETE FROM custom_albums WHERE albumId = :albumId")
+  suspend fun deleteCustomAlbum(albumId: String)
+
+  @Query("SELECT * FROM album_tracks ORDER BY addedAt ASC")
+  fun observeAllAlbumTracks(): Flow<List<AlbumTrackEntity>>
+
+  @Insert(onConflict = OnConflictStrategy.REPLACE)
+  suspend fun insertAlbumTracks(entries: List<AlbumTrackEntity>)
+
+  @Query("DELETE FROM album_tracks WHERE albumId = :albumId AND songId = :songId")
+  suspend fun deleteAlbumTrack(albumId: String, songId: String)
+
+  @Query("DELETE FROM album_tracks WHERE albumId = :albumId")
+  suspend fun deleteTracksForAlbum(albumId: String)
+
+  @Query("DELETE FROM album_tracks WHERE songId = :songId")
+  suspend fun deleteAlbumTracksForSong(songId: String)
+
+  @Query("UPDATE album_tracks SET artworkUrl = :artworkUrl WHERE songId = :songId")
+  suspend fun updateAlbumTrackArtwork(songId: String, artworkUrl: String)
+
+  @Query("SELECT albumId FROM deleted_albums")
+  fun observeDeletedAlbumIds(): Flow<List<String>>
+
+  @Insert(onConflict = OnConflictStrategy.REPLACE)
+  suspend fun markAlbumDeleted(entity: DeletedAlbumEntity)
+
+  @Query("DELETE FROM deleted_albums WHERE albumId = :albumId")
+  suspend fun unmarkAlbumDeleted(albumId: String)
 
   @Query("SELECT offsetMs FROM lyric_offsets WHERE songId = :songId")
   suspend fun getLyricOffset(songId: String): Long?
@@ -430,6 +506,54 @@ val AURIX_MIGRATION_6_7 = object : Migration(6, 7) {
   }
 }
 
+val AURIX_MIGRATION_7_8 = object : Migration(7, 8) {
+  override fun migrate(db: SupportSQLiteDatabase) {
+    db.execSQL(
+      """
+      CREATE TABLE IF NOT EXISTS `custom_albums` (
+        `albumId` TEXT NOT NULL,
+        `title` TEXT NOT NULL,
+        `artist` TEXT NOT NULL,
+        `year` TEXT NOT NULL DEFAULT '',
+        `createdAt` INTEGER NOT NULL,
+        PRIMARY KEY(`albumId`)
+      )
+      """.trimIndent()
+    )
+    db.execSQL(
+      """
+      CREATE TABLE IF NOT EXISTS `album_tracks` (
+        `albumId` TEXT NOT NULL,
+        `songId` TEXT NOT NULL,
+        `title` TEXT NOT NULL,
+        `artist` TEXT NOT NULL,
+        `artworkUrl` TEXT NOT NULL,
+        `durationSeconds` INTEGER NOT NULL,
+        `streamUrl` TEXT NOT NULL,
+        `source` TEXT NOT NULL,
+        `genre` TEXT NOT NULL DEFAULT '',
+        `bpm` INTEGER NOT NULL DEFAULT 0,
+        `mood` TEXT NOT NULL DEFAULT '',
+        `albumName` TEXT NOT NULL DEFAULT '',
+        `trackNumber` INTEGER NOT NULL DEFAULT 0,
+        `year` TEXT NOT NULL DEFAULT '',
+        `addedAt` INTEGER NOT NULL,
+        PRIMARY KEY(`albumId`, `songId`)
+      )
+      """.trimIndent()
+    )
+    db.execSQL(
+      """
+      CREATE TABLE IF NOT EXISTS `deleted_albums` (
+        `albumId` TEXT NOT NULL,
+        `deletedAt` INTEGER NOT NULL,
+        PRIMARY KEY(`albumId`)
+      )
+      """.trimIndent()
+    )
+  }
+}
+
 @Database(
   entities = [
     FavoriteSongEntity::class,
@@ -440,9 +564,12 @@ val AURIX_MIGRATION_6_7 = object : Migration(6, 7) {
     BadLyricsEntity::class,
     PlayLogEntity::class,
     DiscoverWeeklyEntity::class,
-    AlbumCoverEntity::class
+    AlbumCoverEntity::class,
+    CustomAlbumEntity::class,
+    AlbumTrackEntity::class,
+    DeletedAlbumEntity::class
   ],
-  version = 7,
+  version = 8,
   exportSchema = false
 )
 abstract class AurixDatabase : RoomDatabase() {

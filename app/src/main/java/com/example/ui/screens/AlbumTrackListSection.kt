@@ -55,6 +55,7 @@ import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.rounded.DeleteOutline
 import androidx.compose.material.icons.rounded.Download
 import androidx.compose.material.icons.rounded.DownloadDone
 import androidx.compose.material.icons.rounded.Edit
@@ -65,12 +66,17 @@ import androidx.compose.material.icons.rounded.MoreHoriz
 import androidx.compose.material.icons.rounded.MoreVert
 import androidx.compose.material.icons.rounded.MusicNote
 import androidx.compose.material.icons.rounded.PlayArrow
+import androidx.compose.material.icons.rounded.PlaylistAdd
 import androidx.compose.material.icons.rounded.Refresh
+import androidx.compose.material.icons.rounded.RemoveCircleOutline
 import androidx.compose.material.icons.rounded.Shuffle
+import androidx.compose.material3.Button
+import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.DropdownMenu
 import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.material3.ripple
@@ -179,6 +185,10 @@ fun AlbumTrackListSection(
   onTrackDownloadClick: (Song) -> Unit = {},
   onTrackDetailsClick: (Song) -> Unit = {},
   onImportAudioFiles: (List<Uri>) -> Unit = {},
+  availableSongsToAdd: List<Song> = emptyList(),
+  onAddSongsToAlbum: (List<Song>) -> Unit = {},
+  onRemoveTrackFromAlbum: ((Song) -> Unit)? = null,
+  onDeleteAlbum: ((alsoDeleteLocalSongs: Boolean) -> Unit)? = null,
   onSaveCoverPhoto: (imageUri: String, offsetXFraction: Float, offsetYFraction: Float, zoom: Float) -> Unit = { _, _, _, _ -> },
   onSaveCoverMix: (imageSources: List<String>) -> Unit = {},
   onSaveCoverAppIcon: () -> Unit = {},
@@ -261,6 +271,8 @@ fun AlbumTrackListSection(
 
   var showAlbumMenu by remember { mutableStateOf(false) }
   var showEditCoverSheet by remember { mutableStateOf(false) }
+  var showAddSongsSheet by remember { mutableStateOf(false) }
+  var showDeleteAlbumDialog by remember { mutableStateOf(false) }
 
   val importAudioLauncher = rememberLauncherForActivityResult(
     contract = ActivityResultContracts.OpenMultipleDocuments()
@@ -313,6 +325,10 @@ fun AlbumTrackListSection(
           reducedMotion = effectiveReducedMotion,
           onAddToLibraryClick = onAddToLibraryClick,
           onDownloadClick = onDownloadAlbumClick,
+          onAddSongsClick = {
+            showAlbumMenu = false
+            showAddSongsSheet = true
+          },
           onMoreClick = { showAlbumMenu = true },
           onDismissMenu = { showAlbumMenu = false },
           onEditCoverClick = {
@@ -326,6 +342,14 @@ fun AlbumTrackListSection(
           onImportAudioClick = {
             showAlbumMenu = false
             importAudioLauncher.launch(arrayOf("audio/*"))
+          },
+          onDeleteAlbumClick = if (onDeleteAlbum != null) {
+            {
+              showAlbumMenu = false
+              showDeleteAlbumDialog = true
+            }
+          } else {
+            null
           },
           onPlayClick = {
             showAlbumMenu = false
@@ -350,26 +374,101 @@ fun AlbumTrackListSection(
         Spacer(modifier = Modifier.height(18.dp))
       }
 
-      itemsIndexed(
-        items = tracks,
-        key = { _, song -> song.id }
-      ) { index, song ->
-        val isCurrent = currentSong?.id == song.id
-        val displayNumber = song.trackNumber.takeIf { it > 0 } ?: (index + 1)
-        TrackRow(
-          trackNumber = displayNumber,
-          track = song,
-          isCurrentTrack = isCurrent,
-          isPlaying = isCurrent && isPlaying,
-          accentColor = dominantAccent,
-          reducedMotion = effectiveReducedMotion,
-          onClick = { onTrackClick(song) },
-          onToggleFavorite = { onTrackFavoriteClick(song) },
-          onDownloadTrack = { onTrackDownloadClick(song) },
-          onTrackDetails = { onTrackDetailsClick(song) }
-        )
-        if (index < tracks.lastIndex) {
-          Spacer(modifier = Modifier.height(4.dp))
+      if (tracks.isEmpty()) {
+        item(key = "album_empty_tracks") {
+          Column(
+            modifier = Modifier
+              .fillMaxWidth()
+              .clip(RoundedCornerShape(22.dp))
+              .background(AlbumDesignTokens.GlassFill)
+              .border(1.dp, AlbumDesignTokens.Border, RoundedCornerShape(22.dp))
+              .padding(horizontal = 20.dp, vertical = 24.dp),
+            horizontalAlignment = Alignment.CenterHorizontally,
+            verticalArrangement = Arrangement.spacedBy(10.dp)
+          ) {
+            Icon(
+              imageVector = Icons.Rounded.MusicNote,
+              contentDescription = null,
+              tint = dominantAccent,
+              modifier = Modifier.size(32.dp)
+            )
+            Text(
+              text = stringResource(id = R.string.album_empty_tracks_title),
+              style = MaterialTheme.typography.titleMedium.copy(
+                fontFamily = AlbumDesignTokens.OutfitFontFamily,
+                fontWeight = FontWeight.Bold
+              ),
+              color = AlbumDesignTokens.Text,
+              textAlign = TextAlign.Center
+            )
+            Text(
+              text = stringResource(id = R.string.album_empty_tracks_sub),
+              style = MaterialTheme.typography.bodySmall.copy(
+                fontFamily = AlbumDesignTokens.OutfitFontFamily
+              ),
+              color = AlbumDesignTokens.DimText,
+              textAlign = TextAlign.Center
+            )
+            Spacer(modifier = Modifier.height(4.dp))
+            Row(
+              horizontalArrangement = Arrangement.spacedBy(10.dp),
+              verticalAlignment = Alignment.CenterVertically
+            ) {
+              Button(
+                onClick = { showAddSongsSheet = true },
+                shape = CircleShape,
+                colors = ButtonDefaults.buttonColors(
+                  containerColor = dominantAccent,
+                  contentColor = AlbumDesignTokens.Background
+                ),
+                modifier = Modifier.testTag("empty_album_add_songs_button")
+              ) {
+                Icon(Icons.Rounded.PlaylistAdd, contentDescription = null, modifier = Modifier.size(18.dp))
+                Spacer(modifier = Modifier.width(6.dp))
+                Text(
+                  text = stringResource(id = R.string.album_add_songs),
+                  fontFamily = AlbumDesignTokens.OutfitFontFamily,
+                  fontWeight = FontWeight.SemiBold
+                )
+              }
+              OutlinedButton(
+                onClick = { importAudioLauncher.launch(arrayOf("audio/*")) },
+                shape = CircleShape,
+                border = BorderStroke(1.dp, AlbumDesignTokens.Border),
+                colors = ButtonDefaults.outlinedButtonColors(contentColor = AlbumDesignTokens.Text)
+              ) {
+                Text(
+                  text = stringResource(id = R.string.library_add_local_short),
+                  fontFamily = AlbumDesignTokens.OutfitFontFamily,
+                  fontWeight = FontWeight.SemiBold
+                )
+              }
+            }
+          }
+        }
+      } else {
+        itemsIndexed(
+          items = tracks,
+          key = { _, song -> song.id }
+        ) { index, song ->
+          val isCurrent = currentSong?.id == song.id
+          val displayNumber = song.trackNumber.takeIf { it > 0 } ?: (index + 1)
+          TrackRow(
+            trackNumber = displayNumber,
+            track = song,
+            isCurrentTrack = isCurrent,
+            isPlaying = isCurrent && isPlaying,
+            accentColor = dominantAccent,
+            reducedMotion = effectiveReducedMotion,
+            onClick = { onTrackClick(song) },
+            onToggleFavorite = { onTrackFavoriteClick(song) },
+            onDownloadTrack = { onTrackDownloadClick(song) },
+            onTrackDetails = { onTrackDetailsClick(song) },
+            onRemoveFromAlbum = onRemoveTrackFromAlbum?.let { cb -> { cb(song) } }
+          )
+          if (index < tracks.lastIndex) {
+            Spacer(modifier = Modifier.height(4.dp))
+          }
         }
       }
     }
@@ -384,6 +483,27 @@ fun AlbumTrackListSection(
       onSaveMix = onSaveCoverMix,
       onSaveAppIcon = onSaveCoverAppIcon,
       onResetCover = onResetCover
+    )
+  }
+
+  if (showAddSongsSheet) {
+    AddSongsToAlbumSheet(
+      album = effectiveAlbumInfo,
+      availableSongs = availableSongsToAdd,
+      onDismiss = { showAddSongsSheet = false },
+      onAddSongs = onAddSongsToAlbum,
+      onImportAudioFiles = onImportAudioFiles
+    )
+  }
+
+  if (showDeleteAlbumDialog && onDeleteAlbum != null) {
+    DeleteAlbumConfirmDialog(
+      album = effectiveAlbumInfo,
+      onDismiss = { showDeleteAlbumDialog = false },
+      onConfirm = { alsoDeleteLocal ->
+        showDeleteAlbumDialog = false
+        onDeleteAlbum(alsoDeleteLocal)
+      }
     )
   }
 }
@@ -496,11 +616,13 @@ fun AlbumHeader(
   reducedMotion: Boolean = false,
   onAddToLibraryClick: () -> Unit = {},
   onDownloadClick: () -> Unit = {},
+  onAddSongsClick: () -> Unit = {},
   onMoreClick: () -> Unit = {},
   onDismissMenu: () -> Unit = {},
   onEditCoverClick: () -> Unit = {},
   onResetCoverClick: () -> Unit = {},
   onImportAudioClick: () -> Unit = {},
+  onDeleteAlbumClick: (() -> Unit)? = null,
   onPlayClick: () -> Unit = {},
   onShuffleClick: () -> Unit = {},
   modifier: Modifier = Modifier
@@ -581,6 +703,7 @@ fun AlbumHeader(
     ) {
       val cleanYear = albumYear.trim()
       val metaText = when {
+        trackCount == 0 -> stringResource(id = R.string.album_meta_empty)
         trackCount == 1 && cleanYear.isNotEmpty() -> stringResource(id = R.string.album_meta_single_year, cleanYear)
         trackCount == 1 -> stringResource(id = R.string.album_meta_single)
         cleanYear.isNotEmpty() -> stringResource(id = R.string.album_meta_plural_year, trackCount, cleanYear)
@@ -631,6 +754,7 @@ fun AlbumHeader(
           isAlbumDownloaded = isAlbumDownloaded,
           onAddToLibraryClick = onAddToLibraryClick,
           onDownloadClick = onDownloadClick,
+          onAddSongsClick = onAddSongsClick,
           onMoreClick = onMoreClick
         )
         DropdownMenu(
@@ -638,6 +762,20 @@ fun AlbumHeader(
           onDismissRequest = onDismissMenu,
           containerColor = AlbumDesignTokens.RaisedSurface
         ) {
+          DropdownMenuItem(
+            leadingIcon = {
+              Icon(Icons.Rounded.PlaylistAdd, contentDescription = null, tint = AlbumDesignTokens.Accent)
+            },
+            text = {
+              Text(
+                text = stringResource(id = R.string.album_add_songs),
+                color = AlbumDesignTokens.Text,
+                fontFamily = AlbumDesignTokens.OutfitFontFamily
+              )
+            },
+            onClick = onAddSongsClick,
+            modifier = Modifier.testTag("album_menu_add_songs")
+          )
           DropdownMenuItem(
             leadingIcon = {
               Icon(Icons.Rounded.Edit, contentDescription = null, tint = AlbumDesignTokens.Accent)
@@ -731,6 +869,22 @@ fun AlbumHeader(
               onDownloadClick()
             }
           )
+          if (onDeleteAlbumClick != null) {
+            DropdownMenuItem(
+              leadingIcon = {
+                Icon(Icons.Rounded.DeleteOutline, contentDescription = null, tint = Color(0xFFFF6B6B))
+              },
+              text = {
+                Text(
+                  text = stringResource(id = R.string.album_delete),
+                  color = Color(0xFFFF6B6B),
+                  fontFamily = AlbumDesignTokens.OutfitFontFamily
+                )
+              },
+              onClick = onDeleteAlbumClick,
+              modifier = Modifier.testTag("album_menu_delete_album")
+            )
+          }
         }
       }
     }
@@ -743,6 +897,7 @@ fun ActionButtons(
   isAlbumDownloaded: Boolean,
   onAddToLibraryClick: () -> Unit,
   onDownloadClick: () -> Unit,
+  onAddSongsClick: () -> Unit = {},
   onMoreClick: () -> Unit,
   modifier: Modifier = Modifier
 ) {
@@ -781,8 +936,15 @@ fun ActionButtons(
       testTag = "album_download_button"
     )
     AlbumHeaderIconButton(
+      icon = Icons.Rounded.PlaylistAdd,
+      contentDescription = stringResource(id = R.string.album_add_songs),
+      tint = AlbumDesignTokens.Accent,
+      onClick = onAddSongsClick,
+      testTag = "album_add_songs_button"
+    )
+    AlbumHeaderIconButton(
       icon = Icons.Rounded.MoreHoriz,
-      contentDescription = stringResource(id = R.string.album_more_options),
+      contentDescription = "More album options",
       tint = AlbumDesignTokens.Text.copy(alpha = 0.88f),
       onClick = onMoreClick,
       testTag = "album_more_button"
@@ -1005,6 +1167,7 @@ fun TrackRow(
   onToggleFavorite: () -> Unit = {},
   onDownloadTrack: () -> Unit = {},
   onTrackDetails: () -> Unit = {},
+  onRemoveFromAlbum: (() -> Unit)? = null,
   modifier: Modifier = Modifier
 ) {
   val rowShape = RoundedCornerShape(20.dp)
@@ -1263,6 +1426,25 @@ fun TrackRow(
             onTrackDetails()
           }
         )
+        if (onRemoveFromAlbum != null) {
+          DropdownMenuItem(
+            leadingIcon = {
+              Icon(Icons.Rounded.RemoveCircleOutline, contentDescription = null, tint = Color(0xFFFF6B6B))
+            },
+            text = {
+              Text(
+                text = stringResource(id = R.string.album_track_remove),
+                color = Color(0xFFFF6B6B),
+                fontFamily = AlbumDesignTokens.OutfitFontFamily
+              )
+            },
+            onClick = {
+              menuExpanded = false
+              onRemoveFromAlbum()
+            },
+            modifier = Modifier.testTag("album_track_remove_${track.id}")
+          )
+        }
       }
     }
   }

@@ -13,9 +13,15 @@ import androidx.compose.animation.fadeOut
 import androidx.compose.animation.slideInHorizontally
 import androidx.compose.animation.slideOutHorizontally
 import androidx.compose.animation.togetherWith
+import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.foundation.BorderStroke
+import androidx.compose.foundation.ExperimentalFoundationApi
+import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
+import androidx.compose.foundation.combinedClickable
+import androidx.compose.foundation.interaction.MutableInteractionSource
+import androidx.compose.foundation.interaction.collectIsPressedAsState
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
@@ -24,32 +30,34 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.rounded.Add
 import androidx.compose.material.icons.rounded.AddPhotoAlternate
+import androidx.compose.material.icons.rounded.Album
 import androidx.compose.material.icons.rounded.DeleteOutline
 import androidx.compose.material.icons.rounded.DeleteSweep
 import androidx.compose.material.icons.rounded.FavoriteBorder
 import androidx.compose.material.icons.rounded.History
 import androidx.compose.material.icons.rounded.LibraryMusic
+import androidx.compose.material.icons.rounded.MusicNote
+import androidx.compose.material.icons.rounded.TouchApp
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.draw.scale
+import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.hapticfeedback.HapticFeedbackType
+import androidx.compose.ui.layout.ContentScale
+import androidx.compose.ui.platform.LocalHapticFeedback
 import androidx.compose.ui.platform.testTag
+import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.res.stringResource
+import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
-import androidx.compose.foundation.Image
-import androidx.compose.foundation.clickable
-import androidx.compose.material.icons.rounded.Album
-import androidx.compose.material.icons.rounded.MusicNote
-import androidx.compose.ui.graphics.Brush
-import androidx.compose.ui.layout.ContentScale
-import androidx.compose.ui.res.painterResource
-import androidx.compose.ui.semantics.Role
 import coil.compose.AsyncImage
 import com.example.R
 import com.example.model.APP_ICON_ARTWORK
@@ -62,6 +70,7 @@ fun LibraryScreen(
   favorites: List<Song>,
   recentlyPlayed: List<Song>,
   albums: List<AlbumInfo> = emptyList(),
+  allAvailableSongs: List<Song> = emptyList(),
   currentSong: Song?,
   isPlaying: Boolean,
   darkTheme: Boolean = false,
@@ -78,11 +87,20 @@ fun LibraryScreen(
   onClearRecentHistory: () -> Unit = {},
   onOpenInsights: () -> Unit = {},
   onAlbumClick: (AlbumInfo) -> Unit = {},
+  onCreateAlbum: (title: String, artist: String, year: String) -> Unit = { _, _, _ -> },
+  onAddSongsToAlbum: (AlbumInfo, List<Song>) -> Unit = { _, _ -> },
+  onImportAudioToAlbum: (List<Uri>, AlbumInfo) -> Unit = { _, _ -> },
+  onDeleteAlbum: (AlbumInfo, Boolean) -> Unit = { _, _ -> },
+  onAddSongToAlbumClick: ((Song) -> Unit)? = null,
   onSongClick: (Song) -> Unit,
   onFavoriteClick: (Song) -> Unit
 ) {
   var pendingPhotoSongId by remember { mutableStateOf<String?>(null) }
   var songPendingDelete by remember { mutableStateOf<Song?>(null) }
+  var showCreateAlbumDialog by remember { mutableStateOf(false) }
+  var albumPendingHoldOptions by remember { mutableStateOf<AlbumInfo?>(null) }
+  var albumPendingDelete by remember { mutableStateOf<AlbumInfo?>(null) }
+  var albumPendingAddSongs by remember { mutableStateOf<AlbumInfo?>(null) }
 
   val audioLauncher = rememberLauncherForActivityResult(ActivityResultContracts.OpenMultipleDocuments()) { uris ->
     if (uris.isNotEmpty()) {
@@ -130,7 +148,7 @@ fun LibraryScreen(
         )
       }
       when {
-        selectedTab == 0 || selectedTab == 3 -> {
+        selectedTab == 0 -> {
           Button(
             onClick = { audioLauncher.launch(arrayOf("audio/*")) },
             shape = CircleShape,
@@ -140,6 +158,18 @@ fun LibraryScreen(
             Icon(Icons.Rounded.Add, contentDescription = null, modifier = Modifier.size(18.dp))
             Spacer(modifier = Modifier.width(4.dp))
             Text(stringResource(id = R.string.library_add_local_short), fontWeight = FontWeight.SemiBold)
+          }
+        }
+        selectedTab == 3 -> {
+          Button(
+            onClick = { showCreateAlbumDialog = true },
+            shape = CircleShape,
+            colors = ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.primary),
+            modifier = Modifier.testTag("library_create_album_button")
+          ) {
+            Icon(Icons.Rounded.Add, contentDescription = null, modifier = Modifier.size(18.dp))
+            Spacer(modifier = Modifier.width(4.dp))
+            Text(stringResource(id = R.string.album_new_button), fontWeight = FontWeight.SemiBold)
           }
         }
         selectedTab == 2 && recentlyPlayed.isNotEmpty() -> {
@@ -253,6 +283,26 @@ fun LibraryScreen(
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
                 textAlign = TextAlign.Center
               )
+              Row(
+                horizontalArrangement = Arrangement.spacedBy(10.dp),
+                verticalAlignment = Alignment.CenterVertically
+              ) {
+                Button(
+                  onClick = { showCreateAlbumDialog = true },
+                  shape = CircleShape,
+                  modifier = Modifier.testTag("empty_create_album_button")
+                ) {
+                  Icon(Icons.Rounded.Add, contentDescription = null, modifier = Modifier.size(18.dp))
+                  Spacer(modifier = Modifier.width(6.dp))
+                  Text(stringResource(id = R.string.album_new_button), fontWeight = FontWeight.SemiBold)
+                }
+                OutlinedButton(
+                  onClick = { audioLauncher.launch(arrayOf("audio/*")) },
+                  shape = CircleShape
+                ) {
+                  Text(stringResource(id = R.string.library_add_audio_file), fontWeight = FontWeight.SemiBold)
+                }
+              }
             }
           }
         }
@@ -265,7 +315,31 @@ fun LibraryScreen(
           verticalArrangement = Arrangement.spacedBy(14.dp),
           contentPadding = PaddingValues(bottom = if (currentSong != null) 195.dp else 125.dp)
         ) {
-          items(albumRows, key = { row -> row.joinToString("_") { "${it.albumId}_${it.coverUrl}" } }) { rowAlbums ->
+          item(key = "album_hold_tip") {
+            Row(
+              modifier = Modifier
+                .fillMaxWidth()
+                .clip(RoundedCornerShape(14.dp))
+                .background(MaterialTheme.colorScheme.primary.copy(alpha = if (darkTheme) 0.14f else 0.10f))
+                .border(1.dp, Color.White.copy(alpha = if (darkTheme) 0.16f else 0.70f), RoundedCornerShape(14.dp))
+                .padding(horizontal = 12.dp, vertical = 9.dp),
+              verticalAlignment = Alignment.CenterVertically,
+              horizontalArrangement = Arrangement.spacedBy(8.dp)
+            ) {
+              Icon(
+                imageVector = Icons.Rounded.TouchApp,
+                contentDescription = null,
+                tint = MaterialTheme.colorScheme.primary,
+                modifier = Modifier.size(18.dp)
+              )
+              Text(
+                text = stringResource(id = R.string.album_hold_tip),
+                style = MaterialTheme.typography.bodySmall.copy(fontWeight = FontWeight.Medium, lineHeight = 18.sp),
+                color = MaterialTheme.colorScheme.onSurface
+              )
+            }
+          }
+          items(albumRows, key = { row -> row.joinToString("_") { "${it.albumId}_${it.coverUrl}_${it.tracks.size}" } }) { rowAlbums ->
             Row(
               modifier = Modifier.fillMaxWidth(),
               horizontalArrangement = Arrangement.spacedBy(14.dp)
@@ -274,7 +348,9 @@ fun LibraryScreen(
                 LibraryAlbumGridCard(
                   album = album,
                   darkTheme = darkTheme,
+                  reducedMotion = reducedMotion,
                   onClick = { onAlbumClick(album) },
+                  onLongClick = { albumPendingHoldOptions = album },
                   modifier = Modifier.weight(1f)
                 )
               }
@@ -415,6 +491,7 @@ fun LibraryScreen(
               onCheckLyrics = onCheckLyrics,
               onSongClick = { onSongClick(song) },
               onFavoriteClick = { onFavoriteClick(song) },
+              onAddToAlbumClick = onAddSongToAlbumClick?.let { callback -> { callback(song) } },
               onEditPhotoClick = if (activeTab == 0) {
                 {
                   pendingPhotoSongId = song.id
@@ -483,21 +560,74 @@ fun LibraryScreen(
       }
     )
   }
+
+  if (showCreateAlbumDialog) {
+    CreateAlbumDialog(
+      onDismiss = { showCreateAlbumDialog = false },
+      onCreate = { title, artist, year ->
+        showCreateAlbumDialog = false
+        onCreateAlbum(title, artist, year)
+      }
+    )
+  }
+
+  albumPendingHoldOptions?.let { heldAlbum ->
+    AlbumHoldOptionsSheet(
+      album = heldAlbum,
+      onDismiss = { albumPendingHoldOptions = null },
+      onOpenAlbum = { onAlbumClick(heldAlbum) },
+      onAddSongs = { albumPendingAddSongs = heldAlbum },
+      onRequestDeleteAlbum = { albumPendingDelete = heldAlbum }
+    )
+  }
+
+  albumPendingDelete?.let { deleteTarget ->
+    DeleteAlbumConfirmDialog(
+      album = deleteTarget,
+      onDismiss = { albumPendingDelete = null },
+      onConfirm = { alsoDeleteLocal ->
+        albumPendingDelete = null
+        onDeleteAlbum(deleteTarget, alsoDeleteLocal)
+      }
+    )
+  }
+
+  albumPendingAddSongs?.let { targetAlbum ->
+    AddSongsToAlbumSheet(
+      album = targetAlbum,
+      availableSongs = allAvailableSongs,
+      onDismiss = { albumPendingAddSongs = null },
+      onAddSongs = { chosen -> onAddSongsToAlbum(targetAlbum, chosen) },
+      onImportAudioFiles = { uris -> onImportAudioToAlbum(uris, targetAlbum) }
+    )
+  }
 }
 
+@OptIn(ExperimentalFoundationApi::class)
 @Composable
 private fun LibraryAlbumGridCard(
   album: AlbumInfo,
   darkTheme: Boolean,
+  reducedMotion: Boolean,
   onClick: () -> Unit,
+  onLongClick: () -> Unit,
   modifier: Modifier = Modifier
 ) {
   val cardShape = RoundedCornerShape(24.dp)
   val coverShape = RoundedCornerShape(20.dp)
   val coverUrl = album.coverUrl
+  val haptic = LocalHapticFeedback.current
+  val interactionSource = remember { MutableInteractionSource() }
+  val isPressed by interactionSource.collectIsPressedAsState()
+  val pressScale by animateFloatAsState(
+    targetValue = if (isPressed && !reducedMotion) 0.96f else 1f,
+    animationSpec = if (reducedMotion) snap() else tween(durationMillis = 140),
+    label = "album_card_press_scale"
+  )
 
   Column(
     modifier = modifier
+      .scale(pressScale)
       .clip(cardShape)
       .background(
         if (darkTheme) Color(0xFF172034).copy(alpha = 0.68f)
@@ -508,10 +638,17 @@ private fun LibraryAlbumGridCard(
         color = Color.White.copy(alpha = if (darkTheme) 0.16f else 0.90f),
         shape = cardShape
       )
-      .clickable(
+      .combinedClickable(
+        interactionSource = interactionSource,
+        indication = ripple(color = MaterialTheme.colorScheme.primary),
         role = Role.Button,
         onClickLabel = album.title,
-        onClick = onClick
+        onLongClickLabel = stringResource(id = R.string.album_delete),
+        onClick = onClick,
+        onLongClick = {
+          haptic.performHapticFeedback(HapticFeedbackType.LongPress)
+          onLongClick()
+        }
       )
       .padding(10.dp)
       .testTag("library_album_card_${album.albumId}"),
@@ -578,10 +715,10 @@ private fun LibraryAlbumGridCard(
         maxLines = 1,
         overflow = TextOverflow.Ellipsis
       )
-      val countLabel = if (album.tracks.size == 1) {
-        stringResource(id = R.string.album_meta_single)
-      } else {
-        stringResource(id = R.string.album_meta_plural, album.tracks.size)
+      val countLabel = when (album.tracks.size) {
+        0 -> stringResource(id = R.string.album_meta_empty)
+        1 -> stringResource(id = R.string.album_meta_single)
+        else -> stringResource(id = R.string.album_meta_plural, album.tracks.size)
       }
       Text(
         text = countLabel,
