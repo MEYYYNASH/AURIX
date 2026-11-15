@@ -80,19 +80,66 @@ private fun AurixAppContent(
   viewModel: AurixViewModel,
   currentLanguage: String
 ) {
+  val isAppInitialized by viewModel.isAppInitialized.collectAsStateWithLifecycle()
+  val launchSplashDismissed by viewModel.launchSplashDismissed.collectAsStateWithLifecycle()
   val onboardingCompleted by viewModel.onboardingCompleted.collectAsStateWithLifecycle()
-  var splashFinished by remember { mutableStateOf(false) }
 
-  if (!splashFinished) {
-    SplashScreen(onTimeout = { splashFinished = true })
-    return
+  val themeMode by viewModel.themeMode.collectAsStateWithLifecycle()
+  val accentHex by viewModel.accentColorHex.collectAsStateWithLifecycle()
+  val dynamicBg by viewModel.dynamicBg.collectAsStateWithLifecycle()
+  val reducedMotion by viewModel.reducedMotion.collectAsStateWithLifecycle()
+
+  val systemDark = isSystemInDarkTheme()
+  val amoledTheme = themeMode == "amoled"
+  val darkTheme = when (themeMode) {
+    "light" -> false
+    "dark", "amoled" -> true
+    else -> systemDark
   }
+  val accentColor = parseHexColor(accentHex, darkTheme)
 
-  if (!onboardingCompleted) {
-    OnboardingScreen(onFinished = { viewModel.setOnboardingCompleted(true) })
-    return
+  AurixTheme(darkTheme = darkTheme, amoledTheme = amoledTheme, accentColor = accentColor) {
+    Box(
+      modifier = Modifier
+        .fillMaxSize()
+        .background(if (darkTheme) Color(0xFF17181D) else Color(0xFFECEDF2))
+    ) {
+      if (!isAppInitialized) {
+        Box(modifier = Modifier.fillMaxSize())
+      } else if (!onboardingCompleted) {
+        OnboardingScreen(onFinished = { viewModel.setOnboardingCompleted(true) })
+      } else {
+        AurixMainShell(
+          viewModel = viewModel,
+          currentLanguage = currentLanguage,
+          dynamicBg = dynamicBg,
+          reducedMotion = reducedMotion,
+          darkTheme = darkTheme,
+          amoledTheme = amoledTheme
+        )
+      }
+
+      if (!launchSplashDismissed) {
+        AurixLaunchOverlay(
+          isAppInitialized = isAppInitialized,
+          darkTheme = darkTheme,
+          reducedMotion = reducedMotion,
+          onDismissed = { viewModel.markLaunchSplashShown() }
+        )
+      }
+    }
   }
+}
 
+@Composable
+private fun AurixMainShell(
+  viewModel: AurixViewModel,
+  currentLanguage: String,
+  dynamicBg: Boolean,
+  reducedMotion: Boolean,
+  darkTheme: Boolean,
+  amoledTheme: Boolean
+) {
   var currentScreen by remember { mutableStateOf<Screen>(Screen.Home) }
   var libraryTab by remember { mutableIntStateOf(0) }
   var showNowPlaying by remember { mutableStateOf(false) }
@@ -142,23 +189,12 @@ private fun AurixAppContent(
 
   val themeMode by viewModel.themeMode.collectAsStateWithLifecycle()
   val accentHex by viewModel.accentColorHex.collectAsStateWithLifecycle()
-  val dynamicBg by viewModel.dynamicBg.collectAsStateWithLifecycle()
-  val reducedMotion by viewModel.reducedMotion.collectAsStateWithLifecycle()
   val verifiedLyricsIds by viewModel.verifiedLyricsIds.collectAsStateWithLifecycle()
   val equalizerState by viewModel.equalizerState.collectAsStateWithLifecycle()
   val crossfadeSettings by viewModel.crossfadeSettings.collectAsStateWithLifecycle()
   val hiddenSongIds by viewModel.hiddenSongIds.collectAsStateWithLifecycle()
   val blockedArtists by viewModel.blockedArtists.collectAsStateWithLifecycle()
 
-  val systemDark = isSystemInDarkTheme()
-  val amoledTheme = themeMode == "amoled"
-  val darkTheme = when (themeMode) {
-    "light" -> false
-    "dark", "amoled" -> true
-    else -> systemDark
-  }
-
-  val accentColor = parseHexColor(accentHex, darkTheme)
   val isNowPlayingOpen = showNowPlaying && currentSong != null
 
   // Request runtime notification permission once when playback starts on Android 13+
@@ -221,12 +257,11 @@ private fun AurixAppContent(
     retainedSheetSong = currentSong
   }
 
-  AurixTheme(darkTheme = darkTheme, amoledTheme = amoledTheme, accentColor = accentColor) {
-    Box(
-      modifier = Modifier
-        .fillMaxSize()
-        .background(Color.Black)
-    ) {
+  Box(
+    modifier = Modifier
+      .fillMaxSize()
+      .background(Color.Black)
+  ) {
       // Main App Shell (GPU graphicsLayer prevents clipping/alpha relayout flicker)
       Box(
         modifier = Modifier
@@ -584,7 +619,6 @@ private fun AurixAppContent(
         )
       }
     }
-  }
 }
 
 fun parseHexColor(hex: String, darkTheme: Boolean = false): Color {

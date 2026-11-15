@@ -292,6 +292,16 @@ class AurixViewModel(application: Application) : AndroidViewModel(application) {
   val equalizerState: StateFlow<EqualizerUiState> = AudioEqualizerController.state
   val crossfadeSettings: StateFlow<CrossfadeSettings> = CrossfadeController.state
 
+  private val _isAppInitialized = MutableStateFlow(false)
+  val isAppInitialized: StateFlow<Boolean> = _isAppInitialized
+
+  private val _launchSplashDismissed = MutableStateFlow(false)
+  val launchSplashDismissed: StateFlow<Boolean> = _launchSplashDismissed
+
+  fun markLaunchSplashShown() {
+    _launchSplashDismissed.value = true
+  }
+
   private val lyricsCheckSemaphore = Semaphore(3)
   private val inFlightLyricsChecks = ConcurrentHashMap<String, Job>()
 
@@ -349,26 +359,31 @@ class AurixViewModel(application: Application) : AndroidViewModel(application) {
 
   init {
     viewModelScope.launch(Dispatchers.IO) {
-      dao.clearAllBadLyrics()
-      dao.clearReportedLyricsCache()
-      val eqEnabled = prefsManager.eqEnabled.first()
-      val eqPreset = prefsManager.eqPreset.first()
-      val eqBands = prefsManager.eqBands.first()
-      val eqBass = prefsManager.eqBassBoost.first()
-      AudioEqualizerController.restoreSettings(
-        enabled = eqEnabled,
-        presetId = eqPreset,
-        bandLevelsMb = eqBands,
-        bassBoostStrength = eqBass
-      )
-      val crossfadeSec = prefsManager.crossfadeSeconds.first()
-      val crossfadeManualSkip = prefsManager.crossfadeManualSkip.first()
-      CrossfadeController.restoreSettings(
-        durationSeconds = crossfadeSec,
-        fadeOnManualSkip = crossfadeManualSkip
-      )
-      val savedLang = prefsManager.language.first()
-      LocaleHelper.saveLanguageSync(application, savedLang)
+      try {
+        dao.clearAllBadLyrics()
+        dao.clearReportedLyricsCache()
+        val eqEnabled = prefsManager.eqEnabled.first()
+        val eqPreset = prefsManager.eqPreset.first()
+        val eqBands = prefsManager.eqBands.first()
+        val eqBass = prefsManager.eqBassBoost.first()
+        AudioEqualizerController.restoreSettings(
+          enabled = eqEnabled,
+          presetId = eqPreset,
+          bandLevelsMb = eqBands,
+          bassBoostStrength = eqBass
+        )
+        val crossfadeSec = prefsManager.crossfadeSeconds.first()
+        val crossfadeManualSkip = prefsManager.crossfadeManualSkip.first()
+        CrossfadeController.restoreSettings(
+          durationSeconds = crossfadeSec,
+          fadeOnManualSkip = crossfadeManualSkip
+        )
+        val savedLang = prefsManager.language.first()
+        LocaleHelper.saveLanguageSync(application, savedLang)
+        prefsManager.onboardingCompleted.first()
+      } finally {
+        _isAppInitialized.value = true
+      }
     }
     connectPlaybackController(application)
     loadDailyRecommendations(DailyFeedCategory.TIKTOK_VIRAL)

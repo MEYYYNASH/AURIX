@@ -6,6 +6,7 @@ import androidx.compose.animation.animateColorAsState
 import androidx.compose.animation.core.*
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
+import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
@@ -29,7 +30,9 @@ import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.geometry.Size
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.StrokeCap
 import androidx.compose.ui.graphics.drawscope.Stroke
+import androidx.compose.ui.graphics.drawscope.rotate
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.testTag
@@ -450,7 +453,7 @@ fun AurixBrandLogo(
   val infiniteTransition = rememberInfiniteTransition(label = "aurix_logo_anim")
   val pulseScale by infiniteTransition.animateFloat(
     initialValue = 1.0f,
-    targetValue = 1.06f,
+    targetValue = 1.045f,
     animationSpec = infiniteRepeatable(
       animation = tween(durationMillis = 1900, easing = FastOutSlowInEasing),
       repeatMode = RepeatMode.Reverse
@@ -458,8 +461,8 @@ fun AurixBrandLogo(
     label = "logo_scale"
   )
   val glowAlpha by infiniteTransition.animateFloat(
-    initialValue = 0.28f,
-    targetValue = 0.65f,
+    initialValue = 0.22f,
+    targetValue = 0.48f,
     animationSpec = infiniteRepeatable(
       animation = tween(durationMillis = 1900, easing = FastOutSlowInEasing),
       repeatMode = RepeatMode.Reverse
@@ -468,7 +471,7 @@ fun AurixBrandLogo(
   )
 
   val activeScale = if (animated && !reducedMotion) pulseScale else 1.0f
-  val activeGlow = if (animated && !reducedMotion) glowAlpha else 0.35f
+  val activeGlow = if (animated && !reducedMotion) glowAlpha else 0.26f
 
   Box(
     modifier = modifier.size(size),
@@ -477,33 +480,95 @@ fun AurixBrandLogo(
     Box(
       modifier = Modifier
         .matchParentSize()
-        .scale(activeScale * 1.08f)
+        .scale(activeScale * 1.06f)
         .clip(RoundedCornerShape(cornerRadius + 4.dp))
         .background(
           Brush.radialGradient(
             colors = listOf(
-              MaterialTheme.colorScheme.primary.copy(alpha = activeGlow),
+              Color(0xFF9EA3B8).copy(alpha = activeGlow),
               Color.Transparent
             )
           )
         )
     )
-    Image(
-      painter = painterResource(id = R.drawable.aurix_clean_logo_1794625921343),
-      contentDescription = "AURIX Logo",
-      contentScale = ContentScale.Crop,
+    Box(
       modifier = Modifier
         .matchParentSize()
         .scale(activeScale)
         .clip(RoundedCornerShape(cornerRadius))
+        .background(
+          Brush.verticalGradient(
+            colors = listOf(Color(0xFFD3D6E4), Color(0xFF6E7084))
+          )
+        )
         .border(
-          width = 1.dp,
+          width = 0.75.dp,
           brush = Brush.verticalGradient(
             listOf(Color.White.copy(alpha = 0.45f), Color.White.copy(alpha = 0.08f))
           ),
           shape = RoundedCornerShape(cornerRadius)
         )
-    )
+    ) {
+      Canvas(modifier = Modifier.fillMaxSize()) {
+        val cx = this.size.width / 2f
+        val cy = this.size.height / 2f
+        val planetRadius = this.size.minDimension * 0.285f
+        val ringRx = this.size.minDimension * 0.405f
+        val ringRy = this.size.minDimension * 0.112f
+        val ringStroke = this.size.minDimension * 0.052f
+        val ringColor = Color(0xFF3A3B42)
+
+        rotate(degrees = -12f, pivot = Offset(cx, cy)) {
+          drawArc(
+            color = ringColor,
+            startAngle = 180f,
+            sweepAngle = 180f,
+            useCenter = false,
+            topLeft = Offset(cx - ringRx, cy - ringRy),
+            size = Size(ringRx * 2f, ringRy * 2f),
+            style = Stroke(width = ringStroke, cap = StrokeCap.Round)
+          )
+
+          drawCircle(
+            color = Color.Black.copy(alpha = 0.14f),
+            radius = planetRadius * 1.04f,
+            center = Offset(cx, cy + planetRadius * 0.09f)
+          )
+          drawCircle(
+            color = Color.White,
+            radius = planetRadius,
+            center = Offset(cx, cy)
+          )
+
+          val eyeOffsetX = planetRadius * 0.215f
+          val eyeCenterY = cy - planetRadius * 0.21f
+          val eyeW = planetRadius * 0.245f
+          val eyeH = planetRadius * 0.42f
+          drawRoundRect(
+            color = Color(0xFF0B0C10),
+            topLeft = Offset(cx - eyeOffsetX - eyeW / 2f, eyeCenterY - eyeH / 2f),
+            size = Size(eyeW, eyeH),
+            cornerRadius = CornerRadius(eyeW * 0.5f, eyeW * 0.5f)
+          )
+          drawRoundRect(
+            color = Color(0xFF0B0C10),
+            topLeft = Offset(cx + eyeOffsetX - eyeW / 2f, eyeCenterY - eyeH / 2f),
+            size = Size(eyeW, eyeH),
+            cornerRadius = CornerRadius(eyeW * 0.5f, eyeW * 0.5f)
+          )
+
+          drawArc(
+            color = ringColor,
+            startAngle = 0f,
+            sweepAngle = 180f,
+            useCenter = false,
+            topLeft = Offset(cx - ringRx, cy - ringRy),
+            size = Size(ringRx * 2f, ringRy * 2f),
+            style = Stroke(width = ringStroke, cap = StrokeCap.Round)
+          )
+        }
+      }
+    }
   }
 }
 

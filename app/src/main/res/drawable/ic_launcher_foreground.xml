@@ -1,8 +1,56 @@
 <?xml version="1.0" encoding="utf-8"?>
-<layer-list xmlns:android="http://schemas.android.com/apk/res/android">
-    <item
-        android:width="66dp"
-        android:height="66dp"
-        android:drawable="@drawable/aurix_clean_logo_1794625921343"
-        android:gravity="center" />
-</layer-list>
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="108dp"
+    android:height="108dp"
+    android:viewportWidth="108"
+    android:viewportHeight="108">
+
+    <!-- Subtle soft drop shadow beneath sphere -->
+    <path
+        android:fillColor="#08000000"
+        android:pathData="M54,32.4 A23.2,23.2 0 1,1 53.99,32.4 Z" />
+    <path
+        android:fillColor="#0B000000"
+        android:pathData="M54,33.7 A21.9,21.9 0 1,1 53.99,33.7 Z" />
+    <path
+        android:fillColor="#0F000000"
+        android:pathData="M54,34.7 A20.9,20.9 0 1,1 53.99,34.7 Z" />
+
+    <!-- Tilted -12 deg geometric planet & orbit group -->
+    <group
+        android:pivotX="54"
+        android:pivotY="54"
+        android:rotation="-12">
+
+        <!-- Back half of orbit ring (passes behind the white sphere) -->
+        <path
+            android:fillColor="#00000000"
+            android:strokeColor="#FF3A3B42"
+            android:strokeWidth="3.8"
+            android:strokeLineCap="round"
+            android:pathData="M24.5,54 A29.5,7.8 0 0,1 83.5,54" />
+
+        <!-- White circle character -->
+        <path
+            android:fillColor="#FFFFFFFF"
+            android:pathData="M54,33.5 A20.5,20.5 0 1,1 53.99,33.5 Z" />
+
+        <!-- Left black oval eye (slightly above center, a little apart) -->
+        <path
+            android:fillColor="#FF0B0C10"
+            android:pathData="M49.5,44.2 A2.5,4.3 0 1,1 49.49,44.2 Z" />
+
+        <!-- Right black oval eye -->
+        <path
+            android:fillColor="#FF0B0C10"
+            android:pathData="M58.5,44.2 A2.5,4.3 0 1,1 58.49,44.2 Z" />
+
+        <!-- Front half of orbit ring (passes cleanly in front of sphere bottom) -->
+        <path
+            android:fillColor="#00000000"
+            android:strokeColor="#FF3A3B42"
+            android:strokeWidth="3.8"
+            android:strokeLineCap="round"
+            android:pathData="M83.5,54 A29.5,7.8 0 0,1 24.5,54" />
+    </group>
+</vector>
