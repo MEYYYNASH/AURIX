@@ -138,8 +138,8 @@ class AurixViewModel(application: Application) : AndroidViewModel(application) {
   private val _downloadedSongIds = MutableStateFlow<Set<String>>(emptySet())
   val downloadedSongIds: StateFlow<Set<String>> = _downloadedSongIds
 
-  // Daily TikTok Viral & Chart Recommendations (auto-updates daily, zero demo/workout spam)
-  private val _selectedDailyFeed = MutableStateFlow(DailyFeedCategory.TIKTOK_VIRAL)
+  // Daily Chart & Viral Recommendations (auto-updates daily)
+  private val _selectedDailyFeed = MutableStateFlow(DailyFeedCategory.DAILY_CHARTS)
   val selectedDailyFeed: StateFlow<DailyFeedCategory> = _selectedDailyFeed
 
   private val _dailyUpdatedLabel = MutableStateFlow(formatTodayBadge())
@@ -389,7 +389,7 @@ class AurixViewModel(application: Application) : AndroidViewModel(application) {
       }
     }
     connectPlaybackController(application)
-    loadDailyRecommendations(DailyFeedCategory.TIKTOK_VIRAL)
+    loadDailyRecommendations(DailyFeedCategory.DAILY_CHARTS)
     startPositionTicker()
     GitHubUpdater.cleanupObsoleteApks(application, _installedAppInfo.value.versionCode)
     checkForUpdates(application, silent = true)

@@ -1,6 +1,7 @@
 package com.example.ui.screens
 
 import androidx.compose.animation.AnimatedContent
+import androidx.compose.animation.animateColorAsState
 import androidx.compose.animation.core.snap
 import androidx.compose.animation.core.tween
 import androidx.compose.animation.fadeIn
@@ -16,12 +17,12 @@ import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
-import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.rounded.*
 import androidx.compose.material3.*
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.getValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.alpha
@@ -325,15 +326,18 @@ fun HomeScreen(
         }
       }
 
-      // Daily Feed Header & Viral Category Filter Chips
+      // Daily Feed Editorial Header & Category Filter Pills
       item {
-        Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
+        Column(verticalArrangement = Arrangement.spacedBy(14.dp)) {
           Row(
             modifier = Modifier.fillMaxWidth(),
             horizontalArrangement = Arrangement.SpaceBetween,
             verticalAlignment = Alignment.CenterVertically
           ) {
-            Column(modifier = Modifier.weight(1f)) {
+            Column(
+              modifier = Modifier.weight(1f),
+              verticalArrangement = Arrangement.spacedBy(3.dp)
+            ) {
               val feedLabel = feedLocalizedLabel(selectedFeed)
               val feedSubtitle = feedLocalizedSubtitle(selectedFeed)
               Row(
@@ -342,26 +346,81 @@ fun HomeScreen(
               ) {
                 Text(
                   text = feedLabel,
-                  style = MaterialTheme.typography.titleLarge.copy(fontWeight = FontWeight.ExtraBold, fontSize = 20.sp, lineHeight = 28.sp),
-                  color = MaterialTheme.colorScheme.onBackground
+                  style = MaterialTheme.typography.titleLarge.copy(
+                    fontWeight = FontWeight.ExtraBold,
+                    fontSize = 22.sp,
+                    lineHeight = 30.sp
+                  ),
+                  color = MaterialTheme.colorScheme.onBackground,
+                  maxLines = 1,
+                  overflow = TextOverflow.Ellipsis
                 )
                 Surface(
                   shape = CircleShape,
-                  color = MaterialTheme.colorScheme.primary.copy(alpha = 0.16f)
+                  color = AurixTealAccent.copy(alpha = 0.14f)
                 ) {
-                  Text(
-                    text = stringResource(id = R.string.home_daily_badge),
-                    style = MaterialTheme.typography.labelSmall.copy(fontWeight = FontWeight.Bold, fontSize = 10.sp, lineHeight = 14.sp),
-                    color = MaterialTheme.colorScheme.primary,
-                    modifier = Modifier.padding(horizontal = 8.dp, vertical = 3.dp)
-                  )
+                  Row(
+                    modifier = Modifier.padding(horizontal = 8.dp, vertical = 3.dp),
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.spacedBy(5.dp)
+                  ) {
+                    Box(
+                      modifier = Modifier
+                        .size(6.dp)
+                        .clip(CircleShape)
+                        .background(AurixTealAccent)
+                    )
+                    Text(
+                      text = stringResource(id = R.string.home_daily_badge),
+                      style = MaterialTheme.typography.labelSmall.copy(
+                        fontWeight = FontWeight.Bold,
+                        fontSize = 10.sp,
+                        lineHeight = 14.sp
+                      ),
+                      color = AurixTealAccent
+                    )
+                  }
                 }
               }
               Text(
                 text = feedSubtitle,
-                style = MaterialTheme.typography.bodySmall.copy(lineHeight = 18.sp),
-                color = MaterialTheme.colorScheme.onSurfaceVariant
+                style = MaterialTheme.typography.bodySmall.copy(
+                  fontSize = 13.sp,
+                  lineHeight = 19.sp
+                ),
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                maxLines = 1,
+                overflow = TextOverflow.Ellipsis
               )
+            }
+
+            if (!isLoadingFeatured && featuredTracks.isNotEmpty()) {
+              Surface(
+                shape = CircleShape,
+                color = if (darkTheme) Color(0xFF151F30) else Color.White.copy(alpha = 0.85f),
+                border = androidx.compose.foundation.BorderStroke(
+                  1.dp,
+                  if (darkTheme) Color(0xFF273348) else Color.White
+                )
+              ) {
+                Row(
+                  modifier = Modifier.padding(horizontal = 10.dp, vertical = 5.dp),
+                  verticalAlignment = Alignment.CenterVertically,
+                  horizontalArrangement = Arrangement.spacedBy(4.dp)
+                ) {
+                  Icon(
+                    imageVector = Icons.Rounded.QueueMusic,
+                    contentDescription = null,
+                    tint = AurixTealAccent,
+                    modifier = Modifier.size(14.dp)
+                  )
+                  Text(
+                    text = featuredTracks.take(20).size.toString(),
+                    style = MaterialTheme.typography.labelSmall.copy(fontWeight = FontWeight.Bold),
+                    color = MaterialTheme.colorScheme.onSurface
+                  )
+                }
+              }
             }
           }
 
@@ -373,23 +432,31 @@ fun HomeScreen(
           ) {
             DailyFeedCategory.entries.forEach { category ->
               val selected = category == selectedFeed
-              val chipBg = if (selected) {
-                MaterialTheme.colorScheme.primary
-              } else if (darkTheme) {
-                Color.White.copy(alpha = 0.08f)
-              } else {
-                Color.White.copy(alpha = 0.78f)
-              }
-              val chipBorder = if (selected) {
-                MaterialTheme.colorScheme.primary
-              } else if (darkTheme) {
-                Color.White.copy(alpha = 0.16f)
-              } else {
-                Color.White
-              }
+              val chipBg by animateColorAsState(
+                targetValue = when {
+                  selected -> AurixTealAccent
+                  darkTheme -> Color(0xFF151F30)
+                  else -> Color.White.copy(alpha = 0.84f)
+                },
+                animationSpec = if (reducedMotion) snap() else tween(200),
+                label = "chip_bg_${category.id}"
+              )
+              val chipBorder by animateColorAsState(
+                targetValue = when {
+                  selected -> AurixTealAccent
+                  darkTheme -> Color(0xFF273348)
+                  else -> Color.White
+                },
+                animationSpec = if (reducedMotion) snap() else tween(200),
+                label = "chip_border_${category.id}"
+              )
+              val chipTextColor = if (selected) Color(0xFF06201C) else MaterialTheme.colorScheme.onSurface
 
-              Box(
+              Row(
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.spacedBy(6.dp),
                 modifier = Modifier
+                  .heightIn(min = 40.dp)
                   .clip(CircleShape)
                   .background(chipBg)
                   .border(1.dp, chipBorder, CircleShape)
@@ -397,13 +464,20 @@ fun HomeScreen(
                   .testTag("home_feed_chip_${category.id}")
                   .padding(horizontal = 14.dp, vertical = 8.dp)
               ) {
+                Icon(
+                  imageVector = feedCategoryIcon(category),
+                  contentDescription = null,
+                  tint = if (selected) Color(0xFF06201C) else AurixTealAccent,
+                  modifier = Modifier.size(15.dp)
+                )
                 Text(
                   text = feedLocalizedLabel(category),
                   style = MaterialTheme.typography.bodySmall.copy(
                     fontWeight = if (selected) FontWeight.Bold else FontWeight.SemiBold,
+                    fontSize = 13.sp,
                     lineHeight = 18.sp
                   ),
-                  color = if (selected) Color.White else MaterialTheme.colorScheme.onSurface
+                  color = chipTextColor
                 )
               }
             }
@@ -411,11 +485,11 @@ fun HomeScreen(
         }
       }
 
-      // Main Daily Recommendations Card (fixed height across Error / Loading / Loaded so layout never jumps)
+      // Unified Daily Recommendations Card (zero card-inside-card, fixed min height during Loading/Error)
       item {
-        val cardBgColor = if (darkTheme) Color(0xFF151F30) else Color.White.copy(alpha = 0.90f)
+        val cardBgColor = if (darkTheme) Color(0xFF151F30) else Color.White.copy(alpha = 0.92f)
         val cardBorderColor = if (darkTheme) Color(0xFF273348) else Color.White
-        val cardShape = RoundedCornerShape(26.dp)
+        val cardShape = RoundedCornerShape(28.dp)
         val cardState = when {
           isLoadingFeatured -> DailyCardState.LOADING
           featuredTracks.isEmpty() -> DailyCardState.ERROR
@@ -425,7 +499,13 @@ fun HomeScreen(
         Box(
           modifier = Modifier
             .fillMaxWidth()
-            .height(436.dp)
+            .then(
+              if (cardState == DailyCardState.LOADED) {
+                Modifier.heightIn(min = 420.dp)
+              } else {
+                Modifier.height(420.dp)
+              }
+            )
             .clip(cardShape)
             .background(cardBgColor)
             .border(1.dp, cardBorderColor, cardShape)
@@ -434,12 +514,12 @@ fun HomeScreen(
         ) {
           AnimatedContent(
             targetState = cardState,
-            modifier = Modifier.fillMaxSize(),
+            modifier = Modifier.fillMaxWidth(),
             transitionSpec = {
               if (reducedMotion) {
                 fadeIn(snap()) togetherWith fadeOut(snap())
               } else if (targetState == DailyCardState.LOADED) {
-                (fadeIn(tween(350)) + slideInVertically(tween(350)) { it / 12 }) togetherWith fadeOut(tween(180))
+                (fadeIn(tween(350)) + slideInVertically(tween(350)) { it / 16 }) togetherWith fadeOut(tween(180))
               } else {
                 fadeIn(tween(220)) togetherWith fadeOut(tween(160))
               }
@@ -450,7 +530,8 @@ fun HomeScreen(
               DailyCardState.ERROR -> {
                 Column(
                   modifier = Modifier
-                    .fillMaxSize()
+                    .fillMaxWidth()
+                    .height(420.dp)
                     .padding(horizontal = 24.dp),
                   horizontalAlignment = Alignment.CenterHorizontally,
                   verticalArrangement = Arrangement.Center
@@ -517,7 +598,8 @@ fun HomeScreen(
               DailyCardState.LOADING -> {
                 Column(
                   modifier = Modifier
-                    .fillMaxSize()
+                    .fillMaxWidth()
+                    .height(420.dp)
                     .padding(horizontal = 24.dp),
                   horizontalAlignment = Alignment.CenterHorizontally,
                   verticalArrangement = Arrangement.Center
@@ -551,14 +633,8 @@ fun HomeScreen(
               DailyCardState.LOADED -> {
                 val heroSong = featuredTracks.first()
                 val restTracks = featuredTracks.drop(1).take(19)
-                Column(
-                  modifier = Modifier
-                    .fillMaxSize()
-                    .verticalScroll(rememberScrollState())
-                    .padding(horizontal = 10.dp, vertical = 10.dp),
-                  verticalArrangement = Arrangement.spacedBy(8.dp)
-                ) {
-                  ViralSpotlightCard(
+                Column(modifier = Modifier.fillMaxWidth()) {
+                  IntegratedHeroSpotlight(
                     song = heroSong,
                     badgeLabel = "#1 ${selectedFeed.badgeText.uppercase()}",
                     isCurrent = currentSong?.id == heroSong.id,
@@ -571,25 +647,36 @@ fun HomeScreen(
                     onFavoriteClick = { onFavoriteClick(heroSong) }
                   )
 
-                  restTracks.forEachIndexed { idx, song ->
-                    SongRow(
-                      song = song,
-                      isPlaying = isPlaying,
-                      isCurrent = currentSong?.id == song.id,
-                      reducedMotion = reducedMotion,
-                      darkTheme = darkTheme,
-                      hasLyrics = song.id in verifiedLyricsIds,
-                      rank = idx + 2,
-                      showSourceBadge = false,
-                      onCheckLyrics = onCheckLyrics,
-                      onSongClick = { onSongClick(song, featuredTracks) },
-                      onFavoriteClick = { onFavoriteClick(song) }
+                  if (restTracks.isNotEmpty()) {
+                    HorizontalDivider(
+                      color = if (darkTheme) Color(0xFF273348).copy(alpha = 0.8f) else MaterialTheme.colorScheme.onSurface.copy(alpha = 0.08f)
                     )
-                    if (idx < restTracks.lastIndex) {
-                      HorizontalDivider(
-                        modifier = Modifier.padding(horizontal = 14.dp),
-                        color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.06f)
-                      )
+                    Column(
+                      modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(horizontal = 8.dp, vertical = 6.dp)
+                    ) {
+                      restTracks.forEachIndexed { idx, song ->
+                        SongRow(
+                          song = song,
+                          isPlaying = isPlaying,
+                          isCurrent = currentSong?.id == song.id,
+                          reducedMotion = reducedMotion,
+                          darkTheme = darkTheme,
+                          hasLyrics = song.id in verifiedLyricsIds,
+                          rank = idx + 2,
+                          showSourceBadge = false,
+                          onCheckLyrics = onCheckLyrics,
+                          onSongClick = { onSongClick(song, featuredTracks) },
+                          onFavoriteClick = { onFavoriteClick(song) }
+                        )
+                        if (idx < restTracks.lastIndex) {
+                          HorizontalDivider(
+                            modifier = Modifier.padding(horizontal = 14.dp),
+                            color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.06f)
+                          )
+                        }
+                      }
                     }
                   }
                 }
@@ -621,7 +708,7 @@ fun HomeScreen(
 }
 
 @Composable
-private fun ViralSpotlightCard(
+private fun IntegratedHeroSpotlight(
   song: Song,
   badgeLabel: String,
   isCurrent: Boolean,
@@ -637,24 +724,13 @@ private fun ViralSpotlightCard(
     onCheckLyrics(song)
   }
   val (c1, c2) = rememberArtworkColors(song.artworkUrl, song.title)
-  val shape = RoundedCornerShape(26.dp)
 
   Box(
     modifier = Modifier
       .fillMaxWidth()
-      .clip(shape)
-      .background(if (darkTheme) Color(0xFF172034).copy(alpha = 0.78f) else Color.White.copy(alpha = 0.86f))
-      .border(
-        width = 1.dp,
-        brush = Brush.verticalGradient(
-          colors = listOf(Color.White.copy(alpha = if (darkTheme) 0.32f else 0.96f), Color.White.copy(alpha = 0.08f))
-        ),
-        shape = shape
-      )
       .clickable { onPlayClick() }
       .testTag("home_hero_spotlight")
   ) {
-    // Soft ambient artwork wash behind the hero card
     if (song.artworkUrl.isNotBlank()) {
       AsyncImage(
         model = song.artworkUrl,
@@ -662,8 +738,8 @@ private fun ViralSpotlightCard(
         contentScale = ContentScale.Crop,
         modifier = Modifier
           .matchParentSize()
-          .alpha(if (darkTheme) 0.28f else 0.18f)
-          .blur(36.dp)
+          .alpha(if (darkTheme) 0.24f else 0.14f)
+          .blur(38.dp)
       )
     }
     Box(
@@ -672,8 +748,8 @@ private fun ViralSpotlightCard(
         .background(
           Brush.horizontalGradient(
             colors = listOf(
-              c1.copy(alpha = if (darkTheme) 0.26f else 0.16f),
-              c2.copy(alpha = if (darkTheme) 0.14f else 0.08f),
+              c1.copy(alpha = if (darkTheme) 0.22f else 0.12f),
+              c2.copy(alpha = if (darkTheme) 0.10f else 0.05f),
               Color.Transparent
             )
           )
@@ -683,33 +759,36 @@ private fun ViralSpotlightCard(
     Row(
       modifier = Modifier
         .fillMaxWidth()
-        .padding(14.dp),
+        .padding(16.dp),
       verticalAlignment = Alignment.CenterVertically,
       horizontalArrangement = Arrangement.spacedBy(14.dp)
     ) {
       Box(
         modifier = Modifier
-          .size(88.dp)
+          .size(84.dp)
           .clip(RoundedCornerShape(18.dp))
-          .border(1.dp, Color.White.copy(alpha = 0.34f), RoundedCornerShape(18.dp))
+          .border(1.dp, Color.White.copy(alpha = 0.26f), RoundedCornerShape(18.dp))
       ) {
         SongArtwork(
           song = song,
           modifier = Modifier.fillMaxSize(),
           cornerRadius = 18.dp,
-          iconSize = 32.dp
+          iconSize = 30.dp
         )
       }
 
       Column(modifier = Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(4.dp)) {
         Surface(
           shape = CircleShape,
-          color = MaterialTheme.colorScheme.primary.copy(alpha = 0.18f)
+          color = AurixTealAccent.copy(alpha = 0.16f)
         ) {
           Text(
             text = badgeLabel,
-            style = MaterialTheme.typography.labelSmall.copy(fontWeight = FontWeight.ExtraBold, fontSize = 10.sp),
-            color = MaterialTheme.colorScheme.primary,
+            style = MaterialTheme.typography.labelSmall.copy(
+              fontWeight = FontWeight.ExtraBold,
+              fontSize = 10.sp
+            ),
+            color = AurixTealAccent,
             modifier = Modifier.padding(horizontal = 8.dp, vertical = 3.dp)
           )
         }
@@ -717,7 +796,10 @@ private fun ViralSpotlightCard(
         Row(verticalAlignment = Alignment.CenterVertically) {
           Text(
             text = song.title,
-            style = MaterialTheme.typography.titleMedium.copy(fontWeight = FontWeight.ExtraBold),
+            style = MaterialTheme.typography.titleMedium.copy(
+              fontWeight = FontWeight.ExtraBold,
+              lineHeight = 22.sp
+            ),
             color = MaterialTheme.colorScheme.onSurface,
             maxLines = 1,
             overflow = TextOverflow.Ellipsis,
@@ -733,7 +815,7 @@ private fun ViralSpotlightCard(
         }
         Text(
           text = song.artist,
-          style = MaterialTheme.typography.bodySmall,
+          style = MaterialTheme.typography.bodySmall.copy(lineHeight = 18.sp),
           color = MaterialTheme.colorScheme.onSurfaceVariant,
           maxLines = 1,
           overflow = TextOverflow.Ellipsis
@@ -747,7 +829,7 @@ private fun ViralSpotlightCard(
         ) {
           Surface(
             shape = CircleShape,
-            color = MaterialTheme.colorScheme.primary,
+            color = AurixTealAccent,
             modifier = Modifier
               .clip(CircleShape)
               .clickable { onPlayClick() }
@@ -760,7 +842,7 @@ private fun ViralSpotlightCard(
               if (isCurrent && isPlaying) {
                 EqualizerBars(
                   isPlaying = true,
-                  color = Color.White,
+                  color = Color(0xFF06201C),
                   reducedMotion = reducedMotion,
                   barWidth = 2.dp,
                   maxHeight = 11.dp
@@ -769,7 +851,7 @@ private fun ViralSpotlightCard(
                 Icon(
                   imageVector = Icons.Rounded.PlayArrow,
                   contentDescription = "Play",
-                  tint = Color.White,
+                  tint = Color(0xFF06201C),
                   modifier = Modifier.size(16.dp)
                 )
               }
@@ -779,15 +861,20 @@ private fun ViralSpotlightCard(
                 } else {
                   stringResource(id = R.string.home_play_now)
                 },
-                style = MaterialTheme.typography.labelMedium.copy(fontWeight = FontWeight.Bold, lineHeight = 17.sp),
-                color = Color.White
+                style = MaterialTheme.typography.labelMedium.copy(
+                  fontWeight = FontWeight.Bold,
+                  lineHeight = 17.sp
+                ),
+                color = Color(0xFF06201C)
               )
             }
           }
 
           IconButton(
             onClick = onFavoriteClick,
-            modifier = Modifier.size(36.dp)
+            modifier = Modifier
+              .minimumInteractiveComponentSize()
+              .size(40.dp)
           ) {
             Icon(
               imageVector = if (song.isFavorite) Icons.Rounded.Favorite else Icons.Rounded.FavoriteBorder,
@@ -852,6 +939,15 @@ private fun HomeLibraryPill(
         color = MaterialTheme.colorScheme.onSurfaceVariant
       )
     }
+  }
+}
+
+private fun feedCategoryIcon(category: DailyFeedCategory): ImageVector {
+  return when (category) {
+    DailyFeedCategory.TIKTOK_VIRAL -> Icons.Rounded.Whatshot
+    DailyFeedCategory.DAILY_CHARTS -> Icons.Rounded.Public
+    DailyFeedCategory.PHONK_EDITS -> Icons.Rounded.Bolt
+    DailyFeedCategory.KHMER_ASIA -> Icons.Rounded.GraphicEq
   }
 }
 
