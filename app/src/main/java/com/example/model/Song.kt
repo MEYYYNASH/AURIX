@@ -14,8 +14,41 @@ data class Song(
   val fullDurationSeconds: Long = durationSeconds,
   val genre: String = "",
   val bpm: Int = 0,
-  val mood: String = ""
+  val mood: String = "",
+  val album: String = "",
+  val trackNumber: Int = 0,
+  val year: String = ""
 )
+
+enum class CustomCoverMode(val id: String) {
+  PHOTO("PHOTO"),
+  MIX("MIX"),
+  APP_ICON("APP_ICON");
+
+  companion object {
+    fun fromId(raw: String?): CustomCoverMode {
+      return entries.firstOrNull { it.id == raw } ?: PHOTO
+    }
+  }
+}
+
+data class AlbumInfo(
+  val albumId: String,
+  val title: String,
+  val artist: String,
+  val year: String,
+  val coverUrl: String?,
+  val automaticCoverUrl: String?,
+  val customCoverMode: CustomCoverMode? = null,
+  val customSourceUris: List<String> = emptyList(),
+  val tracks: List<Song> = emptyList()
+)
+
+fun computeAlbumId(albumName: String, artistName: String): String {
+  val normAlbum = albumName.trim().ifBlank { "Unknown Album" }.lowercase()
+  val normArtist = artistName.trim().ifBlank { "Unknown Artist" }.lowercase()
+  return "${normAlbum}::${normArtist}"
+}
 
 data class LyricLine(
   val timestampMs: Long,

@@ -14,6 +14,7 @@ import androidx.lifecycle.AndroidViewModel
 import androidx.lifecycle.viewModelScope
 import androidx.media3.common.MediaItem
 import androidx.media3.common.MediaMetadata
+import androidx.media3.common.PlaybackException
 import androidx.media3.common.PlaybackParameters
 import androidx.media3.common.Player
 import androidx.media3.session.MediaController
@@ -75,7 +76,8 @@ class AurixViewModel(application: Application) : AndroidViewModel(application) {
       AURIX_MIGRATION_2_3,
       AURIX_MIGRATION_3_4,
       AURIX_MIGRATION_4_5,
-      AURIX_MIGRATION_5_6
+      AURIX_MIGRATION_5_6,
+      AURIX_MIGRATION_6_7
     )
     .build()
   private val dao = database.aurixDao()
@@ -213,11 +215,46 @@ class AurixViewModel(application: Application) : AndroidViewModel(application) {
     return song.id !in hiddenIds && normalizeArtistKey(song.artist) !in blocked
   }
 
-  private val rawFavorites: StateFlow<List<Song>> = dao.getFavorites().map { list ->
+  private val albumCoverEntities: StateFlow<Map<String, AlbumCoverEntity>> = dao.observeAlbumCovers()
+    .map { list -> list.associateBy { it.albumId } }
+    .stateIn(viewModelScope, SharingStarted.Eagerly, emptyMap())
+
+  private val _selectedAlbumId = MutableStateFlow<String?>(null)
+
+  private fun effectiveArtworkForSong(song: Song, covers: Map<String, AlbumCoverEntity>): Song {
+    val albumName = song.album.ifBlank { "Unknown Album" }
+    val artistName = song.artist.ifBlank { "Unknown Artist" }
+    val albumId = computeAlbumId(albumName, artistName)
+    val custom = covers[albumId]
+    if (custom != null && custom.coverPath.isNotBlank()) {
+      return song.copy(artworkUrl = custom.coverPath)
+    }
+    if (song.id.startsWith("album_track_")) {
+      val placeholderAlbumId = computeAlbumId("Album Title", "Artist Name")
+      val placeholderCustom = covers[placeholderAlbumId]
+      if (placeholderCustom != null && placeholderCustom.coverPath.isNotBlank()) {
+        return song.copy(artworkUrl = placeholderCustom.coverPath)
+      }
+    }
+    return song
+  }
+
+  private val rawFavorites: StateFlow<List<Song>> = combine(
+    dao.getFavorites(),
+    albumCoverEntities
+  ) { list, covers ->
     list.map {
-      TrackMetadataClassifier.enrich(
-        Song(it.id, it.title, it.artist, it.artworkUrl, it.durationSeconds, it.streamUrl, it.source, true)
+      val base = Song(
+        id = it.id,
+        title = it.title,
+        artist = it.artist,
+        artworkUrl = it.artworkUrl,
+        durationSeconds = it.durationSeconds,
+        streamUrl = it.streamUrl,
+        source = it.source,
+        isFavorite = true
       )
+      TrackMetadataClassifier.enrich(effectiveArtworkForSong(base, covers))
     }
   }.stateIn(viewModelScope, SharingStarted.Lazily, emptyList())
 
@@ -271,7 +308,7 @@ class AurixViewModel(application: Application) : AndroidViewModel(application) {
     }
   }.stateIn(viewModelScope, SharingStarted.Eagerly, SearchUiState.Idle)
 
-  val localSongs: StateFlow<List<Song>> = combine(
+  private val rawLocalSongs: StateFlow<List<Song>> = combine(
     dao.getLocalSongs(),
     favoriteIds,
     hiddenSongIds,
@@ -282,15 +319,25 @@ class AurixViewModel(application: Application) : AndroidViewModel(application) {
         Song(
           id = it.id,
           title = it.title,
-          artist = it.artist,
-          artworkUrl = it.artworkUrl.ifBlank { APP_ICON_ARTWORK },
+          artist = it.artist.ifBlank { "Unknown Artist" },
+          artworkUrl = if (it.artworkUrl == APP_ICON_ARTWORK) "" else it.artworkUrl,
           durationSeconds = it.durationSeconds,
           streamUrl = it.streamUrl,
           source = it.source,
-          isFavorite = it.id in favs
+          isFavorite = it.id in favs,
+          album = it.album.ifBlank { "Unknown Album" },
+          trackNumber = it.trackNumber,
+          year = it.year
         )
       )
     }.filter { isTrackVisible(it, hidden, blocked) }
+  }.stateIn(viewModelScope, SharingStarted.Lazily, emptyList())
+
+  val localSongs: StateFlow<List<Song>> = combine(
+    rawLocalSongs,
+    albumCoverEntities
+  ) { list, covers ->
+    list.map { effectiveArtworkForSong(it, covers) }
   }.stateIn(viewModelScope, SharingStarted.Lazily, emptyList())
 
   // Qualified play logs (only plays >= 30 seconds of active playback) filtered by visibility
@@ -298,12 +345,16 @@ class AurixViewModel(application: Application) : AndroidViewModel(application) {
     analyticsRepository.observeQualifiedPlayLogs(),
     favoriteIds,
     hiddenSongIds,
-    blockedArtists
-  ) { logs, favs, hidden, blocked ->
+    blockedArtists,
+    albumCoverEntities
+  ) { logs, favs, hidden, blocked, covers ->
     logs
       .filter { isTrackVisible(it.song, hidden, blocked) }
       .map { record ->
-        record.copy(song = record.song.copy(isFavorite = record.song.id in favs))
+        val updatedSong = effectiveArtworkForSong(record.song, covers).copy(
+          isFavorite = record.song.id in favs
+        )
+        record.copy(song = updatedSong)
       }
   }.stateIn(viewModelScope, SharingStarted.Eagerly, emptyList())
 
@@ -376,22 +427,20 @@ class AurixViewModel(application: Application) : AndroidViewModel(application) {
     RecommendationEngine.risingArtists(logs, limit = 10)
   }.stateIn(viewModelScope, SharingStarted.Lazily, emptyList())
 
-  val albumTracks: StateFlow<List<Song>> = combine(
-    localSongs,
-    featuredTracks,
-    favoriteIds,
-    hiddenSongIds
-  ) { local, featured, favs, hidden ->
-    val sourcePool = local.ifEmpty { featured }.take(8)
-    val defaultDurations = listOf(192L, 218L, 174L, 245L, 203L, 189L, 231L, 260L)
-    val count = if (sourcePool.isNotEmpty()) sourcePool.size else defaultDurations.size
-    (0 until count).mapNotNull { idx ->
+  private fun buildDefaultExampleAlbum(
+    featured: List<Song>,
+    favs: Set<String>,
+    hidden: Set<String>,
+    covers: Map<String, AlbumCoverEntity>
+  ): AlbumInfo {
+    val defaultDurations = listOf(192L, 218L, 174L, 245L, 203L)
+    val baseTracks = (0 until 5).mapNotNull { idx ->
       val id = "album_track_${idx + 1}"
       if (id in hidden) return@mapNotNull null
-      val backing = sourcePool.getOrNull(idx)
+      val backing = featured.getOrNull(idx)
       val duration = backing?.fullDurationSeconds?.takeIf { it > 0L }
         ?: backing?.durationSeconds?.takeIf { it > 0L }
-        ?: defaultDurations[idx % defaultDurations.size]
+        ?: defaultDurations[idx]
       Song(
         id = id,
         title = "Track Title ${idx + 1}",
@@ -401,10 +450,87 @@ class AurixViewModel(application: Application) : AndroidViewModel(application) {
         streamUrl = backing?.streamUrl.orEmpty(),
         source = backing?.source ?: "Album",
         isFavorite = id in favs,
-        fullDurationSeconds = duration
+        fullDurationSeconds = duration,
+        album = "Album Title",
+        trackNumber = idx + 1,
+        year = ""
       )
     }
+    val rawInfo = AudioMetadataReader.deriveAlbumHeaderFromTracks(
+      tracks = baseTracks,
+      customCovers = covers,
+      fallbackTitle = "Album Title",
+      fallbackArtist = "Artist Name"
+    )
+    val effectiveTracks = rawInfo.tracks.map { effectiveArtworkForSong(it, covers) }
+    return rawInfo.copy(tracks = effectiveTracks)
+  }
+
+  val libraryAlbums: StateFlow<List<AlbumInfo>> = combine(
+    rawLocalSongs,
+    featuredTracks,
+    favoriteIds,
+    hiddenSongIds,
+    albumCoverEntities
+  ) { local, featured, favs, hidden, covers ->
+    if (local.isEmpty()) {
+      listOf(buildDefaultExampleAlbum(featured, favs, hidden, covers))
+    } else {
+      val grouped = local.groupBy { song ->
+        computeAlbumId(
+          albumName = song.album.ifBlank { "Unknown Album" },
+          artistName = song.artist.ifBlank { "Unknown Artist" }
+        )
+      }
+      grouped.values.map { rawAlbumTracks ->
+        val sorted = rawAlbumTracks.sortedWith(
+          compareBy<Song> { if (it.trackNumber > 0) it.trackNumber else Int.MAX_VALUE }
+            .thenBy { it.title.lowercase(Locale.ROOT) }
+        )
+        val header = AudioMetadataReader.deriveAlbumHeaderFromTracks(
+          tracks = sorted,
+          customCovers = covers
+        )
+        header.copy(tracks = header.tracks.map { effectiveArtworkForSong(it, covers) })
+      }
+    }
   }.stateIn(viewModelScope, SharingStarted.Eagerly, emptyList())
+
+  val activeAlbumInfo: StateFlow<AlbumInfo> = combine(
+    libraryAlbums,
+    _selectedAlbumId
+  ) { albums, selectedId ->
+    val fallback = albums.firstOrNull() ?: AlbumInfo(
+      albumId = computeAlbumId("Album Title", "Artist Name"),
+      title = "Album Title",
+      artist = "Artist Name",
+      year = "",
+      coverUrl = null,
+      automaticCoverUrl = null,
+      tracks = emptyList()
+    )
+    if (selectedId != null) {
+      albums.firstOrNull { it.albumId == selectedId } ?: fallback
+    } else {
+      fallback
+    }
+  }.stateIn(
+    viewModelScope,
+    SharingStarted.Eagerly,
+    AlbumInfo(
+      albumId = computeAlbumId("Album Title", "Artist Name"),
+      title = "Album Title",
+      artist = "Artist Name",
+      year = "",
+      coverUrl = null,
+      automaticCoverUrl = null,
+      tracks = emptyList()
+    )
+  )
+
+  val albumTracks: StateFlow<List<Song>> = activeAlbumInfo
+    .map { it.tracks }
+    .stateIn(viewModelScope, SharingStarted.Eagerly, emptyList())
 
   val isAlbumAddedToLibrary: StateFlow<Boolean> = combine(
     albumTracks,
@@ -421,8 +547,15 @@ class AurixViewModel(application: Application) : AndroidViewModel(application) {
   }.stateIn(viewModelScope, SharingStarted.Eagerly, false)
 
   private val _rawCurrentSong = MutableStateFlow<Song?>(null)
-  val currentSong: StateFlow<Song?> = combine(_rawCurrentSong, favoriteIds) { song, favs ->
-    song?.copy(isFavorite = song.id in favs)
+  val currentSong: StateFlow<Song?> = combine(
+    _rawCurrentSong,
+    favoriteIds,
+    albumCoverEntities
+  ) { song, favs, covers ->
+    song?.let {
+      val withAlbumArt = effectiveArtworkForSong(it, covers)
+      withAlbumArt.copy(isFavorite = withAlbumArt.id in favs)
+    }
   }.stateIn(viewModelScope, SharingStarted.Lazily, null)
 
   private val _isPlaying = MutableStateFlow(false)
@@ -527,6 +660,11 @@ class AurixViewModel(application: Application) : AndroidViewModel(application) {
         }
       }
       _currentPosition.value = controller.currentPosition.coerceAtLeast(0L)
+    }
+
+    override fun onPlayerError(error: PlaybackException) {
+      _isPlaying.value = false
+      flushActivePlaySessionDuration()
     }
   }
 
@@ -1281,7 +1419,8 @@ class AurixViewModel(application: Application) : AndroidViewModel(application) {
             durationSeconds = 30L,
             streamUrl = track.previewUrl.orEmpty(),
             source = sourceTag,
-            fullDurationSeconds = if (fullDurSec > 0L) fullDurSec else 30L
+            fullDurationSeconds = if (fullDurSec > 0L) fullDurSec else 30L,
+            album = track.collectionName.orEmpty()
           ),
           genreHint = track.primaryGenreName
         )
@@ -1310,7 +1449,8 @@ class AurixViewModel(application: Application) : AndroidViewModel(application) {
             durationSeconds = 30L,
             streamUrl = track.preview.orEmpty(),
             source = sourceTag,
-            fullDurationSeconds = if (track.duration > 0L) track.duration else 30L
+            fullDurationSeconds = if (track.duration > 0L) track.duration else 30L,
+            album = track.album?.title.orEmpty()
           )
         )
       }
@@ -1615,6 +1755,9 @@ class AurixViewModel(application: Application) : AndroidViewModel(application) {
     val controller = mediaController
     if (controller != null && controller.hasNextMediaItem()) {
       controller.seekToNextMediaItem()
+      if (controller.playbackState == Player.STATE_IDLE) {
+        controller.prepare()
+      }
       controller.play()
       return
     }
@@ -1639,6 +1782,9 @@ class AurixViewModel(application: Application) : AndroidViewModel(application) {
     }
     if (controller != null && controller.hasPreviousMediaItem()) {
       controller.seekToPreviousMediaItem()
+      if (controller.playbackState == Player.STATE_IDLE) {
+        controller.prepare()
+      }
       controller.play()
       return
     }
@@ -1696,7 +1842,9 @@ class AurixViewModel(application: Application) : AndroidViewModel(application) {
     if (controller.isPlaying) {
       controller.pause()
     } else {
-      if (controller.playbackState == Player.STATE_ENDED) {
+      if (controller.playbackState == Player.STATE_IDLE && controller.mediaItemCount > 0) {
+        controller.prepare()
+      } else if (controller.playbackState == Player.STATE_ENDED) {
         controller.seekTo(0L)
       }
       controller.play()
@@ -1726,7 +1874,112 @@ class AurixViewModel(application: Application) : AndroidViewModel(application) {
     playSong(randomTrack, tracks)
   }
 
-  fun toggleAlbumInLibrary(tracks: List<Song>) {
+  fun openAlbum(albumId: String? = null) {
+    _selectedAlbumId.value = albumId
+  }
+
+  fun saveAlbumCoverPhoto(
+    albumId: String,
+    imageSource: String,
+    offsetXFraction: Float = 0f,
+    offsetYFraction: Float = 0f,
+    zoom: Float = 1f
+  ) {
+    val appContext = getApplication<Application>()
+    viewModelScope.launch {
+      val prev = dao.getAlbumCover(albumId)
+      val result = AlbumCoverStorage.renderAndSavePhotoCover(
+        context = appContext,
+        albumId = albumId,
+        imageSource = imageSource,
+        offsetXFraction = offsetXFraction,
+        offsetYFraction = offsetYFraction,
+        zoom = zoom
+      )
+      result.onSuccess { savedPath ->
+        AlbumCoverStorage.deleteManagedAlbumCover(appContext, prev?.coverPath)
+        AlbumBannerCache.clear()
+        dao.upsertAlbumCover(
+          AlbumCoverEntity(
+            albumId = albumId,
+            coverPath = savedPath,
+            mode = CustomCoverMode.PHOTO.id,
+            sourceUris = imageSource
+          )
+        )
+        Toast.makeText(appContext, "Album cover saved", Toast.LENGTH_SHORT).show()
+      }.onFailure {
+        Toast.makeText(appContext, "Unable to save album cover", Toast.LENGTH_SHORT).show()
+      }
+    }
+  }
+
+  fun saveAlbumCoverMix(albumId: String, imageSources: List<String>) {
+    val appContext = getApplication<Application>()
+    viewModelScope.launch {
+      val prev = dao.getAlbumCover(albumId)
+      val clean = imageSources.filter { it.isNotBlank() }.take(4)
+      val result = AlbumCoverStorage.renderAndSaveMixCover(
+        context = appContext,
+        albumId = albumId,
+        imageSources = clean
+      )
+      result.onSuccess { savedPath ->
+        AlbumCoverStorage.deleteManagedAlbumCover(appContext, prev?.coverPath)
+        AlbumBannerCache.clear()
+        dao.upsertAlbumCover(
+          AlbumCoverEntity(
+            albumId = albumId,
+            coverPath = savedPath,
+            mode = CustomCoverMode.MIX.id,
+            sourceUris = clean.joinToString("\n")
+          )
+        )
+        Toast.makeText(appContext, "Mix cover saved", Toast.LENGTH_SHORT).show()
+      }.onFailure {
+        Toast.makeText(appContext, "Unable to save mix cover", Toast.LENGTH_SHORT).show()
+      }
+    }
+  }
+
+  fun saveAlbumCoverAppIcon(albumId: String) {
+    val appContext = getApplication<Application>()
+    viewModelScope.launch {
+      val prev = dao.getAlbumCover(albumId)
+      val result = AlbumCoverStorage.renderAndSaveAppIconCover(
+        context = appContext,
+        albumId = albumId
+      )
+      result.onSuccess { savedPath ->
+        AlbumCoverStorage.deleteManagedAlbumCover(appContext, prev?.coverPath)
+        AlbumBannerCache.clear()
+        dao.upsertAlbumCover(
+          AlbumCoverEntity(
+            albumId = albumId,
+            coverPath = savedPath,
+            mode = CustomCoverMode.APP_ICON.id,
+            sourceUris = ""
+          )
+        )
+        Toast.makeText(appContext, "App icon cover saved", Toast.LENGTH_SHORT).show()
+      }.onFailure {
+        Toast.makeText(appContext, "Unable to save app icon cover", Toast.LENGTH_SHORT).show()
+      }
+    }
+  }
+
+  fun resetAlbumCover(albumId: String) {
+    val appContext = getApplication<Application>()
+    viewModelScope.launch {
+      val prev = dao.getAlbumCover(albumId)
+      AlbumCoverStorage.deleteManagedAlbumCover(appContext, prev?.coverPath)
+      dao.deleteAlbumCover(albumId)
+      AlbumBannerCache.clear()
+      Toast.makeText(appContext, "Album cover reset", Toast.LENGTH_SHORT).show()
+    }
+  }
+
+  fun toggleAlbumInLibrary(tracks: List<Song>, albumTitle: String = "Album") {
     if (tracks.isEmpty()) return
     val appContext = getApplication<Application>()
     viewModelScope.launch {
@@ -1734,7 +1987,7 @@ class AurixViewModel(application: Application) : AndroidViewModel(application) {
       val allAdded = tracks.all { it.id in currentFavs }
       if (allAdded) {
         tracks.forEach { dao.deleteFavorite(it.id) }
-        Toast.makeText(appContext, "Removed Album Title from library", Toast.LENGTH_SHORT).show()
+        Toast.makeText(appContext, "Removed \"$albumTitle\" from library", Toast.LENGTH_SHORT).show()
       } else {
         tracks.forEach { song ->
           dao.insertFavorite(
@@ -1749,7 +2002,7 @@ class AurixViewModel(application: Application) : AndroidViewModel(application) {
             )
           )
         }
-        Toast.makeText(appContext, "Added Album Title to library", Toast.LENGTH_SHORT).show()
+        Toast.makeText(appContext, "Added \"$albumTitle\" to library", Toast.LENGTH_SHORT).show()
       }
     }
   }
@@ -1831,66 +2084,65 @@ class AurixViewModel(application: Application) : AndroidViewModel(application) {
   }
 
   fun addLocalSong(uri: Uri) {
+    importLocalSongs(listOf(uri))
+  }
+
+  fun importLocalSongs(uris: List<Uri>) {
+    if (uris.isEmpty()) return
     val appContext = getApplication<Application>()
     viewModelScope.launch {
-      val entity = withContext(Dispatchers.IO) {
-        try {
-          appContext.contentResolver.takePersistableUriPermission(
-            uri,
-            Intent.FLAG_GRANT_READ_URI_PERMISSION
+      var addedCount = 0
+      var firstAddedTitle: String? = null
+      var firstAlbumId: String? = null
+
+      withContext(Dispatchers.IO) {
+        for (uri in uris) {
+          try {
+            appContext.contentResolver.takePersistableUriPermission(
+              uri,
+              Intent.FLAG_GRANT_READ_URI_PERMISSION
+            )
+          } catch (_: Exception) { }
+
+          val existing = dao.getLocalSongById(uri.toString())
+          if (existing != null) continue
+
+          val meta = AudioMetadataReader.extractFromUri(
+            context = appContext,
+            uri = uri,
+            songId = uri.toString()
           )
-        } catch (_: Exception) { }
-
-        val existing = dao.getLocalSongById(uri.toString())
-        if (existing != null) return@withContext null
-
-        var displayTitle: String? = null
-        var artist = "Device Storage"
-        var durationSec = 180L
-
-        try {
-          appContext.contentResolver.query(uri, arrayOf(OpenableColumns.DISPLAY_NAME), null, null, null)?.use { cursor ->
-            if (cursor.moveToFirst()) {
-              val idx = cursor.getColumnIndex(OpenableColumns.DISPLAY_NAME)
-              if (idx >= 0) {
-                displayTitle = cursor.getString(idx)?.substringBeforeLast('.')
-              }
-            }
+          val entity = LocalSongEntity(
+            id = uri.toString(),
+            title = meta.title,
+            artist = meta.artist,
+            artworkUrl = meta.embeddedArtworkUri,
+            durationSeconds = meta.durationSeconds,
+            streamUrl = uri.toString(),
+            source = "Local",
+            album = meta.album,
+            trackNumber = meta.trackNumber,
+            year = meta.year
+          )
+          dao.insertLocalSong(entity)
+          addedCount++
+          if (firstAddedTitle == null) {
+            firstAddedTitle = entity.title
+            firstAlbumId = computeAlbumId(entity.album, entity.artist)
           }
-        } catch (_: Exception) { }
-
-        try {
-          val retriever = MediaMetadataRetriever()
-          retriever.setDataSource(appContext, uri)
-          val metaTitle = retriever.extractMetadata(MediaMetadataRetriever.METADATA_KEY_TITLE)
-          val metaArtist = retriever.extractMetadata(MediaMetadataRetriever.METADATA_KEY_ARTIST)
-          val metaDuration = retriever.extractMetadata(MediaMetadataRetriever.METADATA_KEY_DURATION)?.toLongOrNull()
-          if (!metaTitle.isNullOrBlank()) displayTitle = metaTitle
-          if (!metaArtist.isNullOrBlank()) artist = metaArtist
-          if (metaDuration != null && metaDuration > 0L) durationSec = metaDuration / 1000L
-          retriever.release()
-        } catch (_: Exception) { }
-
-        val fallbackName = uri.lastPathSegment
-          ?.substringAfterLast('/')
-          ?.substringBeforeLast('.')
-          ?.takeIf { !it.startsWith("audio:") }
-          ?: "Local Audio Track"
-
-        LocalSongEntity(
-          id = uri.toString(),
-          title = displayTitle?.ifBlank { null } ?: fallbackName,
-          artist = artist,
-          artworkUrl = APP_ICON_ARTWORK,
-          durationSeconds = durationSec,
-          streamUrl = uri.toString(),
-          source = "Local"
-        )
+        }
       }
 
-      if (entity != null) {
-        dao.insertLocalSong(entity)
-        Toast.makeText(appContext, "Imported \"${entity.title}\" to My songs", Toast.LENGTH_SHORT).show()
+      if (addedCount > 0) {
+        if (_selectedAlbumId.value == null && firstAlbumId != null) {
+          _selectedAlbumId.value = firstAlbumId
+        }
+        val msg = if (addedCount == 1) {
+          "Imported \"$firstAddedTitle\" to My songs"
+        } else {
+          "Imported $addedCount audio files"
+        }
+        Toast.makeText(appContext, msg, Toast.LENGTH_SHORT).show()
       } else {
         Toast.makeText(appContext, "Song is already in My songs", Toast.LENGTH_SHORT).show()
       }

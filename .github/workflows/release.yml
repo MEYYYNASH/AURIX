@@ -10,9 +10,9 @@ on:
   workflow_dispatch:
     inputs:
       tag:
-        description: 'Release tag (e.g. v1.6.0)'
+        description: 'Release tag (e.g. v1.6.1)'
         required: false
-        default: 'v1.6.0'
+        default: 'v1.6.1'
 
 permissions:
   contents: write
@@ -52,11 +52,11 @@ jobs:
             RELEASE_TAG="${{ github.ref_name }}"
           else
             VERSION=$(grep -m1 'versionName' app/build.gradle.kts | sed -E 's/.*"([^"]+)".*/\1/')
-            RELEASE_TAG="v${VERSION:-1.6.0}"
+            RELEASE_TAG="v${VERSION:-1.6.1}"
           fi
           VCODE=$(grep -m1 'versionCode' app/build.gradle.kts | sed -E 's/[^0-9]*([0-9]+).*/\1/')
           echo "RELEASE_TAG=${RELEASE_TAG}" >> "$GITHUB_ENV"
-          echo "RELEASE_VERSION_CODE=${VCODE:-10600}" >> "$GITHUB_ENV"
+          echo "RELEASE_VERSION_CODE=${VCODE:-10601}" >> "$GITHUB_ENV"
 
       - name: Ensure keystores exist
         run: |
@@ -100,9 +100,10 @@ jobs:
             mandatory: false
 
             What's New in AURIX ${{ env.RELEASE_TAG }}:
-            - Added 30s+ play-session tracking logging track, artist, genre, BPM, mood, timestamp, and listened duration in Room
-            - Added Smart Recommendations, Discover Weekly (30-track 70/30 mix), Recently Played (20 unique), Most Played (Week/Month/All time), Mood Playlists, Similar Songs, Music DNA, Trending Tracks, and Rising Artists
-            - Added modular Album Header + Track List section and Search Orbit loader improvements
+            - Smoother screen navigation, directional Library tab transitions, animated segmented pills, and flicker-free artwork/banner crossfades
+            - Dynamic blurred Album Banner behind the frosted glass Album Header with dominant accent color extraction and parallax scroll fade
+            - Real ID3 / media tag extraction for imported audio files (title, artist, album, track number, year, duration, and embedded cover art)
+            - Custom Album Cover Editor (Photo drag/zoom crop, 1-4 image Mix collage, and App Icon tile) saved per album in Room and shown in the Library Albums grid
           files: |
             app/build/outputs/apk/release/app-release.apk
             AURIX-${{ env.RELEASE_TAG }}.apk

@@ -7,6 +7,7 @@ import androidx.activity.compose.BackHandler
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.animation.*
+import androidx.compose.animation.animateColorAsState
 import androidx.compose.animation.core.CubicBezierEasing
 import androidx.compose.animation.core.animateDpAsState
 import androidx.compose.animation.core.animateFloatAsState
@@ -202,6 +203,8 @@ private fun AurixMainShell(
   val hiddenSongIds by viewModel.hiddenSongIds.collectAsStateWithLifecycle()
   val blockedArtists by viewModel.blockedArtists.collectAsStateWithLifecycle()
   val albumTracks by viewModel.albumTracks.collectAsStateWithLifecycle()
+  val activeAlbumInfo by viewModel.activeAlbumInfo.collectAsStateWithLifecycle()
+  val libraryAlbums by viewModel.libraryAlbums.collectAsStateWithLifecycle()
   val isAlbumAddedToLibrary by viewModel.isAlbumAddedToLibrary.collectAsStateWithLifecycle()
   val isAlbumDownloaded by viewModel.isAlbumDownloaded.collectAsStateWithLifecycle()
   var albumDetailSong by remember { mutableStateOf<com.example.model.Song?>(null) }
@@ -303,6 +306,7 @@ private fun AurixMainShell(
           reducedMotion = reducedMotion
         )
 
+        val topTabs = remember { listOf(Screen.Home, Screen.Search, Screen.Library, Screen.Settings) }
         AnimatedContent(
           targetState = currentScreen,
           modifier = Modifier.fillMaxSize(),
@@ -310,10 +314,41 @@ private fun AurixMainShell(
             if (reducedMotion) {
               fadeIn(snap()) togetherWith fadeOut(snap())
             } else {
-              (fadeIn(tween(300, easing = AurixEase)) + slideInVertically(tween(300, easing = AurixEase)) { it / 24 }) togetherWith
-                fadeOut(tween(180))
+              val initialTabIdx = topTabs.indexOf(initialState)
+              val targetTabIdx = topTabs.indexOf(targetState)
+              val isEnteringDetail = initialTabIdx >= 0 && targetTabIdx < 0
+              val isExitingDetail = initialTabIdx < 0 && targetTabIdx >= 0
+              when {
+                isEnteringDetail -> {
+                  (fadeIn(tween(280, easing = AurixEase)) +
+                    slideInHorizontally(tween(300, easing = AurixEase)) { it / 8 } +
+                    scaleIn(tween(300, easing = AurixEase), initialScale = 0.97f)) togetherWith
+                    (fadeOut(tween(200, easing = AurixEase)) +
+                      slideOutHorizontally(tween(260, easing = AurixEase)) { -it / 16 })
+                }
+                isExitingDetail -> {
+                  (fadeIn(tween(260, easing = AurixEase)) +
+                    slideInHorizontally(tween(280, easing = AurixEase)) { -it / 14 }) togetherWith
+                    (fadeOut(tween(200, easing = AurixEase)) +
+                      slideOutHorizontally(tween(260, easing = AurixEase)) { it / 8 } +
+                      scaleOut(tween(240, easing = AurixEase), targetScale = 0.97f))
+                }
+                initialTabIdx >= 0 && targetTabIdx >= 0 && initialTabIdx != targetTabIdx -> {
+                  val forward = targetTabIdx > initialTabIdx
+                  (fadeIn(tween(260, easing = AurixEase)) +
+                    slideInHorizontally(tween(280, easing = AurixEase)) { if (forward) it / 14 else -it / 14 }) togetherWith
+                    (fadeOut(tween(180, easing = AurixEase)) +
+                      slideOutHorizontally(tween(220, easing = AurixEase)) { if (forward) -it / 18 else it / 18 })
+                }
+                else -> {
+                  (fadeIn(tween(260, easing = AurixEase)) +
+                    slideInVertically(tween(280, easing = AurixEase)) { it / 28 }) togetherWith
+                    fadeOut(tween(180))
+                }
+              }.using(SizeTransform(clip = false))
             }
           },
+          contentKey = { it.route },
           label = "tab_content"
         ) { screen ->
           when (screen) {
@@ -344,6 +379,7 @@ private fun AurixMainShell(
                 currentScreen = Screen.Library
               },
               onOpenAlbum = {
+                viewModel.openAlbum(null)
                 currentScreen = Screen.Album
               },
               smartRecommendations = smartRecommendations,
@@ -434,10 +470,12 @@ private fun AurixMainShell(
               }
             }
             is Screen.Album -> AlbumTrackListSection(
-              albumTitle = stringResource(id = R.string.album_placeholder_title),
-              artistName = stringResource(id = R.string.album_placeholder_artist),
-              coverUrl = null,
-              tracks = albumTracks,
+              albumTitle = activeAlbumInfo.title,
+              artistName = activeAlbumInfo.artist,
+              albumYear = activeAlbumInfo.year,
+              coverUrl = activeAlbumInfo.coverUrl,
+              albumInfo = activeAlbumInfo,
+              tracks = activeAlbumInfo.tracks,
               currentSong = currentSong,
               isPlaying = isPlaying,
               isShuffleEnabled = shuffleEnabled,
@@ -445,14 +483,25 @@ private fun AurixMainShell(
               isAlbumDownloaded = isAlbumDownloaded,
               hasCurrentSong = currentSong != null,
               reducedMotion = reducedMotion,
-              onAddToLibraryClick = { viewModel.toggleAlbumInLibrary(albumTracks) },
-              onDownloadAlbumClick = { viewModel.downloadAlbum(context, albumTracks) },
-              onPlayClick = { viewModel.playAlbumFromStart(albumTracks) },
-              onShuffleClick = { viewModel.shuffleAlbum(albumTracks) },
-              onTrackClick = { song -> viewModel.onAlbumTrackClick(song, albumTracks) },
+              onAddToLibraryClick = {
+                viewModel.toggleAlbumInLibrary(activeAlbumInfo.tracks, activeAlbumInfo.title)
+              },
+              onDownloadAlbumClick = { viewModel.downloadAlbum(context, activeAlbumInfo.tracks) },
+              onPlayClick = { viewModel.playAlbumFromStart(activeAlbumInfo.tracks) },
+              onShuffleClick = { viewModel.shuffleAlbum(activeAlbumInfo.tracks) },
+              onTrackClick = { song -> viewModel.onAlbumTrackClick(song, activeAlbumInfo.tracks) },
               onTrackFavoriteClick = { song -> viewModel.toggleFavorite(song) },
               onTrackDownloadClick = { song -> viewModel.downloadSong(context, song) },
-              onTrackDetailsClick = { song -> albumDetailSong = song }
+              onTrackDetailsClick = { song -> albumDetailSong = song },
+              onImportAudioFiles = { uris -> viewModel.importLocalSongs(uris) },
+              onSaveCoverPhoto = { uri, ox, oy, zoom ->
+                viewModel.saveAlbumCoverPhoto(activeAlbumInfo.albumId, uri, ox, oy, zoom)
+              },
+              onSaveCoverMix = { sources ->
+                viewModel.saveAlbumCoverMix(activeAlbumInfo.albumId, sources)
+              },
+              onSaveCoverAppIcon = { viewModel.saveAlbumCoverAppIcon(activeAlbumInfo.albumId) },
+              onResetCover = { viewModel.resetAlbumCover(activeAlbumInfo.albumId) }
             )
             is Screen.Search -> SearchScreen(
               searchMode = searchMode,
@@ -496,6 +545,7 @@ private fun AurixMainShell(
               localSongs = localSongs,
               favorites = favorites,
               recentlyPlayed = recentlyPlayed,
+              albums = libraryAlbums,
               currentSong = currentSong,
               isPlaying = isPlaying,
               darkTheme = darkTheme,
@@ -505,11 +555,16 @@ private fun AurixMainShell(
               onTabSelected = { libraryTab = it },
               onCheckLyrics = { viewModel.ensureLyricsVerified(it) },
               onAddLocalSong = { viewModel.addLocalSong(it) },
+              onAddLocalSongs = { viewModel.importLocalSongs(it) },
               onCustomizeSongPhoto = { songId, imageUri -> viewModel.updateLocalSongArtwork(songId, imageUri) },
               onDeleteLocalSong = { viewModel.deleteLocalSong(it) },
               onRemoveRecentSong = { viewModel.removeFromHistory(it) },
               onClearRecentHistory = { viewModel.clearHistory() },
               onOpenInsights = { currentScreen = Screen.Insights },
+              onAlbumClick = { album ->
+                viewModel.openAlbum(album.albumId)
+                currentScreen = Screen.Album
+              },
               onSongClick = { song ->
                 val listQueue = when (libraryTab) {
                   0 -> localSongs
@@ -565,7 +620,16 @@ private fun AurixMainShell(
         }
 
         // Subtle atmospheric gradient scrim so scrolling list rows fade gracefully behind the floating dock
-        val dockScrimBase = if (darkTheme) Color(0xFF0A0E1A) else Color(0xFFEAF0FF)
+        val targetScrimBase = when {
+          currentScreen is Screen.Album -> Color(0xFF0E1120)
+          darkTheme -> Color(0xFF0A0E1A)
+          else -> Color(0xFFEAF0FF)
+        }
+        val dockScrimBase by animateColorAsState(
+          targetValue = targetScrimBase,
+          animationSpec = if (reducedMotion) snap() else tween(280, easing = AurixEase),
+          label = "dock_scrim_base"
+        )
         val dockScrimHeight by animateDpAsState(
           targetValue = if (currentSong != null) 216.dp else 140.dp,
           animationSpec = if (reducedMotion) snap() else tween(300, easing = AurixEase),

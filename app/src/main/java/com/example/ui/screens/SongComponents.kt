@@ -55,8 +55,7 @@ import kotlinx.coroutines.withContext
 
 fun resolveArtworkModel(artworkUrl: String, source: String = ""): Any? {
   return when {
-    artworkUrl == APP_ICON_ARTWORK ||
-      (artworkUrl.isBlank() && (source == "Local" || source == "Imported")) -> R.drawable.aurix_clean_logo_1794625921343
+    artworkUrl == APP_ICON_ARTWORK -> R.drawable.ic_launcher_foreground
     artworkUrl.isNotBlank() -> artworkUrl
     else -> null
   }
@@ -231,39 +230,56 @@ fun SongArtwork(
     Brush.linearGradient(colors = listOf(c1, c2, Color(0xFF0B1020)))
   }
 
-  val usesAppIcon = song.artworkUrl == APP_ICON_ARTWORK ||
-    (song.artworkUrl.isBlank() && (song.source == "Local" || song.source == "Imported"))
+  val usesAppIcon = song.artworkUrl == APP_ICON_ARTWORK
+  val placeholderGradient = remember(c1, c2, song.artworkUrl) {
+    if (song.artworkUrl.isBlank() || usesAppIcon) {
+      Brush.linearGradient(colors = listOf(Color(0xFF7B61FF), Color(0xFF2D1E69)))
+    } else {
+      gradient
+    }
+  }
 
   Box(
     modifier = modifier
       .clip(RoundedCornerShape(cornerRadius))
-      .background(gradient),
+      .background(placeholderGradient),
     contentAlignment = Alignment.Center
   ) {
-    when {
-      usesAppIcon -> {
-        Image(
-          painter = painterResource(id = R.drawable.aurix_clean_logo_1794625921343),
-          contentDescription = song.title,
-          contentScale = ContentScale.Crop,
-          modifier = Modifier.fillMaxSize()
-        )
-      }
-      song.artworkUrl.isNotBlank() -> {
-        AsyncImage(
-          model = song.artworkUrl,
-          contentDescription = song.title,
-          contentScale = ContentScale.Crop,
-          modifier = Modifier.fillMaxSize()
-        )
-      }
-      else -> {
-        Icon(
-          imageVector = Icons.Rounded.MusicNote,
-          contentDescription = null,
-          tint = Color.White.copy(alpha = 0.85f),
-          modifier = Modifier.size(iconSize)
-        )
+    androidx.compose.animation.Crossfade(
+      targetState = song.artworkUrl,
+      animationSpec = tween(durationMillis = 280),
+      label = "song_artwork_crossfade"
+    ) { targetArt ->
+      Box(
+        modifier = Modifier.fillMaxSize(),
+        contentAlignment = Alignment.Center
+      ) {
+        when {
+          targetArt == APP_ICON_ARTWORK -> {
+            Image(
+              painter = painterResource(id = R.drawable.ic_launcher_foreground),
+              contentDescription = song.title,
+              contentScale = ContentScale.Fit,
+              modifier = Modifier.fillMaxSize(0.86f)
+            )
+          }
+          targetArt.isNotBlank() -> {
+            AsyncImage(
+              model = targetArt,
+              contentDescription = song.title,
+              contentScale = ContentScale.Crop,
+              modifier = Modifier.fillMaxSize()
+            )
+          }
+          else -> {
+            Icon(
+              imageVector = Icons.Rounded.MusicNote,
+              contentDescription = null,
+              tint = Color.White.copy(alpha = 0.88f),
+              modifier = Modifier.size(iconSize)
+            )
+          }
+        }
       }
     }
   }
@@ -383,11 +399,14 @@ fun GlassSegmentedBar(
   darkTheme: Boolean,
   onSelect: (Int) -> Unit,
   modifier: Modifier = Modifier,
-  testTags: List<String> = emptyList()
+  testTags: List<String> = emptyList(),
+  reducedMotion: Boolean = false
 ) {
   val barBg = if (darkTheme) Color.White.copy(alpha = 0.08f) else Color.White.copy(alpha = 0.68f)
   val barBorder = if (darkTheme) Color.White.copy(alpha = 0.16f) else Color.White.copy(alpha = 0.95f)
   val pillBg = if (darkTheme) Color(0xFF28344E) else Color.White
+  val pillBorderColor = Color.White.copy(alpha = if (darkTheme) 0.18f else 0.9f)
+  val colorSpec = if (reducedMotion) snap<Color>() else tween<Color>(durationMillis = 220, easing = FastOutSlowInEasing)
 
   Row(
     modifier = modifier
@@ -401,18 +420,33 @@ fun GlassSegmentedBar(
     options.forEachIndexed { index, (label, icon) ->
       val selected = selectedIndex == index
       val tag = testTags.getOrNull(index)
+      val animatedBg by animateColorAsState(
+        targetValue = if (selected) pillBg else Color.Transparent,
+        animationSpec = colorSpec,
+        label = "seg_bg_$index"
+      )
+      val animatedBorder by animateColorAsState(
+        targetValue = if (selected) pillBorderColor else Color.Transparent,
+        animationSpec = colorSpec,
+        label = "seg_border_$index"
+      )
+      val animatedContentColor by animateColorAsState(
+        targetValue = if (selected) MaterialTheme.colorScheme.onSurface else MaterialTheme.colorScheme.onSurfaceVariant,
+        animationSpec = colorSpec,
+        label = "seg_text_$index"
+      )
+      val animatedIconColor by animateColorAsState(
+        targetValue = if (selected) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurfaceVariant,
+        animationSpec = colorSpec,
+        label = "seg_icon_$index"
+      )
+
       Row(
         modifier = Modifier
           .weight(1f)
           .clip(CircleShape)
-          .background(if (selected) pillBg else Color.Transparent)
-          .then(
-            if (selected) Modifier.border(
-              0.75.dp,
-              Color.White.copy(alpha = if (darkTheme) 0.18f else 0.9f),
-              CircleShape
-            ) else Modifier
-          )
+          .background(animatedBg)
+          .border(0.75.dp, animatedBorder, CircleShape)
           .clickable { onSelect(index) }
           .then(if (tag != null) Modifier.testTag(tag) else Modifier)
           .padding(vertical = 10.dp, horizontal = 8.dp),
@@ -423,7 +457,7 @@ fun GlassSegmentedBar(
           Icon(
             imageVector = icon,
             contentDescription = null,
-            tint = if (selected) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurfaceVariant,
+            tint = animatedIconColor,
             modifier = Modifier.size(16.dp)
           )
           Spacer(modifier = Modifier.width(6.dp))
@@ -433,7 +467,7 @@ fun GlassSegmentedBar(
           style = MaterialTheme.typography.bodySmall.copy(
             fontWeight = if (selected) FontWeight.Bold else FontWeight.SemiBold
           ),
-          color = if (selected) MaterialTheme.colorScheme.onSurface else MaterialTheme.colorScheme.onSurfaceVariant,
+          color = animatedContentColor,
           maxLines = 1,
           overflow = TextOverflow.Ellipsis
         )

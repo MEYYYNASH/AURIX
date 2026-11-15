@@ -47,7 +47,19 @@ data class LocalSongEntity(
   val durationSeconds: Long,
   val streamUrl: String,
   val source: String,
-  val addedAt: Long = System.currentTimeMillis()
+  val addedAt: Long = System.currentTimeMillis(),
+  val album: String = "Unknown Album",
+  val trackNumber: Int = 0,
+  val year: String = ""
+)
+
+@Entity(tableName = "album_covers")
+data class AlbumCoverEntity(
+  @PrimaryKey val albumId: String,
+  val coverPath: String,
+  val mode: String,
+  val sourceUris: String = "",
+  val updatedAt: Long = System.currentTimeMillis()
 )
 
 @Entity(tableName = "lyric_offsets")
@@ -166,8 +178,40 @@ interface AurixDao {
   @Query("UPDATE local_songs SET artworkUrl = :artworkUrl WHERE id = :songId")
   suspend fun updateLocalSongArtwork(songId: String, artworkUrl: String)
 
+  @Query(
+    """
+    UPDATE local_songs
+    SET title = :title, artist = :artist, album = :album,
+        trackNumber = :trackNumber, year = :year,
+        artworkUrl = :artworkUrl, durationSeconds = :durationSeconds
+    WHERE id = :songId
+    """
+  )
+  suspend fun updateLocalSongMetadata(
+    songId: String,
+    title: String,
+    artist: String,
+    album: String,
+    trackNumber: Int,
+    year: String,
+    artworkUrl: String,
+    durationSeconds: Long
+  )
+
   @Query("DELETE FROM local_songs WHERE id = :songId")
   suspend fun deleteLocalSong(songId: String)
+
+  @Query("SELECT * FROM album_covers")
+  fun observeAlbumCovers(): Flow<List<AlbumCoverEntity>>
+
+  @Query("SELECT * FROM album_covers WHERE albumId = :albumId LIMIT 1")
+  suspend fun getAlbumCover(albumId: String): AlbumCoverEntity?
+
+  @Insert(onConflict = OnConflictStrategy.REPLACE)
+  suspend fun upsertAlbumCover(entity: AlbumCoverEntity)
+
+  @Query("DELETE FROM album_covers WHERE albumId = :albumId")
+  suspend fun deleteAlbumCover(albumId: String)
 
   @Query("SELECT offsetMs FROM lyric_offsets WHERE songId = :songId")
   suspend fun getLyricOffset(songId: String): Long?
@@ -366,6 +410,26 @@ val AURIX_MIGRATION_5_6 = object : Migration(5, 6) {
   }
 }
 
+val AURIX_MIGRATION_6_7 = object : Migration(6, 7) {
+  override fun migrate(db: SupportSQLiteDatabase) {
+    db.execSQL("ALTER TABLE `local_songs` ADD COLUMN `album` TEXT NOT NULL DEFAULT 'Unknown Album'")
+    db.execSQL("ALTER TABLE `local_songs` ADD COLUMN `trackNumber` INTEGER NOT NULL DEFAULT 0")
+    db.execSQL("ALTER TABLE `local_songs` ADD COLUMN `year` TEXT NOT NULL DEFAULT ''")
+    db.execSQL(
+      """
+      CREATE TABLE IF NOT EXISTS `album_covers` (
+        `albumId` TEXT NOT NULL,
+        `coverPath` TEXT NOT NULL,
+        `mode` TEXT NOT NULL,
+        `sourceUris` TEXT NOT NULL,
+        `updatedAt` INTEGER NOT NULL,
+        PRIMARY KEY(`albumId`)
+      )
+      """.trimIndent()
+    )
+  }
+}
+
 @Database(
   entities = [
     FavoriteSongEntity::class,
@@ -375,9 +439,10 @@ val AURIX_MIGRATION_5_6 = object : Migration(5, 6) {
     LyricsCacheEntity::class,
     BadLyricsEntity::class,
     PlayLogEntity::class,
-    DiscoverWeeklyEntity::class
+    DiscoverWeeklyEntity::class,
+    AlbumCoverEntity::class
   ],
-  version = 6,
+  version = 7,
   exportSchema = false
 )
 abstract class AurixDatabase : RoomDatabase() {

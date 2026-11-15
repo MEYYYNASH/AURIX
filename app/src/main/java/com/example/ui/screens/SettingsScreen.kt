@@ -929,8 +929,8 @@ private fun UpdateCardPreviewHost(
   checkStatus: UpdateCheckStatus,
   statusText: String
 ) {
-  val installed = InstalledAppInfo("com.aurix.music", "1.6.0", 10600L, emptySet())
-  val release = GitHubRelease("v1.6.0", "AURIX v1.6.0", "Release notes", "", "2026-11-15", 10600L)
+  val installed = InstalledAppInfo("com.aurix.music", "1.6.1", 10601L, emptySet())
+  val release = GitHubRelease("v1.6.1", "AURIX v1.6.1", "Release notes", "", "2026-11-15", 10601L)
   AurixTheme(darkTheme = true) {
     Box(
       modifier = Modifier
@@ -966,8 +966,8 @@ private fun UpdateCardIntroPreview() {
 @Preview(name = "UpdateCard - Idle", showBackground = true)
 @Composable
 private fun UpdateCardIdlePreview() {
-  val installed = InstalledAppInfo("com.aurix.music", "1.6.0", 10600L, emptySet())
-  val release = GitHubRelease("v1.6.0", "AURIX v1.6.0", "", "", "2026-11-15", 10600L)
+  val installed = InstalledAppInfo("com.aurix.music", "1.6.1", 10601L, emptySet())
+  val release = GitHubRelease("v1.6.1", "AURIX v1.6.1", "", "", "2026-11-15", 10601L)
   UpdateCardPreviewHost(
     logoState = UpdateLogoState.Idle,
     checkStatus = UpdateCheckStatus.UpToDate(installed, release),
@@ -988,8 +988,8 @@ private fun UpdateCardCheckingPreview() {
 @Preview(name = "UpdateCard - Done", showBackground = true)
 @Composable
 private fun UpdateCardDonePreview() {
-  val installed = InstalledAppInfo("com.aurix.music", "1.6.0", 10600L, emptySet())
-  val release = GitHubRelease("v1.6.0", "AURIX v1.6.0", "", "", "2026-11-15", 10600L)
+  val installed = InstalledAppInfo("com.aurix.music", "1.6.1", 10601L, emptySet())
+  val release = GitHubRelease("v1.6.1", "AURIX v1.6.1", "", "", "2026-11-15", 10601L)
   UpdateCardPreviewHost(
     logoState = UpdateLogoState.Done,
     checkStatus = UpdateCheckStatus.UpToDate(installed, release),
