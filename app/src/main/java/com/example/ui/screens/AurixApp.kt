@@ -29,7 +29,9 @@ import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.graphics.vector.ImageVector
+import androidx.compose.ui.platform.LocalConfiguration
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.window.DialogProperties
 import androidx.core.content.ContextCompat
@@ -37,6 +39,8 @@ import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.LifecycleEventObserver
 import androidx.lifecycle.compose.LocalLifecycleOwner
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import com.example.LocaleHelper
+import com.example.R
 import com.example.data.ApkDownloadState
 import com.example.data.UpdateCheckStatus
 import com.example.ui.theme.*
@@ -53,6 +57,29 @@ private val AurixEase = CubicBezierEasing(0.2f, 0.8f, 0.2f, 1.0f)
 
 @Composable
 fun AurixApp(viewModel: AurixViewModel) {
+  val currentLanguage by viewModel.language.collectAsStateWithLifecycle()
+  val baseContext = LocalContext.current
+  val baseConfig = LocalConfiguration.current
+  val localizedConfig = remember(baseConfig, currentLanguage) {
+    LocaleHelper.localizedConfiguration(baseConfig, currentLanguage)
+  }
+  val localizedContext = remember(baseContext, localizedConfig, currentLanguage) {
+    LocaleHelper.wrapActivityContext(baseContext, localizedConfig, currentLanguage)
+  }
+
+  CompositionLocalProvider(
+    LocalConfiguration provides localizedConfig,
+    LocalContext provides localizedContext
+  ) {
+    AurixAppContent(viewModel = viewModel, currentLanguage = currentLanguage)
+  }
+}
+
+@Composable
+private fun AurixAppContent(
+  viewModel: AurixViewModel,
+  currentLanguage: String
+) {
   val onboardingCompleted by viewModel.onboardingCompleted.collectAsStateWithLifecycle()
   var splashFinished by remember { mutableStateOf(false) }
 
@@ -115,7 +142,6 @@ fun AurixApp(viewModel: AurixViewModel) {
 
   val themeMode by viewModel.themeMode.collectAsStateWithLifecycle()
   val accentHex by viewModel.accentColorHex.collectAsStateWithLifecycle()
-  val currentLanguage by viewModel.language.collectAsStateWithLifecycle()
   val dynamicBg by viewModel.dynamicBg.collectAsStateWithLifecycle()
   val reducedMotion by viewModel.reducedMotion.collectAsStateWithLifecycle()
   val verifiedLyricsIds by viewModel.verifiedLyricsIds.collectAsStateWithLifecycle()
@@ -393,7 +419,12 @@ fun AurixApp(viewModel: AurixViewModel) {
 
         // Bottom Floating MiniPlayer + Liquid Glass Navigation Bar (steady during NowPlaying sheet slide)
         val screens = remember { listOf(Screen.Home, Screen.Search, Screen.Library, Screen.Settings) }
-        val navTabs = remember { screens.map { TabItem(it.title, it.icon) } }
+        val navTabs = listOf(
+          TabItem(stringResource(id = R.string.nav_home), Screen.Home.icon),
+          TabItem(stringResource(id = R.string.nav_search), Screen.Search.icon),
+          TabItem(stringResource(id = R.string.nav_library), Screen.Library.icon),
+          TabItem(stringResource(id = R.string.nav_settings), Screen.Settings.icon)
+        )
         val selectedIndex = screens.indexOf(currentScreen).coerceAtLeast(0)
 
         Column(

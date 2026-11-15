@@ -27,11 +27,13 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.testTag
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import com.example.R
 import com.example.model.Song
 
 @Composable
@@ -86,13 +88,13 @@ fun LibraryScreen(
     ) {
       Column(modifier = Modifier.weight(1f).padding(end = 8.dp)) {
         Text(
-          text = "Library",
-          style = MaterialTheme.typography.displayLarge.copy(fontSize = 28.sp, fontWeight = FontWeight.Bold),
+          text = stringResource(id = R.string.library_title),
+          style = MaterialTheme.typography.displayLarge.copy(fontSize = 28.sp, lineHeight = 38.sp, fontWeight = FontWeight.Bold),
           color = MaterialTheme.colorScheme.onBackground
         )
         Text(
-          text = "Local audio, saved downloads & custom covers",
-          style = MaterialTheme.typography.bodySmall,
+          text = stringResource(id = R.string.library_subtitle),
+          style = MaterialTheme.typography.bodySmall.copy(lineHeight = 18.sp),
           color = MaterialTheme.colorScheme.onSurfaceVariant,
           maxLines = 1,
           overflow = TextOverflow.Ellipsis
@@ -108,7 +110,7 @@ fun LibraryScreen(
           ) {
             Icon(Icons.Rounded.Add, contentDescription = null, modifier = Modifier.size(18.dp))
             Spacer(modifier = Modifier.width(4.dp))
-            Text("Add local", fontWeight = FontWeight.SemiBold)
+            Text(stringResource(id = R.string.library_add_local_short), fontWeight = FontWeight.SemiBold)
           }
         }
         selectedTab == 2 && recentlyPlayed.isNotEmpty() -> {
@@ -121,7 +123,7 @@ fun LibraryScreen(
           ) {
             Icon(Icons.Rounded.DeleteSweep, contentDescription = null, modifier = Modifier.size(18.dp))
             Spacer(modifier = Modifier.width(4.dp))
-            Text("Clear", fontWeight = FontWeight.SemiBold)
+            Text(stringResource(id = R.string.library_clear), fontWeight = FontWeight.SemiBold)
           }
         }
       }
@@ -131,9 +133,9 @@ fun LibraryScreen(
 
     GlassSegmentedBar(
       options = listOf(
-        "My songs" to null,
-        "Favorites" to null,
-        "Recent" to null
+        stringResource(id = R.string.library_tab_my_songs) to null,
+        stringResource(id = R.string.library_tab_favorites) to null,
+        stringResource(id = R.string.library_tab_recent) to null
       ),
       selectedIndex = selectedTab,
       darkTheme = darkTheme,
@@ -170,18 +172,18 @@ fun LibraryScreen(
             val (emptyIcon, emptyTitle, emptyMsg) = when (selectedTab) {
               0 -> Triple(
                 Icons.Rounded.LibraryMusic,
-                "No local songs yet",
-                "Import audio from your phone (uses the AURIX icon by default) or download analyzed tracks."
+                stringResource(id = R.string.library_empty_local_title),
+                stringResource(id = R.string.library_empty_local_sub)
               )
               1 -> Triple(
                 Icons.Rounded.FavoriteBorder,
-                "No favorites yet",
-                "Tap the heart on any track to save it here."
+                stringResource(id = R.string.library_empty_fav_title),
+                stringResource(id = R.string.library_empty_fav_sub)
               )
               else -> Triple(
                 Icons.Rounded.History,
-                "No recent plays",
-                "Tracks you listen to will appear here automatically."
+                stringResource(id = R.string.library_empty_recent_title),
+                stringResource(id = R.string.library_empty_recent_sub)
               )
             }
 
@@ -202,12 +204,12 @@ fun LibraryScreen(
 
             Text(
               text = emptyTitle,
-              style = MaterialTheme.typography.titleMedium.copy(fontWeight = FontWeight.Bold),
+              style = MaterialTheme.typography.titleMedium.copy(fontWeight = FontWeight.Bold, lineHeight = 24.sp),
               color = MaterialTheme.colorScheme.onSurface
             )
             Text(
               text = emptyMsg,
-              style = MaterialTheme.typography.bodySmall,
+              style = MaterialTheme.typography.bodySmall.copy(lineHeight = 19.sp),
               color = MaterialTheme.colorScheme.onSurfaceVariant,
               textAlign = TextAlign.Center
             )
@@ -220,7 +222,7 @@ fun LibraryScreen(
               ) {
                 Icon(Icons.Rounded.Add, contentDescription = null, modifier = Modifier.size(18.dp))
                 Spacer(modifier = Modifier.width(6.dp))
-                Text("Add audio file", fontWeight = FontWeight.SemiBold)
+                Text(stringResource(id = R.string.library_add_audio_file), fontWeight = FontWeight.SemiBold)
               }
             }
           }
@@ -252,8 +254,8 @@ fun LibraryScreen(
                 modifier = Modifier.size(18.dp)
               )
               Text(
-                text = "Tap photo icon to set cover • Tap trash icon to delete song",
-                style = MaterialTheme.typography.bodySmall.copy(fontWeight = FontWeight.Medium),
+                text = stringResource(id = R.string.library_cover_tip),
+                style = MaterialTheme.typography.bodySmall.copy(fontWeight = FontWeight.Medium, lineHeight = 18.sp),
                 color = MaterialTheme.colorScheme.onSurface
               )
             }
@@ -304,14 +306,14 @@ fun LibraryScreen(
       },
       title = {
         Text(
-          text = "Delete song?",
-          style = MaterialTheme.typography.titleMedium.copy(fontWeight = FontWeight.Bold)
+          text = stringResource(id = R.string.details_delete_title),
+          style = MaterialTheme.typography.titleMedium.copy(fontWeight = FontWeight.Bold, lineHeight = 24.sp)
         )
       },
       text = {
         Text(
-          text = "Remove \"${target.title}\" by ${target.artist} from My songs and delete its saved audio file from AURIX?",
-          style = MaterialTheme.typography.bodyMedium
+          text = stringResource(id = R.string.library_delete_confirm_msg, target.title, target.artist),
+          style = MaterialTheme.typography.bodyMedium.copy(lineHeight = 22.sp)
         )
       },
       confirmButton = {
@@ -324,7 +326,7 @@ fun LibraryScreen(
           shape = CircleShape,
           modifier = Modifier.testTag("confirm_delete_song_button")
         ) {
-          Text("Delete", color = Color.White, fontWeight = FontWeight.Bold)
+          Text(stringResource(id = R.string.action_delete), color = Color.White, fontWeight = FontWeight.Bold)
         }
       },
       dismissButton = {
@@ -332,7 +334,7 @@ fun LibraryScreen(
           onClick = { songPendingDelete = null },
           modifier = Modifier.testTag("cancel_delete_song_button")
         ) {
-          Text("Cancel")
+          Text(stringResource(id = R.string.action_cancel))
         }
       }
     )

@@ -24,11 +24,13 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.testTag
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import coil.compose.AsyncImage
+import com.example.R
 import com.example.model.Song
 import com.example.ui.theme.HeartRed
 import com.example.viewmodel.DailyFeedCategory
@@ -123,7 +125,7 @@ fun HomeScreen(
             ) {
               Icon(
                 imageVector = Icons.Rounded.Refresh,
-                contentDescription = "Refresh daily recommendations",
+                contentDescription = stringResource(id = R.string.home_refresh_cd),
                 tint = MaterialTheme.colorScheme.onSurface,
                 modifier = Modifier.size(20.dp)
               )
@@ -141,7 +143,7 @@ fun HomeScreen(
             ) {
               Icon(
                 imageVector = Icons.Rounded.Search,
-                contentDescription = "Search music",
+                contentDescription = stringResource(id = R.string.home_search_cd),
                 tint = MaterialTheme.colorScheme.onSurface,
                 modifier = Modifier.size(20.dp)
               )
@@ -157,7 +159,7 @@ fun HomeScreen(
           horizontalArrangement = Arrangement.spacedBy(10.dp)
         ) {
           HomeLibraryPill(
-            title = "My Songs",
+            title = stringResource(id = R.string.my_songs),
             countLabel = if (localSongsCount == 1) "1" else "$localSongsCount",
             icon = Icons.Rounded.FolderOpen,
             iconTint = MaterialTheme.colorScheme.primary,
@@ -166,7 +168,7 @@ fun HomeScreen(
             onClick = { onOpenLibraryTab(0) }
           )
           HomeLibraryPill(
-            title = "Favorites",
+            title = stringResource(id = R.string.home_favorites),
             countLabel = if (favoritesCount == 1) "1" else "$favoritesCount",
             icon = Icons.Rounded.Favorite,
             iconTint = HeartRed,
@@ -187,13 +189,13 @@ fun HomeScreen(
               verticalAlignment = Alignment.CenterVertically
             ) {
               Text(
-                text = "Jump Back In",
-                style = MaterialTheme.typography.titleMedium.copy(fontWeight = FontWeight.Bold),
+                text = stringResource(id = R.string.home_jump_back_in),
+                style = MaterialTheme.typography.titleMedium.copy(fontWeight = FontWeight.Bold, lineHeight = 24.sp),
                 color = MaterialTheme.colorScheme.onBackground
               )
               Text(
-                text = "History",
-                style = MaterialTheme.typography.labelLarge.copy(fontWeight = FontWeight.SemiBold),
+                text = stringResource(id = R.string.home_history),
+                style = MaterialTheme.typography.labelLarge.copy(fontWeight = FontWeight.SemiBold, lineHeight = 20.sp),
                 color = MaterialTheme.colorScheme.primary,
                 modifier = Modifier
                   .clip(CircleShape)
@@ -298,13 +300,15 @@ fun HomeScreen(
             verticalAlignment = Alignment.CenterVertically
           ) {
             Column(modifier = Modifier.weight(1f)) {
+              val feedLabel = feedLocalizedLabel(selectedFeed)
+              val feedSubtitle = feedLocalizedSubtitle(selectedFeed)
               Row(
                 verticalAlignment = Alignment.CenterVertically,
                 horizontalArrangement = Arrangement.spacedBy(8.dp)
               ) {
                 Text(
-                  text = selectedFeed.label,
-                  style = MaterialTheme.typography.titleLarge.copy(fontWeight = FontWeight.ExtraBold, fontSize = 20.sp),
+                  text = feedLabel,
+                  style = MaterialTheme.typography.titleLarge.copy(fontWeight = FontWeight.ExtraBold, fontSize = 20.sp, lineHeight = 28.sp),
                   color = MaterialTheme.colorScheme.onBackground
                 )
                 Surface(
@@ -312,16 +316,16 @@ fun HomeScreen(
                   color = MaterialTheme.colorScheme.primary.copy(alpha = 0.16f)
                 ) {
                   Text(
-                    text = "DAILY",
-                    style = MaterialTheme.typography.labelSmall.copy(fontWeight = FontWeight.Bold, fontSize = 10.sp),
+                    text = stringResource(id = R.string.home_daily_badge),
+                    style = MaterialTheme.typography.labelSmall.copy(fontWeight = FontWeight.Bold, fontSize = 10.sp, lineHeight = 14.sp),
                     color = MaterialTheme.colorScheme.primary,
                     modifier = Modifier.padding(horizontal = 8.dp, vertical = 3.dp)
                   )
                 }
               }
               Text(
-                text = selectedFeed.subtitle,
-                style = MaterialTheme.typography.bodySmall,
+                text = feedSubtitle,
+                style = MaterialTheme.typography.bodySmall.copy(lineHeight = 18.sp),
                 color = MaterialTheme.colorScheme.onSurfaceVariant
               )
             }
@@ -360,9 +364,10 @@ fun HomeScreen(
                   .padding(horizontal = 14.dp, vertical = 8.dp)
               ) {
                 Text(
-                  text = category.label,
+                  text = feedLocalizedLabel(category),
                   style = MaterialTheme.typography.bodySmall.copy(
-                    fontWeight = if (selected) FontWeight.Bold else FontWeight.SemiBold
+                    fontWeight = if (selected) FontWeight.Bold else FontWeight.SemiBold,
+                    lineHeight = 18.sp
                   ),
                   color = if (selected) Color.White else MaterialTheme.colorScheme.onSurface
                 )
@@ -388,8 +393,8 @@ fun HomeScreen(
               ) {
                 CircularProgressIndicator(color = MaterialTheme.colorScheme.primary)
                 Text(
-                  text = "Fetching today's ${selectedFeed.label} sounds...",
-                  style = MaterialTheme.typography.bodySmall,
+                  text = stringResource(id = R.string.home_fetching_sounds, feedLocalizedLabel(selectedFeed)),
+                  style = MaterialTheme.typography.bodySmall.copy(lineHeight = 18.sp),
                   color = MaterialTheme.colorScheme.onSurfaceVariant
                 )
               }
@@ -415,8 +420,8 @@ fun HomeScreen(
                   modifier = Modifier.size(30.dp)
                 )
                 Text(
-                  text = featuredError ?: "No daily tracks available right now.",
-                  style = MaterialTheme.typography.bodyMedium,
+                  text = featuredError ?: stringResource(id = R.string.home_no_daily_tracks),
+                  style = MaterialTheme.typography.bodyMedium.copy(lineHeight = 20.sp),
                   color = MaterialTheme.colorScheme.onSurfaceVariant
                 )
                 OutlinedButton(
@@ -425,7 +430,7 @@ fun HomeScreen(
                 ) {
                   Icon(Icons.Rounded.Refresh, contentDescription = null, modifier = Modifier.size(16.dp))
                   Spacer(modifier = Modifier.width(6.dp))
-                  Text("Retry")
+                  Text(stringResource(id = R.string.home_retry))
                 }
               }
             }
@@ -663,8 +668,12 @@ private fun ViralSpotlightCard(
                 )
               }
               Text(
-                text = if (isCurrent && isPlaying) "Playing" else "Play Now",
-                style = MaterialTheme.typography.labelMedium.copy(fontWeight = FontWeight.Bold),
+                text = if (isCurrent && isPlaying) {
+                  stringResource(id = R.string.home_playing_now)
+                } else {
+                  stringResource(id = R.string.home_play_now)
+                },
+                style = MaterialTheme.typography.labelMedium.copy(fontWeight = FontWeight.Bold, lineHeight = 17.sp),
                 color = Color.White
               )
             }
@@ -737,5 +746,25 @@ private fun HomeLibraryPill(
         color = MaterialTheme.colorScheme.onSurfaceVariant
       )
     }
+  }
+}
+
+@Composable
+private fun feedLocalizedLabel(category: DailyFeedCategory): String {
+  return when (category) {
+    DailyFeedCategory.TIKTOK_VIRAL -> stringResource(id = R.string.home_feed_tiktok)
+    DailyFeedCategory.DAILY_CHARTS -> stringResource(id = R.string.home_feed_charts)
+    DailyFeedCategory.PHONK_EDITS -> stringResource(id = R.string.home_feed_phonk)
+    DailyFeedCategory.KHMER_ASIA -> stringResource(id = R.string.home_feed_khmer)
+  }
+}
+
+@Composable
+private fun feedLocalizedSubtitle(category: DailyFeedCategory): String {
+  return when (category) {
+    DailyFeedCategory.TIKTOK_VIRAL -> stringResource(id = R.string.home_feed_tiktok_sub)
+    DailyFeedCategory.DAILY_CHARTS -> stringResource(id = R.string.home_feed_charts_sub)
+    DailyFeedCategory.PHONK_EDITS -> stringResource(id = R.string.home_feed_phonk_sub)
+    DailyFeedCategory.KHMER_ASIA -> stringResource(id = R.string.home_feed_khmer_sub)
   }
 }

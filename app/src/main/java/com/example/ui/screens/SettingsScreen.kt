@@ -145,8 +145,12 @@ fun SettingsScreen(
             reducedMotion = reducedMotion
           )
           Text(
-            text = "Settings",
-            style = MaterialTheme.typography.displayLarge.copy(fontSize = 27.sp, fontWeight = FontWeight.Bold),
+            text = stringResource(id = R.string.settings_title),
+            style = MaterialTheme.typography.displayLarge.copy(
+              fontSize = 27.sp,
+              lineHeight = 38.sp,
+              fontWeight = FontWeight.Bold
+            ),
             color = MaterialTheme.colorScheme.onBackground
           )
         }
@@ -191,15 +195,15 @@ fun SettingsScreen(
             Spacer(modifier = Modifier.width(12.dp))
             Column(modifier = Modifier.weight(1f)) {
               Text(
-                text = "App Update & Release",
-                style = MaterialTheme.typography.titleMedium.copy(fontWeight = FontWeight.Bold),
+                text = stringResource(id = R.string.settings_update_title),
+                style = MaterialTheme.typography.titleMedium.copy(fontWeight = FontWeight.Bold, lineHeight = 24.sp),
                 color = MaterialTheme.colorScheme.onSurface,
                 maxLines = 1,
                 overflow = TextOverflow.Ellipsis
               )
               Text(
-                text = "Over-the-air updates & release notes",
-                style = MaterialTheme.typography.bodySmall,
+                text = stringResource(id = R.string.settings_update_subtitle),
+                style = MaterialTheme.typography.bodySmall.copy(lineHeight = 18.sp),
                 color = MaterialTheme.colorScheme.primary,
                 maxLines = 1,
                 overflow = TextOverflow.Ellipsis
@@ -218,19 +222,20 @@ fun SettingsScreen(
               verticalArrangement = Arrangement.spacedBy(9.dp)
             ) {
               UpdateSummaryRow(
-                label = "Installed Version",
+                label = stringResource(id = R.string.settings_installed_version),
                 value = "v${installedAppInfo.versionName} (code ${installedAppInfo.versionCode})"
               )
               UpdateSummaryRow(
-                label = "Latest Release",
-                value = latestRelease?.let { "${it.tagName} (code ${it.versionCode})" } ?: "Not checked yet"
+                label = stringResource(id = R.string.settings_latest_release),
+                value = latestRelease?.let { "${it.tagName} (code ${it.versionCode})" }
+                  ?: stringResource(id = R.string.settings_not_checked)
               )
               UpdateSummaryRow(
-                label = "Release Date",
+                label = stringResource(id = R.string.settings_release_date),
                 value = latestRelease?.releaseDate?.ifBlank { "-" } ?: "-"
               )
               UpdateSummaryRow(
-                label = "Update Status",
+                label = stringResource(id = R.string.settings_update_status),
                 value = updateStatus,
                 valueColor = when {
                   apkDownloadState is ApkDownloadState.Error -> MaterialTheme.colorScheme.error
@@ -263,8 +268,8 @@ fun SettingsScreen(
                   modifier = Modifier.size(18.dp)
                 )
                 Text(
-                  text = "Critical release: Update Now is required.",
-                  style = MaterialTheme.typography.bodySmall.copy(fontWeight = FontWeight.SemiBold),
+                  text = stringResource(id = R.string.settings_critical_release),
+                  style = MaterialTheme.typography.bodySmall.copy(fontWeight = FontWeight.SemiBold, lineHeight = 18.sp),
                   color = MaterialTheme.colorScheme.error
                 )
               }
@@ -292,8 +297,8 @@ fun SettingsScreen(
                 horizontalArrangement = Arrangement.SpaceBetween
               ) {
                 Text(
-                  text = "Downloading & verifying APK...",
-                  style = MaterialTheme.typography.bodySmall.copy(fontWeight = FontWeight.SemiBold),
+                  text = stringResource(id = R.string.settings_downloading_verifying),
+                  style = MaterialTheme.typography.bodySmall.copy(fontWeight = FontWeight.SemiBold, lineHeight = 18.sp),
                   color = MaterialTheme.colorScheme.primary
                 )
                 Text(
@@ -318,9 +323,9 @@ fun SettingsScreen(
           // "Update Now" appears ONLY when latest versionCode > installed versionCode!
           if (isUpdateAvailable && latestRelease != null) {
             val updateLabel = when {
-              isDownloading -> "Downloading Update..."
-              isValidatedReady -> "Install Verified Update (${latestRelease.tagName})"
-              else -> "Update Now (${latestRelease.tagName})"
+              isDownloading -> stringResource(id = R.string.settings_downloading_update)
+              isValidatedReady -> stringResource(id = R.string.settings_install_verified_update, latestRelease.tagName)
+              else -> stringResource(id = R.string.settings_update_now, latestRelease.tagName)
             }
             val updateIcon = when {
               isDownloading -> Icons.Rounded.Downloading
@@ -359,7 +364,7 @@ fun SettingsScreen(
                 )
                 Text(
                   text = updateLabel,
-                  style = MaterialTheme.typography.bodyMedium.copy(fontWeight = FontWeight.Bold),
+                  style = MaterialTheme.typography.bodyMedium.copy(fontWeight = FontWeight.Bold, lineHeight = 20.sp),
                   color = Color.White,
                   maxLines = 1,
                   overflow = TextOverflow.Ellipsis
@@ -374,7 +379,11 @@ fun SettingsScreen(
             horizontalArrangement = Arrangement.spacedBy(10.dp)
           ) {
             GlassActionPill(
-              text = if (updateCheckStatus is UpdateCheckStatus.Checking) "Checking..." else "Check Updates",
+              text = if (updateCheckStatus is UpdateCheckStatus.Checking) {
+                stringResource(id = R.string.settings_checking)
+              } else {
+                stringResource(id = R.string.settings_check_updates)
+              },
               icon = Icons.Rounded.Refresh,
               darkTheme = darkTheme,
               enabled = !isDownloading && updateCheckStatus !is UpdateCheckStatus.Checking,
@@ -382,7 +391,7 @@ fun SettingsScreen(
               onClick = { onCheckUpdate(context) }
             )
             GlassActionPill(
-              text = "Release Notes",
+              text = stringResource(id = R.string.settings_release_notes),
               icon = Icons.Rounded.Description,
               darkTheme = darkTheme,
               enabled = latestRelease != null,
@@ -396,7 +405,7 @@ fun SettingsScreen(
             horizontalArrangement = Arrangement.spacedBy(10.dp)
           ) {
             GlassActionPill(
-              text = "Open Release Page",
+              text = stringResource(id = R.string.settings_open_release_page),
               icon = Icons.AutoMirrored.Rounded.OpenInNew,
               darkTheme = darkTheme,
               enabled = true,
@@ -417,8 +426,8 @@ fun SettingsScreen(
         ) {
           Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
             Text(
-              text = "Theme",
-              style = MaterialTheme.typography.titleMedium.copy(fontWeight = FontWeight.Bold),
+              text = stringResource(id = R.string.settings_theme),
+              style = MaterialTheme.typography.titleMedium.copy(fontWeight = FontWeight.Bold, lineHeight = 24.sp),
               color = MaterialTheme.colorScheme.onSurface
             )
             Surface(
@@ -426,8 +435,14 @@ fun SettingsScreen(
               color = if (darkTheme) Color(0xFF0E1320).copy(alpha = 0.72f) else Color(0xFFE1E8F6),
               modifier = Modifier.fillMaxWidth()
             ) {
+              val themeOptions = listOf(
+                "system" to stringResource(id = R.string.settings_theme_system),
+                "light" to stringResource(id = R.string.settings_theme_light),
+                "dark" to stringResource(id = R.string.settings_theme_dark),
+                "amoled" to stringResource(id = R.string.settings_theme_amoled)
+              )
               Row(modifier = Modifier.padding(4.dp)) {
-                listOf("system" to "System", "light" to "Light", "dark" to "Dark", "amoled" to "AMOLED").forEach { (key, label) ->
+                themeOptions.forEach { (key, label) ->
                   val selected = currentTheme == key
                   Box(
                     modifier = Modifier
@@ -435,14 +450,15 @@ fun SettingsScreen(
                       .clip(RoundedCornerShape(999.dp))
                       .background(if (selected) (if (darkTheme) Color(0xFF28334A) else Color.White) else Color.Transparent)
                       .clickable { onThemeChanged(key) }
-                      .padding(vertical = 10.dp),
+                      .padding(vertical = 10.dp, horizontal = 4.dp),
                     contentAlignment = Alignment.Center
                   ) {
                     Text(
                       text = label,
-                      style = MaterialTheme.typography.bodySmall.copy(fontWeight = FontWeight.SemiBold),
+                      style = MaterialTheme.typography.bodySmall.copy(fontWeight = FontWeight.SemiBold, lineHeight = 18.sp),
                       color = if (selected) MaterialTheme.colorScheme.onSurface else MaterialTheme.colorScheme.onSurfaceVariant,
-                      maxLines = 1
+                      maxLines = 1,
+                      overflow = TextOverflow.Ellipsis
                     )
                   }
                 }
@@ -452,8 +468,8 @@ fun SettingsScreen(
 
           Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
             Text(
-              text = "Accent color",
-              style = MaterialTheme.typography.titleMedium.copy(fontWeight = FontWeight.Bold),
+              text = stringResource(id = R.string.settings_accent),
+              style = MaterialTheme.typography.titleMedium.copy(fontWeight = FontWeight.Bold, lineHeight = 24.sp),
               color = MaterialTheme.colorScheme.onSurface
             )
             Row(
@@ -497,13 +513,13 @@ fun SettingsScreen(
           ) {
             Column(modifier = Modifier.weight(1f)) {
               Text(
-                text = "Dynamic artwork background",
-                style = MaterialTheme.typography.bodyLarge.copy(fontWeight = FontWeight.Medium),
+                text = stringResource(id = R.string.settings_dynamic_bg),
+                style = MaterialTheme.typography.bodyLarge.copy(fontWeight = FontWeight.Medium, lineHeight = 22.sp),
                 color = MaterialTheme.colorScheme.onSurface
               )
               Text(
-                text = "Ambient blurred album glow across screens",
-                style = MaterialTheme.typography.bodySmall,
+                text = stringResource(id = R.string.settings_dynamic_bg_desc),
+                style = MaterialTheme.typography.bodySmall.copy(lineHeight = 18.sp),
                 color = MaterialTheme.colorScheme.onSurfaceVariant
               )
             }
@@ -526,13 +542,13 @@ fun SettingsScreen(
           ) {
             Column(modifier = Modifier.weight(1f)) {
               Text(
-                text = "Reduced motion",
-                style = MaterialTheme.typography.bodyLarge.copy(fontWeight = FontWeight.Medium),
+                text = stringResource(id = R.string.settings_reduced_motion),
+                style = MaterialTheme.typography.bodyLarge.copy(fontWeight = FontWeight.Medium, lineHeight = 22.sp),
                 color = MaterialTheme.colorScheme.onSurface
               )
               Text(
-                text = "Minimize glass transitions & spring effects",
-                style = MaterialTheme.typography.bodySmall,
+                text = stringResource(id = R.string.settings_reduced_motion_desc),
+                style = MaterialTheme.typography.bodySmall.copy(lineHeight = 18.sp),
                 color = MaterialTheme.colorScheme.onSurfaceVariant
               )
             }
@@ -651,8 +667,8 @@ fun SettingsScreen(
           verticalArrangement = Arrangement.spacedBy(10.dp)
         ) {
           Text(
-            text = "Language",
-            style = MaterialTheme.typography.titleMedium.copy(fontWeight = FontWeight.Bold),
+            text = stringResource(id = R.string.settings_language),
+            style = MaterialTheme.typography.titleMedium.copy(fontWeight = FontWeight.Bold, lineHeight = 24.sp),
             color = MaterialTheme.colorScheme.onSurface
           )
           Surface(
@@ -661,20 +677,24 @@ fun SettingsScreen(
             modifier = Modifier.fillMaxWidth()
           ) {
             Row(modifier = Modifier.padding(4.dp)) {
-              listOf("en" to "English", "km" to "ភាសាខ្មែរ").forEach { (code, label) ->
-                val selected = currentLanguage == code
+              listOf(
+                "en" to stringResource(id = R.string.lang_english),
+                "km" to stringResource(id = R.string.lang_khmer)
+              ).forEach { (code, label) ->
+                val selected = currentLanguage.equals(code, ignoreCase = true)
                 Box(
                   modifier = Modifier
                     .weight(1f)
                     .clip(RoundedCornerShape(999.dp))
                     .background(if (selected) (if (darkTheme) Color(0xFF28334A) else Color.White) else Color.Transparent)
                     .clickable { onLanguageChanged(code) }
+                    .testTag("settings_language_$code")
                     .padding(vertical = 10.dp),
                   contentAlignment = Alignment.Center
                 ) {
                   Text(
                     text = label,
-                    style = MaterialTheme.typography.bodySmall.copy(fontWeight = FontWeight.SemiBold),
+                    style = MaterialTheme.typography.bodySmall.copy(fontWeight = FontWeight.SemiBold, lineHeight = 18.sp),
                     color = if (selected) MaterialTheme.colorScheme.onSurface else MaterialTheme.colorScheme.onSurfaceVariant
                   )
                 }
@@ -693,13 +713,17 @@ fun SettingsScreen(
           verticalArrangement = Arrangement.spacedBy(6.dp)
         ) {
           Text(
-            text = "About AURIX",
-            style = MaterialTheme.typography.titleMedium.copy(fontWeight = FontWeight.Bold),
+            text = stringResource(id = R.string.settings_about_title),
+            style = MaterialTheme.typography.titleMedium.copy(fontWeight = FontWeight.Bold, lineHeight = 24.sp),
             color = MaterialTheme.colorScheme.onSurface
           )
           Text(
-            text = "AURIX ${installedAppInfo.versionName} (code ${installedAppInfo.versionCode}). iTunes 30s previews, synced lyrics from LRCLIB, signed OTA updates via GitHub.",
-            style = MaterialTheme.typography.bodyMedium,
+            text = stringResource(
+              id = R.string.settings_about_body,
+              installedAppInfo.versionName,
+              installedAppInfo.versionCode
+            ),
+            style = MaterialTheme.typography.bodyMedium.copy(lineHeight = 22.sp),
             color = MaterialTheme.colorScheme.onSurfaceVariant
           )
         }
@@ -720,13 +744,13 @@ fun SettingsScreen(
         verticalArrangement = Arrangement.spacedBy(12.dp)
       ) {
         Text(
-          text = "Release Notes (${latestRelease.tagName} · code ${latestRelease.versionCode})",
-          style = MaterialTheme.typography.titleLarge.copy(fontWeight = FontWeight.Bold),
+          text = stringResource(id = R.string.settings_release_notes_title, latestRelease.tagName, latestRelease.versionCode),
+          style = MaterialTheme.typography.titleLarge.copy(fontWeight = FontWeight.Bold, lineHeight = 30.sp),
           color = MaterialTheme.colorScheme.onSurface
         )
         Text(
-          text = latestRelease.body.ifBlank { "No changelog details provided." },
-          style = MaterialTheme.typography.bodyMedium,
+          text = latestRelease.body.ifBlank { stringResource(id = R.string.settings_no_changelog) },
+          style = MaterialTheme.typography.bodyMedium.copy(lineHeight = 22.sp),
           color = MaterialTheme.colorScheme.onSurfaceVariant
         )
         if (isUpdateAvailable) {
@@ -736,7 +760,7 @@ fun SettingsScreen(
             modifier = Modifier.fillMaxWidth().height(48.dp),
             shape = RoundedCornerShape(16.dp)
           ) {
-            Text("Update Now (${latestRelease.tagName})", fontWeight = FontWeight.Bold)
+            Text(stringResource(id = R.string.settings_update_now, latestRelease.tagName), fontWeight = FontWeight.Bold)
           }
         }
         Spacer(modifier = Modifier.height(8.dp))

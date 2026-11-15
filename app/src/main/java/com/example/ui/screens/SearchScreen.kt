@@ -36,6 +36,7 @@ import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalSoftwareKeyboardController
 import androidx.compose.ui.platform.testTag
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.ui.text.style.TextAlign
@@ -43,6 +44,7 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import coil.compose.AsyncImage
+import com.example.R
 import com.example.model.AudioFormatOption
 import com.example.model.Song
 import com.example.model.YoutubeAnalysisResult
@@ -95,13 +97,13 @@ fun SearchScreen(
       Spacer(modifier = Modifier.height(14.dp))
 
       Text(
-        text = "Search",
-        style = MaterialTheme.typography.displayLarge.copy(fontSize = 28.sp, fontWeight = FontWeight.ExtraBold),
+        text = stringResource(id = R.string.search_title),
+        style = MaterialTheme.typography.displayLarge.copy(fontSize = 28.sp, lineHeight = 38.sp, fontWeight = FontWeight.ExtraBold),
         color = MaterialTheme.colorScheme.onBackground
       )
       Text(
-        text = "Find songs, analyze YouTube links & save to app",
-        style = MaterialTheme.typography.bodySmall,
+        text = stringResource(id = R.string.search_subtitle),
+        style = MaterialTheme.typography.bodySmall.copy(lineHeight = 18.sp),
         color = MaterialTheme.colorScheme.onSurfaceVariant
       )
 
@@ -110,8 +112,8 @@ fun SearchScreen(
       // Unified Liquid Glass Mode Switcher (ONLY in Search)
       GlassSegmentedBar(
         options = listOf(
-          "iTunes 30s" to Icons.Rounded.Search,
-          "YouTube Link" to Icons.Rounded.PlayArrow
+          stringResource(id = R.string.search_mode_itunes) to Icons.Rounded.Search,
+          stringResource(id = R.string.search_mode_youtube) to Icons.Rounded.PlayArrow
         ),
         selectedIndex = if (searchMode == "youtube") 1 else 0,
         darkTheme = darkTheme,
@@ -177,13 +179,13 @@ fun SearchScreen(
                     }
                     Column(modifier = Modifier.weight(1f)) {
                       Text(
-                        text = "YouTube Audio Downloader",
-                        style = MaterialTheme.typography.titleMedium.copy(fontWeight = FontWeight.ExtraBold),
+                        text = stringResource(id = R.string.search_yt_title),
+                        style = MaterialTheme.typography.titleMedium.copy(fontWeight = FontWeight.ExtraBold, lineHeight = 24.sp),
                         color = MaterialTheme.colorScheme.onSurface
                       )
                       Text(
-                        text = "Analyze URL, choose full audio format & save to AURIX",
-                        style = MaterialTheme.typography.bodySmall,
+                        text = stringResource(id = R.string.search_yt_subtitle),
+                        style = MaterialTheme.typography.bodySmall.copy(lineHeight = 18.sp),
                         color = MaterialTheme.colorScheme.onSurfaceVariant
                       )
                     }
@@ -194,7 +196,7 @@ fun SearchScreen(
                     onValueChange = onYoutubeUrlChanged,
                     placeholder = {
                       Text(
-                        text = "Paste YouTube URL (youtube.com / youtu.be)...",
+                        text = stringResource(id = R.string.search_yt_placeholder),
                         maxLines = 1,
                         overflow = TextOverflow.Ellipsis
                       )
@@ -251,7 +253,7 @@ fun SearchScreen(
                           if (clip.isNotBlank()) {
                             onYoutubeUrlChanged(clip)
                           } else {
-                            Toast.makeText(context, "Clipboard is empty", Toast.LENGTH_SHORT).show()
+                            Toast.makeText(context, context.getString(R.string.search_yt_clipboard_empty), Toast.LENGTH_SHORT).show()
                           }
                         },
                       contentAlignment = Alignment.Center
@@ -267,8 +269,8 @@ fun SearchScreen(
                           modifier = Modifier.size(17.dp)
                         )
                         Text(
-                          text = "Paste URL",
-                          style = MaterialTheme.typography.bodySmall.copy(fontWeight = FontWeight.Bold),
+                          text = stringResource(id = R.string.search_yt_paste),
+                          style = MaterialTheme.typography.bodySmall.copy(fontWeight = FontWeight.Bold, lineHeight = 18.sp),
                           color = MaterialTheme.colorScheme.onSurface
                         )
                       }
@@ -298,7 +300,11 @@ fun SearchScreen(
                       }
                       Spacer(modifier = Modifier.width(6.dp))
                       Text(
-                        text = if (isAnalyzingYoutube) "Analyzing..." else "Analyze",
+                        text = if (isAnalyzingYoutube) {
+                          stringResource(id = R.string.search_yt_analyzing)
+                        } else {
+                          stringResource(id = R.string.search_yt_analyze)
+                        },
                         fontWeight = FontWeight.Bold
                       )
                     }
@@ -359,26 +365,26 @@ fun SearchScreen(
                     verticalArrangement = Arrangement.spacedBy(12.dp)
                   ) {
                     Text(
-                      text = "How download works",
-                      style = MaterialTheme.typography.titleSmall.copy(fontWeight = FontWeight.Bold),
+                      text = stringResource(id = R.string.search_yt_guide_title),
+                      style = MaterialTheme.typography.titleSmall.copy(fontWeight = FontWeight.Bold, lineHeight = 20.sp),
                       color = MaterialTheme.colorScheme.onSurface
                     )
                     MatcherGuideRow(
                       icon = Icons.Rounded.Link,
-                      title = "1. Paste YouTube URL & tap Analyze",
-                      subtitle = "Loads the video title, channel and cover thumbnail",
+                      title = stringResource(id = R.string.search_yt_step1_title),
+                      subtitle = stringResource(id = R.string.search_yt_step1_sub),
                       iconTint = MaterialTheme.colorScheme.primary
                     )
                     MatcherGuideRow(
                       icon = Icons.Rounded.Tune,
-                      title = "2. Select available format & quality",
-                      subtitle = "Choose M4A, MP3, or high-bitrate audio streams",
+                      title = stringResource(id = R.string.search_yt_step2_title),
+                      subtitle = stringResource(id = R.string.search_yt_step2_sub),
                       iconTint = Color(0xFF14B8A6)
                     )
                     MatcherGuideRow(
                       icon = Icons.Rounded.Download,
-                      title = "3. Download & save to the app",
-                      subtitle = "Live progress bar saves tracks straight to My songs",
+                      title = stringResource(id = R.string.search_yt_step3_title),
+                      subtitle = stringResource(id = R.string.search_yt_step3_sub),
                       iconTint = Color(0xFFEC4899)
                     )
                   }
@@ -394,7 +400,7 @@ fun SearchScreen(
             TextField(
               value = searchQuery,
               onValueChange = onSearchQueryChanged,
-              placeholder = { Text("Search songs, artists or TikTok hits...") },
+              placeholder = { Text(stringResource(id = R.string.search_placeholder)) },
               leadingIcon = {
                 Icon(
                   Icons.Rounded.Search,
@@ -477,7 +483,7 @@ fun SearchScreen(
                     ) {
                       Text(searchError, color = MaterialTheme.colorScheme.onSurfaceVariant, textAlign = TextAlign.Center)
                       OutlinedButton(onClick = { onSearchQueryChanged(searchQuery) }, shape = CircleShape) {
-                        Text("Try Again")
+                        Text(stringResource(id = R.string.try_again))
                       }
                     }
                   }
@@ -493,13 +499,13 @@ fun SearchScreen(
                     ) {
                       Icon(Icons.Rounded.SearchOff, contentDescription = null, tint = MaterialTheme.colorScheme.primary, modifier = Modifier.size(30.dp))
                       Text(
-                        text = "No 30s previews found",
-                        style = MaterialTheme.typography.titleSmall.copy(fontWeight = FontWeight.Bold),
+                        text = stringResource(id = R.string.search_no_results_title),
+                        style = MaterialTheme.typography.titleSmall.copy(fontWeight = FontWeight.Bold, lineHeight = 20.sp),
                         color = MaterialTheme.colorScheme.onSurface
                       )
                       Text(
-                        text = "Try searching another track title or artist name.",
-                        style = MaterialTheme.typography.bodySmall,
+                        text = stringResource(id = R.string.search_no_results_sub),
+                        style = MaterialTheme.typography.bodySmall.copy(lineHeight = 18.sp),
                         color = MaterialTheme.colorScheme.onSurfaceVariant,
                         textAlign = TextAlign.Center
                       )

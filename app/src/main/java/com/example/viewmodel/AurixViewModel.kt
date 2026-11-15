@@ -18,6 +18,7 @@ import androidx.media3.common.Player
 import androidx.media3.session.MediaController
 import androidx.media3.session.SessionToken
 import androidx.room.Room
+import com.example.LocaleHelper
 import com.example.R
 import com.example.data.*
 import com.example.lyrics.LrcParser
@@ -76,7 +77,11 @@ class AurixViewModel(application: Application) : AndroidViewModel(application) {
   // Preferences States
   val themeMode = prefsManager.themeMode.stateIn(viewModelScope, SharingStarted.Lazily, "system")
   val accentColorHex = prefsManager.accentColor.stateIn(viewModelScope, SharingStarted.Lazily, "#007AFF")
-  val language = prefsManager.language.stateIn(viewModelScope, SharingStarted.Lazily, "en")
+  val language = prefsManager.language.stateIn(
+    viewModelScope,
+    SharingStarted.Eagerly,
+    LocaleHelper.getPersistedLanguage(application)
+  )
   val dynamicBg = prefsManager.dynamicBg.stateIn(viewModelScope, SharingStarted.Lazily, true)
   val reducedMotion = prefsManager.reducedMotion.stateIn(viewModelScope, SharingStarted.Lazily, false)
   val onboardingCompleted = prefsManager.onboardingCompleted.stateIn(viewModelScope, SharingStarted.Lazily, false)
@@ -362,6 +367,8 @@ class AurixViewModel(application: Application) : AndroidViewModel(application) {
         durationSeconds = crossfadeSec,
         fadeOnManualSkip = crossfadeManualSkip
       )
+      val savedLang = prefsManager.language.first()
+      LocaleHelper.saveLanguageSync(application, savedLang)
     }
     connectPlaybackController(application)
     loadDailyRecommendations(DailyFeedCategory.TIKTOK_VIRAL)
@@ -1713,8 +1720,12 @@ class AurixViewModel(application: Application) : AndroidViewModel(application) {
     }
   }
 
+  private fun localizedAppContext(): Context {
+    return LocaleHelper.wrapBaseContext(getApplication(), language.value)
+  }
+
   fun hideSong(song: Song) {
-    val appContext = getApplication<Application>()
+    val appContext = localizedAppContext()
     viewModelScope.launch {
       prefsManager.addHiddenSongId(song.id)
       prunePlaybackQueue { it.id == song.id }
@@ -1729,7 +1740,7 @@ class AurixViewModel(application: Application) : AndroidViewModel(application) {
   fun blockArtist(artist: String) {
     val normalized = normalizeArtistKey(artist)
     if (normalized.isBlank()) return
-    val appContext = getApplication<Application>()
+    val appContext = localizedAppContext()
     viewModelScope.launch {
       prefsManager.addBlockedArtist(normalized)
       prunePlaybackQueue { normalizeArtistKey(it.artist) == normalized }
@@ -1742,7 +1753,7 @@ class AurixViewModel(application: Application) : AndroidViewModel(application) {
   }
 
   fun clearHiddenAndBlocked() {
-    val appContext = getApplication<Application>()
+    val appContext = localizedAppContext()
     viewModelScope.launch {
       prefsManager.clearHiddenAndBlocked()
       Toast.makeText(
@@ -1846,7 +1857,11 @@ class AurixViewModel(application: Application) : AndroidViewModel(application) {
 
   fun setThemeMode(mode: String) { viewModelScope.launch { prefsManager.setThemeMode(mode) } }
   fun setAccentColor(hex: String) { viewModelScope.launch { prefsManager.setAccentColor(hex) } }
-  fun setLanguage(lang: String) { viewModelScope.launch { prefsManager.setLanguage(lang) } }
+  fun setLanguage(lang: String) {
+    val normalized = LocaleHelper.normalizeLanguage(lang)
+    LocaleHelper.saveLanguageSync(getApplication(), normalized)
+    viewModelScope.launch { prefsManager.setLanguage(normalized) }
+  }
   fun setDynamicBg(enabled: Boolean) { viewModelScope.launch { prefsManager.setDynamicBg(enabled) } }
   fun setReducedMotion(enabled: Boolean) { viewModelScope.launch { prefsManager.setReducedMotion(enabled) } }
   fun setOnboardingCompleted(completed: Boolean) { viewModelScope.launch { prefsManager.setOnboardingCompleted(completed) } }

@@ -20,10 +20,12 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.vector.ImageVector
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import com.example.R
 import kotlinx.coroutines.launch
 
 data class OnboardingPage(
@@ -35,10 +37,10 @@ data class OnboardingPage(
 @Composable
 fun OnboardingScreen(onFinished: () -> Unit) {
   val pages = listOf(
-    OnboardingPage("Your music, all in one place", "Discover 30-second iTunes previews and play your local audio files seamlessly.", Icons.Rounded.MusicNote),
-    OnboardingPage("Beautiful synchronized lyrics", "Follow along with real-time synced lyrics that auto-scroll as the music plays.", Icons.Rounded.Equalizer),
-    OnboardingPage("Customize your experience", "Personalize themes, custom accent colors, language, and immersive backgrounds.", Icons.Rounded.Palette),
-    OnboardingPage("Ready to listen?", "Dive into your personalized music journey with AURIX today.", Icons.Rounded.PlayArrow)
+    OnboardingPage(stringResource(R.string.onboarding_p1_title), stringResource(R.string.onboarding_p1_desc), Icons.Rounded.MusicNote),
+    OnboardingPage(stringResource(R.string.onboarding_p2_title), stringResource(R.string.onboarding_p2_desc), Icons.Rounded.Equalizer),
+    OnboardingPage(stringResource(R.string.onboarding_p3_title), stringResource(R.string.onboarding_p3_desc), Icons.Rounded.Palette),
+    OnboardingPage(stringResource(R.string.onboarding_p4_title), stringResource(R.string.onboarding_p4_desc), Icons.Rounded.PlayArrow)
   )
 
   val pagerState = rememberPagerState(pageCount = { pages.size })
@@ -61,7 +63,7 @@ fun OnboardingScreen(onFinished: () -> Unit) {
         verticalAlignment = Alignment.CenterVertically
       ) {
         TextButton(onClick = onFinished) {
-          Text("Skip", color = MaterialTheme.colorScheme.onSurfaceVariant)
+          Text(stringResource(R.string.onboarding_skip), color = MaterialTheme.colorScheme.onSurfaceVariant)
         }
         Text(
           text = "${pagerState.currentPage + 1} / ${pages.size}",
@@ -164,7 +166,7 @@ fun OnboardingScreen(onFinished: () -> Unit) {
             shape = RoundedCornerShape(28.dp),
             modifier = Modifier.height(56.dp)
           ) {
-            Text("Get started", style = MaterialTheme.typography.bodyMedium.copy(fontWeight = FontWeight.Bold))
+            Text(stringResource(R.string.onboarding_get_started), style = MaterialTheme.typography.bodyMedium.copy(fontWeight = FontWeight.Bold))
             Spacer(modifier = Modifier.width(8.dp))
             Icon(Icons.AutoMirrored.Rounded.ArrowForward, contentDescription = null)
           }

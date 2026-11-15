@@ -228,7 +228,7 @@ fun NowPlayingSheet(
           onClick = onClose,
           modifier = Modifier.minimumInteractiveComponentSize().testTag("np_close_button")
         ) {
-          Icon(Icons.Rounded.KeyboardArrowDown, contentDescription = "Close", tint = Color.White, modifier = Modifier.size(28.dp))
+          Icon(Icons.Rounded.KeyboardArrowDown, contentDescription = stringResource(id = R.string.np_close_cd), tint = Color.White, modifier = Modifier.size(28.dp))
         }
 
         // Glass Switch: Player | Lyrics
@@ -237,8 +237,12 @@ fun NowPlayingSheet(
           color = Color.White.copy(alpha = 0.14f),
           border = androidx.compose.foundation.BorderStroke(1.dp, Color.White.copy(alpha = 0.22f))
         ) {
+          val tabs = listOf(
+            false to stringResource(id = R.string.np_tab_player),
+            true to stringResource(id = R.string.np_tab_lyrics)
+          )
           Row(modifier = Modifier.padding(3.dp)) {
-            listOf(false to "Player", true to "Lyrics").forEach { (lyricsTab, label) ->
+            tabs.forEach { (lyricsTab, label) ->
               val selected = showLyrics == lyricsTab
               Box(
                 modifier = Modifier
@@ -251,7 +255,7 @@ fun NowPlayingSheet(
                 Text(
                   text = label,
                   color = if (selected) Color.White else Color.White.copy(alpha = 0.72f),
-                  style = MaterialTheme.typography.bodySmall.copy(fontWeight = FontWeight.SemiBold)
+                  style = MaterialTheme.typography.bodySmall.copy(fontWeight = FontWeight.SemiBold, lineHeight = 18.sp)
                 )
               }
             }
@@ -262,7 +266,7 @@ fun NowPlayingSheet(
           onClick = { showDetails = true },
           modifier = Modifier.minimumInteractiveComponentSize().testTag("np_details_button")
         ) {
-          Icon(Icons.Rounded.MoreVert, contentDescription = "Details", tint = Color.White)
+          Icon(Icons.Rounded.MoreVert, contentDescription = stringResource(id = R.string.np_details_cd), tint = Color.White)
         }
       }
 
@@ -527,7 +531,11 @@ fun NowPlayingSheet(
         verticalAlignment = Alignment.CenterVertically
       ) {
         TextButton(onClick = onCycleSleep) {
-          val label = if (sleepMinutes == 0) "Sleep: Off" else "Sleep: ${sleepMinutes}m"
+          val label = if (sleepMinutes == 0) {
+            stringResource(id = R.string.np_sleep_off)
+          } else {
+            stringResource(id = R.string.np_sleep_min, sleepMinutes)
+          }
           Text(
             text = label,
             color = if (sleepMinutes > 0) Color.White else Color.White.copy(alpha = 0.70f),
@@ -581,7 +589,7 @@ fun NowPlayingSheet(
             else -> "1x"
           }
           Text(
-            text = "Speed: $speedLabel",
+            text = stringResource(id = R.string.np_speed_label, speedLabel),
             color = if (playbackSpeed != 1.0f) Color.White else Color.White.copy(alpha = 0.70f),
             textDecoration = if (playbackSpeed != 1.0f) TextDecoration.Underline else TextDecoration.None
           )
