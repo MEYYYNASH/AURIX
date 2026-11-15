@@ -120,6 +120,7 @@ fun AurixApp(viewModel: AurixViewModel) {
   val reducedMotion by viewModel.reducedMotion.collectAsStateWithLifecycle()
   val verifiedLyricsIds by viewModel.verifiedLyricsIds.collectAsStateWithLifecycle()
   val equalizerState by viewModel.equalizerState.collectAsStateWithLifecycle()
+  val crossfadeSettings by viewModel.crossfadeSettings.collectAsStateWithLifecycle()
   val hiddenSongIds by viewModel.hiddenSongIds.collectAsStateWithLifecycle()
   val blockedArtists by viewModel.blockedArtists.collectAsStateWithLifecycle()
 
@@ -357,6 +358,9 @@ fun AurixApp(viewModel: AurixViewModel) {
               onEqBandLevelChanged = { idx, level -> viewModel.setEqualizerBandLevel(idx, level) },
               onEqBassBoostChanged = { viewModel.setBassBoostStrength(it) },
               onResetEq = { viewModel.resetEqualizer() },
+              crossfadeSettings = crossfadeSettings,
+              onCrossfadeSecondsChanged = { viewModel.setCrossfadeSeconds(it) },
+              onCrossfadeManualSkipChanged = { viewModel.setCrossfadeManualSkip(it) },
               hiddenSongsCount = hiddenSongIds.size,
               blockedArtistsCount = blockedArtists.size,
               onClearHiddenAndBlocked = { viewModel.clearHiddenAndBlocked() }

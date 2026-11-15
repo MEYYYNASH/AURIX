@@ -39,6 +39,7 @@ import com.example.data.ApkDownloadState
 import com.example.data.GitHubRelease
 import com.example.data.InstalledAppInfo
 import com.example.data.UpdateCheckStatus
+import com.example.playback.CrossfadeSettings
 import com.example.playback.EqPreset
 import com.example.playback.EqualizerUiState
 import com.example.ui.theme.*
@@ -77,6 +78,9 @@ fun SettingsScreen(
   onEqBandLevelChanged: (Int, Int) -> Unit = { _, _ -> },
   onEqBassBoostChanged: (Int) -> Unit = {},
   onResetEq: () -> Unit = {},
+  crossfadeSettings: CrossfadeSettings = CrossfadeSettings(),
+  onCrossfadeSecondsChanged: (Int) -> Unit = {},
+  onCrossfadeManualSkipChanged: (Boolean) -> Unit = {},
   hiddenSongsCount: Int = 0,
   blockedArtistsCount: Int = 0,
   onClearHiddenAndBlocked: () -> Unit = {}
@@ -94,6 +98,7 @@ fun SettingsScreen(
 
   var showReleaseNotesSheet by remember { mutableStateOf(false) }
   var showEqualizerSheet by remember { mutableStateOf(false) }
+  var showCrossfadeSheet by remember { mutableStateOf(false) }
 
   val isDownloading = apkDownloadState is ApkDownloadState.Downloading
   val isValidatedReady = apkDownloadState is ApkDownloadState.ValidatedReady
@@ -569,6 +574,41 @@ fun SettingsScreen(
             )
           }
 
+          HorizontalDivider(color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.08f))
+
+          val crossfadeActive = crossfadeSettings.durationSeconds > 0
+          Row(
+            modifier = Modifier
+              .fillMaxWidth()
+              .clickable { showCrossfadeSheet = true }
+              .padding(horizontal = 18.dp, vertical = 12.dp)
+              .testTag("settings_crossfade_row"),
+            horizontalArrangement = Arrangement.SpaceBetween,
+            verticalAlignment = Alignment.CenterVertically
+          ) {
+            Column(modifier = Modifier.weight(1f)) {
+              Text(
+                text = stringResource(id = R.string.crossfade_title),
+                style = MaterialTheme.typography.bodyLarge.copy(fontWeight = FontWeight.Medium, lineHeight = 22.sp),
+                color = MaterialTheme.colorScheme.onSurface
+              )
+              Text(
+                text = if (crossfadeActive) {
+                  stringResource(id = R.string.crossfade_seconds_active, crossfadeSettings.durationSeconds)
+                } else {
+                  stringResource(id = R.string.crossfade_off)
+                },
+                style = MaterialTheme.typography.bodySmall.copy(lineHeight = 18.sp),
+                color = if (crossfadeActive) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurfaceVariant
+              )
+            }
+            Icon(
+              imageVector = Icons.Rounded.GraphicEq,
+              contentDescription = null,
+              tint = if (crossfadeActive) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurfaceVariant
+            )
+          }
+
           if (hiddenSongsCount > 0 || blockedArtistsCount > 0) {
             HorizontalDivider(color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.08f))
             Row(
@@ -713,6 +753,16 @@ fun SettingsScreen(
       onBassBoostChanged = onEqBassBoostChanged,
       onReset = onResetEq,
       onDismiss = { showEqualizerSheet = false }
+    )
+  }
+
+  if (showCrossfadeSheet) {
+    CrossfadeSheet(
+      settings = crossfadeSettings,
+      reducedMotion = reducedMotion,
+      onDurationChanged = onCrossfadeSecondsChanged,
+      onManualSkipChanged = onCrossfadeManualSkipChanged,
+      onDismiss = { showCrossfadeSheet = false }
     )
   }
 }

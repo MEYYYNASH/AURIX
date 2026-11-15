@@ -28,6 +28,8 @@ class PreferencesManager(private val context: Context) {
     val EQ_PRESET = stringPreferencesKey("eq_preset")
     val EQ_BANDS = stringPreferencesKey("eq_bands")
     val EQ_BASS_BOOST = intPreferencesKey("eq_bass_boost")
+    val CROSSFADE_SECONDS = intPreferencesKey("crossfade_seconds")
+    val CROSSFADE_MANUAL_SKIP = booleanPreferencesKey("crossfade_manual_skip")
   }
 
   val themeMode: Flow<String> = context.dataStore.data.map { prefs -> prefs[THEME_MODE] ?: "system" }
@@ -46,6 +48,8 @@ class PreferencesManager(private val context: Context) {
     prefs[EQ_BANDS]?.split(",")?.mapNotNull { it.trim().toIntOrNull() } ?: emptyList()
   }
   val eqBassBoost: Flow<Int> = context.dataStore.data.map { prefs -> prefs[EQ_BASS_BOOST] ?: 0 }
+  val crossfadeSeconds: Flow<Int> = context.dataStore.data.map { prefs -> prefs[CROSSFADE_SECONDS] ?: 0 }
+  val crossfadeManualSkip: Flow<Boolean> = context.dataStore.data.map { prefs -> prefs[CROSSFADE_MANUAL_SKIP] ?: true }
 
   suspend fun setThemeMode(mode: String) { context.dataStore.edit { it[THEME_MODE] = mode } }
   suspend fun setAccentColor(color: String) { context.dataStore.edit { it[ACCENT_COLOR] = color } }
@@ -89,6 +93,13 @@ class PreferencesManager(private val context: Context) {
       prefs[EQ_PRESET] = presetId
       prefs[EQ_BANDS] = bandsMb.joinToString(",")
       prefs[EQ_BASS_BOOST] = bassBoostStrength
+    }
+  }
+
+  suspend fun saveCrossfadeSettings(durationSeconds: Int, fadeOnManualSkip: Boolean) {
+    context.dataStore.edit { prefs ->
+      prefs[CROSSFADE_SECONDS] = durationSeconds.coerceIn(0, 12)
+      prefs[CROSSFADE_MANUAL_SKIP] = fadeOnManualSkip
     }
   }
 }

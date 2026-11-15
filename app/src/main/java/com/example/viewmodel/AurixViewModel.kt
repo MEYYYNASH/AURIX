@@ -25,6 +25,8 @@ import com.example.lyrics.LyricsMatchOutcome
 import com.example.lyrics.LyricsMatcher
 import com.example.model.*
 import com.example.playback.AudioEqualizerController
+import com.example.playback.CrossfadeController
+import com.example.playback.CrossfadeSettings
 import com.example.playback.EqPreset
 import com.example.playback.EqualizerUiState
 import com.example.playback.PlaybackService
@@ -283,6 +285,7 @@ class AurixViewModel(application: Application) : AndroidViewModel(application) {
     .stateIn(viewModelScope, SharingStarted.Eagerly, emptySet())
 
   val equalizerState: StateFlow<EqualizerUiState> = AudioEqualizerController.state
+  val crossfadeSettings: StateFlow<CrossfadeSettings> = CrossfadeController.state
 
   private val lyricsCheckSemaphore = Semaphore(3)
   private val inFlightLyricsChecks = ConcurrentHashMap<String, Job>()
@@ -352,6 +355,12 @@ class AurixViewModel(application: Application) : AndroidViewModel(application) {
         presetId = eqPreset,
         bandLevelsMb = eqBands,
         bassBoostStrength = eqBass
+      )
+      val crossfadeSec = prefsManager.crossfadeSeconds.first()
+      val crossfadeManualSkip = prefsManager.crossfadeManualSkip.first()
+      CrossfadeController.restoreSettings(
+        durationSeconds = crossfadeSec,
+        fadeOnManualSkip = crossfadeManualSkip
       )
     }
     connectPlaybackController(application)
@@ -1812,6 +1821,25 @@ class AurixViewModel(application: Application) : AndroidViewModel(application) {
         presetId = eqState.presetId,
         bandsMb = eqState.bandLevelsMb,
         bassBoostStrength = eqState.bassBoostStrength
+      )
+    }
+  }
+
+  fun setCrossfadeSeconds(seconds: Int) {
+    val updated = CrossfadeController.setDurationSeconds(seconds)
+    persistCrossfadeSettings(updated)
+  }
+
+  fun setCrossfadeManualSkip(enabled: Boolean) {
+    val updated = CrossfadeController.setFadeOnManualSkip(enabled)
+    persistCrossfadeSettings(updated)
+  }
+
+  private fun persistCrossfadeSettings(settings: CrossfadeSettings) {
+    viewModelScope.launch {
+      prefsManager.saveCrossfadeSettings(
+        durationSeconds = settings.durationSeconds,
+        fadeOnManualSkip = settings.fadeOnManualSkip
       )
     }
   }

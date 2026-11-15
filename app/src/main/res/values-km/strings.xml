@@ -68,4 +68,14 @@
     <string name="eq_preset_club">ក្លឹប</string>
     <string name="eq_preset_custom">ផ្ទាល់ខ្លួន</string>
     <string name="eq_hardware_note">ការកែសំឡេងនឹងភ្ជាប់ដោយស្វ័យប្រវត្តិពេលចាក់ភ្លេង</string>
+    <string name="crossfade_title">បន្ស៊ីភ្លេងឆ្លងបទ</string>
+    <string name="crossfade_subtitle">បន្ថយ និងបង្កើនសំឡេងយ៉ាងរលូនពេលប្ដូរបទចម្រៀង</string>
+    <string name="crossfade_off">បិទ</string>
+    <string name="crossfade_seconds_short">%1$d វិនាទី</string>
+    <string name="crossfade_seconds_active">%1$d វិនាទី · រលូនស្មើ</string>
+    <string name="crossfade_duration_label">រយៈពេលបន្ស៊ី</string>
+    <string name="crossfade_manual_skip_title">បន្ស៊ីពេលរំលងបទ</string>
+    <string name="crossfade_manual_skip_subtitle">ចូលសំឡេងថ្នមៗពេលអ្នកចុចប្ដូរបទដោយផ្ទាល់</string>
+    <string name="crossfade_track_out">បទកំពុងចាក់</string>
+    <string name="crossfade_track_in">បទបន្ទាប់</string>
 </resources>

@@ -68,4 +68,14 @@
     <string name="eq_preset_club">Club</string>
     <string name="eq_preset_custom">Custom</string>
     <string name="eq_hardware_note">Audio effects attach automatically when playback starts</string>
+    <string name="crossfade_title">Crossfade</string>
+    <string name="crossfade_subtitle">Smoothly blend songs together at track transitions</string>
+    <string name="crossfade_off">Off</string>
+    <string name="crossfade_seconds_short">%1$ds</string>
+    <string name="crossfade_seconds_active">%1$ds · Equal power</string>
+    <string name="crossfade_duration_label">Crossfade duration</string>
+    <string name="crossfade_manual_skip_title">Smooth skip transition</string>
+    <string name="crossfade_manual_skip_subtitle">Gentle fade-in when skipping tracks manually</string>
+    <string name="crossfade_track_out">Current song</string>
+    <string name="crossfade_track_in">Next song</string>
 </resources>
