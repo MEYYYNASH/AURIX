@@ -77,3 +77,18 @@ sealed interface YoutubeDownloadState {
   data class Saved(val song: Song) : YoutubeDownloadState
   data class Error(val message: String) : YoutubeDownloadState
 }
+
+typealias Track = Song
+
+enum class SearchMode {
+  ITunes30s,
+  YouTubeLink
+}
+
+sealed interface SearchUiState {
+  data object Idle : SearchUiState
+  data class Loading(val mode: SearchMode, val query: String) : SearchUiState
+  data class Results(val items: List<Track>) : SearchUiState
+  data object Empty : SearchUiState
+  data class Error(val message: String) : SearchUiState
+}

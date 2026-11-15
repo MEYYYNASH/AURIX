@@ -154,6 +154,8 @@ fun HomeScreen(
                 OrbitLoader(
                   size = 30.dp,
                   cardColor = iconBg,
+                  ringColor = if (darkTheme) OrbitRingDefault else Color(0xFF3A3C48),
+                  planetColor = if (darkTheme) OrbitPlanetDefault else Color.White,
                   reducedMotion = reducedMotion
                 )
               } else {
@@ -607,6 +609,8 @@ fun HomeScreen(
                   OrbitLoader(
                     size = 84.dp,
                     cardColor = cardBgColor,
+                    ringColor = if (darkTheme) OrbitRingDefault else Color(0xFF3A3C48),
+                    planetColor = if (darkTheme) OrbitPlanetDefault else Color.White,
                     reducedMotion = reducedMotion,
                     modifier = Modifier.testTag("home_daily_orbit_loader")
                   )

@@ -2,11 +2,14 @@ package com.example.ui.screens
 
 import android.content.ClipboardManager
 import android.content.Context
+import android.provider.Settings
 import android.widget.Toast
 import androidx.compose.animation.AnimatedContent
+import androidx.compose.animation.core.snap
 import androidx.compose.animation.core.tween
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
+import androidx.compose.animation.slideInVertically
 import androidx.compose.animation.togetherWith
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.background
@@ -34,21 +37,30 @@ import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.platform.LocalInspectionMode
 import androidx.compose.ui.platform.LocalSoftwareKeyboardController
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.res.stringResource
+import androidx.compose.ui.semantics.LiveRegionMode
+import androidx.compose.ui.semantics.contentDescription
+import androidx.compose.ui.semantics.liveRegion
+import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
+import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import coil.compose.AsyncImage
 import com.example.R
 import com.example.model.AudioFormatOption
+import com.example.model.SearchMode
+import com.example.model.SearchUiState
 import com.example.model.Song
 import com.example.model.YoutubeAnalysisResult
 import com.example.model.YoutubeDownloadState
+import com.example.ui.theme.AurixTheme
 import java.util.Locale
 
 @Composable
@@ -81,7 +93,20 @@ fun SearchScreen(
   onOpenMySongs: () -> Unit,
   onSongClick: (Song, List<Song>) -> Unit,
   onFavoriteClick: (Song) -> Unit,
-  onDownloadClick: (Song) -> Unit
+  onDownloadClick: (Song) -> Unit,
+  searchUiState: SearchUiState = when {
+    isSearching -> SearchUiState.Loading(
+      mode = if (searchMode == "youtube") SearchMode.YouTubeLink else SearchMode.ITunes30s,
+      query = searchQuery
+    )
+    !searchError.isNullOrBlank() -> SearchUiState.Error(searchError)
+    searchQuery.isBlank() -> SearchUiState.Idle
+    searchResults.isEmpty() -> SearchUiState.Empty
+    else -> SearchUiState.Results(searchResults)
+  },
+  onClearSearch: () -> Unit = { onSearchQueryChanged("") },
+  onRetrySearch: () -> Unit = { onSearchQueryChanged(searchQuery) },
+  onImmediateSearch: (String) -> Unit = onSearchQueryChanged
 ) {
   val context = LocalContext.current
   val keyboardController = LocalSoftwareKeyboardController.current
@@ -337,7 +362,41 @@ fun SearchScreen(
               }
             }
 
-            if (youtubeAnalysis != null) {
+            if (isAnalyzingYoutube) {
+              item {
+                Box(
+                  modifier = Modifier
+                    .fillMaxWidth()
+                    .height(260.dp)
+                    .semantics {
+                      liveRegion = LiveRegionMode.Polite
+                      contentDescription = "Searching"
+                    }
+                    .testTag("youtube_analyzing_orbit_loader"),
+                  contentAlignment = Alignment.Center
+                ) {
+                  Column(
+                    horizontalAlignment = Alignment.CenterHorizontally,
+                    verticalArrangement = Arrangement.spacedBy(14.dp)
+                  ) {
+                    OrbitLoader(
+                      size = 84.dp,
+                      ringColor = OrbitRingDefault,
+                      planetColor = OrbitPlanetDefault,
+                      eyeColor = OrbitEyeDefault,
+                      cometColor = AurixTealAccent,
+                      reducedMotion = reducedMotion
+                    )
+                    Text(
+                      text = "Analyzing link…",
+                      style = MaterialTheme.typography.bodySmall.copy(fontWeight = FontWeight.Medium),
+                      color = MaterialTheme.colorScheme.onSurfaceVariant,
+                      textAlign = TextAlign.Center
+                    )
+                  }
+                }
+              }
+            } else if (youtubeAnalysis != null) {
               item {
                 YoutubeAnalysisResultCard(
                   analysis = youtubeAnalysis,
@@ -410,7 +469,10 @@ fun SearchScreen(
               },
               trailingIcon = {
                 if (searchQuery.isNotEmpty()) {
-                  IconButton(onClick = { onSearchQueryChanged("") }) {
+                  IconButton(
+                    onClick = onClearSearch,
+                    modifier = Modifier.testTag("search_clear_button")
+                  ) {
                     Icon(Icons.Rounded.Close, contentDescription = "Clear search")
                   }
                 }
@@ -418,7 +480,7 @@ fun SearchScreen(
               keyboardOptions = KeyboardOptions(imeAction = ImeAction.Search),
               keyboardActions = KeyboardActions(onSearch = {
                 keyboardController?.hide()
-                if (searchQuery.isNotBlank()) onSearchQueryChanged(searchQuery)
+                if (searchQuery.isNotBlank()) onImmediateSearch(searchQuery)
               }),
               colors = TextFieldDefaults.colors(
                 focusedContainerColor = fieldBg,
@@ -467,109 +529,258 @@ fun SearchScreen(
               Spacer(modifier = Modifier.height(12.dp))
             }
 
-            when {
-              isSearching -> {
-                Box(modifier = Modifier.fillMaxSize().padding(bottom = 80.dp), contentAlignment = Alignment.Center) {
-                  CircularProgressIndicator(color = MaterialTheme.colorScheme.primary)
-                }
+            SearchResultsArea(
+              uiState = searchUiState,
+              currentSong = currentSong,
+              isPlaying = isPlaying,
+              darkTheme = darkTheme,
+              reducedMotion = reducedMotion,
+              songDownloadProgress = songDownloadProgress,
+              downloadedSongIds = downloadedSongIds,
+              verifiedLyricsIds = verifiedLyricsIds,
+              onCheckLyrics = onCheckLyrics,
+              onSongClick = onSongClick,
+              onFavoriteClick = onFavoriteClick,
+              onDownloadClick = onDownloadClick,
+              onRetry = onRetrySearch,
+              modifier = Modifier.weight(1f).fillMaxWidth()
+            )
+          }
+        }
+      }
+    }
+  }
+}
+
+@Composable
+fun SearchResultsArea(
+  uiState: SearchUiState,
+  currentSong: Song?,
+  isPlaying: Boolean,
+  darkTheme: Boolean,
+  reducedMotion: Boolean,
+  songDownloadProgress: Map<String, Float> = emptyMap(),
+  downloadedSongIds: Set<String> = emptySet(),
+  verifiedLyricsIds: Set<String> = emptySet(),
+  onCheckLyrics: (Song) -> Unit = {},
+  onSongClick: (Song, List<Song>) -> Unit = { _, _ -> },
+  onFavoriteClick: (Song) -> Unit = {},
+  onDownloadClick: (Song) -> Unit = {},
+  onRetry: () -> Unit = {},
+  modifier: Modifier = Modifier
+) {
+  val context = LocalContext.current
+  val isInspection = LocalInspectionMode.current
+  val systemAnimatorScale = remember(context, isInspection) {
+    if (isInspection) 1f
+    else runCatching {
+      Settings.Global.getFloat(
+        context.contentResolver,
+        Settings.Global.ANIMATOR_DURATION_SCALE,
+        1f
+      )
+    }.getOrDefault(1f)
+  }
+  val isStill = reducedMotion || systemAnimatorScale <= 0f
+
+  val navBarBottom = WindowInsets.navigationBars.asPaddingValues().calculateBottomPadding()
+  val centerBottomPadding = (if (currentSong != null) 168.dp else 92.dp) + navBarBottom
+  val listBottomPadding = (if (currentSong != null) 205.dp else 135.dp) + navBarBottom
+
+  AnimatedContent(
+    targetState = uiState,
+    modifier = modifier,
+    contentKey = { state ->
+      when (state) {
+        is SearchUiState.Loading -> "loading_${state.mode}"
+        is SearchUiState.Results -> "results"
+        else -> state::class
+      }
+    },
+    transitionSpec = {
+      if (isStill) {
+        fadeIn(snap()) togetherWith fadeOut(snap())
+      } else if (targetState is SearchUiState.Results) {
+        (fadeIn(tween(350)) + slideInVertically(tween(350)) { it / 16 }) togetherWith
+          fadeOut(tween(220))
+      } else {
+        fadeIn(tween(350)) togetherWith fadeOut(tween(220))
+      }
+    },
+    label = "search_results_area"
+  ) { state ->
+    when (state) {
+      SearchUiState.Idle -> {
+        Box(
+          modifier = Modifier
+            .fillMaxSize()
+            .padding(bottom = centerBottomPadding),
+          contentAlignment = Alignment.Center
+        ) {
+          GlassCard(darkTheme = darkTheme, cornerRadius = 24.dp, modifier = Modifier.fillMaxWidth()) {
+            Column(
+              modifier = Modifier.fillMaxWidth().padding(24.dp),
+              horizontalAlignment = Alignment.CenterHorizontally,
+              verticalArrangement = Arrangement.spacedBy(8.dp)
+            ) {
+              Box(
+                modifier = Modifier
+                  .size(52.dp)
+                  .clip(CircleShape)
+                  .background(MaterialTheme.colorScheme.primary.copy(alpha = 0.14f)),
+                contentAlignment = Alignment.Center
+              ) {
+                Icon(Icons.Rounded.MusicNote, contentDescription = null, tint = MaterialTheme.colorScheme.primary, modifier = Modifier.size(26.dp))
               }
-              !searchError.isNullOrBlank() -> {
-                Box(modifier = Modifier.fillMaxSize().padding(bottom = 110.dp), contentAlignment = Alignment.Center) {
-                  GlassCard(darkTheme = darkTheme, cornerRadius = 24.dp, modifier = Modifier.fillMaxWidth()) {
-                    Column(
-                      modifier = Modifier.fillMaxWidth().padding(22.dp),
-                      horizontalAlignment = Alignment.CenterHorizontally,
-                      verticalArrangement = Arrangement.spacedBy(10.dp)
-                    ) {
-                      Text(searchError, color = MaterialTheme.colorScheme.onSurfaceVariant, textAlign = TextAlign.Center)
-                      OutlinedButton(onClick = { onSearchQueryChanged(searchQuery) }, shape = CircleShape) {
-                        Text(stringResource(id = R.string.try_again))
-                      }
-                    }
-                  }
-                }
-              }
-              searchResults.isEmpty() && searchQuery.isNotBlank() -> {
-                Box(modifier = Modifier.fillMaxSize().padding(bottom = 110.dp), contentAlignment = Alignment.Center) {
-                  GlassCard(darkTheme = darkTheme, cornerRadius = 24.dp, modifier = Modifier.fillMaxWidth()) {
-                    Column(
-                      modifier = Modifier.fillMaxWidth().padding(24.dp),
-                      horizontalAlignment = Alignment.CenterHorizontally,
-                      verticalArrangement = Arrangement.spacedBy(8.dp)
-                    ) {
-                      Icon(Icons.Rounded.SearchOff, contentDescription = null, tint = MaterialTheme.colorScheme.primary, modifier = Modifier.size(30.dp))
-                      Text(
-                        text = stringResource(id = R.string.search_no_results_title),
-                        style = MaterialTheme.typography.titleSmall.copy(fontWeight = FontWeight.Bold, lineHeight = 20.sp),
-                        color = MaterialTheme.colorScheme.onSurface
-                      )
-                      Text(
-                        text = stringResource(id = R.string.search_no_results_sub),
-                        style = MaterialTheme.typography.bodySmall.copy(lineHeight = 18.sp),
-                        color = MaterialTheme.colorScheme.onSurfaceVariant,
-                        textAlign = TextAlign.Center
-                      )
-                    }
-                  }
-                }
-              }
-              searchResults.isEmpty() -> {
-                Box(modifier = Modifier.fillMaxSize().padding(bottom = 110.dp), contentAlignment = Alignment.Center) {
-                  GlassCard(darkTheme = darkTheme, cornerRadius = 24.dp, modifier = Modifier.fillMaxWidth()) {
-                    Column(
-                      modifier = Modifier.fillMaxWidth().padding(24.dp),
-                      horizontalAlignment = Alignment.CenterHorizontally,
-                      verticalArrangement = Arrangement.spacedBy(8.dp)
-                    ) {
-                      Box(
-                        modifier = Modifier
-                          .size(52.dp)
-                          .clip(CircleShape)
-                          .background(MaterialTheme.colorScheme.primary.copy(alpha = 0.14f)),
-                        contentAlignment = Alignment.Center
-                      ) {
-                        Icon(Icons.Rounded.MusicNote, contentDescription = null, tint = MaterialTheme.colorScheme.primary, modifier = Modifier.size(26.dp))
-                      }
-                      Text(
-                        text = "iTunes 30s Music Search",
-                        style = MaterialTheme.typography.titleMedium.copy(fontWeight = FontWeight.Bold),
-                        color = MaterialTheme.colorScheme.onSurface
-                      )
-                      Text(
-                        text = "Type a song or artist above, or pick a quick trend tag.",
-                        style = MaterialTheme.typography.bodySmall,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant,
-                        textAlign = TextAlign.Center
-                      )
-                    }
-                  }
-                }
-              }
-              else -> {
-                LazyColumn(
-                  modifier = Modifier.fillMaxSize(),
-                  verticalArrangement = Arrangement.spacedBy(6.dp),
-                  contentPadding = PaddingValues(bottom = if (currentSong != null) 205.dp else 135.dp)
-                ) {
-                  itemsIndexed(searchResults, key = { _, song -> song.id }) { index, song ->
-                    SongDownloadRow(
-                      song = song,
-                      index = index + 1,
-                      isPlaying = isPlaying,
-                      isCurrent = currentSong?.id == song.id,
-                      reducedMotion = reducedMotion,
-                      darkTheme = darkTheme,
-                      hasLyrics = song.id in verifiedLyricsIds,
-                      downloadProgress = songDownloadProgress[song.id],
-                      isDownloaded = song.id in downloadedSongIds,
-                      onCheckLyrics = onCheckLyrics,
-                      onSongClick = { onSongClick(song, searchResults) },
-                      onFavoriteClick = { onFavoriteClick(song) },
-                      onDownloadClick = { onDownloadClick(song) }
-                    )
-                  }
-                }
-              }
+              Text(
+                text = "iTunes 30s Music Search",
+                style = MaterialTheme.typography.titleMedium.copy(fontWeight = FontWeight.Bold),
+                color = MaterialTheme.colorScheme.onSurface
+              )
+              Text(
+                text = "Type a song or artist above, or pick a quick trend tag.",
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                textAlign = TextAlign.Center
+              )
+            }
+          }
+        }
+      }
+
+      is SearchUiState.Loading -> {
+        Box(
+          modifier = Modifier
+            .fillMaxSize()
+            .padding(bottom = centerBottomPadding)
+            .semantics {
+              liveRegion = LiveRegionMode.Polite
+              contentDescription = "Searching"
+            }
+            .testTag("search_orbit_loader"),
+          contentAlignment = Alignment.Center
+        ) {
+          Column(
+            horizontalAlignment = Alignment.CenterHorizontally,
+            verticalArrangement = Arrangement.spacedBy(14.dp)
+          ) {
+            OrbitLoader(
+              size = 84.dp,
+              ringColor = OrbitRingDefault,
+              planetColor = OrbitPlanetDefault,
+              eyeColor = OrbitEyeDefault,
+              cometColor = AurixTealAccent,
+              reducedMotion = reducedMotion
+            )
+            Text(
+              text = if (state.mode == SearchMode.YouTubeLink) "Analyzing link…" else "Searching iTunes…",
+              style = MaterialTheme.typography.bodySmall.copy(fontWeight = FontWeight.Medium),
+              color = MaterialTheme.colorScheme.onSurfaceVariant,
+              textAlign = TextAlign.Center
+            )
+          }
+        }
+      }
+
+      is SearchUiState.Results -> {
+        LazyColumn(
+          modifier = Modifier.fillMaxSize(),
+          verticalArrangement = Arrangement.spacedBy(6.dp),
+          contentPadding = PaddingValues(bottom = listBottomPadding)
+        ) {
+          itemsIndexed(state.items, key = { _, song -> song.id }) { index, song ->
+            SongDownloadRow(
+              song = song,
+              index = index + 1,
+              isPlaying = isPlaying,
+              isCurrent = currentSong?.id == song.id,
+              reducedMotion = reducedMotion,
+              darkTheme = darkTheme,
+              hasLyrics = song.id in verifiedLyricsIds,
+              downloadProgress = songDownloadProgress[song.id],
+              isDownloaded = song.id in downloadedSongIds,
+              onCheckLyrics = onCheckLyrics,
+              onSongClick = { onSongClick(song, state.items) },
+              onFavoriteClick = { onFavoriteClick(song) },
+              onDownloadClick = { onDownloadClick(song) }
+            )
+          }
+        }
+      }
+
+      SearchUiState.Empty -> {
+        Box(
+          modifier = Modifier
+            .fillMaxSize()
+            .padding(bottom = centerBottomPadding)
+            .testTag("search_empty_state"),
+          contentAlignment = Alignment.Center
+        ) {
+          Column(
+            horizontalAlignment = Alignment.CenterHorizontally,
+            verticalArrangement = Arrangement.spacedBy(14.dp)
+          ) {
+            OrbitLoader(
+              size = 84.dp,
+              ringColor = OrbitRingDefault,
+              planetColor = OrbitPlanetDefault,
+              eyeColor = OrbitEyeDefault,
+              reducedMotion = true,
+              isStatic = true,
+              showComet = false
+            )
+            Text(
+              text = "No songs found",
+              style = MaterialTheme.typography.titleMedium.copy(fontWeight = FontWeight.Bold),
+              color = MaterialTheme.colorScheme.onBackground,
+              textAlign = TextAlign.Center
+            )
+          }
+        }
+      }
+
+      is SearchUiState.Error -> {
+        Box(
+          modifier = Modifier
+            .fillMaxSize()
+            .padding(bottom = centerBottomPadding)
+            .testTag("search_error_state"),
+          contentAlignment = Alignment.Center
+        ) {
+          Column(
+            modifier = Modifier.padding(horizontal = 24.dp),
+            horizontalAlignment = Alignment.CenterHorizontally,
+            verticalArrangement = Arrangement.spacedBy(16.dp)
+          ) {
+            Text(
+              text = state.message.ifBlank { "Search failed. Check your connection." },
+              style = MaterialTheme.typography.bodyMedium.copy(fontWeight = FontWeight.Medium),
+              color = MaterialTheme.colorScheme.onSurfaceVariant,
+              textAlign = TextAlign.Center
+            )
+            Button(
+              onClick = onRetry,
+              enabled = true,
+              shape = CircleShape,
+              colors = ButtonDefaults.buttonColors(
+                containerColor = AurixTealAccent,
+                contentColor = Color(0xFF06201C)
+              ),
+              contentPadding = PaddingValues(horizontal = 22.dp, vertical = 10.dp),
+              modifier = Modifier
+                .defaultMinSize(minHeight = 48.dp)
+                .testTag("search_retry_button")
+            ) {
+              Icon(
+                imageVector = Icons.Rounded.Refresh,
+                contentDescription = null,
+                modifier = Modifier.size(18.dp)
+              )
+              Spacer(modifier = Modifier.width(8.dp))
+              Text(
+                text = "Retry",
+                style = MaterialTheme.typography.labelLarge.copy(fontWeight = FontWeight.Bold)
+              )
             }
           }
         }
@@ -990,5 +1201,83 @@ private fun MatcherGuideRow(
         color = MaterialTheme.colorScheme.onSurfaceVariant
       )
     }
+  }
+}
+
+@Composable
+private fun SearchPreviewBackdrop(content: @Composable () -> Unit) {
+  AurixTheme(darkTheme = true) {
+    Box(
+      modifier = Modifier
+        .fillMaxSize()
+        .background(
+          Brush.verticalGradient(
+            colors = listOf(Color(0xFF424E5B), Color(0xFF0A1426))
+          )
+        )
+        .padding(horizontal = 20.dp)
+    ) {
+      content()
+    }
+  }
+}
+
+@Preview(name = "SearchResults - Loading", showBackground = true)
+@Composable
+private fun SearchResultsLoadingPreview() {
+  SearchPreviewBackdrop {
+    SearchResultsArea(
+      uiState = SearchUiState.Loading(mode = SearchMode.ITunes30s, query = "about"),
+      currentSong = null,
+      isPlaying = false,
+      darkTheme = true,
+      reducedMotion = false
+    )
+  }
+}
+
+@Preview(name = "SearchResults - Results", showBackground = true)
+@Composable
+private fun SearchResultsListPreview() {
+  val sample = listOf(
+    Song("1", "Heaven Sent", "Esthero", "", 30L, "https://example.com/1.m4a", "iTunes 30s", isFavorite = true),
+    Song("2", "About You", "The 1975", "", 30L, "https://example.com/2.m4a", "iTunes 30s", isFavorite = false)
+  )
+  SearchPreviewBackdrop {
+    SearchResultsArea(
+      uiState = SearchUiState.Results(sample),
+      currentSong = sample.first(),
+      isPlaying = true,
+      darkTheme = true,
+      reducedMotion = false
+    )
+  }
+}
+
+@Preview(name = "SearchResults - Empty", showBackground = true)
+@Composable
+private fun SearchResultsEmptyPreview() {
+  SearchPreviewBackdrop {
+    SearchResultsArea(
+      uiState = SearchUiState.Empty,
+      currentSong = null,
+      isPlaying = false,
+      darkTheme = true,
+      reducedMotion = false
+    )
+  }
+}
+
+@Preview(name = "SearchResults - Error", showBackground = true)
+@Composable
+private fun SearchResultsErrorPreview() {
+  SearchPreviewBackdrop {
+    SearchResultsArea(
+      uiState = SearchUiState.Error("Search failed. Check your connection."),
+      currentSong = null,
+      isPlaying = false,
+      darkTheme = true,
+      reducedMotion = false
+    )
   }
 }

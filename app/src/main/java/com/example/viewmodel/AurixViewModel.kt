@@ -31,7 +31,9 @@ import com.example.playback.CrossfadeSettings
 import com.example.playback.EqPreset
 import com.example.playback.EqualizerUiState
 import com.example.playback.PlaybackService
+import com.example.ui.screens.UpdateLogoState
 import com.google.common.util.concurrent.ListenableFuture
+import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.async
@@ -122,6 +124,12 @@ class AurixViewModel(application: Application) : AndroidViewModel(application) {
 
   private val _updateStatus = MutableStateFlow("Ready to check for updates")
   val updateStatus: StateFlow<String> = _updateStatus
+  val statusText: StateFlow<String> = _updateStatus
+
+  private val _logoState = MutableStateFlow(UpdateLogoState.Idle)
+  val logoState: StateFlow<UpdateLogoState> = _logoState
+  private var logoTransitionJob: Job? = null
+  private var updateCheckJob: Job? = null
 
   private val _latestRelease = MutableStateFlow<GitHubRelease?>(null)
   val latestRelease: StateFlow<GitHubRelease?> = _latestRelease
@@ -165,6 +173,18 @@ class AurixViewModel(application: Application) : AndroidViewModel(application) {
 
   private val _searchError = MutableStateFlow<String?>(null)
   val searchError: StateFlow<String?> = _searchError
+
+  private data class SearchDispatch(
+    val query: String,
+    val mode: SearchMode,
+    val debounceMs: Long,
+    val nonce: Long
+  )
+
+  private val _searchModeEnum = MutableStateFlow(SearchMode.ITunes30s)
+  private val _searchDispatch = MutableSharedFlow<SearchDispatch>(extraBufferCapacity = 16)
+  private var searchDispatchNonce = 0L
+  private val _searchUiState = MutableStateFlow<SearchUiState>(SearchUiState.Idle)
 
   val hiddenSongIds: StateFlow<Set<String>> = prefsManager.hiddenSongIds
     .stateIn(viewModelScope, SharingStarted.Eagerly, emptySet())
@@ -220,6 +240,22 @@ class AurixViewModel(application: Application) : AndroidViewModel(application) {
       .filter { isTrackVisible(it, hidden, blocked) }
       .map { it.copy(isFavorite = it.id in favs) }
   }.stateIn(viewModelScope, SharingStarted.Lazily, emptyList())
+
+  val searchUiState: StateFlow<SearchUiState> = combine(
+    _searchUiState,
+    favoriteIds,
+    hiddenSongIds,
+    blockedArtists
+  ) { state, favs, hidden, blocked ->
+    if (state is SearchUiState.Results) {
+      val visible = state.items
+        .filter { isTrackVisible(it, hidden, blocked) }
+        .map { it.copy(isFavorite = it.id in favs) }
+      if (visible.isEmpty()) SearchUiState.Empty else SearchUiState.Results(visible)
+    } else {
+      state
+    }
+  }.stateIn(viewModelScope, SharingStarted.Eagerly, SearchUiState.Idle)
 
   val localSongs: StateFlow<List<Song>> = combine(
     dao.getLocalSongs(),
@@ -388,6 +424,7 @@ class AurixViewModel(application: Application) : AndroidViewModel(application) {
         _isAppInitialized.value = true
       }
     }
+    observeSearchRequests()
     connectPlaybackController(application)
     loadDailyRecommendations(DailyFeedCategory.DAILY_CHARTS)
     startPositionTicker()
@@ -501,7 +538,20 @@ class AurixViewModel(application: Application) : AndroidViewModel(application) {
   }
 
   fun setSearchMode(mode: String) {
+    val nextEnum = if (mode == "youtube") SearchMode.YouTubeLink else SearchMode.ITunes30s
+    val changed = _searchMode.value != mode
     _searchMode.value = mode
+    _searchModeEnum.value = nextEnum
+    if (changed) {
+      val currentQ = if (nextEnum == SearchMode.ITunes30s) _searchQuery.value else _youtubeUrl.value
+      if (currentQ.isBlank()) {
+        _searchDispatch.tryEmit(SearchDispatch("", nextEnum, 0L, ++searchDispatchNonce))
+      } else if (nextEnum == SearchMode.ITunes30s) {
+        _searchDispatch.tryEmit(SearchDispatch(currentQ, nextEnum, 0L, ++searchDispatchNonce))
+      } else if (_youtubeAnalysis.value == null && !_isAnalyzingYoutube.value) {
+        analyzeYoutubeUrl()
+      }
+    }
   }
 
   fun setYoutubeUrl(url: String) {
@@ -764,11 +814,42 @@ class AurixViewModel(application: Application) : AndroidViewModel(application) {
     }
   }
 
+  fun startUpdateLogoIntro() {
+    if (_logoState.value == UpdateLogoState.Checking || _logoState.value == UpdateLogoState.Done) return
+    logoTransitionJob?.cancel()
+    _logoState.value = UpdateLogoState.Intro
+    logoTransitionJob = viewModelScope.launch {
+      delay(1700L)
+      if (_logoState.value == UpdateLogoState.Intro) {
+        _logoState.value = UpdateLogoState.Idle
+      }
+    }
+  }
+
+  private fun transitionLogoDoneToIdle() {
+    logoTransitionJob?.cancel()
+    _logoState.value = UpdateLogoState.Done
+    logoTransitionJob = viewModelScope.launch {
+      delay(2600L)
+      if (_logoState.value == UpdateLogoState.Done) {
+        _logoState.value = UpdateLogoState.Idle
+      }
+    }
+  }
+
   fun checkForUpdates(context: Context, silent: Boolean = false) {
-    viewModelScope.launch {
+    if (_logoState.value == UpdateLogoState.Checking) return
+    if (silent && _updateCheckStatus.value is UpdateCheckStatus.Checking) return
+
+    updateCheckJob?.cancel()
+    updateCheckJob = viewModelScope.launch {
       _installedAppInfo.value = GitHubUpdater.getInstalledAppInfo(context)
       _updateCheckStatus.value = UpdateCheckStatus.Checking
-      _updateStatus.value = "Checking GitHub releases..."
+      _updateStatus.value = "Checking for updates…"
+      if (!silent) {
+        logoTransitionJob?.cancel()
+        _logoState.value = UpdateLogoState.Checking
+      }
 
       val owner = githubOwner.value.trim().ifBlank { "MEYYYNASH" }
       val repo = githubRepo.value.trim().ifBlank { "AURIX" }
@@ -785,14 +866,19 @@ class AurixViewModel(application: Application) : AndroidViewModel(application) {
           } else if (_apkDownloadState.value !is ApkDownloadState.Downloading) {
             _apkDownloadState.value = ApkDownloadState.Idle
           }
+          if (!silent) {
+            transitionLogoDoneToIdle()
+          }
         }
         is UpdateCheckStatus.UpToDate -> {
           _latestRelease.value = result.release
+          _updateStatus.value = "You are already using the latest version."
           if (_apkDownloadState.value !is ApkDownloadState.Downloading) {
             _apkDownloadState.value = ApkDownloadState.Idle
           }
           if (!silent) {
             Toast.makeText(context, "You are already using the latest version.", Toast.LENGTH_SHORT).show()
+            transitionLogoDoneToIdle()
           }
         }
         is UpdateCheckStatus.DowngradeBlocked -> {
@@ -802,14 +888,21 @@ class AurixViewModel(application: Application) : AndroidViewModel(application) {
           }
           if (!silent) {
             Toast.makeText(context, GitHubUpdater.statusTextFor(result), Toast.LENGTH_LONG).show()
+            transitionLogoDoneToIdle()
           }
         }
         is UpdateCheckStatus.Error -> {
           if (!silent) {
+            logoTransitionJob?.cancel()
+            _logoState.value = UpdateLogoState.Idle
             Toast.makeText(context, result.message, Toast.LENGTH_SHORT).show()
           }
         }
-        else -> Unit
+        else -> {
+          if (!silent) {
+            _logoState.value = UpdateLogoState.Idle
+          }
+        }
       }
     }
   }
@@ -1193,29 +1286,108 @@ class AurixViewModel(application: Application) : AndroidViewModel(application) {
     }
   }
 
-  fun search(query: String) {
+  private fun observeSearchRequests() {
+    viewModelScope.launch {
+      _searchDispatch.collectLatest { dispatch ->
+        val trimmed = dispatch.query.trim()
+        if (trimmed.isEmpty()) {
+          _rawSearchResults.value = emptyList()
+          _searchError.value = null
+          _isSearching.value = false
+          _searchUiState.value = SearchUiState.Idle
+          return@collectLatest
+        }
+
+        if (dispatch.debounceMs > 0L) {
+          delay(dispatch.debounceMs)
+        }
+
+        _isSearching.value = true
+        _searchError.value = null
+        _searchUiState.value = SearchUiState.Loading(mode = dispatch.mode, query = trimmed)
+        try {
+          when (dispatch.mode) {
+            SearchMode.ITunes30s -> {
+              val res = NetworkClient.itunesApi.searchSongs(term = trimmed, limit = 30)
+              val mapped = mapItunesTracks(res.results)
+              _rawSearchResults.value = mapped
+              val visible = mapped
+                .filter { isTrackVisible(it, hiddenSongIds.value, blockedArtists.value) }
+                .map { it.copy(isFavorite = it.id in favoriteIds.value) }
+              _searchUiState.value = if (visible.isEmpty()) {
+                SearchUiState.Empty
+              } else {
+                SearchUiState.Results(visible)
+              }
+            }
+            SearchMode.YouTubeLink -> {
+              val ytErr = _youtubeError.value
+              val analysis = _youtubeAnalysis.value
+              if (analysis != null) {
+                val track = Song(
+                  id = "yt_${analysis.videoId}",
+                  title = analysis.matchedTrackTitle,
+                  artist = analysis.matchedArtist,
+                  artworkUrl = analysis.thumbnailUrl,
+                  durationSeconds = analysis.durationSeconds,
+                  streamUrl = analysis.originalUrl,
+                  source = "Downloaded",
+                  fullDurationSeconds = analysis.durationSeconds
+                )
+                _searchUiState.value = SearchUiState.Results(listOf(track))
+              } else if (!ytErr.isNullOrBlank()) {
+                _searchUiState.value = SearchUiState.Error("Search failed. Check your connection.")
+              } else {
+                _searchUiState.value = SearchUiState.Empty
+              }
+            }
+          }
+        } catch (ce: CancellationException) {
+          throw ce
+        } catch (_: Exception) {
+          _rawSearchResults.value = emptyList()
+          val message = "Search failed. Check your connection."
+          _searchError.value = message
+          _searchUiState.value = SearchUiState.Error(message)
+        } finally {
+          _isSearching.value = false
+        }
+      }
+    }
+  }
+
+  fun search(query: String, immediate: Boolean = false) {
     _searchQuery.value = query
     searchJob?.cancel()
     if (query.isBlank()) {
       _rawSearchResults.value = emptyList()
       _searchError.value = null
       _isSearching.value = false
+      _searchUiState.value = SearchUiState.Idle
+      _searchDispatch.tryEmit(SearchDispatch("", _searchModeEnum.value, 0L, ++searchDispatchNonce))
       return
     }
-    searchJob = viewModelScope.launch {
-      _isSearching.value = true
-      _searchError.value = null
-      delay(300)
-      try {
-        val res = NetworkClient.itunesApi.searchSongs(term = query.trim(), limit = 30)
-        _rawSearchResults.value = mapItunesTracks(res.results)
-      } catch (_: Exception) {
-        _rawSearchResults.value = emptyList()
-        _searchError.value = "Network error while searching iTunes."
-      } finally {
-        _isSearching.value = false
-      }
+    _searchDispatch.tryEmit(
+      SearchDispatch(
+        query = query,
+        mode = _searchModeEnum.value,
+        debounceMs = if (immediate) 0L else 400L,
+        nonce = ++searchDispatchNonce
+      )
+    )
+  }
+
+  fun retrySearch() {
+    val q = _searchQuery.value
+    if (q.isBlank()) {
+      _searchUiState.value = SearchUiState.Idle
+      return
     }
+    search(q, immediate = true)
+  }
+
+  fun clearSearch() {
+    search("")
   }
 
   fun playSong(song: Song, newQueue: List<Song> = _rawFeatured.value.ifEmpty { listOf(song) }) {

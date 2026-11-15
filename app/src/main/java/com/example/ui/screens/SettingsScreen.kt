@@ -30,8 +30,12 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.res.stringResource
+import androidx.compose.ui.semantics.LiveRegionMode
+import androidx.compose.ui.semantics.liveRegion
+import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
+import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.example.R
@@ -83,9 +87,14 @@ fun SettingsScreen(
   onCrossfadeManualSkipChanged: (Boolean) -> Unit = {},
   hiddenSongsCount: Int = 0,
   blockedArtistsCount: Int = 0,
-  onClearHiddenAndBlocked: () -> Unit = {}
+  onClearHiddenAndBlocked: () -> Unit = {},
+  logoState: UpdateLogoState = UpdateLogoState.Idle,
+  onStartUpdateLogoIntro: () -> Unit = {}
 ) {
   val context = LocalContext.current
+  LaunchedEffect(Unit) {
+    onStartUpdateLogoIntro()
+  }
   val accents = listOf(
     "#EF4444" to AccentRed,
     "#EC4899" to AccentPink,
@@ -127,7 +136,7 @@ fun SettingsScreen(
       bottom = if (hasCurrentSong) 195.dp else 125.dp
     )
   ) {
-    // Clean Glass Header with Animated Brand Logo
+    // Static Header Brand Logo + Title
     item {
       Row(
         modifier = Modifier.fillMaxWidth(),
@@ -141,7 +150,7 @@ fun SettingsScreen(
           AurixBrandLogo(
             size = 42.dp,
             cornerRadius = 13.dp,
-            animated = true,
+            animated = false,
             reducedMotion = reducedMotion
           )
           Text(
@@ -168,253 +177,24 @@ fun SettingsScreen(
       }
     }
 
-    // Glass Update & Release Card (Uncluttered layout inspired by GlassNotes)
+    // Glass Update & Release Card
     item {
-      GlassCard(
+      AppUpdateReleaseCard(
+        logoState = logoState,
+        installedAppInfo = installedAppInfo,
+        updateCheckStatus = updateCheckStatus,
+        updateStatus = updateStatus,
+        latestRelease = latestRelease,
+        apkDownloadState = apkDownloadState,
+        animatedProgress = animatedProgress,
         darkTheme = darkTheme,
-        cornerRadius = 26.dp,
-        modifier = Modifier
-          .fillMaxWidth()
-          .animateContentSize(animationSpec = if (reducedMotion) snap() else tween(280))
-      ) {
-        Column(
-          modifier = Modifier.padding(18.dp),
-          verticalArrangement = Arrangement.spacedBy(14.dp)
-        ) {
-          // Card Top Header
-          Row(
-            modifier = Modifier.fillMaxWidth(),
-            verticalAlignment = Alignment.CenterVertically
-          ) {
-            AurixBrandLogo(
-              size = 48.dp,
-              cornerRadius = 15.dp,
-              animated = false,
-              reducedMotion = reducedMotion
-            )
-            Spacer(modifier = Modifier.width(12.dp))
-            Column(modifier = Modifier.weight(1f)) {
-              Text(
-                text = stringResource(id = R.string.settings_update_title),
-                style = MaterialTheme.typography.titleMedium.copy(fontWeight = FontWeight.Bold, lineHeight = 24.sp),
-                color = MaterialTheme.colorScheme.onSurface,
-                maxLines = 1,
-                overflow = TextOverflow.Ellipsis
-              )
-              Text(
-                text = stringResource(id = R.string.settings_update_subtitle),
-                style = MaterialTheme.typography.bodySmall.copy(lineHeight = 18.sp),
-                color = MaterialTheme.colorScheme.primary,
-                maxLines = 1,
-                overflow = TextOverflow.Ellipsis
-              )
-            }
-          }
-
-          // Inner Key-Value Status Summary Panel
-          Surface(
-            shape = RoundedCornerShape(18.dp),
-            color = if (darkTheme) Color.Black.copy(alpha = 0.24f) else MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.55f),
-            modifier = Modifier.fillMaxWidth()
-          ) {
-            Column(
-              modifier = Modifier.padding(14.dp),
-              verticalArrangement = Arrangement.spacedBy(9.dp)
-            ) {
-              UpdateSummaryRow(
-                label = stringResource(id = R.string.settings_installed_version),
-                value = "v${installedAppInfo.versionName} (code ${installedAppInfo.versionCode})"
-              )
-              UpdateSummaryRow(
-                label = stringResource(id = R.string.settings_latest_release),
-                value = latestRelease?.let { "${it.tagName} (code ${it.versionCode})" }
-                  ?: stringResource(id = R.string.settings_not_checked)
-              )
-              UpdateSummaryRow(
-                label = stringResource(id = R.string.settings_release_date),
-                value = latestRelease?.releaseDate?.ifBlank { "-" } ?: "-"
-              )
-              UpdateSummaryRow(
-                label = stringResource(id = R.string.settings_update_status),
-                value = updateStatus,
-                valueColor = when {
-                  apkDownloadState is ApkDownloadState.Error -> MaterialTheme.colorScheme.error
-                  isDowngradeBlocked -> AccentAmber
-                  isUpToDate || isValidatedReady -> AccentGreen
-                  isMandatory -> MaterialTheme.colorScheme.error
-                  isUpdateAvailable -> MaterialTheme.colorScheme.primary
-                  updateCheckStatus is UpdateCheckStatus.Error -> MaterialTheme.colorScheme.error
-                  else -> MaterialTheme.colorScheme.primary
-                }
-              )
-            }
-          }
-
-          if (isMandatory && isUpdateAvailable) {
-            Surface(
-              shape = RoundedCornerShape(14.dp),
-              color = MaterialTheme.colorScheme.error.copy(alpha = 0.14f),
-              modifier = Modifier.fillMaxWidth()
-            ) {
-              Row(
-                modifier = Modifier.padding(horizontal = 12.dp, vertical = 9.dp),
-                verticalAlignment = Alignment.CenterVertically,
-                horizontalArrangement = Arrangement.spacedBy(8.dp)
-              ) {
-                Icon(
-                  imageVector = Icons.Rounded.WarningAmber,
-                  contentDescription = null,
-                  tint = MaterialTheme.colorScheme.error,
-                  modifier = Modifier.size(18.dp)
-                )
-                Text(
-                  text = stringResource(id = R.string.settings_critical_release),
-                  style = MaterialTheme.typography.bodySmall.copy(fontWeight = FontWeight.SemiBold, lineHeight = 18.sp),
-                  color = MaterialTheme.colorScheme.error
-                )
-              }
-            }
-          }
-
-          // Animated Download Progress Bar
-          AnimatedVisibility(
-            visible = isDownloading,
-            enter = expandVertically() + fadeIn(),
-            exit = shrinkVertically() + fadeOut()
-          ) {
-            val dl = apkDownloadState as? ApkDownloadState.Downloading
-            val mbText = if (dl != null && dl.totalBytes > 0L) {
-              val dMb = dl.downloadedBytes / (1024f * 1024f)
-              val tMb = dl.totalBytes / (1024f * 1024f)
-              String.format("%.1f / %.1f MB", dMb, tMb)
-            } else if (dl != null) {
-              String.format("%.1f MB", dl.downloadedBytes / (1024f * 1024f))
-            } else ""
-
-            Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
-              Row(
-                modifier = Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.SpaceBetween
-              ) {
-                Text(
-                  text = stringResource(id = R.string.settings_downloading_verifying),
-                  style = MaterialTheme.typography.bodySmall.copy(fontWeight = FontWeight.SemiBold, lineHeight = 18.sp),
-                  color = MaterialTheme.colorScheme.primary
-                )
-                Text(
-                  text = mbText,
-                  style = MaterialTheme.typography.bodySmall,
-                  color = MaterialTheme.colorScheme.onSurfaceVariant
-                )
-              }
-              LinearProgressIndicator(
-                progress = { animatedProgress },
-                modifier = Modifier
-                  .fillMaxWidth()
-                  .height(7.dp)
-                  .clip(RoundedCornerShape(999.dp)),
-                color = MaterialTheme.colorScheme.primary,
-                trackColor = MaterialTheme.colorScheme.surfaceVariant
-              )
-            }
-          }
-
-          // Strict Smart Update Primary Action:
-          // "Update Now" appears ONLY when latest versionCode > installed versionCode!
-          if (isUpdateAvailable && latestRelease != null) {
-            val updateLabel = when {
-              isDownloading -> stringResource(id = R.string.settings_downloading_update)
-              isValidatedReady -> stringResource(id = R.string.settings_install_verified_update, latestRelease.tagName)
-              else -> stringResource(id = R.string.settings_update_now, latestRelease.tagName)
-            }
-            val updateIcon = when {
-              isDownloading -> Icons.Rounded.Downloading
-              isValidatedReady -> Icons.Rounded.InstallMobile
-              else -> Icons.Rounded.SystemUpdate
-            }
-
-            Box(
-              modifier = Modifier
-                .fillMaxWidth()
-                .height(50.dp)
-                .clip(RoundedCornerShape(18.dp))
-                .background(
-                  Brush.horizontalGradient(
-                    colors = listOf(
-                      MaterialTheme.colorScheme.primary,
-                      MaterialTheme.colorScheme.primary.copy(alpha = 0.78f)
-                    )
-                  )
-                )
-                .clickable(enabled = !isDownloading) {
-                  if (isValidatedReady) onInstallUpdate(context) else onDownloadUpdate(context)
-                }
-                .testTag("update_now_button"),
-              contentAlignment = Alignment.Center
-            ) {
-              Row(
-                verticalAlignment = Alignment.CenterVertically,
-                horizontalArrangement = Arrangement.spacedBy(8.dp)
-              ) {
-                Icon(
-                  imageVector = updateIcon,
-                  contentDescription = null,
-                  tint = Color.White,
-                  modifier = Modifier.size(19.dp)
-                )
-                Text(
-                  text = updateLabel,
-                  style = MaterialTheme.typography.bodyMedium.copy(fontWeight = FontWeight.Bold, lineHeight = 20.sp),
-                  color = Color.White,
-                  maxLines = 1,
-                  overflow = TextOverflow.Ellipsis
-                )
-              }
-            }
-          }
-
-          // Secondary Action Pills (Check Updates always available; Release Notes & GitHub clean)
-          Row(
-            modifier = Modifier.fillMaxWidth(),
-            horizontalArrangement = Arrangement.spacedBy(10.dp)
-          ) {
-            GlassActionPill(
-              text = if (updateCheckStatus is UpdateCheckStatus.Checking) {
-                stringResource(id = R.string.settings_checking)
-              } else {
-                stringResource(id = R.string.settings_check_updates)
-              },
-              icon = Icons.Rounded.Refresh,
-              darkTheme = darkTheme,
-              enabled = !isDownloading && updateCheckStatus !is UpdateCheckStatus.Checking,
-              modifier = Modifier.weight(1f).testTag("check_update_button"),
-              onClick = { onCheckUpdate(context) }
-            )
-            GlassActionPill(
-              text = stringResource(id = R.string.settings_release_notes),
-              icon = Icons.Rounded.Description,
-              darkTheme = darkTheme,
-              enabled = latestRelease != null,
-              modifier = Modifier.weight(1f),
-              onClick = { showReleaseNotesSheet = true }
-            )
-          }
-
-          Row(
-            modifier = Modifier.fillMaxWidth(),
-            horizontalArrangement = Arrangement.spacedBy(10.dp)
-          ) {
-            GlassActionPill(
-              text = stringResource(id = R.string.settings_open_release_page),
-              icon = Icons.AutoMirrored.Rounded.OpenInNew,
-              darkTheme = darkTheme,
-              enabled = true,
-              modifier = Modifier.weight(1f),
-              onClick = { onOpenGitHubRepo(context) }
-            )
-          }
-        }
-      }
+        reducedMotion = reducedMotion,
+        onCheckUpdate = { onCheckUpdate(context) },
+        onOpenReleaseNotes = { showReleaseNotesSheet = true },
+        onDownloadUpdate = { onDownloadUpdate(context) },
+        onInstallUpdate = { onInstallUpdate(context) },
+        onOpenGitHubRepo = { onOpenGitHubRepo(context) }
+      )
     }
 
     // Theme & Accent Glass Card
@@ -792,10 +572,286 @@ fun SettingsScreen(
 }
 
 @Composable
+fun AppUpdateReleaseCard(
+  logoState: UpdateLogoState,
+  installedAppInfo: InstalledAppInfo,
+  updateCheckStatus: UpdateCheckStatus,
+  updateStatus: String,
+  latestRelease: GitHubRelease?,
+  apkDownloadState: ApkDownloadState,
+  animatedProgress: Float = 0f,
+  darkTheme: Boolean = true,
+  reducedMotion: Boolean = false,
+  onCheckUpdate: () -> Unit,
+  onOpenReleaseNotes: () -> Unit,
+  onDownloadUpdate: () -> Unit = {},
+  onInstallUpdate: () -> Unit = {},
+  onOpenGitHubRepo: () -> Unit,
+  modifier: Modifier = Modifier
+) {
+  val isDownloading = apkDownloadState is ApkDownloadState.Downloading
+  val isValidatedReady = apkDownloadState is ApkDownloadState.ValidatedReady
+  val isUpdateAvailable = updateCheckStatus is UpdateCheckStatus.UpdateAvailable
+  val isMandatory = (updateCheckStatus as? UpdateCheckStatus.UpdateAvailable)?.isMandatory == true
+  val isUpToDate = updateCheckStatus is UpdateCheckStatus.UpToDate
+  val isDowngradeBlocked = updateCheckStatus is UpdateCheckStatus.DowngradeBlocked
+  val isChecking = logoState == UpdateLogoState.Checking || updateCheckStatus is UpdateCheckStatus.Checking
+
+  GlassCard(
+    darkTheme = darkTheme,
+    cornerRadius = 26.dp,
+    modifier = modifier
+      .fillMaxWidth()
+      .animateContentSize(animationSpec = if (reducedMotion) snap() else tween(280))
+  ) {
+    Column(
+      modifier = Modifier.padding(18.dp),
+      verticalArrangement = Arrangement.spacedBy(14.dp)
+    ) {
+      // Card Top Header: 84.dp animated UpdateLogo on left, title & blue subtitle on right
+      Row(
+        modifier = Modifier.fillMaxWidth(),
+        verticalAlignment = Alignment.CenterVertically
+      ) {
+        UpdateLogo(
+          state = logoState,
+          size = 84.dp,
+          reducedMotion = reducedMotion,
+          modifier = Modifier.testTag("settings_update_logo")
+        )
+        Spacer(modifier = Modifier.width(14.dp))
+        Column(modifier = Modifier.weight(1f)) {
+          Text(
+            text = stringResource(id = R.string.settings_update_title),
+            style = MaterialTheme.typography.titleMedium.copy(fontWeight = FontWeight.Bold, lineHeight = 24.sp),
+            color = MaterialTheme.colorScheme.onSurface,
+            maxLines = 1,
+            overflow = TextOverflow.Ellipsis
+          )
+          Text(
+            text = stringResource(id = R.string.settings_update_subtitle),
+            style = MaterialTheme.typography.bodySmall.copy(lineHeight = 18.sp),
+            color = MaterialTheme.colorScheme.primary,
+            maxLines = 2,
+            overflow = TextOverflow.Ellipsis
+          )
+        }
+      }
+
+      // Inner Key-Value Status Summary Panel
+      Surface(
+        shape = RoundedCornerShape(18.dp),
+        color = if (darkTheme) Color.Black.copy(alpha = 0.24f) else MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.55f),
+        modifier = Modifier.fillMaxWidth()
+      ) {
+        Column(
+          modifier = Modifier.padding(14.dp),
+          verticalArrangement = Arrangement.spacedBy(9.dp)
+        ) {
+          UpdateSummaryRow(
+            label = stringResource(id = R.string.settings_installed_version),
+            value = "v${installedAppInfo.versionName} (code ${installedAppInfo.versionCode})"
+          )
+          UpdateSummaryRow(
+            label = stringResource(id = R.string.settings_latest_release),
+            value = latestRelease?.let { "${it.tagName} (code ${it.versionCode})" }
+              ?: stringResource(id = R.string.settings_not_checked)
+          )
+          UpdateSummaryRow(
+            label = stringResource(id = R.string.settings_release_date),
+            value = latestRelease?.releaseDate?.ifBlank { "-" } ?: "-"
+          )
+          UpdateSummaryRow(
+            label = stringResource(id = R.string.settings_update_status),
+            value = updateStatus,
+            valueColor = when {
+              apkDownloadState is ApkDownloadState.Error -> MaterialTheme.colorScheme.error
+              isDowngradeBlocked -> AccentAmber
+              isUpToDate || isValidatedReady -> AccentGreen
+              isMandatory -> MaterialTheme.colorScheme.error
+              isUpdateAvailable -> MaterialTheme.colorScheme.primary
+              updateCheckStatus is UpdateCheckStatus.Error -> MaterialTheme.colorScheme.error
+              else -> MaterialTheme.colorScheme.primary
+            },
+            valueModifier = Modifier
+              .semantics { liveRegion = LiveRegionMode.Polite }
+              .testTag("settings_update_status_text")
+          )
+        }
+      }
+
+      if (isMandatory && isUpdateAvailable) {
+        Surface(
+          shape = RoundedCornerShape(14.dp),
+          color = MaterialTheme.colorScheme.error.copy(alpha = 0.14f),
+          modifier = Modifier.fillMaxWidth()
+        ) {
+          Row(
+            modifier = Modifier.padding(horizontal = 12.dp, vertical = 9.dp),
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.spacedBy(8.dp)
+          ) {
+            Icon(
+              imageVector = Icons.Rounded.WarningAmber,
+              contentDescription = null,
+              tint = MaterialTheme.colorScheme.error,
+              modifier = Modifier.size(18.dp)
+            )
+            Text(
+              text = stringResource(id = R.string.settings_critical_release),
+              style = MaterialTheme.typography.bodySmall.copy(fontWeight = FontWeight.SemiBold, lineHeight = 18.sp),
+              color = MaterialTheme.colorScheme.error
+            )
+          }
+        }
+      }
+
+      // Animated Download Progress Bar
+      AnimatedVisibility(
+        visible = isDownloading,
+        enter = expandVertically() + fadeIn(),
+        exit = shrinkVertically() + fadeOut()
+      ) {
+        val dl = apkDownloadState as? ApkDownloadState.Downloading
+        val mbText = if (dl != null && dl.totalBytes > 0L) {
+          val dMb = dl.downloadedBytes / (1024f * 1024f)
+          val tMb = dl.totalBytes / (1024f * 1024f)
+          String.format("%.1f / %.1f MB", dMb, tMb)
+        } else if (dl != null) {
+          String.format("%.1f MB", dl.downloadedBytes / (1024f * 1024f))
+        } else ""
+
+        Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
+          Row(
+            modifier = Modifier.fillMaxWidth(),
+            horizontalArrangement = Arrangement.SpaceBetween
+          ) {
+            Text(
+              text = stringResource(id = R.string.settings_downloading_verifying),
+              style = MaterialTheme.typography.bodySmall.copy(fontWeight = FontWeight.SemiBold, lineHeight = 18.sp),
+              color = MaterialTheme.colorScheme.primary
+            )
+            Text(
+              text = mbText,
+              style = MaterialTheme.typography.bodySmall,
+              color = MaterialTheme.colorScheme.onSurfaceVariant
+            )
+          }
+          LinearProgressIndicator(
+            progress = { animatedProgress },
+            modifier = Modifier
+              .fillMaxWidth()
+              .height(7.dp)
+              .clip(RoundedCornerShape(999.dp)),
+            color = MaterialTheme.colorScheme.primary,
+            trackColor = MaterialTheme.colorScheme.surfaceVariant
+          )
+        }
+      }
+
+      // Strict Smart Update Primary Action
+      if (isUpdateAvailable && latestRelease != null) {
+        val updateLabel = when {
+          isDownloading -> stringResource(id = R.string.settings_downloading_update)
+          isValidatedReady -> stringResource(id = R.string.settings_install_verified_update, latestRelease.tagName)
+          else -> stringResource(id = R.string.settings_update_now, latestRelease.tagName)
+        }
+        val updateIcon = when {
+          isDownloading -> Icons.Rounded.Downloading
+          isValidatedReady -> Icons.Rounded.InstallMobile
+          else -> Icons.Rounded.SystemUpdate
+        }
+
+        Box(
+          modifier = Modifier
+            .fillMaxWidth()
+            .height(50.dp)
+            .clip(RoundedCornerShape(18.dp))
+            .background(
+              Brush.horizontalGradient(
+                colors = listOf(
+                  MaterialTheme.colorScheme.primary,
+                  MaterialTheme.colorScheme.primary.copy(alpha = 0.78f)
+                )
+              )
+            )
+            .clickable(enabled = !isDownloading) {
+              if (isValidatedReady) onInstallUpdate() else onDownloadUpdate()
+            }
+            .testTag("update_now_button"),
+          contentAlignment = Alignment.Center
+        ) {
+          Row(
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.spacedBy(8.dp)
+          ) {
+            Icon(
+              imageVector = updateIcon,
+              contentDescription = null,
+              tint = Color.White,
+              modifier = Modifier.size(19.dp)
+            )
+            Text(
+              text = updateLabel,
+              style = MaterialTheme.typography.bodyMedium.copy(fontWeight = FontWeight.Bold, lineHeight = 20.sp),
+              color = Color.White,
+              maxLines = 1,
+              overflow = TextOverflow.Ellipsis
+            )
+          }
+        }
+      }
+
+      // Secondary Action Pills
+      Row(
+        modifier = Modifier.fillMaxWidth(),
+        horizontalArrangement = Arrangement.spacedBy(10.dp)
+      ) {
+        GlassActionPill(
+          text = if (isChecking) {
+            stringResource(id = R.string.settings_checking)
+          } else {
+            stringResource(id = R.string.settings_check_updates)
+          },
+          icon = Icons.Rounded.Refresh,
+          darkTheme = darkTheme,
+          enabled = !isDownloading && !isChecking,
+          modifier = Modifier.weight(1f).testTag("check_update_button"),
+          onClick = { if (!isChecking) onCheckUpdate() }
+        )
+        GlassActionPill(
+          text = stringResource(id = R.string.settings_release_notes),
+          icon = Icons.Rounded.Description,
+          darkTheme = darkTheme,
+          enabled = latestRelease != null,
+          modifier = Modifier.weight(1f),
+          onClick = onOpenReleaseNotes
+        )
+      }
+
+      Row(
+        modifier = Modifier.fillMaxWidth(),
+        horizontalArrangement = Arrangement.spacedBy(10.dp)
+      ) {
+        GlassActionPill(
+          text = stringResource(id = R.string.settings_open_release_page),
+          icon = Icons.AutoMirrored.Rounded.OpenInNew,
+          darkTheme = darkTheme,
+          enabled = true,
+          modifier = Modifier.weight(1f),
+          onClick = onOpenGitHubRepo
+        )
+      }
+    }
+  }
+}
+
+@Composable
 private fun UpdateSummaryRow(
   label: String,
   value: String,
-  valueColor: Color = MaterialTheme.colorScheme.onSurface
+  valueColor: Color = MaterialTheme.colorScheme.onSurface,
+  valueModifier: Modifier = Modifier
 ) {
   Row(
     modifier = Modifier.fillMaxWidth(),
@@ -813,7 +869,8 @@ private fun UpdateSummaryRow(
       style = MaterialTheme.typography.bodySmall.copy(fontWeight = FontWeight.SemiBold),
       color = valueColor,
       maxLines = 1,
-      overflow = TextOverflow.Ellipsis
+      overflow = TextOverflow.Ellipsis,
+      modifier = valueModifier
     )
   }
 }
@@ -864,4 +921,78 @@ private fun GlassActionPill(
       )
     }
   }
+}
+
+@Composable
+private fun UpdateCardPreviewHost(
+  logoState: UpdateLogoState,
+  checkStatus: UpdateCheckStatus,
+  statusText: String
+) {
+  val installed = InstalledAppInfo("com.aurix.music", "1.5.8", 10508L, emptySet())
+  val release = GitHubRelease("v1.5.8", "AURIX v1.5.8", "Release notes", "", "2026-11-15", 10508L)
+  AurixTheme(darkTheme = true) {
+    Box(
+      modifier = Modifier
+        .background(Color(0xFF0A0E1A))
+        .padding(16.dp)
+    ) {
+      AppUpdateReleaseCard(
+        logoState = logoState,
+        installedAppInfo = installed,
+        updateCheckStatus = checkStatus,
+        updateStatus = statusText,
+        latestRelease = release,
+        apkDownloadState = ApkDownloadState.Idle,
+        darkTheme = true,
+        onCheckUpdate = {},
+        onOpenReleaseNotes = {},
+        onOpenGitHubRepo = {}
+      )
+    }
+  }
+}
+
+@Preview(name = "UpdateCard - Intro", showBackground = true)
+@Composable
+private fun UpdateCardIntroPreview() {
+  UpdateCardPreviewHost(
+    logoState = UpdateLogoState.Intro,
+    checkStatus = UpdateCheckStatus.Idle,
+    statusText = "Ready to check for updates"
+  )
+}
+
+@Preview(name = "UpdateCard - Idle", showBackground = true)
+@Composable
+private fun UpdateCardIdlePreview() {
+  val installed = InstalledAppInfo("com.aurix.music", "1.5.8", 10508L, emptySet())
+  val release = GitHubRelease("v1.5.8", "AURIX v1.5.8", "", "", "2026-11-15", 10508L)
+  UpdateCardPreviewHost(
+    logoState = UpdateLogoState.Idle,
+    checkStatus = UpdateCheckStatus.UpToDate(installed, release),
+    statusText = "You are already using the latest version."
+  )
+}
+
+@Preview(name = "UpdateCard - Checking", showBackground = true)
+@Composable
+private fun UpdateCardCheckingPreview() {
+  UpdateCardPreviewHost(
+    logoState = UpdateLogoState.Checking,
+    checkStatus = UpdateCheckStatus.Checking,
+    statusText = "Checking for updates…"
+  )
+}
+
+@Preview(name = "UpdateCard - Done", showBackground = true)
+@Composable
+private fun UpdateCardDonePreview() {
+  val installed = InstalledAppInfo("com.aurix.music", "1.5.8", 10508L, emptySet())
+  val release = GitHubRelease("v1.5.8", "AURIX v1.5.8", "", "", "2026-11-15", 10508L)
+  UpdateCardPreviewHost(
+    logoState = UpdateLogoState.Done,
+    checkStatus = UpdateCheckStatus.UpToDate(installed, release),
+    statusText = "You are already using the latest version."
+  )
 }

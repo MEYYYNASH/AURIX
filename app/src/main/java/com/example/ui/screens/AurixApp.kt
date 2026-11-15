@@ -156,7 +156,8 @@ private fun AurixMainShell(
 
   val installedAppInfo by viewModel.installedAppInfo.collectAsStateWithLifecycle()
   val updateCheckStatus by viewModel.updateCheckStatus.collectAsStateWithLifecycle()
-  val updateStatus by viewModel.updateStatus.collectAsStateWithLifecycle()
+  val updateStatus by viewModel.statusText.collectAsStateWithLifecycle()
+  val logoState by viewModel.logoState.collectAsStateWithLifecycle()
   val latestRelease by viewModel.latestRelease.collectAsStateWithLifecycle()
   val apkDownloadState by viewModel.apkDownloadState.collectAsStateWithLifecycle()
   val songDownloadProgress by viewModel.songDownloadProgress.collectAsStateWithLifecycle()
@@ -173,6 +174,7 @@ private fun AurixMainShell(
   val searchResults by viewModel.searchResults.collectAsStateWithLifecycle()
   val isSearching by viewModel.isSearching.collectAsStateWithLifecycle()
   val searchError by viewModel.searchError.collectAsStateWithLifecycle()
+  val searchUiState by viewModel.searchUiState.collectAsStateWithLifecycle()
 
   val localSongs by viewModel.localSongs.collectAsStateWithLifecycle()
   val favorites by viewModel.favorites.collectAsStateWithLifecycle()
@@ -360,7 +362,11 @@ private fun AurixMainShell(
               },
               onSongClick = { song, queue -> viewModel.playSong(song, queue) },
               onFavoriteClick = { viewModel.toggleFavorite(it) },
-              onDownloadClick = { viewModel.downloadSong(context, it) }
+              onDownloadClick = { viewModel.downloadSong(context, it) },
+              searchUiState = searchUiState,
+              onClearSearch = { viewModel.clearSearch() },
+              onRetrySearch = { viewModel.retrySearch() },
+              onImmediateSearch = { viewModel.search(it, immediate = true) }
             )
             is Screen.Library -> LibraryScreen(
               localSongs = localSongs,
@@ -426,7 +432,9 @@ private fun AurixMainShell(
               onCrossfadeManualSkipChanged = { viewModel.setCrossfadeManualSkip(it) },
               hiddenSongsCount = hiddenSongIds.size,
               blockedArtistsCount = blockedArtists.size,
-              onClearHiddenAndBlocked = { viewModel.clearHiddenAndBlocked() }
+              onClearHiddenAndBlocked = { viewModel.clearHiddenAndBlocked() },
+              logoState = logoState,
+              onStartUpdateLogoIntro = { viewModel.startUpdateLogoIntro() }
             )
           }
         }
