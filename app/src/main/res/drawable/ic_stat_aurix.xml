@@ -1,0 +1,42 @@
+<?xml version="1.0" encoding="utf-8"?>
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="24dp"
+    android:height="24dp"
+    android:viewportWidth="208"
+    android:viewportHeight="208">
+
+    <!-- Back half (top arc) of tilted -12 deg ring behind planet -->
+    <group
+        android:pivotX="104"
+        android:pivotY="104"
+        android:rotation="-12">
+        <path
+            android:fillColor="#00000000"
+            android:strokeColor="#FFFFFFFF"
+            android:strokeWidth="10"
+            android:strokeLineCap="round"
+            android:pathData="M20,104 A84,26 0 0,1 188,104" />
+    </group>
+
+    <!-- Planet circle clipped to r=46, with knocked-out vertical oval eyes and tilted 24px front-ring gap -->
+    <group>
+        <clip-path android:pathData="M104,58 A46,46 0 1,1 103.99,58 Z" />
+        <path
+            android:fillColor="#FFFFFFFF"
+            android:fillType="evenOdd"
+            android:pathData="M104,58 A46,46 0 1,1 103.99,58 Z M96,81 A7.5,12 0 1,1 95.99,81 Z M118,78 A7.5,12 0 1,1 117.99,78 Z M174.43,89.03 A72,14 -12 0,1 33.57,118.97 L10.10,123.96 A96,38 -12 0,0 197.90,84.04 Z" />
+    </group>
+
+    <!-- Front half (bottom arc) of tilted -12 deg ring in front of planet -->
+    <group
+        android:pivotX="104"
+        android:pivotY="104"
+        android:rotation="-12">
+        <path
+            android:fillColor="#00000000"
+            android:strokeColor="#FFFFFFFF"
+            android:strokeWidth="10"
+            android:strokeLineCap="round"
+            android:pathData="M188,104 A84,26 0 0,1 20,104" />
+    </group>
+</vector>

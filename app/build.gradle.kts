@@ -16,8 +16,8 @@ android {
     applicationId = "com.aurix.music"
     minSdk = 24
     targetSdk = 36
-    versionCode = 10505
-    versionName = "1.5.5"
+    versionCode = 10506
+    versionName = "1.5.6"
 
     testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
   }

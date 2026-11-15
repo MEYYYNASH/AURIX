@@ -114,6 +114,10 @@
     <string name="home_history">History</string>
     <string name="home_daily_badge">DAILY</string>
     <string name="home_fetching_sounds">Fetching today\&#39;s %1$s sounds…</string>
+    <string name="home_updated_just_now">Updated just now</string>
+    <string name="home_refresh_error">Unable to refresh daily sounds right now.</string>
+    <string name="home_refreshing_title">Refreshing daily sounds</string>
+    <string name="home_refreshing_subtitle">Only takes a moment</string>
     <string name="home_no_daily_tracks">No daily tracks available right now.</string>
     <string name="home_retry">Retry</string>
     <string name="home_playing_now">Playing</string>

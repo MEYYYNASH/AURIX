@@ -1,5 +1,12 @@
 package com.example.ui.screens
 
+import androidx.compose.animation.AnimatedContent
+import androidx.compose.animation.core.snap
+import androidx.compose.animation.core.tween
+import androidx.compose.animation.fadeIn
+import androidx.compose.animation.fadeOut
+import androidx.compose.animation.slideInVertically
+import androidx.compose.animation.togetherWith
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
@@ -9,6 +16,7 @@ import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.rounded.*
 import androidx.compose.material3.*
@@ -25,7 +33,11 @@ import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.res.stringResource
+import androidx.compose.ui.semantics.LiveRegionMode
+import androidx.compose.ui.semantics.liveRegion
+import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
@@ -35,6 +47,8 @@ import com.example.model.Song
 import com.example.ui.theme.HeartRed
 import com.example.viewmodel.DailyFeedCategory
 
+private enum class DailyCardState { LOADING, ERROR, LOADED }
+
 @Composable
 fun HomeScreen(
   featuredTracks: List<Song>,
@@ -42,6 +56,7 @@ fun HomeScreen(
   featuredError: String?,
   selectedFeed: DailyFeedCategory,
   dailyUpdatedLabel: String,
+  dailyUpdatedJustNow: Boolean = false,
   favoritesCount: Int,
   localSongsCount: Int,
   recentlyPlayed: List<Song>,
@@ -99,22 +114,33 @@ fun HomeScreen(
                 maxLines = 1,
                 overflow = TextOverflow.Ellipsis
               )
+              val statusText = if (dailyUpdatedJustNow) {
+                stringResource(id = R.string.home_updated_just_now)
+              } else {
+                dailyUpdatedLabel
+              }
               Text(
-                text = dailyUpdatedLabel,
+                text = statusText,
                 style = MaterialTheme.typography.labelMedium.copy(fontWeight = FontWeight.Medium),
-                color = MaterialTheme.colorScheme.primary,
+                color = AurixTealAccent,
                 maxLines = 1,
-                overflow = TextOverflow.Ellipsis
+                overflow = TextOverflow.Ellipsis,
+                modifier = Modifier.testTag("home_header_status_label")
               )
             }
           }
 
           Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-            val iconBg = if (darkTheme) Color.White.copy(alpha = 0.10f) else Color.White.copy(alpha = 0.85f)
-            val iconBorder = if (darkTheme) Color.White.copy(alpha = 0.18f) else Color.White
+            val iconBg = if (darkTheme) Color(0xFF151F30) else Color.White.copy(alpha = 0.85f)
+            val iconBorder = if (darkTheme) Color(0xFF273348) else Color.White
 
             IconButton(
-              onClick = onRefreshDailyFeed,
+              onClick = {
+                if (!isLoadingFeatured) {
+                  onRefreshDailyFeed()
+                }
+              },
+              enabled = !isLoadingFeatured,
               modifier = Modifier
                 .minimumInteractiveComponentSize()
                 .size(44.dp)
@@ -123,12 +149,20 @@ fun HomeScreen(
                 .border(1.dp, iconBorder, CircleShape)
                 .testTag("home_refresh_feed_button")
             ) {
-              Icon(
-                imageVector = Icons.Rounded.Refresh,
-                contentDescription = stringResource(id = R.string.home_refresh_cd),
-                tint = MaterialTheme.colorScheme.onSurface,
-                modifier = Modifier.size(20.dp)
-              )
+              if (isLoadingFeatured) {
+                OrbitLoader(
+                  size = 30.dp,
+                  cardColor = iconBg,
+                  reducedMotion = reducedMotion
+                )
+              } else {
+                Icon(
+                  imageVector = Icons.Rounded.Refresh,
+                  contentDescription = stringResource(id = R.string.home_refresh_cd),
+                  tint = MaterialTheme.colorScheme.onSurface,
+                  modifier = Modifier.size(20.dp)
+                )
+              }
             }
 
             IconButton(
@@ -377,94 +411,166 @@ fun HomeScreen(
         }
       }
 
-      // Main Daily Recommendations Content (#1 Spotlight Hero + Ranked Editorial Chart)
-      when {
-        isLoadingFeatured && featuredTracks.isEmpty() -> {
-          item {
-            GlassCard(
-              darkTheme = darkTheme,
-              cornerRadius = 26.dp,
-              modifier = Modifier.fillMaxWidth()
-            ) {
-              Column(
-                modifier = Modifier.fillMaxWidth().padding(vertical = 38.dp),
-                horizontalAlignment = Alignment.CenterHorizontally,
-                verticalArrangement = Arrangement.spacedBy(12.dp)
-              ) {
-                CircularProgressIndicator(color = MaterialTheme.colorScheme.primary)
-                Text(
-                  text = stringResource(id = R.string.home_fetching_sounds, feedLocalizedLabel(selectedFeed)),
-                  style = MaterialTheme.typography.bodySmall.copy(lineHeight = 18.sp),
-                  color = MaterialTheme.colorScheme.onSurfaceVariant
-                )
-              }
-            }
-          }
+      // Main Daily Recommendations Card (fixed height across Error / Loading / Loaded so layout never jumps)
+      item {
+        val cardBgColor = if (darkTheme) Color(0xFF151F30) else Color.White.copy(alpha = 0.90f)
+        val cardBorderColor = if (darkTheme) Color(0xFF273348) else Color.White
+        val cardShape = RoundedCornerShape(26.dp)
+        val cardState = when {
+          isLoadingFeatured -> DailyCardState.LOADING
+          featuredTracks.isEmpty() -> DailyCardState.ERROR
+          else -> DailyCardState.LOADED
         }
-        featuredTracks.isEmpty() -> {
-          item {
-            GlassCard(
-              darkTheme = darkTheme,
-              cornerRadius = 26.dp,
-              modifier = Modifier.fillMaxWidth()
-            ) {
-              Column(
-                modifier = Modifier.fillMaxWidth().padding(24.dp),
-                horizontalAlignment = Alignment.CenterHorizontally,
-                verticalArrangement = Arrangement.spacedBy(10.dp)
-              ) {
-                Icon(
-                  imageVector = Icons.Rounded.MusicNote,
-                  contentDescription = null,
-                  tint = MaterialTheme.colorScheme.primary,
-                  modifier = Modifier.size(30.dp)
-                )
-                Text(
-                  text = featuredError ?: stringResource(id = R.string.home_no_daily_tracks),
-                  style = MaterialTheme.typography.bodyMedium.copy(lineHeight = 20.sp),
-                  color = MaterialTheme.colorScheme.onSurfaceVariant
-                )
-                OutlinedButton(
-                  onClick = onRefreshDailyFeed,
-                  shape = CircleShape
+
+        Box(
+          modifier = Modifier
+            .fillMaxWidth()
+            .height(436.dp)
+            .clip(cardShape)
+            .background(cardBgColor)
+            .border(1.dp, cardBorderColor, cardShape)
+            .semantics { liveRegion = LiveRegionMode.Polite }
+            .testTag("home_daily_feed_card")
+        ) {
+          AnimatedContent(
+            targetState = cardState,
+            modifier = Modifier.fillMaxSize(),
+            transitionSpec = {
+              if (reducedMotion) {
+                fadeIn(snap()) togetherWith fadeOut(snap())
+              } else if (targetState == DailyCardState.LOADED) {
+                (fadeIn(tween(350)) + slideInVertically(tween(350)) { it / 12 }) togetherWith fadeOut(tween(180))
+              } else {
+                fadeIn(tween(220)) togetherWith fadeOut(tween(160))
+              }
+            },
+            label = "daily_card_state_transition"
+          ) { state ->
+            when (state) {
+              DailyCardState.ERROR -> {
+                Column(
+                  modifier = Modifier
+                    .fillMaxSize()
+                    .padding(horizontal = 24.dp),
+                  horizontalAlignment = Alignment.CenterHorizontally,
+                  verticalArrangement = Arrangement.Center
                 ) {
-                  Icon(Icons.Rounded.Refresh, contentDescription = null, modifier = Modifier.size(16.dp))
-                  Spacer(modifier = Modifier.width(6.dp))
-                  Text(stringResource(id = R.string.home_retry))
+                  Box(
+                    modifier = Modifier
+                      .size(58.dp)
+                      .clip(CircleShape)
+                      .background(AurixTealAccent.copy(alpha = 0.14f)),
+                    contentAlignment = Alignment.Center
+                  ) {
+                    Icon(
+                      imageVector = Icons.Rounded.MusicNote,
+                      contentDescription = null,
+                      tint = AurixTealAccent,
+                      modifier = Modifier.size(30.dp)
+                    )
+                  }
+                  Spacer(modifier = Modifier.height(14.dp))
+                  Text(
+                    text = featuredError ?: stringResource(id = R.string.home_refresh_error),
+                    style = MaterialTheme.typography.bodyMedium.copy(
+                      fontWeight = FontWeight.Medium,
+                      lineHeight = 22.sp
+                    ),
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    textAlign = TextAlign.Center
+                  )
+                  Spacer(modifier = Modifier.height(18.dp))
+                  Button(
+                    onClick = {
+                      if (!isLoadingFeatured) {
+                        onRefreshDailyFeed()
+                      }
+                    },
+                    enabled = !isLoadingFeatured,
+                    shape = CircleShape,
+                    colors = ButtonDefaults.buttonColors(
+                      containerColor = AurixTealAccent,
+                      contentColor = Color(0xFF06201C)
+                    ),
+                    contentPadding = PaddingValues(horizontal = 20.dp, vertical = 10.dp),
+                    modifier = Modifier
+                      .defaultMinSize(minHeight = 48.dp)
+                      .testTag("home_daily_retry_button")
+                  ) {
+                    Icon(
+                      imageVector = Icons.Rounded.Refresh,
+                      contentDescription = null,
+                      modifier = Modifier.size(18.dp)
+                    )
+                    Spacer(modifier = Modifier.width(8.dp))
+                    Text(
+                      text = stringResource(id = R.string.home_retry),
+                      style = MaterialTheme.typography.labelLarge.copy(
+                        fontWeight = FontWeight.Bold,
+                        lineHeight = 20.sp
+                      )
+                    )
+                  }
                 }
               }
-            }
-          }
-        }
-        else -> {
-          val heroSong = featuredTracks.first()
-          val restTracks = featuredTracks.drop(1).take(19)
 
-          // #1 Spotlight Hero Card
-          item {
-            ViralSpotlightCard(
-              song = heroSong,
-              badgeLabel = "#1 ${selectedFeed.badgeText.uppercase()}",
-              isCurrent = currentSong?.id == heroSong.id,
-              isPlaying = isPlaying,
-              darkTheme = darkTheme,
-              reducedMotion = reducedMotion,
-              hasLyrics = heroSong.id in verifiedLyricsIds,
-              onCheckLyrics = onCheckLyrics,
-              onPlayClick = { onSongClick(heroSong, featuredTracks) },
-              onFavoriteClick = { onFavoriteClick(heroSong) }
-            )
-          }
+              DailyCardState.LOADING -> {
+                Column(
+                  modifier = Modifier
+                    .fillMaxSize()
+                    .padding(horizontal = 24.dp),
+                  horizontalAlignment = Alignment.CenterHorizontally,
+                  verticalArrangement = Arrangement.Center
+                ) {
+                  OrbitLoader(
+                    size = 84.dp,
+                    cardColor = cardBgColor,
+                    reducedMotion = reducedMotion,
+                    modifier = Modifier.testTag("home_daily_orbit_loader")
+                  )
+                  Spacer(modifier = Modifier.height(16.dp))
+                  Text(
+                    text = stringResource(id = R.string.home_refreshing_title),
+                    style = MaterialTheme.typography.titleMedium.copy(
+                      fontWeight = FontWeight.Bold,
+                      lineHeight = 24.sp
+                    ),
+                    color = MaterialTheme.colorScheme.onSurface,
+                    textAlign = TextAlign.Center
+                  )
+                  Spacer(modifier = Modifier.height(4.dp))
+                  Text(
+                    text = stringResource(id = R.string.home_refreshing_subtitle),
+                    style = MaterialTheme.typography.bodySmall.copy(lineHeight = 18.sp),
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    textAlign = TextAlign.Center
+                  )
+                }
+              }
 
-          // Ranked Viral List Card (#02 .. #20)
-          if (restTracks.isNotEmpty()) {
-            item {
-              GlassCard(
-                darkTheme = darkTheme,
-                cornerRadius = 26.dp,
-                modifier = Modifier.fillMaxWidth()
-              ) {
-                Column(modifier = Modifier.padding(horizontal = 8.dp, vertical = 8.dp)) {
+              DailyCardState.LOADED -> {
+                val heroSong = featuredTracks.first()
+                val restTracks = featuredTracks.drop(1).take(19)
+                Column(
+                  modifier = Modifier
+                    .fillMaxSize()
+                    .verticalScroll(rememberScrollState())
+                    .padding(horizontal = 10.dp, vertical = 10.dp),
+                  verticalArrangement = Arrangement.spacedBy(8.dp)
+                ) {
+                  ViralSpotlightCard(
+                    song = heroSong,
+                    badgeLabel = "#1 ${selectedFeed.badgeText.uppercase()}",
+                    isCurrent = currentSong?.id == heroSong.id,
+                    isPlaying = isPlaying,
+                    darkTheme = darkTheme,
+                    reducedMotion = reducedMotion,
+                    hasLyrics = heroSong.id in verifiedLyricsIds,
+                    onCheckLyrics = onCheckLyrics,
+                    onPlayClick = { onSongClick(heroSong, featuredTracks) },
+                    onFavoriteClick = { onFavoriteClick(heroSong) }
+                  )
+
                   restTracks.forEachIndexed { idx, song ->
                     SongRow(
                       song = song,

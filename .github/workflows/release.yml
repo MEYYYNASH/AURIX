@@ -10,9 +10,9 @@ on:
   workflow_dispatch:
     inputs:
       tag:
-        description: 'Release tag (e.g. v1.5.5)'
+        description: 'Release tag (e.g. v1.5.6)'
         required: false
-        default: 'v1.5.5'
+        default: 'v1.5.6'
 
 permissions:
   contents: write
@@ -52,11 +52,11 @@ jobs:
             RELEASE_TAG="${{ github.ref_name }}"
           else
             VERSION=$(grep -m1 'versionName' app/build.gradle.kts | sed -E 's/.*"([^"]+)".*/\1/')
-            RELEASE_TAG="v${VERSION:-1.5.5}"
+            RELEASE_TAG="v${VERSION:-1.5.6}"
           fi
           VCODE=$(grep -m1 'versionCode' app/build.gradle.kts | sed -E 's/[^0-9]*([0-9]+).*/\1/')
           echo "RELEASE_TAG=${RELEASE_TAG}" >> "$GITHUB_ENV"
-          echo "RELEASE_VERSION_CODE=${VCODE:-10505}" >> "$GITHUB_ENV"
+          echo "RELEASE_VERSION_CODE=${VCODE:-10506}" >> "$GITHUB_ENV"
 
       - name: Ensure keystores exist
         run: |
@@ -100,9 +100,9 @@ jobs:
             mandatory: false
 
             What's New in AURIX ${{ env.RELEASE_TAG }}:
-            - New minimalist planet & orbit app icon with adaptive, monochrome themed icon, and 512x512 Play Store asset
-            - New lively animated launch screen using Android SplashScreen API (no double logo, never replays on rotation/resume, respects reduced motion)
-            - Full Khmer + English localization, Crossfade engine, 5-band Equalizer, and verified LRCLIB lyrics matching
+            - New minimalist planet & tilted ring status-bar notification icon (cleanly knocked-out eyes & front-ring gap for red pill status chips)
+            - New AURIX Home refresh/retry flow on the TikTok Viral card with fixed card size, 84dp & 30dp Orbit loader (#2EC4B0 comet), and accessibility polite live updates
+            - Includes standalone status logo SVGs/previews and self-contained interactive Home refresh HTML preview
           files: |
             app/build/outputs/apk/release/app-release.apk
             AURIX-${{ env.RELEASE_TAG }}.apk

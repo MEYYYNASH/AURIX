@@ -169,6 +169,7 @@ private fun AurixMainShell(
   val featuredError by viewModel.featuredError.collectAsStateWithLifecycle()
   val selectedDailyFeed by viewModel.selectedDailyFeed.collectAsStateWithLifecycle()
   val dailyUpdatedLabel by viewModel.dailyUpdatedLabel.collectAsStateWithLifecycle()
+  val dailyUpdatedJustNow by viewModel.dailyUpdatedJustNow.collectAsStateWithLifecycle()
   val searchResults by viewModel.searchResults.collectAsStateWithLifecycle()
   val isSearching by viewModel.isSearching.collectAsStateWithLifecycle()
   val searchError by viewModel.searchError.collectAsStateWithLifecycle()
@@ -304,6 +305,7 @@ private fun AurixMainShell(
               featuredError = featuredError,
               selectedFeed = selectedDailyFeed,
               dailyUpdatedLabel = dailyUpdatedLabel,
+              dailyUpdatedJustNow = dailyUpdatedJustNow,
               favoritesCount = favorites.size,
               localSongsCount = localSongs.size,
               recentlyPlayed = recentlyPlayed,

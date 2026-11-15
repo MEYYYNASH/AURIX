@@ -145,6 +145,9 @@ class AurixViewModel(application: Application) : AndroidViewModel(application) {
   private val _dailyUpdatedLabel = MutableStateFlow(formatTodayBadge())
   val dailyUpdatedLabel: StateFlow<String> = _dailyUpdatedLabel
 
+  private val _dailyUpdatedJustNow = MutableStateFlow(false)
+  val dailyUpdatedJustNow: StateFlow<Boolean> = _dailyUpdatedJustNow
+
   private val dailyFeedCache = mutableMapOf<Pair<String, DailyFeedCategory>, List<Song>>()
   private var lastFeedDateKey: String = todayDateKey()
   private var feedJob: Job? = null
@@ -1085,10 +1088,16 @@ class AurixViewModel(application: Application) : AndroidViewModel(application) {
     category: DailyFeedCategory = _selectedDailyFeed.value,
     forceRefresh: Boolean = false
   ) {
+    if (forceRefresh && _isLoadingFeatured.value) {
+      return
+    }
     val today = todayDateKey()
     if (today != lastFeedDateKey) {
       lastFeedDateKey = today
       dailyFeedCache.clear()
+    }
+    if (!forceRefresh) {
+      _dailyUpdatedJustNow.value = false
     }
     _dailyUpdatedLabel.value = formatTodayBadge()
 
@@ -1166,13 +1175,18 @@ class AurixViewModel(application: Application) : AndroidViewModel(application) {
           dailyFeedCache[cacheKey] = loaded
           _rawFeatured.value = loaded
           _featuredError.value = null
+          if (forceRefresh) {
+            _dailyUpdatedJustNow.value = true
+          }
         } else {
           _rawFeatured.value = emptyList()
-          _featuredError.value = "Unable to load today's ${category.label} feed. Check your connection."
+          _featuredError.value = getApplication<Application>().getString(R.string.home_refresh_error)
+          _dailyUpdatedJustNow.value = false
         }
       } catch (_: Exception) {
         _rawFeatured.value = emptyList()
-        _featuredError.value = "Unable to refresh daily sounds right now."
+        _featuredError.value = getApplication<Application>().getString(R.string.home_refresh_error)
+        _dailyUpdatedJustNow.value = false
       } finally {
         _isLoadingFeatured.value = false
       }

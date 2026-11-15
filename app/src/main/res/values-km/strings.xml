@@ -114,6 +114,10 @@
     <string name="home_history">ប្រវត្តិ</string>
     <string name="home_daily_badge">ប្រចាំថ្ងៃ</string>
     <string name="home_fetching_sounds">កំពុងស្វែងរកបទ %1$s ថ្ងៃនេះ…</string>
+    <string name="home_updated_just_now">ទើបធ្វើបច្ចុប្បន្នភាពឥឡូវនេះ</string>
+    <string name="home_refresh_error">មិនអាចផ្ទុកសំឡេងប្រចាំថ្ងៃឡើងវិញបានទេនៅពេលនេះ។</string>
+    <string name="home_refreshing_title">កំពុងផ្ទុកសំឡេងប្រចាំថ្ងៃឡើងវិញ</string>
+    <string name="home_refreshing_subtitle">រង់ចាំតែមួយភ្លែតប៉ុណ្ណោះ</string>
     <string name="home_no_daily_tracks">មិនមានបទប្រចាំថ្ងៃនៅពេលនេះទេ។</string>
     <string name="home_retry">សាកល្បងម្តងទៀត</string>
     <string name="home_playing_now">កំពុងចាក់</string>

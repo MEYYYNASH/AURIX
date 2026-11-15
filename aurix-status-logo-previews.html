@@ -1,0 +1,151 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>AURIX Status-Bar Mini Logo Previews</title>
+  <style>
+    * { box-sizing: border-box; }
+    body {
+      margin: 0;
+      padding: 32px 24px;
+      background: #0b0f1a;
+      color: #f1f5f9;
+      font-family: system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+    }
+    .wrap {
+      max-width: 780px;
+      margin: 0 auto;
+      display: flex;
+      flex-direction: column;
+      gap: 24px;
+    }
+    h1 { font-size: 20px; margin: 0; font-weight: 700; }
+    p { margin: 4px 0 0; color: #94a3b8; font-size: 13px; }
+    .card {
+      background: #151f30;
+      border: 1px solid #273348;
+      border-radius: 20px;
+      padding: 20px;
+    }
+    .card h2 {
+      font-size: 14px;
+      font-weight: 600;
+      margin: 0 0 16px;
+      color: #cbd5e1;
+      text-transform: uppercase;
+      letter-spacing: 0.06em;
+    }
+    .status-bar {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      background: #060911;
+      border-radius: 14px;
+      padding: 10px 16px;
+      border: 1px solid #1e293b;
+    }
+    .pill {
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+      background: #8F1616;
+      color: #FFFFFF;
+      padding: 4px 10px 4px 8px;
+      border-radius: 999px;
+      font-size: 12px;
+      font-weight: 600;
+      letter-spacing: 0.01em;
+    }
+    .grid {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 20px;
+      align-items: flex-end;
+    }
+    .sample {
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      gap: 8px;
+    }
+    .tile {
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      width: 56px;
+      height: 56px;
+      border-radius: 14px;
+    }
+    .tile-red { background: #8F1616; }
+    .tile-white { background: #FFFFFF; border: 1px solid #cbd5e1; }
+    .size-label { font-size: 12px; color: #94a3b8; font-variant-numeric: tabular-nums; }
+  </style>
+</head>
+<body>
+  <div class="wrap">
+    <div>
+      <h1>AURIX Status-Bar Chip Mini Logo</h1>
+      <p>viewBox "40 40 208 208" &bull; Planet (144,144 r46) &bull; Tilted -12&deg; ring (84&times;26, stroke 10, 24 gap) &bull; Knocked-out eyes</p>
+    </div>
+
+    <div class="card">
+      <h2>Android Status-Bar Chip Mockup (#8F1616 Pill)</h2>
+      <div class="status-bar">
+        <span style="font-size:13px;font-weight:600;">9:41</span>
+        <div class="pill">
+          <svg width="18" height="18" viewBox="40 40 208 208" fill="none" aria-hidden="true">
+            <path d="M 60 144 A 84 26 0 0 1 228 144" transform="rotate(-12 144 144)" stroke="#FFF" stroke-width="10" stroke-linecap="round"/>
+            <circle cx="144" cy="144" r="46" fill="#FFF"/>
+            <ellipse cx="136" cy="133" rx="7.5" ry="12" fill="#8F1616"/>
+            <ellipse cx="158" cy="130" rx="7.5" ry="12" fill="#8F1616"/>
+            <path d="M 228 144 A 84 26 0 0 1 60 144" transform="rotate(-12 144 144)" stroke="#8F1616" stroke-width="24" stroke-linecap="round"/>
+            <path d="M 228 144 A 84 26 0 0 1 60 144" transform="rotate(-12 144 144)" stroke="#FFF" stroke-width="10" stroke-linecap="round"/>
+          </svg>
+          <span>Playing &bull; AURIX</span>
+        </div>
+        <span style="font-size:12px;color:#94a3b8;">5G &bull; 92%</span>
+      </div>
+    </div>
+
+    <div class="card">
+      <h2>White on Red (#FFF on #8F1616) — Size Previews</h2>
+      <div class="grid" id="red-previews"></div>
+    </div>
+
+    <div class="card">
+      <h2>Dark on White (#23242B on #FFF) — Size Previews</h2>
+      <div class="grid" id="light-previews"></div>
+    </div>
+  </div>
+
+  <script>
+    const sizes = [12, 16, 20, 24, 32];
+    function makeLogoSvg(px, fg, bg) {
+      return `<svg width="${px}" height="${px}" viewBox="40 40 208 208" fill="none">
+        <path d="M 60 144 A 84 26 0 0 1 228 144" transform="rotate(-12 144 144)" stroke="${fg}" stroke-width="10" stroke-linecap="round"/>
+        <circle cx="144" cy="144" r="46" fill="${fg}"/>
+        <ellipse cx="136" cy="133" rx="7.5" ry="12" fill="${bg}"/>
+        <ellipse cx="158" cy="130" rx="7.5" ry="12" fill="${bg}"/>
+        <path d="M 228 144 A 84 26 0 0 1 60 144" transform="rotate(-12 144 144)" stroke="${bg}" stroke-width="24" stroke-linecap="round"/>
+        <path d="M 228 144 A 84 26 0 0 1 60 144" transform="rotate(-12 144 144)" stroke="${fg}" stroke-width="10" stroke-linecap="round"/>
+      </svg>`;
+    }
+
+    const redHost = document.getElementById('red-previews');
+    const lightHost = document.getElementById('light-previews');
+
+    sizes.forEach((px) => {
+      const rItem = document.createElement('div');
+      rItem.className = 'sample';
+      rItem.innerHTML = `<div class="tile tile-red">${makeLogoSvg(px, '#FFF', '#8F1616')}</div><span class="size-label">${px} px</span>`;
+      redHost.appendChild(rItem);
+
+      const lItem = document.createElement('div');
+      lItem.className = 'sample';
+      lItem.innerHTML = `<div class="tile tile-white">${makeLogoSvg(px, '#23242B', '#FFF')}</div><span class="size-label">${px} px</span>`;
+      lightHost.appendChild(lItem);
+    });
+  </script>
+</body>
+</html>
