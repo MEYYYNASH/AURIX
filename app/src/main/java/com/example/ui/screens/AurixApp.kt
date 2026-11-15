@@ -43,6 +43,7 @@ import com.example.LocaleHelper
 import com.example.R
 import com.example.data.ApkDownloadState
 import com.example.data.UpdateCheckStatus
+import com.example.recommendation.MoodCategory
 import com.example.ui.theme.*
 import com.example.viewmodel.AurixViewModel
 
@@ -52,6 +53,8 @@ sealed class Screen(val route: String, val title: String, val icon: ImageVector)
   object Library : Screen("library", "Library", Icons.Outlined.Folder)
   object Settings : Screen("settings", "Settings", Icons.Outlined.Settings)
   object Album : Screen("album", "Album", Icons.Outlined.Folder)
+  object Insights : Screen("insights", "Insights", Icons.Outlined.Home)
+  data class PlaylistDetail(val key: String) : Screen("playlist_$key", "Playlist", Icons.Outlined.Home)
 }
 
 private val AurixEase = CubicBezierEasing(0.2f, 0.8f, 0.2f, 1.0f)
@@ -202,6 +205,14 @@ private fun AurixMainShell(
   val isAlbumAddedToLibrary by viewModel.isAlbumAddedToLibrary.collectAsStateWithLifecycle()
   val isAlbumDownloaded by viewModel.isAlbumDownloaded.collectAsStateWithLifecycle()
   var albumDetailSong by remember { mutableStateOf<com.example.model.Song?>(null) }
+  val smartRecommendations by viewModel.smartRecommendations.collectAsStateWithLifecycle()
+  val discoverWeekly by viewModel.discoverWeekly.collectAsStateWithLifecycle()
+  val moodPlaylists by viewModel.moodPlaylists.collectAsStateWithLifecycle()
+  val musicDna by viewModel.musicDna.collectAsStateWithLifecycle()
+  val mostPlayedFilter by viewModel.mostPlayedFilter.collectAsStateWithLifecycle()
+  val mostPlayed by viewModel.mostPlayed.collectAsStateWithLifecycle()
+  val trendingTracks by viewModel.trendingTracks.collectAsStateWithLifecycle()
+  val risingArtists by viewModel.risingArtists.collectAsStateWithLifecycle()
 
   val isNowPlayingOpen = showNowPlaying && currentSong != null
 
@@ -335,9 +346,93 @@ private fun AurixMainShell(
               onOpenAlbum = {
                 currentScreen = Screen.Album
               },
+              smartRecommendations = smartRecommendations,
+              discoverWeekly = discoverWeekly,
+              moodPlaylists = moodPlaylists,
+              musicDna = musicDna,
+              onOpenInsights = { currentScreen = Screen.Insights },
+              onOpenDiscoverWeekly = { currentScreen = Screen.PlaylistDetail("discover_weekly") },
+              onOpenMoodPlaylist = { mood -> currentScreen = Screen.PlaylistDetail("mood_${mood.id}") },
               onSongClick = { song, queue -> viewModel.playSong(song, queue) },
               onFavoriteClick = { viewModel.toggleFavorite(it) }
             )
+            is Screen.Insights -> MusicInsightsScreen(
+              musicDna = musicDna,
+              mostPlayedFilter = mostPlayedFilter,
+              mostPlayed = mostPlayed,
+              trendingTracks = trendingTracks,
+              risingArtists = risingArtists,
+              currentSong = currentSong,
+              isPlaying = isPlaying,
+              darkTheme = darkTheme,
+              reducedMotion = reducedMotion,
+              verifiedLyricsIds = verifiedLyricsIds,
+              onBack = { currentScreen = Screen.Home },
+              onSelectMostPlayedFilter = { viewModel.setMostPlayedFilter(it) },
+              onCheckLyrics = { viewModel.ensureLyricsVerified(it) },
+              onSongClick = { song, queue -> viewModel.playSong(song, queue) },
+              onFavoriteClick = { viewModel.toggleFavorite(it) }
+            )
+            is Screen.PlaylistDetail -> {
+              if (screen.key == "discover_weekly") {
+                val dw = discoverWeekly
+                val dwTracks = dw?.tracks.orEmpty()
+                val dwSubtitle = if (dw != null && dwTracks.isNotEmpty()) {
+                  stringResource(
+                    id = R.string.home_discover_weekly_ready,
+                    dwTracks.size,
+                    dw.matchCount,
+                    dw.discoveryCount
+                  )
+                } else {
+                  stringResource(id = R.string.home_discover_weekly_empty)
+                }
+                PlaylistDetailScreen(
+                  title = stringResource(id = R.string.home_discover_weekly_title),
+                  subtitle = dwSubtitle,
+                  badgeLabel = dw?.weekKey ?: "WEEKLY MIX",
+                  tracks = dwTracks,
+                  emptyMessage = stringResource(id = R.string.home_discover_weekly_empty),
+                  showRefreshButton = dwTracks.isNotEmpty(),
+                  currentSong = currentSong,
+                  isPlaying = isPlaying,
+                  darkTheme = darkTheme,
+                  reducedMotion = reducedMotion,
+                  verifiedLyricsIds = verifiedLyricsIds,
+                  onBack = { currentScreen = Screen.Home },
+                  onRefresh = { viewModel.refreshDiscoverWeekly() },
+                  onPlayAll = { viewModel.playPlaylist(dwTracks) },
+                  onShuffleAll = { viewModel.shuffleAlbum(dwTracks) },
+                  onCheckLyrics = { viewModel.ensureLyricsVerified(it) },
+                  onSongClick = { song, queue -> viewModel.playSong(song, queue) },
+                  onFavoriteClick = { viewModel.toggleFavorite(it) }
+                )
+              } else {
+                val moodId = screen.key.removePrefix("mood_")
+                val matchedMood = MoodCategory.entries.firstOrNull { it.id == moodId } ?: MoodCategory.CHILL
+                val moodPlaylist = moodPlaylists.firstOrNull { it.mood == matchedMood }
+                val moodTracks = moodPlaylist?.tracks.orEmpty()
+                PlaylistDetailScreen(
+                  title = "${matchedMood.displayName} Mix",
+                  subtitle = "${matchedMood.description} · ${matchedMood.bpmRange.first}–${matchedMood.bpmRange.last} BPM",
+                  badgeLabel = stringResource(id = R.string.home_moods_title),
+                  tracks = moodTracks,
+                  emptyMessage = stringResource(id = R.string.playlist_mood_empty),
+                  showRefreshButton = false,
+                  currentSong = currentSong,
+                  isPlaying = isPlaying,
+                  darkTheme = darkTheme,
+                  reducedMotion = reducedMotion,
+                  verifiedLyricsIds = verifiedLyricsIds,
+                  onBack = { currentScreen = Screen.Home },
+                  onPlayAll = { viewModel.playPlaylist(moodTracks) },
+                  onShuffleAll = { viewModel.shuffleAlbum(moodTracks) },
+                  onCheckLyrics = { viewModel.ensureLyricsVerified(it) },
+                  onSongClick = { song, queue -> viewModel.playSong(song, queue) },
+                  onFavoriteClick = { viewModel.toggleFavorite(it) }
+                )
+              }
+            }
             is Screen.Album -> AlbumTrackListSection(
               albumTitle = stringResource(id = R.string.album_placeholder_title),
               artistName = stringResource(id = R.string.album_placeholder_artist),
@@ -414,6 +509,7 @@ private fun AurixMainShell(
               onDeleteLocalSong = { viewModel.deleteLocalSong(it) },
               onRemoveRecentSong = { viewModel.removeFromHistory(it) },
               onClearRecentHistory = { viewModel.clearHistory() },
+              onOpenInsights = { currentScreen = Screen.Insights },
               onSongClick = { song ->
                 val listQueue = when (libraryTab) {
                   0 -> localSongs
@@ -597,8 +693,13 @@ private fun AurixMainShell(
                 viewModel.deleteLocalSong(song)
                 showNowPlaying = false
               }
-            } else {
-              null
+              } else {
+                null
+              },
+            similarSongsProvider = { target -> viewModel.getSimilarSongs(target) },
+            onPlaySimilarSong = { similar ->
+              val queue = listOf(similar) + viewModel.getSimilarSongs(similar).map { it.song }
+              viewModel.playSong(similar, queue)
             }
           )
         }
@@ -610,6 +711,12 @@ private fun AurixMainShell(
           hasLyrics = detailTarget.id in verifiedLyricsIds,
           isPlaying = currentSong?.id == detailTarget.id && isPlaying,
           reducedMotion = reducedMotion,
+          similarSongs = remember(detailTarget) { viewModel.getSimilarSongs(detailTarget) },
+          onSelectSimilarSong = { similar ->
+            albumDetailSong = null
+            val queue = listOf(similar) + viewModel.getSimilarSongs(similar).map { it.song }
+            viewModel.playSong(similar, queue)
+          },
           onDismiss = { albumDetailSong = null },
           onPlay = {
             albumDetailSong = null

@@ -78,6 +78,44 @@ data class BadLyricsEntity(
   val reportedAt: Long = System.currentTimeMillis()
 )
 
+@Entity(tableName = "play_logs")
+data class PlayLogEntity(
+  @PrimaryKey(autoGenerate = true) val id: Long = 0,
+  val songId: String,
+  val title: String,
+  val artist: String,
+  val artworkUrl: String,
+  val durationSeconds: Long,
+  val streamUrl: String,
+  val source: String,
+  val genre: String,
+  val bpm: Int,
+  val mood: String,
+  val playedAt: Long = System.currentTimeMillis(),
+  val listenedDurationMs: Long = 0L
+)
+
+@Entity(
+  tableName = "discover_weekly",
+  primaryKeys = ["weekKey", "position"]
+)
+data class DiscoverWeeklyEntity(
+  val weekKey: String,
+  val position: Int,
+  val songId: String,
+  val title: String,
+  val artist: String,
+  val artworkUrl: String,
+  val durationSeconds: Long,
+  val streamUrl: String,
+  val source: String,
+  val genre: String,
+  val bpm: Int,
+  val mood: String,
+  val isDiscovery: Boolean,
+  val generatedAt: Long = System.currentTimeMillis()
+)
+
 @Dao
 interface AurixDao {
   @Query("SELECT * FROM favorite_songs ORDER BY timestamp DESC")
@@ -172,6 +210,41 @@ interface AurixDao {
 
   @Query("DELETE FROM bad_lyrics")
   suspend fun clearAllBadLyrics()
+
+  @Query("SELECT * FROM play_logs ORDER BY playedAt DESC")
+  fun observePlayLogs(): Flow<List<PlayLogEntity>>
+
+  @Insert(onConflict = OnConflictStrategy.REPLACE)
+  suspend fun insertPlayLog(entry: PlayLogEntity): Long
+
+  @Query("UPDATE play_logs SET listenedDurationMs = :listenedDurationMs WHERE id = :playLogId")
+  suspend fun updatePlayLogDuration(playLogId: Long, listenedDurationMs: Long)
+
+  @Query("UPDATE play_logs SET artworkUrl = :artworkUrl WHERE songId = :songId")
+  suspend fun updatePlayLogArtwork(songId: String, artworkUrl: String)
+
+  @Query("DELETE FROM play_logs WHERE songId = :songId")
+  suspend fun deletePlayLogsBySongId(songId: String)
+
+  @Query("DELETE FROM play_logs")
+  suspend fun clearPlayLogs()
+
+  @Query("SELECT * FROM discover_weekly ORDER BY position ASC")
+  fun observeDiscoverWeekly(): Flow<List<DiscoverWeeklyEntity>>
+
+  @Query("DELETE FROM discover_weekly")
+  suspend fun clearDiscoverWeekly()
+
+  @Insert(onConflict = OnConflictStrategy.REPLACE)
+  suspend fun insertDiscoverWeekly(entries: List<DiscoverWeeklyEntity>)
+
+  @Transaction
+  suspend fun replaceDiscoverWeekly(entries: List<DiscoverWeeklyEntity>) {
+    clearDiscoverWeekly()
+    if (entries.isNotEmpty()) {
+      insertDiscoverWeekly(entries)
+    }
+  }
 }
 
 val AURIX_MIGRATION_1_2 = object : Migration(1, 2) {
@@ -248,6 +321,51 @@ val AURIX_MIGRATION_4_5 = object : Migration(4, 5) {
   }
 }
 
+val AURIX_MIGRATION_5_6 = object : Migration(5, 6) {
+  override fun migrate(db: SupportSQLiteDatabase) {
+    db.execSQL(
+      """
+      CREATE TABLE IF NOT EXISTS `play_logs` (
+        `id` INTEGER PRIMARY KEY AUTOINCREMENT NOT NULL,
+        `songId` TEXT NOT NULL,
+        `title` TEXT NOT NULL,
+        `artist` TEXT NOT NULL,
+        `artworkUrl` TEXT NOT NULL,
+        `durationSeconds` INTEGER NOT NULL,
+        `streamUrl` TEXT NOT NULL,
+        `source` TEXT NOT NULL,
+        `genre` TEXT NOT NULL,
+        `bpm` INTEGER NOT NULL,
+        `mood` TEXT NOT NULL,
+        `playedAt` INTEGER NOT NULL,
+        `listenedDurationMs` INTEGER NOT NULL
+      )
+      """.trimIndent()
+    )
+    db.execSQL(
+      """
+      CREATE TABLE IF NOT EXISTS `discover_weekly` (
+        `weekKey` TEXT NOT NULL,
+        `position` INTEGER NOT NULL,
+        `songId` TEXT NOT NULL,
+        `title` TEXT NOT NULL,
+        `artist` TEXT NOT NULL,
+        `artworkUrl` TEXT NOT NULL,
+        `durationSeconds` INTEGER NOT NULL,
+        `streamUrl` TEXT NOT NULL,
+        `source` TEXT NOT NULL,
+        `genre` TEXT NOT NULL,
+        `bpm` INTEGER NOT NULL,
+        `mood` TEXT NOT NULL,
+        `isDiscovery` INTEGER NOT NULL,
+        `generatedAt` INTEGER NOT NULL,
+        PRIMARY KEY(`weekKey`, `position`)
+      )
+      """.trimIndent()
+    )
+  }
+}
+
 @Database(
   entities = [
     FavoriteSongEntity::class,
@@ -255,9 +373,11 @@ val AURIX_MIGRATION_4_5 = object : Migration(4, 5) {
     LocalSongEntity::class,
     LyricOffsetEntity::class,
     LyricsCacheEntity::class,
-    BadLyricsEntity::class
+    BadLyricsEntity::class,
+    PlayLogEntity::class,
+    DiscoverWeeklyEntity::class
   ],
-  version = 5,
+  version = 6,
   exportSchema = false
 )
 abstract class AurixDatabase : RoomDatabase() {

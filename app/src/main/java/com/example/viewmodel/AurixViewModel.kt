@@ -6,6 +6,7 @@ import android.content.Context
 import android.content.Intent
 import android.media.MediaMetadataRetriever
 import android.net.Uri
+import android.os.SystemClock
 import android.provider.OpenableColumns
 import android.widget.Toast
 import androidx.core.content.ContextCompat
@@ -31,6 +32,7 @@ import com.example.playback.CrossfadeSettings
 import com.example.playback.EqPreset
 import com.example.playback.EqualizerUiState
 import com.example.playback.PlaybackService
+import com.example.recommendation.*
 import com.example.ui.screens.UpdateLogoState
 import com.google.common.util.concurrent.ListenableFuture
 import kotlinx.coroutines.CancellationException
@@ -68,9 +70,17 @@ class AurixViewModel(application: Application) : AndroidViewModel(application) {
     AurixDatabase::class.java,
     "aurix_db"
   )
-    .addMigrations(AURIX_MIGRATION_1_2, AURIX_MIGRATION_2_3, AURIX_MIGRATION_3_4, AURIX_MIGRATION_4_5)
+    .addMigrations(
+      AURIX_MIGRATION_1_2,
+      AURIX_MIGRATION_2_3,
+      AURIX_MIGRATION_3_4,
+      AURIX_MIGRATION_4_5,
+      AURIX_MIGRATION_5_6
+    )
     .build()
   private val dao = database.aurixDao()
+  private val analyticsRepository = ListeningAnalyticsRepository(dao)
+  private val playSessionTracker = PlaySessionTracker()
 
   private var controllerFuture: ListenableFuture<MediaController>? = null
   private var mediaController: MediaController? = null
@@ -204,7 +214,11 @@ class AurixViewModel(application: Application) : AndroidViewModel(application) {
   }
 
   private val rawFavorites: StateFlow<List<Song>> = dao.getFavorites().map { list ->
-    list.map { Song(it.id, it.title, it.artist, it.artworkUrl, it.durationSeconds, it.streamUrl, it.source, true) }
+    list.map {
+      TrackMetadataClassifier.enrich(
+        Song(it.id, it.title, it.artist, it.artworkUrl, it.durationSeconds, it.streamUrl, it.source, true)
+      )
+    }
   }.stateIn(viewModelScope, SharingStarted.Lazily, emptyList())
 
   private val favoriteIds: StateFlow<Set<String>> = rawFavorites.map { list ->
@@ -264,29 +278,102 @@ class AurixViewModel(application: Application) : AndroidViewModel(application) {
     blockedArtists
   ) { list, favs, hidden, blocked ->
     list.map {
-      Song(
-        id = it.id,
-        title = it.title,
-        artist = it.artist,
-        artworkUrl = it.artworkUrl.ifBlank { APP_ICON_ARTWORK },
-        durationSeconds = it.durationSeconds,
-        streamUrl = it.streamUrl,
-        source = it.source,
-        isFavorite = it.id in favs
+      TrackMetadataClassifier.enrich(
+        Song(
+          id = it.id,
+          title = it.title,
+          artist = it.artist,
+          artworkUrl = it.artworkUrl.ifBlank { APP_ICON_ARTWORK },
+          durationSeconds = it.durationSeconds,
+          streamUrl = it.streamUrl,
+          source = it.source,
+          isFavorite = it.id in favs
+        )
       )
     }.filter { isTrackVisible(it, hidden, blocked) }
   }.stateIn(viewModelScope, SharingStarted.Lazily, emptyList())
 
-  // Deduplicated by songId so playing a track 2-4 times updates its position at the front without spamming
-  val recentlyPlayed: StateFlow<List<Song>> = combine(
-    dao.getPlayHistory(),
+  // Qualified play logs (only plays >= 30 seconds of active playback) filtered by visibility
+  val qualifiedPlayLogs: StateFlow<List<PlayLogRecord>> = combine(
+    analyticsRepository.observeQualifiedPlayLogs(),
     favoriteIds,
     hiddenSongIds,
     blockedArtists
-  ) { list, favs, hidden, blocked ->
-    list.distinctBy { it.songId }.map {
-      Song(it.songId, it.title, it.artist, it.artworkUrl, it.durationSeconds, it.streamUrl, it.source, it.songId in favs)
-    }.filter { isTrackVisible(it, hidden, blocked) }
+  ) { logs, favs, hidden, blocked ->
+    logs
+      .filter { isTrackVisible(it.song, hidden, blocked) }
+      .map { record ->
+        record.copy(song = record.song.copy(isFavorite = record.song.id in favs))
+      }
+  }.stateIn(viewModelScope, SharingStarted.Eagerly, emptyList())
+
+  // Last 20 unique songs, newest first, sourced strictly from qualified 30s+ play logs
+  val recentlyPlayed: StateFlow<List<Song>> = qualifiedPlayLogs.map { logs ->
+    RecommendationEngine.recentlyPlayed(logs, limit = 20)
+  }.stateIn(viewModelScope, SharingStarted.Lazily, emptyList())
+
+  private val rawDiscoverWeekly: StateFlow<DiscoverWeeklyPlaylist?> =
+    analyticsRepository.observeDiscoverWeekly()
+      .stateIn(viewModelScope, SharingStarted.Eagerly, null)
+
+  val discoverWeekly: StateFlow<DiscoverWeeklyPlaylist?> = combine(
+    rawDiscoverWeekly,
+    favoriteIds,
+    hiddenSongIds,
+    blockedArtists
+  ) { playlist, favs, hidden, blocked ->
+    playlist?.let { dw ->
+      val visible = dw.tracks
+        .filter { isTrackVisible(it, hidden, blocked) }
+        .map { it.copy(isFavorite = it.id in favs) }
+      if (visible.isEmpty()) null else dw.copy(tracks = visible)
+    }
+  }.stateIn(viewModelScope, SharingStarted.Lazily, null)
+
+  private val catalogTracks: StateFlow<List<Song>> = combine(
+    featuredTracks,
+    localSongs,
+    favorites,
+    searchResults
+  ) { featured, local, favs, search ->
+    (featured + local + favs + search).distinctBy { it.id }
+  }.stateIn(viewModelScope, SharingStarted.Lazily, emptyList())
+
+  val smartRecommendations: StateFlow<List<RecommendedTrack>> = combine(
+    qualifiedPlayLogs,
+    catalogTracks
+  ) { logs, catalog ->
+    RecommendationEngine.smartRecommendations(logs, catalog, limit = 12)
+  }.stateIn(viewModelScope, SharingStarted.Lazily, emptyList())
+
+  private val _mostPlayedFilter = MutableStateFlow(MostPlayedFilter.WEEK)
+  val mostPlayedFilter: StateFlow<MostPlayedFilter> = _mostPlayedFilter
+
+  val mostPlayed: StateFlow<List<RankedTrack>> = combine(
+    qualifiedPlayLogs,
+    _mostPlayedFilter
+  ) { logs, filter ->
+    RecommendationEngine.mostPlayed(logs, filter, limit = 25)
+  }.stateIn(viewModelScope, SharingStarted.Lazily, emptyList())
+
+  val moodPlaylists: StateFlow<List<MoodPlaylist>> = catalogTracks.map { catalog ->
+    RecommendationEngine.buildMoodPlaylists(catalog)
+  }.stateIn(viewModelScope, SharingStarted.Lazily, emptyList())
+
+  val musicDna: StateFlow<MusicDnaProfile> = qualifiedPlayLogs.map { logs ->
+    RecommendationEngine.buildMusicDna(logs)
+  }.stateIn(
+    viewModelScope,
+    SharingStarted.Lazily,
+    RecommendationEngine.buildMusicDna(emptyList())
+  )
+
+  val trendingTracks: StateFlow<List<RankedTrack>> = qualifiedPlayLogs.map { logs ->
+    RecommendationEngine.trendingTracks(logs, limit = 15)
+  }.stateIn(viewModelScope, SharingStarted.Lazily, emptyList())
+
+  val risingArtists: StateFlow<List<RisingArtist>> = qualifiedPlayLogs.map { logs ->
+    RecommendationEngine.risingArtists(logs, limit = 10)
   }.stateIn(viewModelScope, SharingStarted.Lazily, emptyList())
 
   val albumTracks: StateFlow<List<Song>> = combine(
@@ -396,6 +483,9 @@ class AurixViewModel(application: Application) : AndroidViewModel(application) {
     override fun onIsPlayingChanged(isPlayingVal: Boolean) {
       _isPlaying.value = isPlayingVal
       mediaController?.let { _currentPosition.value = it.currentPosition.coerceAtLeast(0L) }
+      if (!isPlayingVal) {
+        flushActivePlaySessionDuration()
+      }
     }
 
     override fun onPositionDiscontinuity(
@@ -469,11 +559,28 @@ class AurixViewModel(application: Application) : AndroidViewModel(application) {
       }
     }
     observeSearchRequests()
+    observeDiscoverWeeklyUpdates()
     connectPlaybackController(application)
     loadDailyRecommendations(DailyFeedCategory.DAILY_CHARTS)
     startPositionTicker()
     GitHubUpdater.cleanupObsoleteApks(application, _installedAppInfo.value.versionCode)
     checkForUpdates(application, silent = true)
+  }
+
+  private fun observeDiscoverWeeklyUpdates() {
+    viewModelScope.launch {
+      combine(qualifiedPlayLogs, catalogTracks) { logs, catalog -> logs to catalog }
+        .collectLatest { (logs, catalog) ->
+          if (logs.isNotEmpty() && catalog.isNotEmpty()) {
+            analyticsRepository.ensureDiscoverWeekly(
+              playLogs = logs,
+              catalog = catalog,
+              existingSnapshot = rawDiscoverWeekly.value,
+              forceRefresh = false
+            )
+          }
+        }
+    }
   }
 
   private fun connectPlaybackController(application: Application) {
@@ -502,13 +609,24 @@ class AurixViewModel(application: Application) : AndroidViewModel(application) {
 
   private fun startPositionTicker() {
     viewModelScope.launch {
+      var lastElapsedMs = SystemClock.elapsedRealtime()
       while (isActive) {
+        val nowElapsedMs = SystemClock.elapsedRealtime()
+        val deltaMs = (nowElapsedMs - lastElapsedMs).coerceIn(0L, 1_000L)
+        lastElapsedMs = nowElapsedMs
+
         val controller = mediaController
         if (controller != null && (controller.isPlaying || controller.playbackState == Player.STATE_READY)) {
           _currentPosition.value = controller.currentPosition.coerceAtLeast(0L)
           val playerDur = controller.duration
           if (playerDur > 0L) {
             _durationMs.value = playerDur
+          }
+          if (controller.isPlaying) {
+            val activeId = controller.currentMediaItem?.mediaId ?: _rawCurrentSong.value?.id
+            if (activeId != null) {
+              handleActivePlayTick(activeId, deltaMs)
+            }
           }
         }
         // 50ms cadence keeps synced lyrics tightly locked to ExoPlayer's audio clock
@@ -517,27 +635,56 @@ class AurixViewModel(application: Application) : AndroidViewModel(application) {
     }
   }
 
+  private fun handleActivePlayTick(activeSongId: String, deltaMs: Long) {
+    when (val action = playSessionTracker.onActivePlaybackDelta(activeSongId, deltaMs)) {
+      is PlaySessionAction.LogQualifiedPlay -> {
+        viewModelScope.launch {
+          val rowId = analyticsRepository.logQualifiedPlay(
+            song = action.song,
+            playedAtMs = action.startedAtMs,
+            listenedDurationMs = action.listenedDurationMs
+          )
+          val extraDuration = playSessionTracker.attachPersistedRowId(
+            songId = action.song.id,
+            startedAt = action.startedAtMs,
+            rowId = rowId
+          )
+          if (extraDuration != null) {
+            analyticsRepository.updatePlayLogDuration(rowId, extraDuration)
+          }
+        }
+      }
+      is PlaySessionAction.UpdateListenedDuration -> {
+        viewModelScope.launch {
+          analyticsRepository.updatePlayLogDuration(action.playLogId, action.listenedDurationMs)
+        }
+      }
+      null -> Unit
+    }
+  }
+
+  private fun flushActivePlaySessionDuration() {
+    val action = playSessionTracker.flushPendingDuration() ?: return
+    viewModelScope.launch {
+      analyticsRepository.updatePlayLogDuration(action.playLogId, action.listenedDurationMs)
+    }
+  }
+
   private fun onTrackActivated(song: Song) {
-    _rawCurrentSong.value = song
+    val enriched = TrackMetadataClassifier.enrich(song)
+    _rawCurrentSong.value = enriched
     _currentPosition.value = 0L
-    _durationMs.value = (song.durationSeconds * 1000L).coerceAtLeast(1000L)
+    _durationMs.value = (enriched.durationSeconds * 1000L).coerceAtLeast(1000L)
     _lyricOffsetMs.value = 0L
 
+    val flushPrevious = playSessionTracker.startNewSession(enriched)
     viewModelScope.launch {
-      _lyricOffsetMs.value = dao.getLyricOffset(song.id) ?: 0L
-      dao.recordPlay(
-        PlayHistoryEntity(
-          songId = song.id,
-          title = song.title,
-          artist = song.artist,
-          artworkUrl = song.artworkUrl,
-          durationSeconds = song.durationSeconds,
-          streamUrl = song.streamUrl,
-          source = song.source
-        )
-      )
+      if (flushPrevious != null) {
+        analyticsRepository.updatePlayLogDuration(flushPrevious.playLogId, flushPrevious.listenedDurationMs)
+      }
+      _lyricOffsetMs.value = dao.getLyricOffset(enriched.id) ?: 0L
     }
-    fetchLyrics(song)
+    fetchLyrics(enriched)
   }
 
   private fun buildMediaItem(song: Song): MediaItem {
@@ -837,16 +984,18 @@ class AurixViewModel(application: Application) : AndroidViewModel(application) {
         )
         dao.insertLocalSong(entity)
 
-        val savedSong = Song(
-          id = entity.id,
-          title = entity.title,
-          artist = entity.artist,
-          artworkUrl = entity.artworkUrl,
-          durationSeconds = entity.durationSeconds,
-          streamUrl = entity.streamUrl,
-          source = entity.source,
-          isFavorite = entity.id in favoriteIds.value,
-          fullDurationSeconds = entity.durationSeconds
+        val savedSong = TrackMetadataClassifier.enrich(
+          Song(
+            id = entity.id,
+            title = entity.title,
+            artist = entity.artist,
+            artworkUrl = entity.artworkUrl,
+            durationSeconds = entity.durationSeconds,
+            streamUrl = entity.streamUrl,
+            source = entity.source,
+            isFavorite = entity.id in favoriteIds.value,
+            fullDurationSeconds = entity.durationSeconds
+          )
         )
         _youtubeDownloadState.value = YoutubeDownloadState.Saved(savedSong)
         Toast.makeText(context, "Saved full song (${YoutubeExtractor.formatDurationShort(finalDuration)}): ${savedSong.title}", Toast.LENGTH_LONG).show()
@@ -1123,15 +1272,18 @@ class AurixViewModel(application: Application) : AndroidViewModel(application) {
           ?.replace("60x60bb", "600x600bb")
           ?: ""
         val fullDurSec = (track.trackTimeMillis ?: 0L) / 1000L
-        Song(
-          id = "itunes_${track.trackId}",
-          title = track.trackName ?: "Untitled",
-          artist = track.artistName ?: "Unknown Artist",
-          artworkUrl = art,
-          durationSeconds = 30L,
-          streamUrl = track.previewUrl.orEmpty(),
-          source = sourceTag,
-          fullDurationSeconds = if (fullDurSec > 0L) fullDurSec else 30L
+        TrackMetadataClassifier.enrich(
+          Song(
+            id = "itunes_${track.trackId}",
+            title = track.trackName ?: "Untitled",
+            artist = track.artistName ?: "Unknown Artist",
+            artworkUrl = art,
+            durationSeconds = 30L,
+            streamUrl = track.previewUrl.orEmpty(),
+            source = sourceTag,
+            fullDurationSeconds = if (fullDurSec > 0L) fullDurSec else 30L
+          ),
+          genreHint = track.primaryGenreName
         )
       }
   }
@@ -1149,15 +1301,17 @@ class AurixViewModel(application: Application) : AndroidViewModel(application) {
           ?: track.album?.coverBig
           ?: track.album?.coverMedium
           ?: ""
-        Song(
-          id = "deezer_${track.id}",
-          title = track.title ?: "Untitled",
-          artist = track.artist?.name ?: "Unknown Artist",
-          artworkUrl = art,
-          durationSeconds = 30L,
-          streamUrl = track.preview.orEmpty(),
-          source = sourceTag,
-          fullDurationSeconds = if (track.duration > 0L) track.duration else 30L
+        TrackMetadataClassifier.enrich(
+          Song(
+            id = "deezer_${track.id}",
+            title = track.title ?: "Untitled",
+            artist = track.artist?.name ?: "Unknown Artist",
+            artworkUrl = art,
+            durationSeconds = 30L,
+            streamUrl = track.preview.orEmpty(),
+            source = sourceTag,
+            fullDurationSeconds = if (track.duration > 0L) track.duration else 30L
+          )
         )
       }
   }
@@ -1618,6 +1772,34 @@ class AurixViewModel(application: Application) : AndroidViewModel(application) {
     pending.forEach { song -> downloadSong(context, song) }
   }
 
+  fun setMostPlayedFilter(filter: MostPlayedFilter) {
+    _mostPlayedFilter.value = filter
+  }
+
+  fun refreshDiscoverWeekly() {
+    viewModelScope.launch {
+      analyticsRepository.ensureDiscoverWeekly(
+        playLogs = qualifiedPlayLogs.value,
+        catalog = catalogTracks.value,
+        existingSnapshot = rawDiscoverWeekly.value,
+        forceRefresh = true
+      )
+    }
+  }
+
+  fun getSimilarSongs(song: Song): List<SimilarTrack> {
+    return RecommendationEngine.similarSongs(
+      target = song,
+      catalog = catalogTracks.value,
+      limit = 6
+    )
+  }
+
+  fun playPlaylist(tracks: List<Song>, startIndex: Int = 0) {
+    val target = tracks.getOrNull(startIndex) ?: tracks.firstOrNull() ?: return
+    playSong(target, tracks)
+  }
+
   fun getLivePlaybackPositionMs(): Long {
     return mediaController?.currentPosition?.coerceAtLeast(0L) ?: _currentPosition.value
   }
@@ -1723,6 +1905,7 @@ class AurixViewModel(application: Application) : AndroidViewModel(application) {
         dao.updateLocalSongArtwork(songId, savedCoverUri)
         dao.updateFavoriteArtwork(songId, savedCoverUri)
         dao.updateHistoryArtwork(songId, savedCoverUri)
+        dao.updatePlayLogArtwork(songId, savedCoverUri)
 
         if (_rawCurrentSong.value?.id == songId) {
           _rawCurrentSong.value = _rawCurrentSong.value?.copy(artworkUrl = savedCoverUri)
@@ -1749,6 +1932,7 @@ class AurixViewModel(application: Application) : AndroidViewModel(application) {
         SongDownloader.deleteAppManagedFileIfOwned(appContext, song.artworkUrl)
         dao.deleteLocalSong(song.id)
         dao.deleteHistoryBySongId(song.id)
+        dao.deletePlayLogsBySongId(song.id)
         dao.deleteFavorite(song.id)
         dao.deleteLyricOffset(song.id)
       }
@@ -1770,6 +1954,7 @@ class AurixViewModel(application: Application) : AndroidViewModel(application) {
           val nextSong = updatedQueue[oldIdx.coerceAtMost(updatedQueue.lastIndex)]
           playSong(nextSong, updatedQueue)
         } else {
+          playSessionTracker.clearSession()
           mediaController?.stop()
           mediaController?.clearMediaItems()
           _rawCurrentSong.value = null
@@ -1798,6 +1983,7 @@ class AurixViewModel(application: Application) : AndroidViewModel(application) {
     viewModelScope.launch {
       withContext(Dispatchers.IO) {
         dao.deleteHistoryBySongId(song.id)
+        dao.deletePlayLogsBySongId(song.id)
       }
       Toast.makeText(appContext, "Removed \"${song.title}\" from Recent", Toast.LENGTH_SHORT).show()
     }
@@ -1808,6 +1994,8 @@ class AurixViewModel(application: Application) : AndroidViewModel(application) {
     viewModelScope.launch {
       withContext(Dispatchers.IO) {
         dao.clearPlayHistory()
+        dao.clearPlayLogs()
+        dao.clearDiscoverWeekly()
       }
       Toast.makeText(appContext, "Cleared recent play history", Toast.LENGTH_SHORT).show()
     }
@@ -2183,6 +2371,12 @@ class AurixViewModel(application: Application) : AndroidViewModel(application) {
   fun setGithubRepo(repo: String) { viewModelScope.launch { prefsManager.setGithubRepo(repo) } }
 
   override fun onCleared() {
+    val flush = playSessionTracker.clearSession()
+    if (flush != null) {
+      kotlinx.coroutines.runBlocking(Dispatchers.IO) {
+        analyticsRepository.updatePlayLogDuration(flush.playLogId, flush.listenedDurationMs)
+      }
+    }
     super.onCleared()
     mediaController?.removeListener(playerListener)
     controllerFuture?.let { MediaController.releaseFuture(it) }

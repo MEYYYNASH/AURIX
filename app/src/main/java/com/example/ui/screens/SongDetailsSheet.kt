@@ -38,6 +38,8 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.example.R
 import com.example.model.Song
+import com.example.recommendation.SimilarTrack
+import com.example.recommendation.TrackMetadataClassifier
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -46,7 +48,9 @@ fun SongDetailsSheet(
   hasLyrics: Boolean = false,
   isPlaying: Boolean = false,
   reducedMotion: Boolean = false,
-  maxSheetHeight: Dp = 460.dp,
+  maxSheetHeight: Dp = 540.dp,
+  similarSongs: List<SimilarTrack> = emptyList(),
+  onSelectSimilarSong: (Song) -> Unit = {},
   onDismiss: () -> Unit,
   onPlay: () -> Unit,
   onFavorite: () -> Unit,
@@ -55,6 +59,7 @@ fun SongDetailsSheet(
   onBlockArtist: () -> Unit,
   onDelete: (() -> Unit)? = null
 ) {
+  val enrichedSong = remember(song) { TrackMetadataClassifier.enrich(song) }
   var confirmDelete by remember { mutableStateOf(false) }
   val (artPrimary, artSecondary) = rememberArtworkColors(song.artworkUrl, song.title)
 
@@ -271,6 +276,92 @@ fun SongDetailsSheet(
             id = if (isPlaying) R.string.details_queue_playing else R.string.details_queue_ready
           )
         )
+        HorizontalDivider(thickness = 1.dp, color = dividerColor)
+        DetailInfoRow(
+          label = stringResource(id = R.string.details_genre),
+          value = enrichedSong.genre
+        )
+        HorizontalDivider(thickness = 1.dp, color = dividerColor)
+        DetailInfoRow(
+          label = stringResource(id = R.string.details_bpm),
+          value = "${enrichedSong.bpm} BPM"
+        )
+        HorizontalDivider(thickness = 1.dp, color = dividerColor)
+        DetailInfoRow(
+          label = stringResource(id = R.string.details_mood),
+          value = enrichedSong.mood
+        )
+
+        Spacer(modifier = Modifier.height(14.dp))
+        Text(
+          text = stringResource(id = R.string.details_similar_songs),
+          style = MaterialTheme.typography.titleSmall.copy(fontWeight = FontWeight.Bold),
+          color = MaterialTheme.colorScheme.onSurface
+        )
+        Spacer(modifier = Modifier.height(8.dp))
+        if (similarSongs.isEmpty()) {
+          Text(
+            text = stringResource(id = R.string.details_similar_empty),
+            style = MaterialTheme.typography.bodySmall,
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
+            modifier = Modifier.padding(bottom = 8.dp)
+          )
+        } else {
+          Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
+            similarSongs.forEach { item ->
+              Row(
+                modifier = Modifier
+                  .fillMaxWidth()
+                  .clip(RoundedCornerShape(14.dp))
+                  .background(
+                    MaterialTheme.colorScheme.onSurface.copy(alpha = if (isDark) 0.06f else 0.04f)
+                  )
+                  .clickable {
+                    onDismiss()
+                    onSelectSimilarSong(item.song)
+                  }
+                  .padding(horizontal = 10.dp, vertical = 8.dp)
+                  .testTag("similar_song_row_${item.song.id}"),
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.spacedBy(10.dp)
+              ) {
+                SongArtwork(
+                  song = item.song,
+                  modifier = Modifier.size(40.dp),
+                  cornerRadius = 10.dp,
+                  iconSize = 18.dp
+                )
+                Column(modifier = Modifier.weight(1f)) {
+                  Text(
+                    text = item.song.title,
+                    style = MaterialTheme.typography.bodySmall.copy(fontWeight = FontWeight.Bold),
+                    color = MaterialTheme.colorScheme.onSurface,
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis
+                  )
+                  Text(
+                    text = "${item.song.artist} · ${item.reason}",
+                    style = MaterialTheme.typography.labelSmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis
+                  )
+                }
+                Surface(
+                  shape = CircleShape,
+                  color = MaterialTheme.colorScheme.primary.copy(alpha = 0.16f)
+                ) {
+                  Text(
+                    text = "${item.similarityScore}%",
+                    style = MaterialTheme.typography.labelSmall.copy(fontWeight = FontWeight.Bold),
+                    color = MaterialTheme.colorScheme.primary,
+                    modifier = Modifier.padding(horizontal = 8.dp, vertical = 3.dp)
+                  )
+                }
+              }
+            }
+          }
+        }
 
         if (onDelete != null) {
           Spacer(modifier = Modifier.height(10.dp))

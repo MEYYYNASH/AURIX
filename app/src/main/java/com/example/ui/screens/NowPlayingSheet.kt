@@ -51,6 +51,7 @@ import com.example.model.LyricsResult
 import com.example.model.Song
 import com.example.playback.EqPreset
 import com.example.playback.EqualizerUiState
+import com.example.recommendation.SimilarTrack
 import com.example.ui.theme.HeartRed
 
 @OptIn(ExperimentalMaterial3Api::class)
@@ -94,7 +95,9 @@ fun NowPlayingSheet(
   onHideSong: () -> Unit = {},
   onBlockArtist: () -> Unit = {},
   onCheckLyrics: ((Song) -> Unit)? = null,
-  onDeleteSong: (() -> Unit)? = null
+  onDeleteSong: (() -> Unit)? = null,
+  similarSongsProvider: (Song) -> List<SimilarTrack> = { emptyList() },
+  onPlaySimilarSong: (Song) -> Unit = {}
 ) {
   BackHandler { onClose() }
   LaunchedEffect(song.id) {
@@ -604,6 +607,11 @@ fun NowPlayingSheet(
         isPlaying = isPlaying,
         reducedMotion = reducedMotion,
         maxSheetHeight = maxDetailsSheetHeight,
+        similarSongs = remember(song) { similarSongsProvider(song) },
+        onSelectSimilarSong = { similar ->
+          showDetails = false
+          onPlaySimilarSong(similar)
+        },
         onDismiss = { showDetails = false },
         onPlay = {
           showDetails = false

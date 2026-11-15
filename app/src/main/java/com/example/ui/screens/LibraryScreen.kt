@@ -54,6 +54,7 @@ fun LibraryScreen(
   onDeleteLocalSong: (Song) -> Unit = {},
   onRemoveRecentSong: (Song) -> Unit = {},
   onClearRecentHistory: () -> Unit = {},
+  onOpenInsights: () -> Unit = {},
   onSongClick: (Song) -> Unit,
   onFavoriteClick: (Song) -> Unit
 ) {
@@ -114,16 +115,26 @@ fun LibraryScreen(
           }
         }
         selectedTab == 2 && recentlyPlayed.isNotEmpty() -> {
-          OutlinedButton(
-            onClick = onClearRecentHistory,
-            shape = CircleShape,
-            border = BorderStroke(1.dp, MaterialTheme.colorScheme.error.copy(alpha = 0.45f)),
-            colors = ButtonDefaults.outlinedButtonColors(contentColor = MaterialTheme.colorScheme.error),
-            modifier = Modifier.testTag("library_clear_recent_button")
-          ) {
-            Icon(Icons.Rounded.DeleteSweep, contentDescription = null, modifier = Modifier.size(18.dp))
-            Spacer(modifier = Modifier.width(4.dp))
-            Text(stringResource(id = R.string.library_clear), fontWeight = FontWeight.SemiBold)
+          Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+            OutlinedButton(
+              onClick = onOpenInsights,
+              shape = CircleShape,
+              contentPadding = PaddingValues(horizontal = 12.dp, vertical = 6.dp),
+              modifier = Modifier.testTag("library_open_insights_button")
+            ) {
+              Text(stringResource(id = R.string.insights_pill_title), fontWeight = FontWeight.SemiBold)
+            }
+            OutlinedButton(
+              onClick = onClearRecentHistory,
+              shape = CircleShape,
+              border = BorderStroke(1.dp, MaterialTheme.colorScheme.error.copy(alpha = 0.45f)),
+              colors = ButtonDefaults.outlinedButtonColors(contentColor = MaterialTheme.colorScheme.error),
+              modifier = Modifier.testTag("library_clear_recent_button")
+            ) {
+              Icon(Icons.Rounded.DeleteSweep, contentDescription = null, modifier = Modifier.size(18.dp))
+              Spacer(modifier = Modifier.width(4.dp))
+              Text(stringResource(id = R.string.library_clear), fontWeight = FontWeight.SemiBold)
+            }
           }
         }
       }

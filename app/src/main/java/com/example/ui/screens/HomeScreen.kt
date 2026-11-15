@@ -45,6 +45,7 @@ import androidx.compose.ui.unit.sp
 import coil.compose.AsyncImage
 import com.example.R
 import com.example.model.Song
+import com.example.recommendation.*
 import com.example.ui.theme.HeartRed
 import com.example.viewmodel.DailyFeedCategory
 
@@ -72,6 +73,13 @@ fun HomeScreen(
   onOpenSearch: () -> Unit,
   onOpenLibraryTab: (Int) -> Unit,
   onOpenAlbum: () -> Unit = {},
+  smartRecommendations: List<RecommendedTrack> = emptyList(),
+  discoverWeekly: DiscoverWeeklyPlaylist? = null,
+  moodPlaylists: List<MoodPlaylist> = emptyList(),
+  musicDna: MusicDnaProfile? = null,
+  onOpenInsights: () -> Unit = {},
+  onOpenDiscoverWeekly: () -> Unit = {},
+  onOpenMoodPlaylist: (MoodCategory) -> Unit = {},
   onSongClick: (Song, List<Song>) -> Unit,
   onFavoriteClick: (Song) -> Unit
 ) {
@@ -216,15 +224,30 @@ fun HomeScreen(
           )
         }
         Spacer(modifier = Modifier.height(10.dp))
-        HomeLibraryPill(
-          title = stringResource(id = R.string.album_placeholder_title),
-          countLabel = stringResource(id = R.string.album_nav_label),
-          icon = Icons.Rounded.Album,
-          iconTint = Color(0xFFC4B5FF),
-          darkTheme = darkTheme,
-          modifier = Modifier.fillMaxWidth().testTag("home_album_tile"),
-          onClick = onOpenAlbum
-        )
+        Row(
+          modifier = Modifier.fillMaxWidth(),
+          horizontalArrangement = Arrangement.spacedBy(10.dp)
+        ) {
+          HomeLibraryPill(
+            title = stringResource(id = R.string.album_placeholder_title),
+            countLabel = stringResource(id = R.string.album_nav_label),
+            icon = Icons.Rounded.Album,
+            iconTint = Color(0xFFC4B5FF),
+            darkTheme = darkTheme,
+            modifier = Modifier.weight(1f).testTag("home_album_tile"),
+            onClick = onOpenAlbum
+          )
+          HomeLibraryPill(
+            title = stringResource(id = R.string.insights_pill_title),
+            countLabel = musicDna?.takeIf { it.hasEnoughHistory }?.let { "${it.totalQualifiedPlays}" }
+              ?: stringResource(id = R.string.insights_pill_sub),
+            icon = Icons.Rounded.GraphicEq,
+            iconTint = AurixTealAccent,
+            darkTheme = darkTheme,
+            modifier = Modifier.weight(1f).testTag("home_insights_tile"),
+            onClick = onOpenInsights
+          )
+        }
       }
 
       // Recently Played Shelf (Deduplicated & Live Playing Ring)
@@ -330,6 +353,196 @@ fun HomeScreen(
                       color = MaterialTheme.colorScheme.onSurfaceVariant,
                       maxLines = 1,
                       overflow = TextOverflow.Ellipsis
+                    )
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+
+      // Discover Weekly + Mood Playlists Section
+      item {
+        Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
+          GlassCard(
+            darkTheme = darkTheme,
+            cornerRadius = 22.dp,
+            modifier = Modifier
+              .fillMaxWidth()
+              .clickable { onOpenDiscoverWeekly() }
+              .testTag("home_discover_weekly_card")
+          ) {
+            Row(
+              modifier = Modifier
+                .fillMaxWidth()
+                .padding(14.dp),
+              verticalAlignment = Alignment.CenterVertically,
+              horizontalArrangement = Arrangement.spacedBy(12.dp)
+            ) {
+              Box(
+                modifier = Modifier
+                  .size(48.dp)
+                  .clip(RoundedCornerShape(14.dp))
+                  .background(
+                    Brush.linearGradient(
+                      listOf(AurixTealAccent.copy(alpha = 0.85f), MaterialTheme.colorScheme.primary)
+                    )
+                  ),
+                contentAlignment = Alignment.Center
+              ) {
+                Icon(
+                  imageVector = Icons.Rounded.AutoAwesome,
+                  contentDescription = null,
+                  tint = Color(0xFF06201C),
+                  modifier = Modifier.size(24.dp)
+                )
+              }
+              Column(modifier = Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(2.dp)) {
+                Text(
+                  text = stringResource(id = R.string.home_discover_weekly_title),
+                  style = MaterialTheme.typography.titleSmall.copy(fontWeight = FontWeight.Bold),
+                  color = MaterialTheme.colorScheme.onSurface
+                )
+                Text(
+                  text = if (discoverWeekly != null && discoverWeekly.tracks.isNotEmpty()) {
+                    stringResource(
+                      id = R.string.home_discover_weekly_ready,
+                      discoverWeekly.tracks.size,
+                      discoverWeekly.matchCount,
+                      discoverWeekly.discoveryCount
+                    )
+                  } else {
+                    stringResource(id = R.string.home_discover_weekly_empty)
+                  },
+                  style = MaterialTheme.typography.bodySmall,
+                  color = MaterialTheme.colorScheme.onSurfaceVariant,
+                  maxLines = 2,
+                  overflow = TextOverflow.Ellipsis
+                )
+              }
+              Icon(
+                imageVector = Icons.Rounded.ChevronRight,
+                contentDescription = null,
+                tint = MaterialTheme.colorScheme.onSurfaceVariant
+              )
+            }
+          }
+
+          Text(
+            text = stringResource(id = R.string.home_moods_title),
+            style = MaterialTheme.typography.titleMedium.copy(fontWeight = FontWeight.Bold, lineHeight = 24.sp),
+            color = MaterialTheme.colorScheme.onBackground
+          )
+          val playlistsToShow = if (moodPlaylists.isNotEmpty()) {
+            moodPlaylists
+          } else {
+            MoodCategory.entries.map { MoodPlaylist(it, emptyList()) }
+          }
+          Row(
+            modifier = Modifier
+              .fillMaxWidth()
+              .horizontalScroll(rememberScrollState()),
+            horizontalArrangement = Arrangement.spacedBy(10.dp)
+          ) {
+            playlistsToShow.forEach { playlist ->
+              val mood = playlist.mood
+              GlassCard(
+                darkTheme = darkTheme,
+                cornerRadius = 18.dp,
+                modifier = Modifier
+                  .width(142.dp)
+                  .clickable { onOpenMoodPlaylist(mood) }
+                  .testTag("home_mood_card_${mood.id}")
+              ) {
+                Column(
+                  modifier = Modifier.padding(12.dp),
+                  verticalArrangement = Arrangement.spacedBy(4.dp)
+                ) {
+                  Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.SpaceBetween,
+                    verticalAlignment = Alignment.CenterVertically
+                  ) {
+                    Text(
+                      text = mood.displayName,
+                      style = MaterialTheme.typography.titleSmall.copy(fontWeight = FontWeight.Bold),
+                      color = MaterialTheme.colorScheme.onSurface
+                    )
+                    Text(
+                      text = "${playlist.tracks.size}",
+                      style = MaterialTheme.typography.labelSmall.copy(fontWeight = FontWeight.Bold),
+                      color = AurixTealAccent
+                    )
+                  }
+                  Text(
+                    text = "${mood.bpmRange.first}–${mood.bpmRange.last} BPM",
+                    style = MaterialTheme.typography.labelSmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                  )
+                }
+              }
+            }
+          }
+        }
+      }
+
+      // Smart Recommendations Section
+      item {
+        Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
+          Text(
+            text = stringResource(id = R.string.home_smart_recs_title),
+            style = MaterialTheme.typography.titleMedium.copy(fontWeight = FontWeight.Bold, lineHeight = 24.sp),
+            color = MaterialTheme.colorScheme.onBackground
+          )
+          GlassCard(
+            darkTheme = darkTheme,
+            cornerRadius = 22.dp,
+            modifier = Modifier
+              .fillMaxWidth()
+              .testTag("home_smart_recommendations_card")
+          ) {
+            if (smartRecommendations.isEmpty()) {
+              Text(
+                text = stringResource(id = R.string.home_smart_recs_empty),
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                modifier = Modifier.padding(16.dp)
+              )
+            } else {
+              val recQueue = smartRecommendations.map { it.song }
+              Column(
+                modifier = Modifier
+                  .fillMaxWidth()
+                  .padding(horizontal = 8.dp, vertical = 6.dp)
+              ) {
+                smartRecommendations.take(5).forEachIndexed { idx, rec ->
+                  Column {
+                    SongRow(
+                      song = rec.song,
+                      isPlaying = isPlaying,
+                      isCurrent = currentSong?.id == rec.song.id,
+                      reducedMotion = reducedMotion,
+                      darkTheme = darkTheme,
+                      hasLyrics = rec.song.id in verifiedLyricsIds,
+                      showSourceBadge = false,
+                      onCheckLyrics = onCheckLyrics,
+                      onSongClick = { onSongClick(rec.song, recQueue) },
+                      onFavoriteClick = { onFavoriteClick(rec.song) }
+                    )
+                    Text(
+                      text = rec.reason,
+                      style = MaterialTheme.typography.labelSmall.copy(fontWeight = FontWeight.SemiBold),
+                      color = AurixTealAccent,
+                      maxLines = 1,
+                      overflow = TextOverflow.Ellipsis,
+                      modifier = Modifier.padding(start = 70.dp, end = 12.dp, bottom = 6.dp)
+                    )
+                  }
+                  if (idx < minOf(4, smartRecommendations.lastIndex)) {
+                    HorizontalDivider(
+                      modifier = Modifier.padding(horizontal = 14.dp),
+                      color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.06f)
                     )
                   }
                 }

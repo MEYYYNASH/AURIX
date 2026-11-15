@@ -11,7 +11,10 @@ data class Song(
   val streamUrl: String,
   val source: String = "iTunes 30s", // "iTunes 30s", "Local", or "Downloaded"
   val isFavorite: Boolean = false,
-  val fullDurationSeconds: Long = durationSeconds
+  val fullDurationSeconds: Long = durationSeconds,
+  val genre: String = "",
+  val bpm: Int = 0,
+  val mood: String = ""
 )
 
 data class LyricLine(
