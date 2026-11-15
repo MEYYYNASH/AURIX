@@ -4,17 +4,20 @@ import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.isSystemInDarkTheme
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.rounded.Block
 import androidx.compose.material.icons.rounded.DeleteOutline
 import androidx.compose.material.icons.rounded.Favorite
 import androidx.compose.material.icons.rounded.FavoriteBorder
 import androidx.compose.material.icons.rounded.PlayArrow
 import androidx.compose.material.icons.rounded.Share
+import androidx.compose.material.icons.rounded.VisibilityOff
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
@@ -23,203 +26,273 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.luminance
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.platform.testTag
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
+import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import com.example.R
 import com.example.model.Song
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun SongDetailsSheet(
   song: Song,
+  hasLyrics: Boolean = false,
+  isPlaying: Boolean = false,
+  reducedMotion: Boolean = false,
+  maxSheetHeight: Dp = 460.dp,
   onDismiss: () -> Unit,
   onPlay: () -> Unit,
   onFavorite: () -> Unit,
   onShare: () -> Unit,
+  onHideSong: () -> Unit,
+  onBlockArtist: () -> Unit,
   onDelete: (() -> Unit)? = null
 ) {
   var confirmDelete by remember { mutableStateOf(false) }
   val (artPrimary, artSecondary) = rememberArtworkColors(song.artworkUrl, song.title)
 
+  val surfaceColor = MaterialTheme.colorScheme.surface
+  val bgColor = MaterialTheme.colorScheme.background
+  val isDark = surfaceColor.luminance() < 0.5f || isSystemInDarkTheme()
+  val isAmoled = isDark && bgColor == Color.Black
+
+  val sheetFill = when {
+    isAmoled -> Color(0xFF0A0E17).copy(alpha = 0.96f)
+    isDark -> surfaceColor.copy(alpha = 0.92f)
+    else -> surfaceColor.copy(alpha = 0.96f)
+  }
+  val topBorderBrush = Brush.verticalGradient(
+    colors = if (isDark) {
+      listOf(Color.White.copy(alpha = 0.24f), Color.White.copy(alpha = 0.03f))
+    } else {
+      listOf(Color.White.copy(alpha = 0.95f), Color.Black.copy(alpha = 0.06f))
+    }
+  )
+  val dividerColor = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.10f)
+  val sheetShape = RoundedCornerShape(topStart = 28.dp, topEnd = 28.dp)
+
   ModalBottomSheet(
     onDismissRequest = onDismiss,
     sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true),
-    shape = RoundedCornerShape(topStart = 32.dp, topEnd = 32.dp),
-    containerColor = MaterialTheme.colorScheme.surface,
+    shape = sheetShape,
+    containerColor = Color.Transparent,
     contentColor = MaterialTheme.colorScheme.onSurface,
-    dragHandle = {
-      Box(
-        modifier = Modifier
-          .padding(top = 12.dp, bottom = 6.dp)
-          .width(42.dp)
-          .height(4.dp)
-          .clip(CircleShape)
-          .background(MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.35f))
-      )
-    }
+    scrimColor = Color.Black.copy(alpha = 0.52f),
+    tonalElevation = 0.dp,
+    dragHandle = null
   ) {
     Box(
       modifier = Modifier
         .fillMaxWidth()
+        .heightIn(max = maxSheetHeight)
+        .clip(sheetShape)
+        .background(sheetFill)
         .background(
           Brush.radialGradient(
             colors = listOf(
-              artPrimary.copy(alpha = 0.22f),
-              artSecondary.copy(alpha = 0.08f),
+              artPrimary.copy(alpha = if (isDark) 0.16f else 0.10f),
+              artSecondary.copy(alpha = if (isDark) 0.06f else 0.04f),
               Color.Transparent
             ),
-            center = Offset(540f, 180f),
-            radius = 720f
+            center = Offset(180f, 120f),
+            radius = 560f
           )
         )
+        .border(1.dp, topBorderBrush, sheetShape)
     ) {
       Column(
         modifier = Modifier
           .fillMaxWidth()
           .verticalScroll(rememberScrollState())
           .navigationBarsPadding()
-          .padding(horizontal = 24.dp, vertical = 14.dp),
-        horizontalAlignment = Alignment.CenterHorizontally
+          .padding(horizontal = 20.dp)
+          .padding(top = 10.dp, bottom = 16.dp)
       ) {
-        // Artwork with subtle glowing drop shadow container
-        Surface(
+        // Drag handle
+        Box(
           modifier = Modifier
-            .size(132.dp)
-            .border(
-              1.dp,
-              Color.White.copy(alpha = 0.16f),
-              RoundedCornerShape(28.dp)
-            ),
-          shape = RoundedCornerShape(28.dp),
-          shadowElevation = 18.dp,
-          color = Color.Transparent
-        ) {
-          SongArtwork(
-            song = song,
-            modifier = Modifier.fillMaxSize(),
-            cornerRadius = 28.dp,
-            iconSize = 52.dp
-          )
-        }
-
-        Spacer(modifier = Modifier.height(16.dp))
-
-        Text(
-          text = song.title,
-          style = MaterialTheme.typography.titleLarge.copy(
-            fontSize = 20.sp,
-            fontWeight = FontWeight.Bold,
-            letterSpacing = (-0.2).sp
-          ),
-          color = MaterialTheme.colorScheme.onSurface,
-          textAlign = TextAlign.Center,
-          maxLines = 2,
-          overflow = TextOverflow.Ellipsis
-        )
-        Spacer(modifier = Modifier.height(4.dp))
-        Text(
-          text = song.artist,
-          style = MaterialTheme.typography.bodyMedium.copy(fontSize = 14.sp),
-          color = MaterialTheme.colorScheme.onSurfaceVariant,
-          textAlign = TextAlign.Center,
-          maxLines = 1,
-          overflow = TextOverflow.Ellipsis
+            .align(Alignment.CenterHorizontally)
+            .padding(bottom = 14.dp)
+            .width(38.dp)
+            .height(4.dp)
+            .clip(CircleShape)
+            .background(MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.38f))
         )
 
-        Spacer(modifier = Modifier.height(22.dp))
-
-        // Action Buttons Row (Play, Like, Share card, Delete)
+        // Header: 64dp artwork on left + title (with LyricsTag) & artist on right
         Row(
-          modifier = Modifier
-            .fillMaxWidth()
-            .clip(RoundedCornerShape(22.dp))
-            .background(MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.48f))
-            .border(
-              1.dp,
-              MaterialTheme.colorScheme.onSurface.copy(alpha = 0.08f),
-              RoundedCornerShape(22.dp)
-            )
-            .padding(vertical = 12.dp, horizontal = 8.dp),
-          horizontalArrangement = Arrangement.SpaceEvenly,
-          verticalAlignment = Alignment.CenterVertically
+          modifier = Modifier.fillMaxWidth(),
+          verticalAlignment = Alignment.CenterVertically,
+          horizontalArrangement = Arrangement.spacedBy(14.dp)
         ) {
-          IconButtonAction(
-            icon = Icons.Rounded.PlayArrow,
-            label = "Play",
-            tint = MaterialTheme.colorScheme.primary,
-            onClick = onPlay
-          )
-          IconButtonAction(
-            icon = if (song.isFavorite) Icons.Rounded.Favorite else Icons.Rounded.FavoriteBorder,
-            label = if (song.isFavorite) "Liked" else "Like",
-            tint = if (song.isFavorite) MaterialTheme.colorScheme.error else MaterialTheme.colorScheme.onSurface,
-            onClick = onFavorite
-          )
-          IconButtonAction(
-            icon = Icons.Rounded.Share,
-            label = "Share card",
-            onClick = onShare,
-            testTag = "details_share_lyrics_button"
-          )
-          if (onDelete != null) {
-            IconButtonAction(
-              icon = Icons.Rounded.DeleteOutline,
-              label = "Delete",
-              tint = MaterialTheme.colorScheme.error,
-              onClick = { confirmDelete = true }
+          Box(
+            modifier = Modifier
+              .size(64.dp)
+              .clip(RoundedCornerShape(16.dp))
+              .border(
+                width = 1.dp,
+                color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.12f),
+                shape = RoundedCornerShape(16.dp)
+              )
+          ) {
+            SongArtwork(
+              song = song,
+              modifier = Modifier.fillMaxSize(),
+              cornerRadius = 16.dp,
+              iconSize = 28.dp
+            )
+          }
+
+          Column(modifier = Modifier.weight(1f)) {
+            Row(
+              modifier = Modifier.fillMaxWidth(),
+              verticalAlignment = Alignment.CenterVertically
+            ) {
+              Text(
+                text = song.title,
+                style = MaterialTheme.typography.titleMedium.copy(
+                  fontSize = 17.sp,
+                  lineHeight = 24.sp,
+                  fontWeight = FontWeight.Bold,
+                  letterSpacing = (-0.2).sp
+                ),
+                color = MaterialTheme.colorScheme.onSurface,
+                maxLines = 2,
+                overflow = TextOverflow.Ellipsis,
+                modifier = Modifier.weight(1f, fill = false)
+              )
+              LyricsTag(
+                visible = hasLyrics,
+                size = LyricsTagSize.Standard,
+                darkTheme = isDark,
+                reducedMotion = reducedMotion,
+                modifier = Modifier.padding(start = 8.dp)
+              )
+            }
+            Spacer(modifier = Modifier.height(3.dp))
+            Text(
+              text = song.artist,
+              style = MaterialTheme.typography.bodyMedium.copy(
+                fontSize = 13.5.sp,
+                lineHeight = 19.sp
+              ),
+              color = MaterialTheme.colorScheme.onSurfaceVariant,
+              maxLines = 1,
+              overflow = TextOverflow.Ellipsis
             )
           }
         }
 
         Spacer(modifier = Modifier.height(18.dp))
 
-        // Track metadata info card
-        Column(
-          modifier = Modifier
-            .fillMaxWidth()
-            .clip(RoundedCornerShape(20.dp))
-            .background(MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.30f))
-            .border(
-              1.dp,
-              MaterialTheme.colorScheme.onSurface.copy(alpha = 0.06f),
-              RoundedCornerShape(20.dp)
-            )
-            .padding(horizontal = 16.dp, vertical = 10.dp),
-          verticalArrangement = Arrangement.spacedBy(4.dp)
+        // Actions: one equal row of 5 round 48dp buttons with small labels, no outer card
+        Row(
+          modifier = Modifier.fillMaxWidth(),
+          horizontalArrangement = Arrangement.spacedBy(4.dp),
+          verticalAlignment = Alignment.Top
         ) {
-          InfoRow(label = "Duration", value = "${song.durationSeconds / 60}:${String.format("%02d", song.durationSeconds % 60)}")
-          HorizontalDivider(color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.06f))
-          InfoRow(label = "Source", value = song.source)
-          HorizontalDivider(color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.06f))
-          InfoRow(label = "Queue Status", value = "Ready")
+          SheetActionCircleButton(
+            icon = Icons.Rounded.PlayArrow,
+            label = stringResource(id = R.string.action_play),
+            isDark = isDark,
+            active = false,
+            testTag = "details_play_button",
+            modifier = Modifier.weight(1f),
+            onClick = onPlay
+          )
+          SheetActionCircleButton(
+            icon = if (song.isFavorite) Icons.Rounded.Favorite else Icons.Rounded.FavoriteBorder,
+            label = stringResource(id = if (song.isFavorite) R.string.action_liked else R.string.action_like),
+            isDark = isDark,
+            active = song.isFavorite,
+            testTag = "details_like_button",
+            modifier = Modifier.weight(1f),
+            onClick = onFavorite
+          )
+          SheetActionCircleButton(
+            icon = Icons.Rounded.Share,
+            label = stringResource(id = R.string.action_share),
+            isDark = isDark,
+            active = false,
+            testTag = "details_share_lyrics_button",
+            modifier = Modifier.weight(1f),
+            onClick = onShare
+          )
+          SheetActionCircleButton(
+            icon = Icons.Rounded.VisibilityOff,
+            label = stringResource(id = R.string.action_hide_song),
+            isDark = isDark,
+            active = false,
+            testTag = "details_hide_song_button",
+            modifier = Modifier.weight(1f),
+            onClick = {
+              onDismiss()
+              onHideSong()
+            }
+          )
+          SheetActionCircleButton(
+            icon = Icons.Rounded.Block,
+            label = stringResource(id = R.string.action_block_artist),
+            isDark = isDark,
+            active = false,
+            testTag = "details_block_artist_button",
+            modifier = Modifier.weight(1f),
+            onClick = {
+              onDismiss()
+              onBlockArtist()
+            }
+          )
         }
+
+        Spacer(modifier = Modifier.height(14.dp))
+
+        // Details: simple rows with 1dp dividers, no outer box or border
+        val displayDurSec = song.fullDurationSeconds.takeIf { it > 0L } ?: song.durationSeconds
+        DetailInfoRow(
+          label = stringResource(id = R.string.details_duration),
+          value = "${displayDurSec / 60}:${String.format("%02d", displayDurSec % 60)}"
+        )
+        HorizontalDivider(thickness = 1.dp, color = dividerColor)
+        DetailInfoRow(
+          label = stringResource(id = R.string.details_source),
+          value = song.source
+        )
+        HorizontalDivider(thickness = 1.dp, color = dividerColor)
+        DetailInfoRow(
+          label = stringResource(id = R.string.details_queue_status),
+          value = stringResource(
+            id = if (isPlaying) R.string.details_queue_playing else R.string.details_queue_ready
+          )
+        )
 
         if (onDelete != null) {
-          Spacer(modifier = Modifier.height(18.dp))
-          OutlinedButton(
+          Spacer(modifier = Modifier.height(10.dp))
+          TextButton(
             onClick = { confirmDelete = true },
-            shape = CircleShape,
-            border = BorderStroke(1.5.dp, MaterialTheme.colorScheme.error.copy(alpha = 0.45f)),
-            colors = ButtonDefaults.outlinedButtonColors(
-              contentColor = MaterialTheme.colorScheme.error,
-              containerColor = MaterialTheme.colorScheme.error.copy(alpha = 0.06f)
-            ),
+            colors = ButtonDefaults.textButtonColors(contentColor = MaterialTheme.colorScheme.error),
             modifier = Modifier
-              .fillMaxWidth()
-              .height(50.dp)
+              .align(Alignment.CenterHorizontally)
+              .minimumInteractiveComponentSize()
               .testTag("details_delete_song_button")
           ) {
-            Icon(Icons.Rounded.DeleteOutline, contentDescription = null, modifier = Modifier.size(20.dp))
-            Spacer(modifier = Modifier.width(8.dp))
-            Text("Delete from Library", style = MaterialTheme.typography.bodyMedium.copy(fontWeight = FontWeight.Bold))
+            Icon(Icons.Rounded.DeleteOutline, contentDescription = null, modifier = Modifier.size(18.dp))
+            Spacer(modifier = Modifier.width(6.dp))
+            Text(
+              text = stringResource(id = R.string.details_delete_from_library),
+              style = MaterialTheme.typography.bodySmall.copy(
+                fontWeight = FontWeight.SemiBold,
+                lineHeight = 18.sp
+              )
+            )
           }
         }
-
-        Spacer(modifier = Modifier.height(8.dp))
       }
     }
   }
@@ -237,14 +310,17 @@ fun SongDetailsSheet(
       },
       title = {
         Text(
-          text = "Delete song?",
-          style = MaterialTheme.typography.titleMedium.copy(fontWeight = FontWeight.Bold)
+          text = stringResource(id = R.string.details_delete_title),
+          style = MaterialTheme.typography.titleMedium.copy(
+            fontWeight = FontWeight.Bold,
+            lineHeight = 25.sp
+          )
         )
       },
       text = {
         Text(
-          text = "Remove \"${song.title}\" by ${song.artist} from your library?",
-          style = MaterialTheme.typography.bodyMedium
+          text = stringResource(id = R.string.details_delete_message, song.title, song.artist),
+          style = MaterialTheme.typography.bodyMedium.copy(lineHeight = 22.sp)
         )
       },
       confirmButton = {
@@ -257,12 +333,16 @@ fun SongDetailsSheet(
           colors = ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.error),
           shape = CircleShape
         ) {
-          Text("Delete", color = Color.White, fontWeight = FontWeight.Bold)
+          Text(
+            text = stringResource(id = R.string.action_delete),
+            color = Color.White,
+            fontWeight = FontWeight.Bold
+          )
         }
       },
       dismissButton = {
         TextButton(onClick = { confirmDelete = false }) {
-          Text("Cancel")
+          Text(text = stringResource(id = R.string.action_cancel))
         }
       }
     )
@@ -270,51 +350,97 @@ fun SongDetailsSheet(
 }
 
 @Composable
-fun IconButtonAction(
+private fun SheetActionCircleButton(
   icon: ImageVector,
   label: String,
-  tint: Color = MaterialTheme.colorScheme.onSurface,
-  testTag: String? = null,
+  isDark: Boolean,
+  active: Boolean,
+  testTag: String,
+  modifier: Modifier = Modifier,
   onClick: () -> Unit
 ) {
+  val accent = MaterialTheme.colorScheme.primary
+  val circleFill = when {
+    active -> accent.copy(alpha = if (isDark) 0.24f else 0.15f)
+    isDark -> Color.White.copy(alpha = 0.08f)
+    else -> MaterialTheme.colorScheme.onSurface.copy(alpha = 0.06f)
+  }
+  val circleBorder = when {
+    active -> accent.copy(alpha = 0.72f)
+    isDark -> Color.White.copy(alpha = 0.14f)
+    else -> MaterialTheme.colorScheme.onSurface.copy(alpha = 0.10f)
+  }
+  val iconTint = if (active) accent else MaterialTheme.colorScheme.onSurface
+  val labelTint = if (active) accent else MaterialTheme.colorScheme.onSurfaceVariant
+
   Column(
     horizontalAlignment = Alignment.CenterHorizontally,
-    modifier = Modifier
+    modifier = modifier
       .minimumInteractiveComponentSize()
       .clip(RoundedCornerShape(14.dp))
       .clickable { onClick() }
-      .then(if (testTag != null) Modifier.testTag(testTag) else Modifier)
-      .padding(horizontal = 10.dp, vertical = 6.dp)
+      .testTag(testTag)
+      .padding(horizontal = 2.dp, vertical = 4.dp)
   ) {
     Surface(
       shape = CircleShape,
-      color = MaterialTheme.colorScheme.surface.copy(alpha = 0.72f),
-      border = BorderStroke(1.dp, MaterialTheme.colorScheme.onSurface.copy(alpha = 0.08f)),
-      modifier = Modifier.size(46.dp)
+      color = circleFill,
+      border = BorderStroke(1.dp, circleBorder),
+      modifier = Modifier.size(48.dp)
     ) {
       Box(contentAlignment = Alignment.Center) {
-        Icon(imageVector = icon, contentDescription = label, tint = tint, modifier = Modifier.size(22.dp))
+        Icon(
+          imageVector = icon,
+          contentDescription = label,
+          tint = iconTint,
+          modifier = Modifier.size(22.dp)
+        )
       }
     }
     Spacer(modifier = Modifier.height(6.dp))
     Text(
       text = label,
-      style = MaterialTheme.typography.labelMedium.copy(fontSize = 11.sp, fontWeight = FontWeight.SemiBold),
-      color = MaterialTheme.colorScheme.onSurfaceVariant
+      style = MaterialTheme.typography.labelSmall.copy(
+        fontSize = 11.sp,
+        lineHeight = 16.sp,
+        fontWeight = if (active) FontWeight.Bold else FontWeight.Medium
+      ),
+      color = labelTint,
+      textAlign = TextAlign.Center,
+      maxLines = 2,
+      overflow = TextOverflow.Ellipsis
     )
   }
 }
 
 @Composable
-fun InfoRow(label: String, value: String) {
+private fun DetailInfoRow(label: String, value: String) {
   Row(
     modifier = Modifier
       .fillMaxWidth()
-      .padding(vertical = 4.dp),
+      .padding(vertical = 10.dp),
     horizontalArrangement = Arrangement.SpaceBetween,
     verticalAlignment = Alignment.CenterVertically
   ) {
-    Text(text = label, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
-    Text(text = value, style = MaterialTheme.typography.bodySmall.copy(fontWeight = FontWeight.Bold), color = MaterialTheme.colorScheme.onSurface)
+    Text(
+      text = label,
+      style = MaterialTheme.typography.bodySmall.copy(
+        fontSize = 13.sp,
+        lineHeight = 19.sp
+      ),
+      color = MaterialTheme.colorScheme.onSurfaceVariant
+    )
+    Spacer(modifier = Modifier.width(12.dp))
+    Text(
+      text = value,
+      style = MaterialTheme.typography.bodySmall.copy(
+        fontSize = 13.sp,
+        lineHeight = 19.sp,
+        fontWeight = FontWeight.Bold
+      ),
+      color = MaterialTheme.colorScheme.onSurface,
+      maxLines = 1,
+      overflow = TextOverflow.Ellipsis
+    )
   }
 }

@@ -39,14 +39,18 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.testTag
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextDecoration
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import coil.compose.AsyncImage
+import com.example.R
 import com.example.model.LyricsResult
 import com.example.model.Song
+import com.example.playback.EqPreset
+import com.example.playback.EqualizerUiState
 import com.example.ui.theme.HeartRed
 
 @OptIn(ExperimentalMaterial3Api::class)
@@ -81,6 +85,14 @@ fun NowPlayingSheet(
   onResetOffset: () -> Unit = {},
   onRetryLyrics: () -> Unit = {},
   hasLyrics: Boolean = false,
+  equalizerState: EqualizerUiState = EqualizerUiState(),
+  onToggleEqualizer: (Boolean) -> Unit = {},
+  onSelectEqPreset: (EqPreset) -> Unit = {},
+  onEqBandLevelChanged: (Int, Int) -> Unit = { _, _ -> },
+  onEqBassBoostChanged: (Int) -> Unit = {},
+  onResetEq: () -> Unit = {},
+  onHideSong: () -> Unit = {},
+  onBlockArtist: () -> Unit = {},
   onCheckLyrics: ((Song) -> Unit)? = null,
   onDeleteSong: (() -> Unit)? = null
 ) {
@@ -92,6 +104,7 @@ fun NowPlayingSheet(
   var showLyrics by remember { mutableStateOf(false) }
   var showDetails by remember { mutableStateOf(false) }
   var showShareLyrics by remember { mutableStateOf(false) }
+  var showEqualizer by remember { mutableStateOf(false) }
 
   val (c1, c2) = rememberArtworkColors(song.artworkUrl, song.title)
   val bgAlpha by animateFloatAsState(
@@ -129,12 +142,13 @@ fun NowPlayingSheet(
   )
 
   val rootInteraction = remember { MutableInteractionSource() }
-  Box(
+  BoxWithConstraints(
     modifier = Modifier
       .fillMaxSize()
       .background(Color(0xFF0C0F16))
       .clickable(interactionSource = rootInteraction, indication = null) {}
   ) {
+    val maxDetailsSheetHeight = (maxHeight * 0.55f).coerceAtLeast(300.dp)
     // True Dynamic Artwork Background sampled from actual album cover colors + blurred drifting art
     if (bgAlpha > 0.01f) {
       Box(modifier = Modifier.fillMaxSize().alpha(bgAlpha)) {
@@ -506,10 +520,11 @@ fun NowPlayingSheet(
 
       Spacer(modifier = Modifier.height(10.dp))
 
-      // Sleep timer & speed toggles
+      // Sleep timer, Equalizer & speed toggles
       Row(
         modifier = Modifier.fillMaxWidth(),
-        horizontalArrangement = Arrangement.SpaceAround
+        horizontalArrangement = Arrangement.SpaceBetween,
+        verticalAlignment = Alignment.CenterVertically
       ) {
         TextButton(onClick = onCycleSleep) {
           val label = if (sleepMinutes == 0) "Sleep: Off" else "Sleep: ${sleepMinutes}m"
@@ -519,6 +534,45 @@ fun NowPlayingSheet(
             textDecoration = if (sleepMinutes > 0) TextDecoration.Underline else TextDecoration.None
           )
         }
+
+        val eqActive = equalizerState.enabled
+        val eqPresetName = presetDisplayName(EqPreset.fromId(equalizerState.presetId))
+        Surface(
+          onClick = { showEqualizer = true },
+          shape = CircleShape,
+          color = if (eqActive) c1.copy(alpha = 0.24f) else Color.White.copy(alpha = 0.12f),
+          border = androidx.compose.foundation.BorderStroke(
+            1.dp,
+            if (eqActive) c1.copy(alpha = 0.72f) else Color.White.copy(alpha = 0.20f)
+          ),
+          modifier = Modifier
+            .minimumInteractiveComponentSize()
+            .testTag("np_equalizer_button")
+        ) {
+          Row(
+            modifier = Modifier.padding(horizontal = 12.dp, vertical = 6.dp),
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.spacedBy(5.dp)
+          ) {
+            Icon(
+              imageVector = Icons.Rounded.Equalizer,
+              contentDescription = stringResource(id = R.string.eq_title),
+              tint = if (eqActive) Color.White else Color.White.copy(alpha = 0.80f),
+              modifier = Modifier.size(16.dp)
+            )
+            Text(
+              text = if (eqActive) "${stringResource(id = R.string.eq_button_short)} · $eqPresetName" else stringResource(id = R.string.eq_button_short),
+              style = MaterialTheme.typography.labelMedium.copy(
+                fontWeight = FontWeight.SemiBold,
+                lineHeight = 16.sp
+              ),
+              color = if (eqActive) Color.White else Color.White.copy(alpha = 0.80f),
+              maxLines = 1,
+              overflow = TextOverflow.Ellipsis
+            )
+          }
+        }
+
         TextButton(onClick = onCycleSpeed) {
           val speedLabel = when (playbackSpeed) {
             1.25f -> "1.25x"
@@ -534,34 +588,58 @@ fun NowPlayingSheet(
         }
       }
     }
-  }
 
-  if (showDetails) {
-    SongDetailsSheet(
-      song = song,
-      onDismiss = { showDetails = false },
-      onPlay = {
-        showDetails = false
-        if (!isPlaying) onPlayPause()
-      },
-      onFavorite = onFavorite,
-      onShare = {
-        showDetails = false
-        showShareLyrics = true
-      },
-      onDelete = onDeleteSong
-    )
-  }
+    if (showDetails) {
+      SongDetailsSheet(
+        song = song,
+        hasLyrics = hasLyrics,
+        isPlaying = isPlaying,
+        reducedMotion = reducedMotion,
+        maxSheetHeight = maxDetailsSheetHeight,
+        onDismiss = { showDetails = false },
+        onPlay = {
+          showDetails = false
+          if (!isPlaying) onPlayPause()
+        },
+        onFavorite = onFavorite,
+        onShare = {
+          showDetails = false
+          showShareLyrics = true
+        },
+        onHideSong = {
+          showDetails = false
+          onHideSong()
+        },
+        onBlockArtist = {
+          showDetails = false
+          onBlockArtist()
+        },
+        onDelete = onDeleteSong
+      )
+    }
 
-  if (showShareLyrics) {
-    ShareLyricsSheet(
-      song = song,
-      lyricsResult = lyricsResult,
-      currentPositionMs = positionProvider(),
-      lyricOffsetMs = lyricOffsetMs,
-      reducedMotion = reducedMotion,
-      onDismiss = { showShareLyrics = false }
-    )
+    if (showEqualizer) {
+      EqualizerSheet(
+        state = equalizerState,
+        onToggleEnabled = onToggleEqualizer,
+        onSelectPreset = onSelectEqPreset,
+        onBandLevelChanged = onEqBandLevelChanged,
+        onBassBoostChanged = onEqBassBoostChanged,
+        onReset = onResetEq,
+        onDismiss = { showEqualizer = false }
+      )
+    }
+
+    if (showShareLyrics) {
+      ShareLyricsSheet(
+        song = song,
+        lyricsResult = lyricsResult,
+        currentPositionMs = positionProvider(),
+        lyricOffsetMs = lyricOffsetMs,
+        reducedMotion = reducedMotion,
+        onDismiss = { showShareLyrics = false }
+      )
+    }
   }
 }
 

@@ -119,6 +119,9 @@ fun AurixApp(viewModel: AurixViewModel) {
   val dynamicBg by viewModel.dynamicBg.collectAsStateWithLifecycle()
   val reducedMotion by viewModel.reducedMotion.collectAsStateWithLifecycle()
   val verifiedLyricsIds by viewModel.verifiedLyricsIds.collectAsStateWithLifecycle()
+  val equalizerState by viewModel.equalizerState.collectAsStateWithLifecycle()
+  val hiddenSongIds by viewModel.hiddenSongIds.collectAsStateWithLifecycle()
+  val blockedArtists by viewModel.blockedArtists.collectAsStateWithLifecycle()
 
   val systemDark = isSystemInDarkTheme()
   val amoledTheme = themeMode == "amoled"
@@ -347,7 +350,16 @@ fun AurixApp(viewModel: AurixViewModel) {
               onAccentChanged = { viewModel.setAccentColor(it) },
               onLanguageChanged = { viewModel.setLanguage(it) },
               onDynamicBgChanged = { viewModel.setDynamicBg(it) },
-              onReducedMotionChanged = { viewModel.setReducedMotion(it) }
+              onReducedMotionChanged = { viewModel.setReducedMotion(it) },
+              equalizerState = equalizerState,
+              onToggleEqualizer = { viewModel.setEqualizerEnabled(it) },
+              onSelectEqPreset = { viewModel.selectEqualizerPreset(it) },
+              onEqBandLevelChanged = { idx, level -> viewModel.setEqualizerBandLevel(idx, level) },
+              onEqBassBoostChanged = { viewModel.setBassBoostStrength(it) },
+              onResetEq = { viewModel.resetEqualizer() },
+              hiddenSongsCount = hiddenSongIds.size,
+              blockedArtistsCount = blockedArtists.size,
+              onClearHiddenAndBlocked = { viewModel.clearHiddenAndBlocked() }
             )
           }
         }
@@ -456,6 +468,14 @@ fun AurixApp(viewModel: AurixViewModel) {
             onResetOffset = { viewModel.resetLyricOffset() },
             onRetryLyrics = { viewModel.retryLyrics() },
             hasLyrics = song.id in verifiedLyricsIds,
+            equalizerState = equalizerState,
+            onToggleEqualizer = { viewModel.setEqualizerEnabled(it) },
+            onSelectEqPreset = { viewModel.selectEqualizerPreset(it) },
+            onEqBandLevelChanged = { idx, level -> viewModel.setEqualizerBandLevel(idx, level) },
+            onEqBassBoostChanged = { viewModel.setBassBoostStrength(it) },
+            onResetEq = { viewModel.resetEqualizer() },
+            onHideSong = { viewModel.hideSong(song) },
+            onBlockArtist = { viewModel.blockArtist(song.artist) },
             onCheckLyrics = { viewModel.ensureLyricsVerified(it) },
             onDeleteSong = if (
               localSongs.any { it.id == song.id } ||

@@ -29,14 +29,18 @@ import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.testTag
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import com.example.R
 import com.example.data.ApkDownloadState
 import com.example.data.GitHubRelease
 import com.example.data.InstalledAppInfo
 import com.example.data.UpdateCheckStatus
+import com.example.playback.EqPreset
+import com.example.playback.EqualizerUiState
 import com.example.ui.theme.*
 
 @OptIn(ExperimentalMaterial3Api::class)
@@ -66,7 +70,16 @@ fun SettingsScreen(
   onAccentChanged: (String) -> Unit,
   onLanguageChanged: (String) -> Unit,
   onDynamicBgChanged: (Boolean) -> Unit,
-  onReducedMotionChanged: (Boolean) -> Unit
+  onReducedMotionChanged: (Boolean) -> Unit,
+  equalizerState: EqualizerUiState = EqualizerUiState(),
+  onToggleEqualizer: (Boolean) -> Unit = {},
+  onSelectEqPreset: (EqPreset) -> Unit = {},
+  onEqBandLevelChanged: (Int, Int) -> Unit = { _, _ -> },
+  onEqBassBoostChanged: (Int) -> Unit = {},
+  onResetEq: () -> Unit = {},
+  hiddenSongsCount: Int = 0,
+  blockedArtistsCount: Int = 0,
+  onClearHiddenAndBlocked: () -> Unit = {}
 ) {
   val context = LocalContext.current
   val accents = listOf(
@@ -80,6 +93,7 @@ fun SettingsScreen(
   )
 
   var showReleaseNotesSheet by remember { mutableStateOf(false) }
+  var showEqualizerSheet by remember { mutableStateOf(false) }
 
   val isDownloading = apkDownloadState is ApkDownloadState.Downloading
   val isValidatedReady = apkDownloadState is ApkDownloadState.ValidatedReady
@@ -523,6 +537,68 @@ fun SettingsScreen(
               modifier = Modifier.testTag("reduced_motion_toggle")
             )
           }
+
+          HorizontalDivider(color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.08f))
+
+          Row(
+            modifier = Modifier
+              .fillMaxWidth()
+              .clickable { showEqualizerSheet = true }
+              .padding(horizontal = 18.dp, vertical = 12.dp)
+              .testTag("settings_equalizer_row"),
+            horizontalArrangement = Arrangement.SpaceBetween,
+            verticalAlignment = Alignment.CenterVertically
+          ) {
+            Column(modifier = Modifier.weight(1f)) {
+              Text(
+                text = stringResource(id = R.string.eq_title),
+                style = MaterialTheme.typography.bodyLarge.copy(fontWeight = FontWeight.Medium, lineHeight = 22.sp),
+                color = MaterialTheme.colorScheme.onSurface
+              )
+              val presetName = presetDisplayName(EqPreset.fromId(equalizerState.presetId))
+              Text(
+                text = if (equalizerState.enabled) "${stringResource(id = R.string.eq_on)} · $presetName" else stringResource(id = R.string.eq_off),
+                style = MaterialTheme.typography.bodySmall.copy(lineHeight = 18.sp),
+                color = if (equalizerState.enabled) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurfaceVariant
+              )
+            }
+            Icon(
+              imageVector = Icons.Rounded.Equalizer,
+              contentDescription = null,
+              tint = if (equalizerState.enabled) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurfaceVariant
+            )
+          }
+
+          if (hiddenSongsCount > 0 || blockedArtistsCount > 0) {
+            HorizontalDivider(color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.08f))
+            Row(
+              modifier = Modifier
+                .fillMaxWidth()
+                .clickable { onClearHiddenAndBlocked() }
+                .padding(horizontal = 18.dp, vertical = 12.dp)
+                .testTag("settings_unhide_row"),
+              horizontalArrangement = Arrangement.SpaceBetween,
+              verticalAlignment = Alignment.CenterVertically
+            ) {
+              Column(modifier = Modifier.weight(1f)) {
+                Text(
+                  text = stringResource(id = R.string.settings_unhide_title),
+                  style = MaterialTheme.typography.bodyLarge.copy(fontWeight = FontWeight.Medium, lineHeight = 22.sp),
+                  color = MaterialTheme.colorScheme.onSurface
+                )
+                Text(
+                  text = stringResource(id = R.string.settings_unhide_subtitle, hiddenSongsCount, blockedArtistsCount),
+                  style = MaterialTheme.typography.bodySmall.copy(lineHeight = 18.sp),
+                  color = MaterialTheme.colorScheme.onSurfaceVariant
+                )
+              }
+              Icon(
+                imageVector = Icons.Rounded.Restore,
+                contentDescription = null,
+                tint = MaterialTheme.colorScheme.primary
+              )
+            }
+          }
         }
       }
     }
@@ -626,6 +702,18 @@ fun SettingsScreen(
         Spacer(modifier = Modifier.height(8.dp))
       }
     }
+  }
+
+  if (showEqualizerSheet) {
+    EqualizerSheet(
+      state = equalizerState,
+      onToggleEnabled = onToggleEqualizer,
+      onSelectPreset = onSelectEqPreset,
+      onBandLevelChanged = onEqBandLevelChanged,
+      onBassBoostChanged = onEqBassBoostChanged,
+      onReset = onResetEq,
+      onDismiss = { showEqualizerSheet = false }
+    )
   }
 }
 

@@ -28,6 +28,15 @@ class PlaybackService : MediaSessionService() {
       .setHandleAudioBecomingNoisy(true)
       .build()
 
+    player.addListener(object : Player.Listener {
+      override fun onAudioSessionIdChanged(audioSessionId: Int) {
+        AudioEqualizerController.attachAudioSession(audioSessionId)
+      }
+    })
+    if (player.audioSessionId != C.AUDIO_SESSION_ID_UNSET && player.audioSessionId > 0) {
+      AudioEqualizerController.attachAudioSession(player.audioSessionId)
+    }
+
     val launchIntent = Intent(this, MainActivity::class.java).apply {
       flags = Intent.FLAG_ACTIVITY_SINGLE_TOP or Intent.FLAG_ACTIVITY_CLEAR_TOP
     }
@@ -55,6 +64,7 @@ class PlaybackService : MediaSessionService() {
   }
 
   override fun onDestroy() {
+    AudioEqualizerController.releaseSession()
     mediaSession?.run {
       player.release()
       release()

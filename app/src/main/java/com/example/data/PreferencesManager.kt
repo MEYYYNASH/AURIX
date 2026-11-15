@@ -3,7 +3,9 @@ package com.example.data
 import android.content.Context
 import androidx.datastore.preferences.core.booleanPreferencesKey
 import androidx.datastore.preferences.core.edit
+import androidx.datastore.preferences.core.intPreferencesKey
 import androidx.datastore.preferences.core.stringPreferencesKey
+import androidx.datastore.preferences.core.stringSetPreferencesKey
 import androidx.datastore.preferences.preferencesDataStore
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.map
@@ -20,6 +22,12 @@ class PreferencesManager(private val context: Context) {
     val ONBOARDING_COMPLETED = booleanPreferencesKey("onboarding_completed")
     val GITHUB_OWNER = stringPreferencesKey("github_owner")
     val GITHUB_REPO = stringPreferencesKey("github_repo")
+    val HIDDEN_SONG_IDS = stringSetPreferencesKey("hidden_song_ids")
+    val BLOCKED_ARTISTS = stringSetPreferencesKey("blocked_artists")
+    val EQ_ENABLED = booleanPreferencesKey("eq_enabled")
+    val EQ_PRESET = stringPreferencesKey("eq_preset")
+    val EQ_BANDS = stringPreferencesKey("eq_bands")
+    val EQ_BASS_BOOST = intPreferencesKey("eq_bass_boost")
   }
 
   val themeMode: Flow<String> = context.dataStore.data.map { prefs -> prefs[THEME_MODE] ?: "system" }
@@ -30,6 +38,14 @@ class PreferencesManager(private val context: Context) {
   val onboardingCompleted: Flow<Boolean> = context.dataStore.data.map { prefs -> prefs[ONBOARDING_COMPLETED] ?: false }
   val githubOwner: Flow<String> = context.dataStore.data.map { prefs -> prefs[GITHUB_OWNER] ?: "MEYYYNASH" }
   val githubRepo: Flow<String> = context.dataStore.data.map { prefs -> prefs[GITHUB_REPO] ?: "AURIX" }
+  val hiddenSongIds: Flow<Set<String>> = context.dataStore.data.map { prefs -> prefs[HIDDEN_SONG_IDS] ?: emptySet() }
+  val blockedArtists: Flow<Set<String>> = context.dataStore.data.map { prefs -> prefs[BLOCKED_ARTISTS] ?: emptySet() }
+  val eqEnabled: Flow<Boolean> = context.dataStore.data.map { prefs -> prefs[EQ_ENABLED] ?: false }
+  val eqPreset: Flow<String> = context.dataStore.data.map { prefs -> prefs[EQ_PRESET] ?: "flat" }
+  val eqBands: Flow<List<Int>> = context.dataStore.data.map { prefs ->
+    prefs[EQ_BANDS]?.split(",")?.mapNotNull { it.trim().toIntOrNull() } ?: emptyList()
+  }
+  val eqBassBoost: Flow<Int> = context.dataStore.data.map { prefs -> prefs[EQ_BASS_BOOST] ?: 0 }
 
   suspend fun setThemeMode(mode: String) { context.dataStore.edit { it[THEME_MODE] = mode } }
   suspend fun setAccentColor(color: String) { context.dataStore.edit { it[ACCENT_COLOR] = color } }
@@ -39,4 +55,40 @@ class PreferencesManager(private val context: Context) {
   suspend fun setOnboardingCompleted(completed: Boolean) { context.dataStore.edit { it[ONBOARDING_COMPLETED] = completed } }
   suspend fun setGithubOwner(owner: String) { context.dataStore.edit { it[GITHUB_OWNER] = owner } }
   suspend fun setGithubRepo(repo: String) { context.dataStore.edit { it[GITHUB_REPO] = repo } }
+
+  suspend fun addHiddenSongId(songId: String) {
+    context.dataStore.edit { prefs ->
+      val current = prefs[HIDDEN_SONG_IDS] ?: emptySet()
+      prefs[HIDDEN_SONG_IDS] = current + songId
+    }
+  }
+
+  suspend fun addBlockedArtist(normalizedArtist: String) {
+    if (normalizedArtist.isBlank()) return
+    context.dataStore.edit { prefs ->
+      val current = prefs[BLOCKED_ARTISTS] ?: emptySet()
+      prefs[BLOCKED_ARTISTS] = current + normalizedArtist
+    }
+  }
+
+  suspend fun clearHiddenAndBlocked() {
+    context.dataStore.edit { prefs ->
+      prefs[HIDDEN_SONG_IDS] = emptySet()
+      prefs[BLOCKED_ARTISTS] = emptySet()
+    }
+  }
+
+  suspend fun saveEqualizerSettings(
+    enabled: Boolean,
+    presetId: String,
+    bandsMb: List<Int>,
+    bassBoostStrength: Int
+  ) {
+    context.dataStore.edit { prefs ->
+      prefs[EQ_ENABLED] = enabled
+      prefs[EQ_PRESET] = presetId
+      prefs[EQ_BANDS] = bandsMb.joinToString(",")
+      prefs[EQ_BASS_BOOST] = bassBoostStrength
+    }
+  }
 }

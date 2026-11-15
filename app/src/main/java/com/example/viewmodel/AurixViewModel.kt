@@ -24,6 +24,9 @@ import com.example.lyrics.LrcParser
 import com.example.lyrics.LyricsMatchOutcome
 import com.example.lyrics.LyricsMatcher
 import com.example.model.*
+import com.example.playback.AudioEqualizerController
+import com.example.playback.EqPreset
+import com.example.playback.EqualizerUiState
 import com.example.playback.PlaybackService
 import com.google.common.util.concurrent.ListenableFuture
 import kotlinx.coroutines.Dispatchers
@@ -153,23 +156,67 @@ class AurixViewModel(application: Application) : AndroidViewModel(application) {
   private val _searchError = MutableStateFlow<String?>(null)
   val searchError: StateFlow<String?> = _searchError
 
-  val favorites: StateFlow<List<Song>> = dao.getFavorites().map { list ->
+  val hiddenSongIds: StateFlow<Set<String>> = prefsManager.hiddenSongIds
+    .stateIn(viewModelScope, SharingStarted.Eagerly, emptySet())
+  val blockedArtists: StateFlow<Set<String>> = prefsManager.blockedArtists
+    .stateIn(viewModelScope, SharingStarted.Eagerly, emptySet())
+
+  private fun normalizeArtistKey(artist: String): String {
+    return artist.trim().lowercase(Locale.ROOT)
+  }
+
+  private fun isTrackVisible(
+    song: Song,
+    hiddenIds: Set<String>,
+    blocked: Set<String>
+  ): Boolean {
+    return song.id !in hiddenIds && normalizeArtistKey(song.artist) !in blocked
+  }
+
+  private val rawFavorites: StateFlow<List<Song>> = dao.getFavorites().map { list ->
     list.map { Song(it.id, it.title, it.artist, it.artworkUrl, it.durationSeconds, it.streamUrl, it.source, true) }
   }.stateIn(viewModelScope, SharingStarted.Lazily, emptyList())
 
-  private val favoriteIds: StateFlow<Set<String>> = favorites.map { list ->
+  private val favoriteIds: StateFlow<Set<String>> = rawFavorites.map { list ->
     list.map { it.id }.toSet()
   }.stateIn(viewModelScope, SharingStarted.Eagerly, emptySet())
 
-  val featuredTracks: StateFlow<List<Song>> = combine(_rawFeatured, favoriteIds) { tracks, favs ->
-    tracks.map { it.copy(isFavorite = it.id in favs) }
+  val favorites: StateFlow<List<Song>> = combine(
+    rawFavorites,
+    hiddenSongIds,
+    blockedArtists
+  ) { list, hidden, blocked ->
+    list.filter { isTrackVisible(it, hidden, blocked) }
   }.stateIn(viewModelScope, SharingStarted.Lazily, emptyList())
 
-  val searchResults: StateFlow<List<Song>> = combine(_rawSearchResults, favoriteIds) { tracks, favs ->
-    tracks.map { it.copy(isFavorite = it.id in favs) }
+  val featuredTracks: StateFlow<List<Song>> = combine(
+    _rawFeatured,
+    favoriteIds,
+    hiddenSongIds,
+    blockedArtists
+  ) { tracks, favs, hidden, blocked ->
+    tracks
+      .filter { isTrackVisible(it, hidden, blocked) }
+      .map { it.copy(isFavorite = it.id in favs) }
   }.stateIn(viewModelScope, SharingStarted.Lazily, emptyList())
 
-  val localSongs: StateFlow<List<Song>> = combine(dao.getLocalSongs(), favoriteIds) { list, favs ->
+  val searchResults: StateFlow<List<Song>> = combine(
+    _rawSearchResults,
+    favoriteIds,
+    hiddenSongIds,
+    blockedArtists
+  ) { tracks, favs, hidden, blocked ->
+    tracks
+      .filter { isTrackVisible(it, hidden, blocked) }
+      .map { it.copy(isFavorite = it.id in favs) }
+  }.stateIn(viewModelScope, SharingStarted.Lazily, emptyList())
+
+  val localSongs: StateFlow<List<Song>> = combine(
+    dao.getLocalSongs(),
+    favoriteIds,
+    hiddenSongIds,
+    blockedArtists
+  ) { list, favs, hidden, blocked ->
     list.map {
       Song(
         id = it.id,
@@ -181,14 +228,19 @@ class AurixViewModel(application: Application) : AndroidViewModel(application) {
         source = it.source,
         isFavorite = it.id in favs
       )
-    }
+    }.filter { isTrackVisible(it, hidden, blocked) }
   }.stateIn(viewModelScope, SharingStarted.Lazily, emptyList())
 
   // Deduplicated by songId so playing a track 2-4 times updates its position at the front without spamming
-  val recentlyPlayed: StateFlow<List<Song>> = combine(dao.getPlayHistory(), favoriteIds) { list, favs ->
+  val recentlyPlayed: StateFlow<List<Song>> = combine(
+    dao.getPlayHistory(),
+    favoriteIds,
+    hiddenSongIds,
+    blockedArtists
+  ) { list, favs, hidden, blocked ->
     list.distinctBy { it.songId }.map {
       Song(it.songId, it.title, it.artist, it.artworkUrl, it.durationSeconds, it.streamUrl, it.source, it.songId in favs)
-    }
+    }.filter { isTrackVisible(it, hidden, blocked) }
   }.stateIn(viewModelScope, SharingStarted.Lazily, emptyList())
 
   private val _rawCurrentSong = MutableStateFlow<Song?>(null)
@@ -229,6 +281,8 @@ class AurixViewModel(application: Application) : AndroidViewModel(application) {
   val verifiedLyricsIds: StateFlow<Set<String>> = dao.observeVerifiedLyricsSongIds()
     .map { it.toSet() }
     .stateIn(viewModelScope, SharingStarted.Eagerly, emptySet())
+
+  val equalizerState: StateFlow<EqualizerUiState> = AudioEqualizerController.state
 
   private val lyricsCheckSemaphore = Semaphore(3)
   private val inFlightLyricsChecks = ConcurrentHashMap<String, Job>()
@@ -289,6 +343,16 @@ class AurixViewModel(application: Application) : AndroidViewModel(application) {
     viewModelScope.launch(Dispatchers.IO) {
       dao.clearAllBadLyrics()
       dao.clearReportedLyricsCache()
+      val eqEnabled = prefsManager.eqEnabled.first()
+      val eqPreset = prefsManager.eqPreset.first()
+      val eqBands = prefsManager.eqBands.first()
+      val eqBass = prefsManager.eqBassBoost.first()
+      AudioEqualizerController.restoreSettings(
+        enabled = eqEnabled,
+        presetId = eqPreset,
+        bandLevelsMb = eqBands,
+        bassBoostStrength = eqBass
+      )
     }
     connectPlaybackController(application)
     loadDailyRecommendations(DailyFeedCategory.TIKTOK_VIRAL)
@@ -1637,6 +1701,118 @@ class AurixViewModel(application: Application) : AndroidViewModel(application) {
     return LrcParser.parse(raw).let { doc ->
       if (!doc.isSynced) emptyList()
       else doc.lines.map { LyricLine(it.timestampMs, it.text) }
+    }
+  }
+
+  fun hideSong(song: Song) {
+    val appContext = getApplication<Application>()
+    viewModelScope.launch {
+      prefsManager.addHiddenSongId(song.id)
+      prunePlaybackQueue { it.id == song.id }
+      Toast.makeText(
+        appContext,
+        appContext.getString(R.string.toast_song_hidden, song.title),
+        Toast.LENGTH_SHORT
+      ).show()
+    }
+  }
+
+  fun blockArtist(artist: String) {
+    val normalized = normalizeArtistKey(artist)
+    if (normalized.isBlank()) return
+    val appContext = getApplication<Application>()
+    viewModelScope.launch {
+      prefsManager.addBlockedArtist(normalized)
+      prunePlaybackQueue { normalizeArtistKey(it.artist) == normalized }
+      Toast.makeText(
+        appContext,
+        appContext.getString(R.string.toast_artist_blocked, artist),
+        Toast.LENGTH_SHORT
+      ).show()
+    }
+  }
+
+  fun clearHiddenAndBlocked() {
+    val appContext = getApplication<Application>()
+    viewModelScope.launch {
+      prefsManager.clearHiddenAndBlocked()
+      Toast.makeText(
+        appContext,
+        appContext.getString(R.string.toast_hidden_cleared),
+        Toast.LENGTH_SHORT
+      ).show()
+    }
+  }
+
+  private fun prunePlaybackQueue(shouldRemove: (Song) -> Boolean) {
+    val currentQueue = _queue.value
+    val activeSong = _rawCurrentSong.value
+    val currentRemoved = activeSong != null && shouldRemove(activeSong)
+    val oldIdx = if (activeSong != null) {
+      currentQueue.indexOfFirst { it.id == activeSong.id }.coerceAtLeast(0)
+    } else 0
+    val updatedQueue = currentQueue.filterNot(shouldRemove)
+    _queue.value = updatedQueue
+
+    if (currentRemoved) {
+      if (updatedQueue.isNotEmpty()) {
+        val nextSong = updatedQueue[oldIdx.coerceAtMost(updatedQueue.lastIndex)]
+        playSong(nextSong, updatedQueue)
+      } else {
+        mediaController?.stop()
+        mediaController?.clearMediaItems()
+        _rawCurrentSong.value = null
+        _isPlaying.value = false
+        _currentPosition.value = 0L
+        _durationMs.value = 0L
+        _lyrics.value = null
+      }
+    } else {
+      val controller = mediaController
+      if (controller != null) {
+        val removedIds = currentQueue.filter(shouldRemove).map { it.id }.toSet()
+        for (i in controller.mediaItemCount - 1 downTo 0) {
+          if (controller.getMediaItemAt(i).mediaId in removedIds) {
+            controller.removeMediaItem(i)
+          }
+        }
+      }
+    }
+  }
+
+  fun setEqualizerEnabled(enabled: Boolean) {
+    val updated = AudioEqualizerController.setEnabled(enabled)
+    persistEqualizerState(updated)
+  }
+
+  fun selectEqualizerPreset(preset: EqPreset) {
+    val updated = AudioEqualizerController.selectPreset(preset)
+    persistEqualizerState(updated)
+  }
+
+  fun setEqualizerBandLevel(bandIndex: Int, levelMb: Int) {
+    val updated = AudioEqualizerController.setBandLevel(bandIndex, levelMb)
+    persistEqualizerState(updated)
+  }
+
+  fun setBassBoostStrength(strength: Int) {
+    val updated = AudioEqualizerController.setBassBoostStrength(strength)
+    persistEqualizerState(updated)
+  }
+
+  fun resetEqualizer() {
+    val updated = AudioEqualizerController.reset()
+    persistEqualizerState(updated)
+  }
+
+  private fun persistEqualizerState(eqState: EqualizerUiState) {
+    viewModelScope.launch {
+      prefsManager.saveEqualizerSettings(
+        enabled = eqState.enabled,
+        presetId = eqState.presetId,
+        bandsMb = eqState.bandLevelsMb,
+        bassBoostStrength = eqState.bassBoostStrength
+      )
     }
   }
 
