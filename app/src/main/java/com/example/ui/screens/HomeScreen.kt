@@ -82,6 +82,7 @@ fun HomeScreen(
   onOpenDiscoverWeekly: () -> Unit = {},
   onOpenMoodPlaylist: (MoodCategory) -> Unit = {},
   onPlayBecauseMix: (List<VocalRecommendationItem>, Song?) -> Unit = { _, _ -> },
+  onOpenBecauseItem: (List<VocalRecommendationItem>, Song) -> Unit = { items, song -> onPlayBecauseMix(items, song) },
   onSongFeedback: (Song, Boolean) -> Unit = { _, _ -> },
   onOpenBecauseDetail: (Boolean) -> Unit = {},
   onSongClick: (Song, List<Song>) -> Unit,
@@ -378,6 +379,7 @@ fun HomeScreen(
           onCheckLyrics = onCheckLyrics,
           onPlayAll = { items -> onPlayBecauseMix(items, null) },
           onPlayItem = { item, items -> onPlayBecauseMix(items, item.song) },
+          onOpenItem = { item, items -> onOpenBecauseItem(items, item.song) },
           onFeedback = onSongFeedback,
           onOpenDetail = onOpenBecauseDetail
         )

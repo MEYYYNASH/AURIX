@@ -397,7 +397,19 @@ private fun AurixMainShell(
               onOpenInsights = { currentScreen = Screen.Insights },
               onOpenDiscoverWeekly = { currentScreen = Screen.PlaylistDetail("discover_weekly") },
               onOpenMoodPlaylist = { mood -> currentScreen = Screen.PlaylistDetail("mood_${mood.id}") },
-              onPlayBecauseMix = { items, startSong -> viewModel.playBecauseYouListenedMix(items, startSong) },
+              onPlayBecauseMix = { items, startSong ->
+                if (startSong != null && currentSong?.id == startSong.id) {
+                  viewModel.togglePlayPause()
+                } else {
+                  viewModel.playBecauseYouListenedMix(items, startSong)
+                }
+              },
+              onOpenBecauseItem = { items, song ->
+                if (currentSong?.id != song.id) {
+                  viewModel.playBecauseYouListenedMix(items, song)
+                }
+                showNowPlaying = true
+              },
               onSongFeedback = { song, liked -> viewModel.submitSongFeedback(song, liked) },
               onOpenBecauseDetail = { isSad ->
                 currentScreen = Screen.PlaylistDetail(if (isSad) "because_sad" else "because_chill")

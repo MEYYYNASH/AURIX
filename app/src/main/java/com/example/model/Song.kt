@@ -9,7 +9,7 @@ data class Song(
   val artworkUrl: String,
   val durationSeconds: Long,
   val streamUrl: String,
-  val source: String = "iTunes 30s", // "iTunes 30s", "Local", or "Downloaded"
+  val source: String = "YouTube", // "YouTube", "Local", or "Downloaded"
   val isFavorite: Boolean = false,
   val fullDurationSeconds: Long = durationSeconds,
   val genre: String = "",
@@ -128,8 +128,7 @@ typealias Track = Song
 
 enum class SearchMode {
   YouTubeSearch,
-  YouTubeLink,
-  ITunes30s
+  YouTubeLink
 }
 
 sealed interface YoutubeFormatSheetState {

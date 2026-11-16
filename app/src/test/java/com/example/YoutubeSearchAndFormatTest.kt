@@ -66,7 +66,7 @@ class YoutubeSearchAndFormatTest {
 
   @Test
   fun searchModeAndFormatSheetState_holdExpectedValues() {
-    assertEquals(listOf(SearchMode.YouTubeSearch, SearchMode.YouTubeLink, SearchMode.ITunes30s), SearchMode.entries)
+    assertEquals(listOf(SearchMode.YouTubeSearch, SearchMode.YouTubeLink), SearchMode.entries)
 
     val song = Song(
       id = "yt_abc12345678",

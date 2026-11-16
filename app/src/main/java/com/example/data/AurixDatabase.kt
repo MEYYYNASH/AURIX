@@ -448,6 +448,9 @@ interface AurixDao {
   @Insert(onConflict = OnConflictStrategy.REPLACE)
   suspend fun upsertSongMetadataList(entries: List<SongMetadataEntity>)
 
+  @Query("DELETE FROM song_metadata WHERE id LIKE 'itunes_%' OR LOWER(source) LIKE '%itunes%' OR LOWER(streamUrl) LIKE '%itunes.apple.com%'")
+  suspend fun purgeItunesMetadata()
+
   @Query("SELECT * FROM song_feedback")
   fun observeSongFeedback(): Flow<List<SongFeedbackEntity>>
 

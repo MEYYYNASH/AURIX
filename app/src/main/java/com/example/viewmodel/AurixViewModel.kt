@@ -108,7 +108,7 @@ class AurixViewModel(application: Application) : AndroidViewModel(application) {
     .stateIn(viewModelScope, SharingStarted.Eagerly, true)
 
   // Search-Only Mode & YouTube Analyze/Download States
-  private val _searchMode = MutableStateFlow("youtube_search") // "youtube_search" | "youtube" | "itunes"
+  private val _searchMode = MutableStateFlow("youtube_search") // "youtube_search" | "youtube"
   val searchMode: StateFlow<String> = _searchMode
 
   private val _searchQuery = MutableStateFlow("")
@@ -225,12 +225,20 @@ class AurixViewModel(application: Application) : AndroidViewModel(application) {
     return artist.trim().lowercase(Locale.ROOT)
   }
 
+  private fun isItunesSong(song: Song): Boolean {
+    return song.id.startsWith("itunes_", ignoreCase = true) ||
+      song.source.contains("itunes", ignoreCase = true) ||
+      song.streamUrl.contains("itunes.apple.com", ignoreCase = true)
+  }
+
   private fun isTrackVisible(
     song: Song,
     hiddenIds: Set<String>,
     blocked: Set<String>
   ): Boolean {
-    return song.id !in hiddenIds && normalizeArtistKey(song.artist) !in blocked
+    return !isItunesSong(song) &&
+      song.id !in hiddenIds &&
+      normalizeArtistKey(song.artist) !in blocked
   }
 
   private val albumCoverEntities: StateFlow<Map<String, AlbumCoverEntity>> = dao.observeAlbumCovers()
@@ -271,19 +279,25 @@ class AurixViewModel(application: Application) : AndroidViewModel(application) {
     dao.getFavorites(),
     albumCoverEntities
   ) { list, covers ->
-    list.map {
-      val base = Song(
-        id = it.id,
-        title = it.title,
-        artist = it.artist,
-        artworkUrl = it.artworkUrl,
-        durationSeconds = it.durationSeconds,
-        streamUrl = it.streamUrl,
-        source = it.source,
-        isFavorite = true
-      )
-      TrackMetadataClassifier.enrich(effectiveArtworkForSong(base, covers))
-    }
+    list
+      .filterNot {
+        it.id.startsWith("itunes_", ignoreCase = true) ||
+          it.source.contains("itunes", ignoreCase = true) ||
+          it.streamUrl.contains("itunes.apple.com", ignoreCase = true)
+      }
+      .map {
+        val base = Song(
+          id = it.id,
+          title = it.title,
+          artist = it.artist,
+          artworkUrl = it.artworkUrl,
+          durationSeconds = it.durationSeconds,
+          streamUrl = it.streamUrl,
+          source = it.source,
+          isFavorite = true
+        )
+        TrackMetadataClassifier.enrich(effectiveArtworkForSong(base, covers))
+      }
   }.stateIn(viewModelScope, SharingStarted.Lazily, emptyList())
 
   private val favoriteIds: StateFlow<Set<String>> = rawFavorites.map { list ->
@@ -410,7 +424,10 @@ class AurixViewModel(application: Application) : AndroidViewModel(application) {
   }.stateIn(viewModelScope, SharingStarted.Lazily, null)
 
   private val storedCatalogSongs: StateFlow<List<Song>> = analyticsRepository.observeStoredCatalogSongs()
+    .map { list -> list.filterNot(::isItunesSong) }
     .stateIn(viewModelScope, SharingStarted.Lazily, emptyList())
+
+  private val _youtubeMoodPool = MutableStateFlow<List<Song>>(emptyList())
 
   val richPlayHistory: StateFlow<List<RichPlayRecord>> = combine(
     analyticsRepository.observeRichPlayHistory(),
@@ -419,7 +436,7 @@ class AurixViewModel(application: Application) : AndroidViewModel(application) {
     blockedArtists
   ) { logs, favs, hidden, blocked ->
     logs
-      .filter { isTrackVisible(it.song, hidden, blocked) }
+      .filter { it.song.id !in hidden && normalizeArtistKey(it.song.artist) !in blocked }
       .map { rec -> rec.copy(song = rec.song.copy(isFavorite = rec.song.id in favs)) }
   }.stateIn(viewModelScope, SharingStarted.Eagerly, emptyList())
 
@@ -431,9 +448,12 @@ class AurixViewModel(application: Application) : AndroidViewModel(application) {
     localSongs,
     favorites,
     searchResults,
-    storedCatalogSongs
-  ) { featured, local, favs, search, stored ->
-    (featured + local + favs + search + stored)
+    combine(storedCatalogSongs, _youtubeMoodPool) { stored, moodPool ->
+      (stored + moodPool).filterNot(::isItunesSong)
+    }
+  ) { featured, local, favs, search, storedAndMood ->
+    (featured + local + favs + search + storedAndMood)
+      .filterNot(::isItunesSong)
       .distinctBy { it.id }
       .map { TrackMetadataClassifier.enrich(it) }
   }.stateIn(viewModelScope, SharingStarted.Lazily, emptyList())
@@ -545,7 +565,7 @@ class AurixViewModel(application: Application) : AndroidViewModel(application) {
     featuredTracks,
     searchResults
   ) { local, favs, recent, featured, search ->
-    (local + favs + recent + featured + search).distinctBy { it.id }
+    (local + favs + recent.filterNot(::isItunesSong) + featured + search).distinctBy { it.id }
   }.stateIn(viewModelScope, SharingStarted.Eagerly, emptyList())
 
   private val albumMetaFlow = combine(
@@ -885,6 +905,7 @@ class AurixViewModel(application: Application) : AndroidViewModel(application) {
       try {
         dao.clearAllBadLyrics()
         dao.clearReportedLyricsCache()
+        dao.purgeItunesMetadata()
         val eqEnabled = prefsManager.eqEnabled.first()
         val eqPreset = prefsManager.eqPreset.first()
         val eqBands = prefsManager.eqBands.first()
@@ -917,6 +938,7 @@ class AurixViewModel(application: Application) : AndroidViewModel(application) {
     observeCatalogMetadataSync()
     connectPlaybackController(application)
     loadDailyRecommendations(DailyFeedCategory.DAILY_CHARTS)
+    loadYoutubeMoodCatalog()
     startPositionTicker()
     if (updateManager.uiState.value.stage == UpdateStage.Idle) {
       checkForUpdates(application, silent = true)
@@ -925,8 +947,10 @@ class AurixViewModel(application: Application) : AndroidViewModel(application) {
 
   private fun observeCatalogMetadataSync() {
     viewModelScope.launch {
-      combine(featuredTracks, localSongs, searchResults) { f, l, s ->
-        (f + l + s).distinctBy { it.id }
+      combine(featuredTracks, localSongs, searchResults, _youtubeMoodPool) { f, l, s, m ->
+        (f + l + s + m)
+          .filterNot(::isItunesSong)
+          .distinctBy { it.id }
       }
         .debounce(1_000L)
         .collectLatest { tracks ->
@@ -1185,19 +1209,16 @@ class AurixViewModel(application: Application) : AndroidViewModel(application) {
   }
 
   fun setSearchMode(mode: String) {
-    val nextEnum = when (mode) {
-      "youtube_search" -> SearchMode.YouTubeSearch
-      "youtube" -> SearchMode.YouTubeLink
-      else -> SearchMode.ITunes30s
-    }
-    val changed = _searchMode.value != mode
-    _searchMode.value = mode
+    val normalizedMode = if (mode == "youtube") "youtube" else "youtube_search"
+    val nextEnum = if (normalizedMode == "youtube") SearchMode.YouTubeLink else SearchMode.YouTubeSearch
+    val changed = _searchMode.value != normalizedMode
+    _searchMode.value = normalizedMode
     _searchModeEnum.value = nextEnum
     if (changed) {
       val currentQ = if (nextEnum == SearchMode.YouTubeLink) _youtubeUrl.value else _searchQuery.value
       if (currentQ.isBlank()) {
         _searchDispatch.tryEmit(SearchDispatch("", nextEnum, 0L, ++searchDispatchNonce))
-      } else if (nextEnum == SearchMode.ITunes30s || nextEnum == SearchMode.YouTubeSearch) {
+      } else if (nextEnum == SearchMode.YouTubeSearch) {
         _searchDispatch.tryEmit(SearchDispatch(currentQ, nextEnum, 0L, ++searchDispatchNonce))
       } else if (_youtubeAnalysis.value == null && !_isAnalyzingYoutube.value) {
         analyzeYoutubeUrl()
@@ -1318,31 +1339,14 @@ class AurixViewModel(application: Application) : AndroidViewModel(application) {
         }
 
         val (parsedTitle, parsedArtist) = parseYoutubeTitleAndArtist(rawTitle, rawAuthor)
-        val cleanedForSearch = cleanTrackTitle(parsedTitle).ifBlank { parsedTitle }
-        val searchTerm = listOf(cleanedForSearch, parsedArtist)
-          .filter { it.isNotBlank() }
-          .joinToString(" ")
-          .ifBlank { parsedTitle }
-
-        // Cross-reference metadata only (title, artist, square album art) for accurate lyrics syncing
-        val itunesMatch = runCatching {
-          NetworkClient.itunesApi.searchSongs(term = searchTerm, limit = 5)
-        }.getOrNull()?.results?.let { mapItunesTracks(it) }?.firstOrNull()
 
         val videoDurSec = extracted?.durationSeconds?.takeIf { it > 0L }
           ?: fullFormats.firstOrNull()?.durationSeconds
           ?: 0L
 
-        val trackTitle = itunesMatch?.title?.takeIf {
-          val nMatch = normalizeForMatch(cleanTrackTitle(it))
-          val nParsed = normalizeForMatch(cleanedForSearch)
-          nMatch.isNotBlank() && (nMatch == nParsed || nMatch.contains(nParsed) || nParsed.contains(nMatch))
-        } ?: parsedTitle
-
-        val trackArtist = itunesMatch?.artist?.takeIf { trackTitle == itunesMatch.title }
-          ?: parsedArtist.ifBlank { "YouTube Audio" }
-
-        val displayThumb = thumbnailUrl.ifBlank { itunesMatch?.artworkUrl.orEmpty() }
+        val trackTitle = parsedTitle.ifBlank { rawTitle }
+        val trackArtist = parsedArtist.ifBlank { "YouTube Audio" }
+        val displayThumb = thumbnailUrl
 
         val analysis = YoutubeAnalysisResult(
           videoId = videoId,
@@ -1882,100 +1886,111 @@ class AurixViewModel(application: Application) : AndroidViewModel(application) {
     return blocked.none { kw -> t.contains(kw) || a.contains(kw) }
   }
 
-  private fun mapItunesTracks(results: List<ItunesTrack>, sourceTag: String = "iTunes 30s"): List<Song> {
-    return results
-      .filter { !it.previewUrl.isNullOrBlank() && !it.trackName.isNullOrBlank() }
-      .distinctBy { it.trackId }
-      .map { track ->
-        val art = (track.artworkUrl100 ?: track.artworkUrl60)
-          ?.replace("100x100bb", "600x600bb")
-          ?.replace("60x60bb", "600x600bb")
-          ?: ""
-        val fullDurSec = (track.trackTimeMillis ?: 0L) / 1000L
-        TrackMetadataClassifier.enrich(
-          Song(
-            id = "itunes_${track.trackId}",
-            title = track.trackName ?: "Untitled",
-            artist = track.artistName ?: "Unknown Artist",
-            artworkUrl = art,
-            durationSeconds = 30L,
-            streamUrl = track.previewUrl.orEmpty(),
-            source = sourceTag,
-            fullDurationSeconds = if (fullDurSec > 0L) fullDurSec else 30L,
-            album = track.collectionName.orEmpty()
-          ),
-          genreHint = track.primaryGenreName
-        )
-      }
+  private fun isSingleQualityYoutubeSong(item: YoutubeSearchItem, parsedTitle: String, parsedArtist: String): Boolean {
+    if (item.videoId.isBlank() || parsedTitle.isBlank()) return false
+    if (!isQualityViralTrack(parsedTitle, parsedArtist)) return false
+    val combined = "${item.rawTitle} ${item.author}".lowercase(Locale.US)
+    val compilationKeywords = listOf(
+      "playlist", "1 hour", "2 hours", "hour mix", "megamix", "full album",
+      "top 50", "top 40", "top 20", "nonstop", "compilation", "study with me"
+    )
+    if (compilationKeywords.any { combined.contains(it) }) return false
+    // Skip very long mixes (> 10 min) and ultra-short clips (< 45 sec) when duration is known
+    if (item.durationSeconds in 1L..44L || item.durationSeconds > 600L) return false
+    return true
   }
 
-  private fun mapDeezerTracks(results: List<DeezerTrack>, sourceTag: String): List<Song> {
-    return results
-      .filter {
-        !it.preview.isNullOrBlank() &&
-          !it.title.isNullOrBlank() &&
-          isQualityViralTrack(it.title, it.artist?.name)
-      }
-      .distinctBy { it.id }
-      .map { track ->
-        val art = track.album?.coverXl
-          ?: track.album?.coverBig
-          ?: track.album?.coverMedium
-          ?: ""
-        TrackMetadataClassifier.enrich(
-          Song(
-            id = "deezer_${track.id}",
-            title = track.title ?: "Untitled",
-            artist = track.artist?.name ?: "Unknown Artist",
-            artworkUrl = art,
-            durationSeconds = 30L,
-            streamUrl = track.preview.orEmpty(),
-            source = sourceTag,
-            fullDurationSeconds = if (track.duration > 0L) track.duration else 30L,
-            album = track.album?.title.orEmpty()
-          )
-        )
-      }
+  private fun mapYoutubeSearchItem(
+    item: YoutubeSearchItem,
+    sourceTag: String = "YouTube",
+    moodHint: String = "",
+    genreHint: String? = null
+  ): Song {
+    val (parsedTitle, parsedArtist) = parseYoutubeTitleAndArtist(item.rawTitle, item.author)
+    val resolvedTitle = parsedTitle.ifBlank { item.rawTitle }
+    val resolvedArtist = parsedArtist.ifBlank { item.author.ifBlank { "YouTube" } }
+    return TrackMetadataClassifier.enrich(
+      Song(
+        id = "yt_${item.videoId}",
+        title = resolvedTitle,
+        artist = resolvedArtist,
+        artworkUrl = item.thumbnailUrl,
+        durationSeconds = item.durationSeconds,
+        streamUrl = "https://www.youtube.com/watch?v=${item.videoId}",
+        source = sourceTag,
+        fullDurationSeconds = item.durationSeconds,
+        mood = moodHint,
+        genre = genreHint.orEmpty()
+      ),
+      genreHint = genreHint
+    )
   }
 
-  private suspend fun fetchDeezerPlaylistFeed(queries: List<String>, sourceTag: String): List<Song> {
-    val keywords = listOf("tiktok", "viral", "trending", "hits", "202", "phonk", "khmer")
+  private suspend fun fetchYoutubeFeedTracks(
+    queries: List<String>,
+    sourceTag: String = "YouTube",
+    limitPerQuery: Int = 20,
+    moodHint: String = "",
+    genreHint: String? = null
+  ): List<Song> = withContext(Dispatchers.IO) {
+    val collected = LinkedHashMap<String, Song>()
+    val seenKeys = HashSet<String>()
     for (q in queries) {
-      val searchRes = runCatching { NetworkClient.deezerApi.searchPlaylists(query = q, limit = 12) }.getOrNull()
-        ?: continue
-      val rankedPlaylists = searchRes.data
-        .filter { it.id > 0L && it.nbTracks >= 10 && isQualityViralTrack(it.title, "") }
-        .sortedByDescending { summary ->
-          val titleLower = summary.title.orEmpty().lowercase(Locale.US)
-          val matchScore = keywords.count { titleLower.contains(it) } * 100
-          val reasonableSizeBonus = if (summary.nbTracks in 15..180) 40 else 0
-          matchScore + reasonableSizeBonus
+      val results = runCatching { YoutubeExtractor.searchSongs(query = q, limit = limitPerQuery) }.getOrNull().orEmpty()
+      for (item in results) {
+        val (parsedTitle, parsedArtist) = parseYoutubeTitleAndArtist(item.rawTitle, item.author)
+        if (!isSingleQualityYoutubeSong(item, parsedTitle, parsedArtist)) continue
+        val song = mapYoutubeSearchItem(
+          item = item,
+          sourceTag = sourceTag,
+          moodHint = moodHint,
+          genreHint = genreHint
+        )
+        val dedupeKey = "${normalizeForMatch(song.title)}::${normalizeArtistKey(song.artist)}"
+        if (song.id !in collected && dedupeKey !in seenKeys) {
+          collected[song.id] = song
+          seenKeys.add(dedupeKey)
         }
+      }
+      if (collected.size >= 24) break
+    }
+    collected.values.toList()
+  }
 
-      for (playlist in rankedPlaylists.take(3)) {
-        val tracksRes = runCatching { NetworkClient.deezerApi.getPlaylistTracks(playlist.id, limit = 35) }.getOrNull()
-          ?: continue
-        val mapped = mapDeezerTracks(tracksRes.data, sourceTag)
-        if (mapped.size >= 8) {
-          return mapped
-        }
+  private fun loadYoutubeMoodCatalog() {
+    viewModelScope.launch(Dispatchers.IO) {
+      val sadDeferred = async {
+        fetchYoutubeFeedTracks(
+          queries = listOf(
+            "sad indie vocal songs official audio",
+            "emotional r&b heartbreak songs lyrics",
+            "sad pop ballad official audio"
+          ),
+          sourceTag = "YouTube",
+          limitPerQuery = 14,
+          moodHint = "Sad",
+          genreHint = "Indie"
+        )
+      }
+      val chillDeferred = async {
+        fetchYoutubeFeedTracks(
+          queries = listOf(
+            "chill r&b late night vocal songs official audio",
+            "chill indie pop songs official audio",
+            "acoustic chill vocal songs lyrics"
+          ),
+          sourceTag = "YouTube",
+          limitPerQuery = 14,
+          moodHint = "Chill",
+          genreHint = "R&B"
+        )
+      }
+      val combined = (sadDeferred.await() + chillDeferred.await()).distinctBy { it.id }
+      if (combined.isNotEmpty()) {
+        _youtubeMoodPool.value = combined
+        analyticsRepository.upsertCatalogMetadata(combined)
       }
     }
-    return emptyList()
-  }
-
-  private suspend fun fetchAppleDailyChartTracks(sourceTag: String = "Daily Chart"): List<Song> {
-    val chart = runCatching { NetworkClient.appleChartsApi.getMostPlayed(country = "us", limit = 25) }.getOrNull()
-      ?: return emptyList()
-    val entries = chart.feed?.results.orEmpty()
-    val ids = entries.mapNotNull { it.id?.takeIf { id -> id.isNotBlank() } }
-    if (ids.isEmpty()) return emptyList()
-
-    val lookup = runCatching { NetworkClient.itunesApi.lookupTracks(ids.joinToString(",")) }.getOrNull()
-      ?: return emptyList()
-    val byId = mapItunesTracks(lookup.results, sourceTag).associateBy { it.id.removePrefix("itunes_") }
-    return ids.mapNotNull { id -> byId[id] }
-      .filter { isQualityViralTrack(it.title, it.artist) }
   }
 
   fun selectDailyFeed(category: DailyFeedCategory) {
@@ -1991,10 +2006,6 @@ class AurixViewModel(application: Application) : AndroidViewModel(application) {
       _dailyUpdatedLabel.value = formatTodayBadge()
       loadDailyRecommendations(category = _selectedDailyFeed.value, forceRefresh = true)
     }
-  }
-
-  fun loadFeaturedItunes() {
-    loadDailyRecommendations(category = _selectedDailyFeed.value, forceRefresh = true)
   }
 
   fun loadDailyRecommendations(
@@ -2031,56 +2042,46 @@ class AurixViewModel(application: Application) : AndroidViewModel(application) {
       try {
         val loaded: List<Song> = when (category) {
           DailyFeedCategory.TIKTOK_VIRAL -> {
-            val playlistTracks = fetchDeezerPlaylistFeed(
-              queries = listOf("tiktok viral", "tiktok hits 2026", "trending on tiktok"),
-              sourceTag = "TikTok Viral"
+            fetchYoutubeFeedTracks(
+              queries = listOf(
+                "tiktok viral songs 2026 official audio",
+                "trending tiktok music hits official audio"
+              ),
+              sourceTag = "TikTok Viral",
+              limitPerQuery = 22
             )
-            if (playlistTracks.isNotEmpty()) {
-              playlistTracks
-            } else {
-              val searchTracks = runCatching {
-                NetworkClient.deezerApi.searchTracks("tiktok viral", limit = 25)
-              }.getOrNull()?.let { mapDeezerTracks(it.data, "TikTok Viral") }.orEmpty()
-              if (searchTracks.size >= 6) searchTracks
-              else fetchAppleDailyChartTracks("TikTok Viral").ifEmpty {
-                val fallbackRes = NetworkClient.itunesApi.searchSongs(term = "tiktok viral", limit = 25)
-                mapItunesTracks(fallbackRes.results, "TikTok Viral").filter { isQualityViralTrack(it.title, it.artist) }
-              }
-            }
           }
           DailyFeedCategory.DAILY_CHARTS -> {
-            val appleTracks = fetchAppleDailyChartTracks("Daily Chart")
-            if (appleTracks.size >= 6) {
-              appleTracks
-            } else {
-              runCatching { NetworkClient.deezerApi.getChartTracks(limit = 30) }.getOrNull()
-                ?.let { mapDeezerTracks(it.data, "Daily Chart") }
-                .orEmpty()
-            }
+            fetchYoutubeFeedTracks(
+              queries = listOf(
+                "top trending music 2026 official audio",
+                "global top hits pop r&b official audio"
+              ),
+              sourceTag = "Daily Chart",
+              limitPerQuery = 22
+            )
           }
           DailyFeedCategory.PHONK_EDITS -> {
-            val phonkPlaylist = fetchDeezerPlaylistFeed(
-              queries = listOf("tiktok phonk", "montagem phonk", "phonk viral"),
-              sourceTag = "TikTok Phonk"
+            fetchYoutubeFeedTracks(
+              queries = listOf(
+                "montagem phonk viral official audio",
+                "tiktok phonk edit songs"
+              ),
+              sourceTag = "TikTok Phonk",
+              limitPerQuery = 22,
+              genreHint = "Phonk"
             )
-            if (phonkPlaylist.isNotEmpty()) {
-              phonkPlaylist
-            } else {
-              val itunesPhonk = NetworkClient.itunesApi.searchSongs(term = "montagem phonk", limit = 25)
-              mapItunesTracks(itunesPhonk.results, "TikTok Phonk").filter { isQualityViralTrack(it.title, it.artist) }
-            }
           }
           DailyFeedCategory.KHMER_ASIA -> {
-            val khmerPlaylist = fetchDeezerPlaylistFeed(
-              queries = listOf("khmer viral", "cambodia hits", "khmer pop"),
-              sourceTag = "Khmer Hits"
+            fetchYoutubeFeedTracks(
+              queries = listOf(
+                "khmer new song 2026 official audio",
+                "khmer sad chill song official mv"
+              ),
+              sourceTag = "Khmer Hits",
+              limitPerQuery = 22,
+              genreHint = "Pop"
             )
-            if (khmerPlaylist.isNotEmpty()) {
-              khmerPlaylist
-            } else {
-              val itunesKhmer = NetworkClient.itunesApi.searchSongs(term = "khmer", limit = 25)
-              mapItunesTracks(itunesKhmer.results, "Khmer Hits").filter { isQualityViralTrack(it.title, it.artist) }
-            }
           }
         }
 
@@ -2155,34 +2156,9 @@ class AurixViewModel(application: Application) : AndroidViewModel(application) {
                 }
               } else {
                 YoutubeExtractor.searchSongs(query = trimmed, limit = 25).map { item ->
-                  val (parsedTitle, parsedArtist) = parseYoutubeTitleAndArtist(item.rawTitle, item.author)
-                  TrackMetadataClassifier.enrich(
-                    Song(
-                      id = "yt_${item.videoId}",
-                      title = parsedTitle.ifBlank { item.rawTitle },
-                      artist = parsedArtist.ifBlank { item.author.ifBlank { "YouTube" } },
-                      artworkUrl = item.thumbnailUrl,
-                      durationSeconds = item.durationSeconds,
-                      streamUrl = "https://www.youtube.com/watch?v=${item.videoId}",
-                      source = "YouTube",
-                      fullDurationSeconds = item.durationSeconds
-                    )
-                  )
+                  mapYoutubeSearchItem(item = item, sourceTag = "YouTube")
                 }
               }
-              _rawSearchResults.value = mapped
-              val visible = mapped
-                .filter { isTrackVisible(it, hiddenSongIds.value, blockedArtists.value) }
-                .map { it.copy(isFavorite = it.id in favoriteIds.value) }
-              _searchUiState.value = if (visible.isEmpty()) {
-                SearchUiState.Empty
-              } else {
-                SearchUiState.Results(visible)
-              }
-            }
-            SearchMode.ITunes30s -> {
-              val res = NetworkClient.itunesApi.searchSongs(term = trimmed, limit = 30)
-              val mapped = mapItunesTracks(res.results)
               _rawSearchResults.value = mapped
               val visible = mapped
                 .filter { isTrackVisible(it, hiddenSongIds.value, blockedArtists.value) }
