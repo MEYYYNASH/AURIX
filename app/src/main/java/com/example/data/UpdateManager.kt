@@ -45,13 +45,13 @@ import kotlin.coroutines.coroutineContext
  * Editable release manifest endpoint for AURIX OTA updates.
  * Expected JSON format:
  * {
- *   "versionName": "1.7.0",
- *   "versionCode": 10700,
+ *   "versionName": "1.7.1",
+ *   "versionCode": 10701,
  *   "releaseDate": "2026-11-16",
- *   "apkUrl": "https://github.com/MEYYYNASH/AURIX/releases/download/v1.7.0/AURIX-v1.7.0.apk",
+ *   "apkUrl": "https://github.com/MEYYYNASH/AURIX/releases/download/v1.7.1/AURIX-v1.7.1.apk",
  *   "sha256": "...",
  *   "notes": ["..."],
- *   "releasePageUrl": "https://github.com/MEYYYNASH/AURIX/releases/tag/v1.7.0"
+ *   "releasePageUrl": "https://github.com/MEYYYNASH/AURIX/releases/tag/v1.7.1"
  * }
  */
 const val VERSION_JSON_URL = "https://raw.githubusercontent.com/MEYYYNASH/AURIX/main/version.json"
@@ -162,10 +162,9 @@ class UpdateManager(
     private const val META_FILE_NAME = "aurix_update.apk.meta.json"
 
     val CURRENT_RELEASE_NOTES = listOf(
-      "Top Music in Search: Explore regional YouTube Music charts across Khmer, Asia, Europe, and Global tabs with instant filter & search transitions",
-      "5 Chart Views: Switch between Trending Today, Rising Fast, New Today, Weekly Top Songs, and Daily Top Music Videos",
-      "Explainable Regional Scoring: Tap any chart row to inspect per-country ranks, movements, and cross-country score bonuses",
-      "Khmer Typography & Offline Cache: Bundled Noto Sans Khmer title rendering, spring animations, and daily offline chart caching"
+      "Clean Liquid Glass Search v1.7.1: Simplified, uncluttered glass search bar, mode pills, quick discovery tags, and smooth playback controls",
+      "Home Feed Cleanup: Removed duplicate TikTok Viral section so YouTube Charts and Today's Hits stay distinct and easy to browse",
+      "Crisp Vector Iconography: Consistent vector icons and AURIX brand logo styling across Home and Search without emoji clutter"
     )
 
     fun parseVersionJson(rawJson: String): RemoteVersionInfo {
