@@ -35,6 +35,7 @@ import com.example.playback.EqPreset
 import com.example.playback.EqualizerUiState
 import com.example.playback.PlaybackService
 import com.example.recommendation.*
+import com.example.topmusic.*
 import com.example.ui.screens.UpdateLogoState
 import com.google.common.util.concurrent.ListenableFuture
 import kotlinx.coroutines.CancellationException
@@ -236,6 +237,43 @@ class AurixViewModel(application: Application) : AndroidViewModel(application) {
   private val _searchDispatch = MutableSharedFlow<SearchDispatch>(extraBufferCapacity = 16)
   private var searchDispatchNonce = 0L
   private val _searchUiState = MutableStateFlow<SearchUiState>(SearchUiState.Idle)
+
+  // Top Music (YouTube Regional Charts inside Search screen)
+  private val topMusicRepository = TopMusicRepository(application)
+  private val _topMusicSnapshot = MutableStateFlow<TopMusicCacheSnapshot?>(null)
+  private val _topMusicLoading = MutableStateFlow(true)
+  private val _topMusicRegion = MutableStateFlow(TopMusicRegion.KHMER)
+  private val _topMusicFilter = MutableStateFlow(TopMusicFilter.TRENDING_TODAY)
+
+  val topMusicUiState: StateFlow<TopMusicUiState> = combine(
+    _topMusicSnapshot,
+    _topMusicLoading,
+    _topMusicRegion,
+    _topMusicFilter,
+    _searchQuery
+  ) { snapshot, loading, region, filter, query ->
+    val entries = snapshot?.entries.orEmpty()
+    val ranked = if (entries.isEmpty()) {
+      emptyList()
+    } else {
+      TopMusicEngine.rankTracks(
+        rawEntries = entries,
+        region = region,
+        filter = filter,
+        searchQuery = query
+      )
+    }
+    TopMusicUiState(
+      isLoading = loading && entries.isEmpty(),
+      isOffline = snapshot?.isOffline == true,
+      isSampleData = snapshot?.isSampleData ?: true,
+      lastUpdatedDate = snapshot?.dateKey.orEmpty(),
+      selectedRegion = region,
+      selectedFilter = filter,
+      searchQuery = query,
+      items = ranked
+    )
+  }.stateIn(viewModelScope, SharingStarted.Eagerly, TopMusicUiState(isLoading = true))
 
   val hiddenSongIds: StateFlow<Set<String>> = prefsManager.hiddenSongIds
     .stateIn(viewModelScope, SharingStarted.Eagerly, emptySet())
@@ -968,6 +1006,7 @@ class AurixViewModel(application: Application) : AndroidViewModel(application) {
     observeSearchRequests()
     observeDiscoverWeeklyUpdates()
     observeCatalogMetadataSync()
+    loadTopMusicCharts(forceRefresh = false)
     connectPlaybackController(application)
     loadDailyRecommendations(DailyFeedCategory.TIKTOK_VIRAL)
     loadPopularYoutubeSongs()
@@ -2627,6 +2666,59 @@ class AurixViewModel(application: Application) : AndroidViewModel(application) {
 
   fun clearSearch() {
     search("")
+  }
+
+  fun loadTopMusicCharts(forceRefresh: Boolean = false) {
+    viewModelScope.launch {
+      _topMusicLoading.value = true
+      try {
+        _topMusicSnapshot.value = topMusicRepository.loadCharts(forceRefresh = forceRefresh)
+      } finally {
+        _topMusicLoading.value = false
+      }
+    }
+  }
+
+  fun selectTopMusicRegion(region: TopMusicRegion) {
+    _topMusicRegion.value = region
+  }
+
+  fun selectTopMusicFilter(filter: TopMusicFilter) {
+    _topMusicFilter.value = filter
+  }
+
+  fun playTopMusicItem(item: TopMusicRankedItem) {
+    val favs = favoriteIds.value
+    val queue = topMusicUiState.value.items.map { ranked ->
+      val songId = "yt_${ranked.videoId}"
+      TrackMetadataClassifier.enrich(
+        Song(
+          id = songId,
+          title = ranked.title,
+          artist = ranked.artist,
+          artworkUrl = ranked.artworkUrl,
+          durationSeconds = ranked.durationSeconds,
+          streamUrl = "https://www.youtube.com/watch?v=${ranked.videoId}",
+          source = "YouTube",
+          isFavorite = songId in favs,
+          fullDurationSeconds = ranked.durationSeconds
+        )
+      )
+    }
+    val selected = queue.firstOrNull { it.id == "yt_${item.videoId}" } ?: TrackMetadataClassifier.enrich(
+      Song(
+        id = "yt_${item.videoId}",
+        title = item.title,
+        artist = item.artist,
+        artworkUrl = item.artworkUrl,
+        durationSeconds = item.durationSeconds,
+        streamUrl = "https://www.youtube.com/watch?v=${item.videoId}",
+        source = "YouTube",
+        isFavorite = "yt_${item.videoId}" in favs,
+        fullDurationSeconds = item.durationSeconds
+      )
+    )
+    playSong(selected, queue.ifEmpty { listOf(selected) })
   }
 
   fun playSong(song: Song, newQueue: List<Song> = _rawFeatured.value.ifEmpty { listOf(song) }) {

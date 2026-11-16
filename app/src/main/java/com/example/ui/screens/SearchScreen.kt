@@ -61,6 +61,10 @@ import com.example.model.Song
 import com.example.model.YoutubeAnalysisResult
 import com.example.model.YoutubeDownloadState
 import com.example.model.YoutubeFormatSheetState
+import com.example.topmusic.TopMusicFilter
+import com.example.topmusic.TopMusicRankedItem
+import com.example.topmusic.TopMusicRegion
+import com.example.topmusic.TopMusicUiState
 import com.example.ui.theme.AurixTheme
 import java.util.Locale
 
@@ -120,7 +124,12 @@ fun SearchScreen(
   },
   onClearSearch: () -> Unit = { onSearchQueryChanged("") },
   onRetrySearch: () -> Unit = { onSearchQueryChanged(searchQuery) },
-  onImmediateSearch: (String) -> Unit = onSearchQueryChanged
+  onImmediateSearch: (String) -> Unit = onSearchQueryChanged,
+  topMusicUiState: TopMusicUiState = TopMusicUiState(isLoading = false),
+  onTopMusicRegionSelected: (TopMusicRegion) -> Unit = {},
+  onTopMusicFilterSelected: (TopMusicFilter) -> Unit = {},
+  onTopMusicRefresh: () -> Unit = {},
+  onPlayTopMusicItem: (TopMusicRankedItem) -> Unit = {}
 ) {
   val context = LocalContext.current
   val keyboardController = LocalSoftwareKeyboardController.current
@@ -503,7 +512,7 @@ fun SearchScreen(
               }
             )
             val placeholderId = if (mode == "youtube_search") {
-              R.string.search_yt_songs_placeholder
+              R.string.search_top_music_placeholder
             } else {
               R.string.search_placeholder
             }
@@ -529,7 +538,7 @@ fun SearchScreen(
                   Icon(
                     imageVector = if (mode == "youtube_search") Icons.Rounded.PlayCircle else Icons.Rounded.Search,
                     contentDescription = null,
-                    tint = if (mode == "youtube_search") Color(0xFFEF4444) else MaterialTheme.colorScheme.primary
+                    tint = if (mode == "youtube_search") Color(0xFFF5B041) else MaterialTheme.colorScheme.primary
                   )
                 },
                 trailingIcon = {
@@ -563,63 +572,90 @@ fun SearchScreen(
 
             Spacer(modifier = Modifier.height(12.dp))
 
-            if (searchQuery.isBlank()) {
-              Row(
+            if (mode == "youtube_search") {
+              TopMusicSection(
+                uiState = topMusicUiState,
+                currentSong = currentSong,
+                isPlaying = isPlaying,
+                resolvingSongId = resolvingSongId,
+                darkTheme = darkTheme,
+                reducedMotion = reducedMotion,
+                remoteSearchUiState = searchUiState,
+                verifiedLyricsIds = verifiedLyricsIds,
+                songDownloadProgress = songDownloadProgress,
+                downloadedSongIds = downloadedSongIds,
+                onRegionSelected = onTopMusicRegionSelected,
+                onFilterSelected = onTopMusicFilterSelected,
+                onRefreshClick = onTopMusicRefresh,
+                onClearSearch = onClearSearch,
+                onPlayTopMusicItem = onPlayTopMusicItem,
+                onCheckLyrics = onCheckLyrics,
+                onRemoteSongClick = onSongClick,
+                onFavoriteClick = onFavoriteClick,
+                onYoutubeSongDownloadClick = onYoutubeSongDownloadClick,
                 modifier = Modifier
+                  .weight(1f)
                   .fillMaxWidth()
-                  .horizontalScroll(rememberScrollState()),
-                horizontalArrangement = Arrangement.spacedBy(8.dp)
-              ) {
-                quickTags.forEach { tag ->
-                  val chipBrush = if (darkTheme) {
-                    Brush.linearGradient(
-                      colors = listOf(Color.White.copy(alpha = 0.14f), Color.White.copy(alpha = 0.06f))
-                    )
-                  } else {
-                    Brush.linearGradient(
-                      colors = listOf(Color.White.copy(alpha = 0.92f), Color(0xFFF3F6FF).copy(alpha = 0.80f))
-                    )
-                  }
-                  val chipBorder = if (darkTheme) Color.White.copy(alpha = 0.22f) else Color.White
-                  Box(
-                    modifier = Modifier
-                      .clip(CircleShape)
-                      .background(chipBrush)
-                      .border(1.dp, chipBorder, CircleShape)
-                      .clickable { onSearchQueryChanged(tag) }
-                      .padding(horizontal = 14.dp, vertical = 9.dp)
-                  ) {
-                    Text(
-                      text = tag,
-                      style = MaterialTheme.typography.bodySmall.copy(fontWeight = FontWeight.SemiBold),
-                      color = MaterialTheme.colorScheme.onSurface
-                    )
+              )
+            } else {
+              if (searchQuery.isBlank()) {
+                Row(
+                  modifier = Modifier
+                    .fillMaxWidth()
+                    .horizontalScroll(rememberScrollState()),
+                  horizontalArrangement = Arrangement.spacedBy(8.dp)
+                ) {
+                  quickTags.forEach { tag ->
+                    val chipBrush = if (darkTheme) {
+                      Brush.linearGradient(
+                        colors = listOf(Color.White.copy(alpha = 0.14f), Color.White.copy(alpha = 0.06f))
+                      )
+                    } else {
+                      Brush.linearGradient(
+                        colors = listOf(Color.White.copy(alpha = 0.92f), Color(0xFFF3F6FF).copy(alpha = 0.80f))
+                      )
+                    }
+                    val chipBorder = if (darkTheme) Color.White.copy(alpha = 0.22f) else Color.White
+                    Box(
+                      modifier = Modifier
+                        .clip(CircleShape)
+                        .background(chipBrush)
+                        .border(1.dp, chipBorder, CircleShape)
+                        .clickable { onSearchQueryChanged(tag) }
+                        .padding(horizontal = 14.dp, vertical = 9.dp)
+                    ) {
+                      Text(
+                        text = tag,
+                        style = MaterialTheme.typography.bodySmall.copy(fontWeight = FontWeight.SemiBold),
+                        color = MaterialTheme.colorScheme.onSurface
+                      )
+                    }
                   }
                 }
+                Spacer(modifier = Modifier.height(12.dp))
               }
-              Spacer(modifier = Modifier.height(12.dp))
-            }
 
-            SearchResultsArea(
-              uiState = searchUiState,
-              searchMode = activeModeEnum,
-              currentSong = currentSong,
-              isPlaying = isPlaying,
-              resolvingSongId = resolvingSongId,
-              darkTheme = darkTheme,
-              reducedMotion = reducedMotion,
-              songDownloadProgress = songDownloadProgress,
-              downloadedSongIds = downloadedSongIds,
-              verifiedLyricsIds = verifiedLyricsIds,
-              onCheckLyrics = onCheckLyrics,
-              onSongClick = onSongClick,
-              onFavoriteClick = onFavoriteClick,
-              onDownloadClick = { song ->
-                if (song.source == "YouTube") onYoutubeSongDownloadClick(song) else onDownloadClick(song)
-              },
-              onRetry = onRetrySearch,
-              modifier = Modifier.weight(1f).fillMaxWidth()
-            )
+              SearchResultsArea(
+                uiState = searchUiState,
+                searchMode = activeModeEnum,
+                currentSong = currentSong,
+                isPlaying = isPlaying,
+                resolvingSongId = resolvingSongId,
+                darkTheme = darkTheme,
+                reducedMotion = reducedMotion,
+                songDownloadProgress = songDownloadProgress,
+                downloadedSongIds = downloadedSongIds,
+                verifiedLyricsIds = verifiedLyricsIds,
+                onCheckLyrics = onCheckLyrics,
+                onSongClick = onSongClick,
+                onFavoriteClick = onFavoriteClick,
+                onDownloadClick = { song ->
+                  if (song.source == "YouTube") onYoutubeSongDownloadClick(song) else onDownloadClick(song)
+                },
+                onRetry = onRetrySearch,
+                modifier = Modifier.weight(1f).fillMaxWidth()
+              )
+            }
           }
         }
       }

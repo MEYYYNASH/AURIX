@@ -45,13 +45,13 @@ import kotlin.coroutines.coroutineContext
  * Editable release manifest endpoint for AURIX OTA updates.
  * Expected JSON format:
  * {
- *   "versionName": "1.6.8",
- *   "versionCode": 10608,
+ *   "versionName": "1.7.0",
+ *   "versionCode": 10700,
  *   "releaseDate": "2026-11-16",
- *   "apkUrl": "https://github.com/MEYYYNASH/AURIX/releases/download/v1.6.8/AURIX-v1.6.8.apk",
+ *   "apkUrl": "https://github.com/MEYYYNASH/AURIX/releases/download/v1.7.0/AURIX-v1.7.0.apk",
  *   "sha256": "...",
  *   "notes": ["..."],
- *   "releasePageUrl": "https://github.com/MEYYYNASH/AURIX/releases/tag/v1.6.8"
+ *   "releasePageUrl": "https://github.com/MEYYYNASH/AURIX/releases/tag/v1.7.0"
  * }
  */
 const val VERSION_JSON_URL = "https://raw.githubusercontent.com/MEYYYNASH/AURIX/main/version.json"
@@ -162,10 +162,10 @@ class UpdateManager(
     private const val META_FILE_NAME = "aurix_update.apk.meta.json"
 
     val CURRENT_RELEASE_NOTES = listOf(
-      "Clean Home Discovery: Hero Spotlight pager, 3-across New Albums shelf, and Popular YouTube Song List with format & quality downloads",
-      "Restored iTunes 30s & Apple Charts: TikTok Viral and Daily Top charts from iTunes alongside full-track YouTube search",
-      "Because You Listened: Dark glassmorphism recommendation rows with 30-day vocal taste matching",
-      "MoodFlow & Planet-Smiley OTA Updater: 5D mood shuffle and SHA-256 verified updates"
+      "Top Music in Search: Explore regional YouTube Music charts across Khmer, Asia, Europe, and Global tabs with instant filter & search transitions",
+      "5 Chart Views: Switch between Trending Today, Rising Fast, New Today, Weekly Top Songs, and Daily Top Music Videos",
+      "Explainable Regional Scoring: Tap any chart row to inspect per-country ranks, movements, and cross-country score bonuses",
+      "Khmer Typography & Offline Cache: Bundled Noto Sans Khmer title rendering, spring animations, and daily offline chart caching"
     )
 
     fun parseVersionJson(rawJson: String): RemoteVersionInfo {

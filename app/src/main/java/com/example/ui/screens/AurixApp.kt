@@ -184,6 +184,7 @@ private fun AurixMainShell(
   val isSearching by viewModel.isSearching.collectAsStateWithLifecycle()
   val searchError by viewModel.searchError.collectAsStateWithLifecycle()
   val searchUiState by viewModel.searchUiState.collectAsStateWithLifecycle()
+  val topMusicUiState by viewModel.topMusicUiState.collectAsStateWithLifecycle()
 
   val localSongs by viewModel.localSongs.collectAsStateWithLifecycle()
   val favorites by viewModel.favorites.collectAsStateWithLifecycle()
@@ -604,7 +605,12 @@ private fun AurixMainShell(
               searchUiState = searchUiState,
               onClearSearch = { viewModel.clearSearch() },
               onRetrySearch = { viewModel.retrySearch() },
-              onImmediateSearch = { viewModel.search(it, immediate = true) }
+              onImmediateSearch = { viewModel.search(it, immediate = true) },
+              topMusicUiState = topMusicUiState,
+              onTopMusicRegionSelected = { viewModel.selectTopMusicRegion(it) },
+              onTopMusicFilterSelected = { viewModel.selectTopMusicFilter(it) },
+              onTopMusicRefresh = { viewModel.loadTopMusicCharts(forceRefresh = true) },
+              onPlayTopMusicItem = { viewModel.playTopMusicItem(it) }
             )
             is Screen.Library -> LibraryScreen(
               localSongs = localSongs,
