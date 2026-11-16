@@ -74,12 +74,16 @@ fun HomeScreen(
   onOpenLibraryTab: (Int) -> Unit,
   onOpenAlbum: () -> Unit = {},
   smartRecommendations: List<RecommendedTrack> = emptyList(),
+  becauseYouListened: BecauseYouListenedResult = BecauseYouListenedResult(),
   discoverWeekly: DiscoverWeeklyPlaylist? = null,
   moodPlaylists: List<MoodPlaylist> = emptyList(),
   musicDna: MusicDnaProfile? = null,
   onOpenInsights: () -> Unit = {},
   onOpenDiscoverWeekly: () -> Unit = {},
   onOpenMoodPlaylist: (MoodCategory) -> Unit = {},
+  onPlayBecauseMix: (List<VocalRecommendationItem>, Song?) -> Unit = { _, _ -> },
+  onSongFeedback: (Song, Boolean) -> Unit = { _, _ -> },
+  onOpenBecauseDetail: (Boolean) -> Unit = {},
   onSongClick: (Song, List<Song>) -> Unit,
   onFavoriteClick: (Song) -> Unit
 ) {
@@ -360,6 +364,23 @@ fun HomeScreen(
             }
           }
         }
+      }
+
+      // "Because You Listened" — Vocal Sad Vibes & Chill Mix
+      item {
+        BecauseYouListenedSection(
+          result = becauseYouListened,
+          currentSong = currentSong,
+          isPlaying = isPlaying,
+          darkTheme = darkTheme,
+          reducedMotion = reducedMotion,
+          verifiedLyricsIds = verifiedLyricsIds,
+          onCheckLyrics = onCheckLyrics,
+          onPlayAll = { items -> onPlayBecauseMix(items, null) },
+          onPlayItem = { item, items -> onPlayBecauseMix(items, item.song) },
+          onFeedback = onSongFeedback,
+          onOpenDetail = onOpenBecauseDetail
+        )
       }
 
       // Discover Weekly + Mood Playlists Section

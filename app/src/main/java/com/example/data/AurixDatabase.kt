@@ -35,7 +35,11 @@ data class PlayHistoryEntity(
   val durationSeconds: Long,
   val streamUrl: String,
   val source: String,
-  val playedAt: Long = System.currentTimeMillis()
+  val playedAt: Long = System.currentTimeMillis(),
+  val completedPercent: Float = 0f,
+  val completed: Boolean = false,
+  val skipped: Boolean = false,
+  val replayed: Boolean = false
 )
 
 @Entity(tableName = "local_songs")
@@ -141,7 +145,52 @@ data class PlayLogEntity(
   val bpm: Int,
   val mood: String,
   val playedAt: Long = System.currentTimeMillis(),
-  val listenedDurationMs: Long = 0L
+  val listenedDurationMs: Long = 0L,
+  val completedPercent: Float = 0f,
+  val completed: Boolean = false,
+  val skipped: Boolean = false,
+  val replayed: Boolean = false,
+  val energy: Float = 0.5f,
+  val sad: Float = 0f,
+  val chill: Float = 0f,
+  val happy: Float = 0f,
+  val calm: Float = 0f,
+  val energetic: Float = 0f,
+  val romantic: Float = 0f,
+  val hasVocals: Boolean = true,
+  val language: String = "en"
+)
+
+@Entity(tableName = "song_metadata")
+data class SongMetadataEntity(
+  @PrimaryKey val id: String,
+  val title: String,
+  val artist: String,
+  val artworkUrl: String,
+  val durationSeconds: Long,
+  val streamUrl: String,
+  val source: String,
+  val genre: String,
+  val bpm: Int,
+  val mood: String,
+  val energy: Float,
+  val sad: Float,
+  val chill: Float,
+  val happy: Float,
+  val calm: Float,
+  val energetic: Float,
+  val romantic: Float,
+  val hasVocals: Boolean,
+  val language: String,
+  val playCount: Int = 0,
+  val updatedAt: Long = System.currentTimeMillis()
+)
+
+@Entity(tableName = "song_feedback")
+data class SongFeedbackEntity(
+  @PrimaryKey val songId: String,
+  val liked: Boolean,
+  val updatedAt: Long = System.currentTimeMillis()
 )
 
 @Entity(
@@ -340,6 +389,47 @@ interface AurixDao {
   @Query("UPDATE play_logs SET listenedDurationMs = :listenedDurationMs WHERE id = :playLogId")
   suspend fun updatePlayLogDuration(playLogId: Long, listenedDurationMs: Long)
 
+  @Query(
+    """
+    UPDATE play_logs
+    SET listenedDurationMs = :listenedDurationMs,
+        completedPercent = :completedPercent,
+        completed = :completed,
+        skipped = :skipped,
+        replayed = :replayed
+    WHERE id = :playLogId
+    """
+  )
+  suspend fun updatePlayLogOutcome(
+    playLogId: Long,
+    listenedDurationMs: Long,
+    completedPercent: Float,
+    completed: Boolean,
+    skipped: Boolean,
+    replayed: Boolean
+  )
+
+  @Query(
+    """
+    UPDATE play_history
+    SET completedPercent = :completedPercent,
+        completed = :completed,
+        skipped = :skipped,
+        replayed = :replayed
+    WHERE songId = :songId
+    """
+  )
+  suspend fun updatePlayHistoryOutcome(
+    songId: String,
+    completedPercent: Float,
+    completed: Boolean,
+    skipped: Boolean,
+    replayed: Boolean
+  )
+
+  @Query("SELECT COUNT(*) FROM play_logs WHERE songId = :songId AND playedAt >= :sinceMs")
+  suspend fun countPlaysForSongSince(songId: String, sinceMs: Long): Int
+
   @Query("UPDATE play_logs SET artworkUrl = :artworkUrl WHERE songId = :songId")
   suspend fun updatePlayLogArtwork(songId: String, artworkUrl: String)
 
@@ -348,6 +438,24 @@ interface AurixDao {
 
   @Query("DELETE FROM play_logs")
   suspend fun clearPlayLogs()
+
+  @Query("SELECT * FROM song_metadata ORDER BY updatedAt DESC")
+  fun observeSongMetadata(): Flow<List<SongMetadataEntity>>
+
+  @Insert(onConflict = OnConflictStrategy.REPLACE)
+  suspend fun upsertSongMetadata(entry: SongMetadataEntity)
+
+  @Insert(onConflict = OnConflictStrategy.REPLACE)
+  suspend fun upsertSongMetadataList(entries: List<SongMetadataEntity>)
+
+  @Query("SELECT * FROM song_feedback")
+  fun observeSongFeedback(): Flow<List<SongFeedbackEntity>>
+
+  @Insert(onConflict = OnConflictStrategy.REPLACE)
+  suspend fun upsertSongFeedback(entry: SongFeedbackEntity)
+
+  @Query("DELETE FROM song_feedback WHERE songId = :songId")
+  suspend fun deleteSongFeedback(songId: String)
 
   @Query("SELECT * FROM discover_weekly ORDER BY position ASC")
   fun observeDiscoverWeekly(): Flow<List<DiscoverWeeklyEntity>>
@@ -554,6 +662,69 @@ val AURIX_MIGRATION_7_8 = object : Migration(7, 8) {
   }
 }
 
+val AURIX_MIGRATION_8_9 = object : Migration(8, 9) {
+  override fun migrate(db: SupportSQLiteDatabase) {
+    db.execSQL("ALTER TABLE `play_history` ADD COLUMN `completedPercent` REAL NOT NULL DEFAULT 0.0")
+    db.execSQL("ALTER TABLE `play_history` ADD COLUMN `completed` INTEGER NOT NULL DEFAULT 0")
+    db.execSQL("ALTER TABLE `play_history` ADD COLUMN `skipped` INTEGER NOT NULL DEFAULT 0")
+    db.execSQL("ALTER TABLE `play_history` ADD COLUMN `replayed` INTEGER NOT NULL DEFAULT 0")
+
+    db.execSQL("ALTER TABLE `play_logs` ADD COLUMN `completedPercent` REAL NOT NULL DEFAULT 0.0")
+    db.execSQL("ALTER TABLE `play_logs` ADD COLUMN `completed` INTEGER NOT NULL DEFAULT 0")
+    db.execSQL("ALTER TABLE `play_logs` ADD COLUMN `skipped` INTEGER NOT NULL DEFAULT 0")
+    db.execSQL("ALTER TABLE `play_logs` ADD COLUMN `replayed` INTEGER NOT NULL DEFAULT 0")
+    db.execSQL("ALTER TABLE `play_logs` ADD COLUMN `energy` REAL NOT NULL DEFAULT 0.5")
+    db.execSQL("ALTER TABLE `play_logs` ADD COLUMN `sad` REAL NOT NULL DEFAULT 0.0")
+    db.execSQL("ALTER TABLE `play_logs` ADD COLUMN `chill` REAL NOT NULL DEFAULT 0.0")
+    db.execSQL("ALTER TABLE `play_logs` ADD COLUMN `happy` REAL NOT NULL DEFAULT 0.0")
+    db.execSQL("ALTER TABLE `play_logs` ADD COLUMN `calm` REAL NOT NULL DEFAULT 0.0")
+    db.execSQL("ALTER TABLE `play_logs` ADD COLUMN `energetic` REAL NOT NULL DEFAULT 0.0")
+    db.execSQL("ALTER TABLE `play_logs` ADD COLUMN `romantic` REAL NOT NULL DEFAULT 0.0")
+    db.execSQL("ALTER TABLE `play_logs` ADD COLUMN `hasVocals` INTEGER NOT NULL DEFAULT 1")
+    db.execSQL("ALTER TABLE `play_logs` ADD COLUMN `language` TEXT NOT NULL DEFAULT 'en'")
+
+    db.execSQL(
+      """
+      CREATE TABLE IF NOT EXISTS `song_metadata` (
+        `id` TEXT NOT NULL,
+        `title` TEXT NOT NULL,
+        `artist` TEXT NOT NULL,
+        `artworkUrl` TEXT NOT NULL,
+        `durationSeconds` INTEGER NOT NULL,
+        `streamUrl` TEXT NOT NULL,
+        `source` TEXT NOT NULL,
+        `genre` TEXT NOT NULL,
+        `bpm` INTEGER NOT NULL,
+        `mood` TEXT NOT NULL,
+        `energy` REAL NOT NULL,
+        `sad` REAL NOT NULL,
+        `chill` REAL NOT NULL,
+        `happy` REAL NOT NULL,
+        `calm` REAL NOT NULL,
+        `energetic` REAL NOT NULL,
+        `romantic` REAL NOT NULL,
+        `hasVocals` INTEGER NOT NULL,
+        `language` TEXT NOT NULL,
+        `playCount` INTEGER NOT NULL DEFAULT 0,
+        `updatedAt` INTEGER NOT NULL,
+        PRIMARY KEY(`id`)
+      )
+      """.trimIndent()
+    )
+
+    db.execSQL(
+      """
+      CREATE TABLE IF NOT EXISTS `song_feedback` (
+        `songId` TEXT NOT NULL,
+        `liked` INTEGER NOT NULL,
+        `updatedAt` INTEGER NOT NULL,
+        PRIMARY KEY(`songId`)
+      )
+      """.trimIndent()
+    )
+  }
+}
+
 @Database(
   entities = [
     FavoriteSongEntity::class,
@@ -563,13 +734,15 @@ val AURIX_MIGRATION_7_8 = object : Migration(7, 8) {
     LyricsCacheEntity::class,
     BadLyricsEntity::class,
     PlayLogEntity::class,
+    SongMetadataEntity::class,
+    SongFeedbackEntity::class,
     DiscoverWeeklyEntity::class,
     AlbumCoverEntity::class,
     CustomAlbumEntity::class,
     AlbumTrackEntity::class,
     DeletedAlbumEntity::class
   ],
-  version = 8,
+  version = 9,
   exportSchema = false
 )
 abstract class AurixDatabase : RoomDatabase() {

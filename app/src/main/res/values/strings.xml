@@ -323,4 +323,25 @@
     <string name="album_delete_message">Remove \"%1$s\" (%2$d songs) from Albums?</string>
     <string name="album_delete_also_local">Also delete %1$d local songs from My songs</string>
     <string name="album_meta_empty">Album · 0 songs</string>
+    <string name="because_section_title">Because You Listened</string>
+    <string name="because_section_sub_cold">Favorites &amp; vocal sad/chill picks to get started</string>
+    <string name="because_section_sub_warm">Vocal sad &amp; chill tracks matched to your 30-day taste</string>
+    <string name="because_tab_sad">Sad Vibes for You</string>
+    <string name="because_tab_chill">Chill Mix for You</string>
+    <string name="because_play_all">Play All</string>
+    <string name="because_see_all">See all (%1$d)</string>
+    <string name="because_match_badge">%1$d%% Match</string>
+    <string name="because_empty_sad">Play or search a few vocal sad tracks to fill Sad Vibes for You.</string>
+    <string name="because_empty_chill">Play or search a few vocal chill tracks to fill Chill Mix for You.</string>
+    <string name="because_like_cd">Like recommendation</string>
+    <string name="because_dislike_cd">Dislike recommendation</string>
+    <string name="because_feedback_liked">Saved like for \"%1$s\"</string>
+    <string name="because_feedback_disliked">Hid \"%1$s\" from mixes</string>
+    <string name="because_feedback_cleared">Cleared feedback for \"%1$s\"</string>
+    <string name="because_detail_badge">VOCAL MOOD MIX</string>
+    <string name="moodflow_label">MoodFlow</string>
+    <string name="moodflow_on_label">MoodFlow On</string>
+    <string name="moodflow_off_label">MoodFlow Off</string>
+    <string name="moodflow_match_badge">%1$d%% Match</string>
+    <string name="moodflow_toggle_cd">Toggle MoodFlow intelligent mood shuffle</string>
 </resources>

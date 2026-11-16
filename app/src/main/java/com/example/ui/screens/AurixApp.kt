@@ -212,6 +212,9 @@ private fun AurixMainShell(
   var albumDetailSong by remember { mutableStateOf<com.example.model.Song?>(null) }
   var songForAlbumPicker by remember { mutableStateOf<com.example.model.Song?>(null) }
   val smartRecommendations by viewModel.smartRecommendations.collectAsStateWithLifecycle()
+  val becauseYouListened by viewModel.becauseYouListened.collectAsStateWithLifecycle()
+  val moodFlowEnabled by viewModel.moodFlowEnabled.collectAsStateWithLifecycle()
+  val moodFlowCurrentPick by viewModel.moodFlowCurrentPick.collectAsStateWithLifecycle()
   val discoverWeekly by viewModel.discoverWeekly.collectAsStateWithLifecycle()
   val moodPlaylists by viewModel.moodPlaylists.collectAsStateWithLifecycle()
   val musicDna by viewModel.musicDna.collectAsStateWithLifecycle()
@@ -387,12 +390,18 @@ private fun AurixMainShell(
                 currentScreen = Screen.Album
               },
               smartRecommendations = smartRecommendations,
+              becauseYouListened = becauseYouListened,
               discoverWeekly = discoverWeekly,
               moodPlaylists = moodPlaylists,
               musicDna = musicDna,
               onOpenInsights = { currentScreen = Screen.Insights },
               onOpenDiscoverWeekly = { currentScreen = Screen.PlaylistDetail("discover_weekly") },
               onOpenMoodPlaylist = { mood -> currentScreen = Screen.PlaylistDetail("mood_${mood.id}") },
+              onPlayBecauseMix = { items, startSong -> viewModel.playBecauseYouListenedMix(items, startSong) },
+              onSongFeedback = { song, liked -> viewModel.submitSongFeedback(song, liked) },
+              onOpenBecauseDetail = { isSad ->
+                currentScreen = Screen.PlaylistDetail(if (isSad) "because_sad" else "because_chill")
+              },
               onSongClick = { song, queue -> viewModel.playSong(song, queue) },
               onFavoriteClick = { viewModel.toggleFavorite(it) }
             )
@@ -446,6 +455,29 @@ private fun AurixMainShell(
                   onCheckLyrics = { viewModel.ensureLyricsVerified(it) },
                   onSongClick = { song, queue -> viewModel.playSong(song, queue) },
                   onFavoriteClick = { viewModel.toggleFavorite(it) }
+                )
+              } else if (screen.key == "because_sad" || screen.key == "because_chill") {
+                val isSad = screen.key == "because_sad"
+                val items = if (isSad) becauseYouListened.sadVibes else becauseYouListened.chillMix
+                BecauseYouListenedDetailScreen(
+                  title = stringResource(id = if (isSad) R.string.because_tab_sad else R.string.because_tab_chill),
+                  subtitle = stringResource(
+                    id = if (becauseYouListened.isColdStart) R.string.because_section_sub_cold else R.string.because_section_sub_warm
+                  ),
+                  items = items,
+                  emptyMessage = stringResource(id = if (isSad) R.string.because_empty_sad else R.string.because_empty_chill),
+                  currentSong = currentSong,
+                  isPlaying = isPlaying,
+                  darkTheme = darkTheme,
+                  reducedMotion = reducedMotion,
+                  verifiedLyricsIds = verifiedLyricsIds,
+                  onBack = { currentScreen = Screen.Home },
+                  onPlayAll = { viewModel.playBecauseYouListenedMix(items, null) },
+                  onShuffleAll = { viewModel.shuffleAlbum(items.map { it.song }) },
+                  onCheckLyrics = { viewModel.ensureLyricsVerified(it) },
+                  onPlayItem = { item -> viewModel.playBecauseYouListenedMix(items, item.song) },
+                  onFavoriteClick = { viewModel.toggleFavorite(it) },
+                  onFeedback = { song, liked -> viewModel.submitSongFeedback(song, liked) }
                 )
               } else {
                 val moodId = screen.key.removePrefix("mood_")
@@ -808,7 +840,10 @@ private fun AurixMainShell(
             onPlaySimilarSong = { similar ->
               val queue = listOf(similar) + viewModel.getSimilarSongs(similar).map { it.song }
               viewModel.playSong(similar, queue)
-            }
+            },
+            moodFlowEnabled = moodFlowEnabled,
+            moodFlowPick = moodFlowCurrentPick,
+            onToggleMoodFlow = { viewModel.toggleMoodFlow() }
           )
         }
       }

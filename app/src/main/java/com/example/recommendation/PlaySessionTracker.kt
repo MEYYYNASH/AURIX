@@ -15,6 +15,14 @@ sealed interface PlaySessionAction {
   ) : PlaySessionAction
 }
 
+data class ActivePlaySnapshot(
+  val song: Song,
+  val startedAtMs: Long,
+  val listenedDurationMs: Long,
+  val isQualified: Boolean,
+  val persistedRowId: Long?
+)
+
 /**
  * Tracks active playback time for the current song and triggers persistence ONLY after
  * the user has listened for at least [RecommendationEngine.MIN_QUALIFIED_PLAY_MS] (30 seconds).
@@ -35,6 +43,18 @@ class PlaySessionTracker(
 
   val isQualified: Boolean
     get() = qualifiedTriggered
+
+  @Synchronized
+  fun currentSessionSnapshot(): ActivePlaySnapshot? {
+    val s = activeSong ?: return null
+    return ActivePlaySnapshot(
+      song = s,
+      startedAtMs = startedAtMs,
+      listenedDurationMs = accumulatedMs,
+      isQualified = qualifiedTriggered,
+      persistedRowId = persistedRowId
+    )
+  }
 
   @Synchronized
   fun startNewSession(song: Song, nowMs: Long = System.currentTimeMillis()): PlaySessionAction.UpdateListenedDuration? {

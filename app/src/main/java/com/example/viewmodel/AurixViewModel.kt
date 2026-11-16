@@ -79,7 +79,8 @@ class AurixViewModel(application: Application) : AndroidViewModel(application) {
       AURIX_MIGRATION_4_5,
       AURIX_MIGRATION_5_6,
       AURIX_MIGRATION_6_7,
-      AURIX_MIGRATION_7_8
+      AURIX_MIGRATION_7_8,
+      AURIX_MIGRATION_8_9
     )
     .build()
   private val dao = database.aurixDao()
@@ -103,6 +104,8 @@ class AurixViewModel(application: Application) : AndroidViewModel(application) {
   val onboardingCompleted = prefsManager.onboardingCompleted.stateIn(viewModelScope, SharingStarted.Lazily, false)
   val githubOwner = prefsManager.githubOwner.stateIn(viewModelScope, SharingStarted.Lazily, "MEYYYNASH")
   val githubRepo = prefsManager.githubRepo.stateIn(viewModelScope, SharingStarted.Lazily, "AURIX")
+  val moodFlowEnabled: StateFlow<Boolean> = prefsManager.moodFlowEnabled
+    .stateIn(viewModelScope, SharingStarted.Eagerly, true)
 
   // Search-Only Mode & YouTube Analyze/Download States
   private val _searchMode = MutableStateFlow("youtube_search") // "youtube_search" | "youtube" | "itunes"
@@ -406,14 +409,58 @@ class AurixViewModel(application: Application) : AndroidViewModel(application) {
     }
   }.stateIn(viewModelScope, SharingStarted.Lazily, null)
 
+  private val storedCatalogSongs: StateFlow<List<Song>> = analyticsRepository.observeStoredCatalogSongs()
+    .stateIn(viewModelScope, SharingStarted.Lazily, emptyList())
+
+  val richPlayHistory: StateFlow<List<RichPlayRecord>> = combine(
+    analyticsRepository.observeRichPlayHistory(),
+    favoriteIds,
+    hiddenSongIds,
+    blockedArtists
+  ) { logs, favs, hidden, blocked ->
+    logs
+      .filter { isTrackVisible(it.song, hidden, blocked) }
+      .map { rec -> rec.copy(song = rec.song.copy(isFavorite = rec.song.id in favs)) }
+  }.stateIn(viewModelScope, SharingStarted.Eagerly, emptyList())
+
+  val songFeedbackMap: StateFlow<Map<String, Boolean>> = analyticsRepository.observeSongFeedback()
+    .stateIn(viewModelScope, SharingStarted.Eagerly, emptyMap())
+
   private val catalogTracks: StateFlow<List<Song>> = combine(
     featuredTracks,
     localSongs,
     favorites,
-    searchResults
-  ) { featured, local, favs, search ->
-    (featured + local + favs + search).distinctBy { it.id }
+    searchResults,
+    storedCatalogSongs
+  ) { featured, local, favs, search, stored ->
+    (featured + local + favs + search + stored)
+      .distinctBy { it.id }
+      .map { TrackMetadataClassifier.enrich(it) }
   }.stateIn(viewModelScope, SharingStarted.Lazily, emptyList())
+
+  val becauseYouListened: StateFlow<BecauseYouListenedResult> = combine(
+    catalogTracks,
+    richPlayHistory,
+    favorites,
+    songFeedbackMap
+  ) { catalog, history, favs, feedback ->
+    val popularity = history.groupingBy { it.song.id }.eachCount()
+    BecauseYouListenedEngine.recommend(
+      catalog = catalog,
+      playHistory = history,
+      favorites = favs,
+      favoriteIds = favs.map { it.id }.toSet(),
+      feedbackBySongId = feedback,
+      popularityBySongId = popularity
+    )
+  }.stateIn(
+    viewModelScope,
+    SharingStarted.Lazily,
+    BecauseYouListenedResult()
+  )
+
+  private val _moodFlowCurrentPick = MutableStateFlow<MoodFlowPick?>(null)
+  val moodFlowCurrentPick: StateFlow<MoodFlowPick?> = _moodFlowCurrentPick.asStateFlow()
 
   val smartRecommendations: StateFlow<List<RecommendedTrack>> = combine(
     qualifiedPlayLogs,
@@ -798,7 +845,8 @@ class AurixViewModel(application: Application) : AndroidViewModel(application) {
         !_repeatEnabled.value &&
         _resolvingSongId.value == null
       ) {
-        nextTrack()
+        recordActiveSessionOutcome(skipped = false)
+        nextTrack(fromNaturalEnd = true)
       }
       _currentPosition.value = controller.currentPosition.coerceAtLeast(0L)
     }
@@ -866,11 +914,26 @@ class AurixViewModel(application: Application) : AndroidViewModel(application) {
     }
     observeSearchRequests()
     observeDiscoverWeeklyUpdates()
+    observeCatalogMetadataSync()
     connectPlaybackController(application)
     loadDailyRecommendations(DailyFeedCategory.DAILY_CHARTS)
     startPositionTicker()
     if (updateManager.uiState.value.stage == UpdateStage.Idle) {
       checkForUpdates(application, silent = true)
+    }
+  }
+
+  private fun observeCatalogMetadataSync() {
+    viewModelScope.launch {
+      combine(featuredTracks, localSongs, searchResults) { f, l, s ->
+        (f + l + s).distinctBy { it.id }
+      }
+        .debounce(1_000L)
+        .collectLatest { tracks ->
+          if (tracks.isNotEmpty()) {
+            analyticsRepository.upsertCatalogMetadata(tracks.take(120))
+          }
+        }
     }
   }
 
@@ -977,12 +1040,74 @@ class AurixViewModel(application: Application) : AndroidViewModel(application) {
     }
   }
 
+  private fun recordActiveSessionOutcome(skipped: Boolean) {
+    val snapshot = playSessionTracker.currentSessionSnapshot() ?: return
+    val song = snapshot.song
+    val listened = snapshot.listenedDurationMs
+    if (listened < 1_500L) return
+    val totalDur = _durationMs.value.coerceAtLeast(song.durationSeconds * 1000L).coerceAtLeast(1L)
+    val rowId = snapshot.persistedRowId
+    val alreadyPlayed = richPlayHistory.value.any { it.song.id == song.id }
+
+    viewModelScope.launch {
+      if (rowId != null && rowId > 0L) {
+        analyticsRepository.updatePlayOutcome(
+          playLogId = rowId,
+          song = song,
+          listenedDurationMs = listened,
+          totalDurationMs = totalDur,
+          skipped = skipped,
+          replayed = alreadyPlayed && !skipped
+        )
+      } else if (skipped) {
+        analyticsRepository.recordEarlySkip(
+          song = song,
+          playedAtMs = snapshot.startedAtMs,
+          listenedDurationMs = listened,
+          durationMs = totalDur
+        )
+      }
+    }
+  }
+
   private fun onTrackActivated(song: Song) {
     val enriched = TrackMetadataClassifier.enrich(song)
+    val previousSong = _rawCurrentSong.value
+    if (previousSong != null && previousSong.id != enriched.id) {
+      val prevSnap = playSessionTracker.currentSessionSnapshot()
+      if (prevSnap != null && prevSnap.song.id == previousSong.id) {
+        val totalDur = _durationMs.value.coerceAtLeast(previousSong.durationSeconds * 1000L).coerceAtLeast(1L)
+        val pct = prevSnap.listenedDurationMs.toFloat() / totalDur.toFloat()
+        if (pct >= 0.78f) {
+          recordActiveSessionOutcome(skipped = false)
+        }
+      }
+    }
+
     _rawCurrentSong.value = enriched
     _currentPosition.value = 0L
     _durationMs.value = (enriched.durationSeconds * 1000L).coerceAtLeast(1000L)
     _lyricOffsetMs.value = 0L
+
+    // Update MoodFlow live match readout for the newly active track
+    if (moodFlowEnabled.value && (_moodFlowCurrentPick.value?.song?.id != enriched.id)) {
+      val profile = MoodFlowEngine.buildCurrentMoodProfile(
+        currentSong = previousSong ?: enriched,
+        previousSongs = recentlyPlayed.value.filter { it.id != enriched.id }.take(2)
+      )
+      val (_, pct) = MoodFlowEngine.computeAdjustedScore(
+        profile = profile,
+        candidate = enriched,
+        playHistory = richPlayHistory.value
+      )
+      _moodFlowCurrentPick.value = MoodFlowPick(
+        song = enriched,
+        matchPercent = pct,
+        score = pct / 100.0,
+        bucket = if (_shuffleEnabled.value) MoodFlowBucket.SAME_MOOD else MoodFlowBucket.RANDOM_FALLBACK,
+        reason = "MoodFlow · $pct% match"
+      )
+    }
 
     val flushPrevious = playSessionTracker.startNewSession(enriched)
     viewModelScope.launch {
@@ -1022,16 +1147,38 @@ class AurixViewModel(application: Application) : AndroidViewModel(application) {
   }
 
   private fun startQueueOnController(controller: MediaController, song: Song, resolvedQueue: List<Song>) {
-    val playableQueue = resolvedQueue
+    val basePlayable = resolvedQueue
       .filter { it.streamUrl.isNotBlank() && (!isUnresolvedYoutubeWatchUrl(it) || it.id == song.id) }
       .ifEmpty { listOf(song) }
-    val startIndex = playableQueue.indexOfFirst { it.id == song.id }.coerceAtLeast(0)
-    val mediaItems = playableQueue.map { buildMediaItem(it) }
+
+    val useMoodFlowOrder = _shuffleEnabled.value && moodFlowEnabled.value && basePlayable.size > 1
+    val orderedQueue = if (useMoodFlowOrder) {
+      val remaining = basePlayable.filter { it.id != song.id }
+      val nextPick = MoodFlowEngine.pickNextSong(
+        currentSong = song,
+        allSongs = remaining,
+        playHistory = richPlayHistory.value,
+        favoriteIds = favoriteIds.value,
+        recentPlayedSongs = recentlyPlayed.value
+      )
+      if (nextPick != null) {
+        val rest = remaining.filter { it.id != nextPick.song.id }
+        listOf(song, nextPick.song) + rest
+      } else {
+        basePlayable
+      }
+    } else {
+      basePlayable
+    }
+
+    val startIndex = orderedQueue.indexOfFirst { it.id == song.id }.coerceAtLeast(0)
+    val mediaItems = orderedQueue.map { buildMediaItem(it) }
 
     controller.stop()
     controller.setMediaItems(mediaItems, startIndex, 0L)
     controller.playbackParameters = PlaybackParameters(_playbackSpeed.value)
-    controller.shuffleModeEnabled = _shuffleEnabled.value
+    // When MoodFlow is enabled, Aurix orders and selects transitions instead of raw uniform ExoPlayer shuffle
+    controller.shuffleModeEnabled = _shuffleEnabled.value && !moodFlowEnabled.value
     controller.repeatMode = if (_repeatEnabled.value) Player.REPEAT_MODE_ONE else Player.REPEAT_MODE_ALL
     controller.prepare()
     controller.play()
@@ -2188,7 +2335,37 @@ class AurixViewModel(application: Application) : AndroidViewModel(application) {
     }
   }
 
-  fun nextTrack() {
+  fun nextTrack(fromNaturalEnd: Boolean = false) {
+    val current = _rawCurrentSong.value
+    if (!fromNaturalEnd && current != null) {
+      val snap = playSessionTracker.currentSessionSnapshot()
+      val totalDur = _durationMs.value.coerceAtLeast(current.durationSeconds * 1000L).coerceAtLeast(1L)
+      val pct = (snap?.listenedDurationMs ?: 0L).toFloat() / totalDur.toFloat()
+      if (pct < 0.50f) {
+        recordActiveSessionOutcome(skipped = true)
+      } else if (pct >= 0.78f) {
+        recordActiveSessionOutcome(skipped = false)
+      }
+    }
+
+    val q = _queue.value.ifEmpty { catalogTracks.value }
+    if (_shuffleEnabled.value && moodFlowEnabled.value && current != null && q.isNotEmpty()) {
+      val candidatePool = if (q.size > 1) q else catalogTracks.value.ifEmpty { q }
+      val pick = MoodFlowEngine.pickNextSong(
+        currentSong = current,
+        allSongs = candidatePool,
+        playHistory = richPlayHistory.value,
+        favoriteIds = favoriteIds.value,
+        recentPlayedSongs = recentlyPlayed.value
+      )
+      if (pick != null) {
+        _moodFlowCurrentPick.value = pick
+        val nextQueue = if (q.any { it.id == pick.song.id }) q else q + pick.song
+        playSong(pick.song, nextQueue)
+        return
+      }
+    }
+
     val controller = mediaController
     if (controller != null && controller.hasNextMediaItem()) {
       controller.seekToNextMediaItem()
@@ -2198,9 +2375,7 @@ class AurixViewModel(application: Application) : AndroidViewModel(application) {
       controller.play()
       return
     }
-    val q = _queue.value
     if (q.isEmpty()) return
-    val current = _rawCurrentSong.value
     val curIdx = q.indexOfFirst { it.id == current?.id }.coerceAtLeast(0)
     val nextIdx = if (_shuffleEnabled.value && q.size > 1) {
       q.indices.filter { it != curIdx }.random()
@@ -2236,7 +2411,56 @@ class AurixViewModel(application: Application) : AndroidViewModel(application) {
   fun toggleShuffle() {
     val next = !_shuffleEnabled.value
     _shuffleEnabled.value = next
-    mediaController?.shuffleModeEnabled = next
+    mediaController?.shuffleModeEnabled = next && !moodFlowEnabled.value
+  }
+
+  fun toggleMoodFlow() {
+    val next = !moodFlowEnabled.value
+    viewModelScope.launch {
+      prefsManager.setMoodFlowEnabled(next)
+    }
+    if (next) {
+      _shuffleEnabled.value = true
+      mediaController?.shuffleModeEnabled = false
+      val cur = _rawCurrentSong.value
+      val pool = _queue.value.ifEmpty { catalogTracks.value }
+      if (cur != null && pool.size > 1) {
+        val pick = MoodFlowEngine.pickNextSong(
+          currentSong = cur,
+          allSongs = pool,
+          playHistory = richPlayHistory.value,
+          favoriteIds = favoriteIds.value,
+          recentPlayedSongs = recentlyPlayed.value
+        )
+        if (pick != null) {
+          _moodFlowCurrentPick.value = pick
+        }
+      }
+    } else {
+      mediaController?.shuffleModeEnabled = _shuffleEnabled.value
+    }
+  }
+
+  fun submitSongFeedback(song: Song, liked: Boolean) {
+    val currentFeedback = songFeedbackMap.value[song.id]
+    val nextFeedback: Boolean? = if (currentFeedback == liked) null else liked
+    val appContext = localizedAppContext()
+    viewModelScope.launch {
+      analyticsRepository.setSongFeedback(song, nextFeedback)
+      val msgRes = when (nextFeedback) {
+        true -> R.string.because_feedback_liked
+        false -> R.string.because_feedback_disliked
+        null -> R.string.because_feedback_cleared
+      }
+      Toast.makeText(appContext, appContext.getString(msgRes, song.title), Toast.LENGTH_SHORT).show()
+    }
+  }
+
+  fun playBecauseYouListenedMix(items: List<VocalRecommendationItem>, startSong: Song? = null) {
+    if (items.isEmpty()) return
+    val tracks = items.map { it.song }
+    val first = startSong ?: tracks.first()
+    playSong(first, tracks)
   }
 
   fun toggleRepeat() {
@@ -2306,9 +2530,25 @@ class AurixViewModel(application: Application) : AndroidViewModel(application) {
   fun shuffleAlbum(tracks: List<Song>) {
     if (tracks.isEmpty()) return
     _shuffleEnabled.value = true
-    mediaController?.shuffleModeEnabled = true
-    val randomTrack = tracks.random()
-    playSong(randomTrack, tracks)
+    mediaController?.shuffleModeEnabled = !moodFlowEnabled.value
+    val starter = if (moodFlowEnabled.value && _rawCurrentSong.value != null && tracks.size > 1) {
+      val pick = MoodFlowEngine.pickNextSong(
+        currentSong = _rawCurrentSong.value!!,
+        allSongs = tracks,
+        playHistory = richPlayHistory.value,
+        favoriteIds = favoriteIds.value,
+        recentPlayedSongs = recentlyPlayed.value
+      )
+      if (pick != null) {
+        _moodFlowCurrentPick.value = pick
+        pick.song
+      } else {
+        tracks.random()
+      }
+    } else {
+      tracks.random()
+    }
+    playSong(starter, tracks)
   }
 
   fun openAlbum(albumId: String? = null) {

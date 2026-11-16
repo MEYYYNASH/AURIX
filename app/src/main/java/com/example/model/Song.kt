@@ -17,7 +17,17 @@ data class Song(
   val mood: String = "",
   val album: String = "",
   val trackNumber: Int = 0,
-  val year: String = ""
+  val year: String = "",
+  val energy: Float = 0.5f,
+  val sad: Float = 0f,
+  val chill: Float = 0f,
+  val happy: Float = 0f,
+  val calm: Float = 0f,
+  val energetic: Float = 0f,
+  val romantic: Float = 0f,
+  val hasVocals: Boolean = true,
+  val language: String = "en",
+  val hasMoodMetadata: Boolean = false
 )
 
 enum class CustomCoverMode(val id: String) {

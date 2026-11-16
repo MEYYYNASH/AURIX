@@ -45,13 +45,13 @@ import kotlin.coroutines.coroutineContext
  * Editable release manifest endpoint for AURIX OTA updates.
  * Expected JSON format:
  * {
- *   "versionName": "1.6.5",
- *   "versionCode": 10605,
+ *   "versionName": "1.6.6",
+ *   "versionCode": 10606,
  *   "releaseDate": "2026-11-16",
- *   "apkUrl": "https://github.com/MEYYYNASH/AURIX/releases/download/v1.6.5/AURIX-v1.6.5.apk",
+ *   "apkUrl": "https://github.com/MEYYYNASH/AURIX/releases/download/v1.6.6/AURIX-v1.6.6.apk",
  *   "sha256": "...",
  *   "notes": ["..."],
- *   "releasePageUrl": "https://github.com/MEYYYNASH/AURIX/releases/tag/v1.6.5"
+ *   "releasePageUrl": "https://github.com/MEYYYNASH/AURIX/releases/tag/v1.6.6"
  * }
  */
 const val VERSION_JSON_URL = "https://raw.githubusercontent.com/MEYYYNASH/AURIX/main/version.json"
@@ -162,10 +162,10 @@ class UpdateManager(
     private const val META_FILE_NAME = "aurix_update.apk.meta.json"
 
     val CURRENT_RELEASE_NOTES = listOf(
-      "Animated 7-state Planet-Smiley OTA updater in Settings",
-      "Resumable APK downloads with live speed, pause/resume & SHA-256 verification",
-      "Direct YouTube song search, full playback & format/quality selector sheet",
-      "One-time What's New dialog & enhanced Liquid Glass visual polish"
+      "Because You Listened: Vocal Sad Vibes & Chill Mix with Match % and 👍/👎 feedback",
+      "MoodFlow: Intelligent 5D mood-aware shuffle with live Match % badge in Now Playing",
+      "Animated 7-state Planet-Smiley OTA updater with SHA-256 verification",
+      "Direct YouTube song search, full playback & format/quality selector sheet"
     )
 
     fun parseVersionJson(rawJson: String): RemoteVersionInfo {

@@ -33,6 +33,7 @@ class PreferencesManager(private val context: Context) {
     val CROSSFADE_MANUAL_SKIP = booleanPreferencesKey("crossfade_manual_skip")
     val LAST_SEEN_VERSION_CODE = longPreferencesKey("last_seen_version_code")
     val UPDATE_DOWNLOAD_META = stringPreferencesKey("update_download_meta")
+    val MOOD_FLOW_ENABLED = booleanPreferencesKey("mood_flow_enabled")
   }
 
   val themeMode: Flow<String> = context.dataStore.data.map { prefs -> prefs[THEME_MODE] ?: "system" }
@@ -55,6 +56,7 @@ class PreferencesManager(private val context: Context) {
   val crossfadeManualSkip: Flow<Boolean> = context.dataStore.data.map { prefs -> prefs[CROSSFADE_MANUAL_SKIP] ?: true }
   val lastSeenVersionCode: Flow<Long> = context.dataStore.data.map { prefs -> prefs[LAST_SEEN_VERSION_CODE] ?: 0L }
   val updateDownloadMeta: Flow<String> = context.dataStore.data.map { prefs -> prefs[UPDATE_DOWNLOAD_META] ?: "" }
+  val moodFlowEnabled: Flow<Boolean> = context.dataStore.data.map { prefs -> prefs[MOOD_FLOW_ENABLED] ?: true }
 
   suspend fun setThemeMode(mode: String) { context.dataStore.edit { it[THEME_MODE] = mode } }
   suspend fun setAccentColor(color: String) { context.dataStore.edit { it[ACCENT_COLOR] = color } }
@@ -118,6 +120,12 @@ class PreferencesManager(private val context: Context) {
     context.dataStore.edit { prefs ->
       if (metaJson.isBlank()) prefs.remove(UPDATE_DOWNLOAD_META)
       else prefs[UPDATE_DOWNLOAD_META] = metaJson
+    }
+  }
+
+  suspend fun setMoodFlowEnabled(enabled: Boolean) {
+    context.dataStore.edit { prefs ->
+      prefs[MOOD_FLOW_ENABLED] = enabled
     }
   }
 }

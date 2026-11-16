@@ -220,4 +220,25 @@
     <string name="onboarding_p3_desc">ជ្រើសរើសស្បែក ពណ៌សំខាន់ ភាសា និងផ្ទៃខាងក្រោយរូបភាពសកម្ម។</string>
     <string name="onboarding_p4_title">ត្រៀមខ្លួនស្ដាប់តន្ត្រីហើយឬនៅ?</string>
     <string name="onboarding_p4_desc">ចាប់ផ្ដើមដំណើរកម្សាន្តតន្ត្រីជាមួយ AURIX ថ្ងៃនេះ។</string>
+    <string name="because_section_title">ដោយសារអ្នកបានស្ដាប់</string>
+    <string name="because_section_sub_cold">បទចម្រៀងចូលចិត្ត និងបទអារម្មណ៍សោកសៅ/ស្ងប់ស្ងាត់សម្រាប់ចាប់ផ្ដើម</string>
+    <string name="because_section_sub_warm">បទចម្រៀងមានសំឡេងច្រៀងអារម្មណ៍សោកសៅ និងស្ងប់ស្ងាត់តាមរសជាតិ ៣០ ថ្ងៃរបស់អ្នក</string>
+    <string name="because_tab_sad">អារម្មណ៍សោកសៅសម្រាប់អ្នក</string>
+    <string name="because_tab_chill">ចម្រៀងស្ងប់ស្ងាត់សម្រាប់អ្នក</string>
+    <string name="because_play_all">ចាក់ទាំងអស់</string>
+    <string name="because_see_all">មើលទាំងអស់ (%1$d)</string>
+    <string name="because_match_badge">ត្រូវគ្នា %1$d%%</string>
+    <string name="because_empty_sad">ចាក់ ឬស្វែងរកបទសោកសៅមានសំឡេងច្រៀងដើម្បីបំពេញបញ្ជីនេះ។</string>
+    <string name="because_empty_chill">ចាក់ ឬស្វែងរកបទស្ងប់ស្ងាត់មានសំឡេងច្រៀងដើម្បីបំពេញបញ្ជីនេះ។</string>
+    <string name="because_like_cd">ចូលចិត្តការណែនាំ</string>
+    <string name="because_dislike_cd">មិនចូលចិត្តការណែនាំ</string>
+    <string name="because_feedback_liked">បានចូលចិត្ត \"%1$s\"</string>
+    <string name="because_feedback_disliked">បានលាក់ \"%1$s\" ពីបញ្ជីណែនាំ</string>
+    <string name="because_feedback_cleared">បានសម្អាតមតិសម្រាប់ \"%1$s\"</string>
+    <string name="because_detail_badge">ចម្រៀងច្រៀងតាមអារម្មណ៍</string>
+    <string name="moodflow_label">MoodFlow</string>
+    <string name="moodflow_on_label">MoodFlow បើក</string>
+    <string name="moodflow_off_label">MoodFlow បិទ</string>
+    <string name="moodflow_match_badge">ត្រូវគ្នា %1$d%%</string>
+    <string name="moodflow_toggle_cd">បើក ឬបិទ MoodFlow ឆ្លាតវៃតាមអារម្មណ៍</string>
 </resources>

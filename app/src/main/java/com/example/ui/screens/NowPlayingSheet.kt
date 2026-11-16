@@ -51,6 +51,7 @@ import com.example.model.LyricsResult
 import com.example.model.Song
 import com.example.playback.EqPreset
 import com.example.playback.EqualizerUiState
+import com.example.recommendation.MoodFlowPick
 import com.example.recommendation.SimilarTrack
 import com.example.ui.theme.HeartRed
 
@@ -98,7 +99,10 @@ fun NowPlayingSheet(
   onDeleteSong: (() -> Unit)? = null,
   onAddToAlbum: ((Song) -> Unit)? = null,
   similarSongsProvider: (Song) -> List<SimilarTrack> = { emptyList() },
-  onPlaySimilarSong: (Song) -> Unit = {}
+  onPlaySimilarSong: (Song) -> Unit = {},
+  moodFlowEnabled: Boolean = true,
+  moodFlowPick: MoodFlowPick? = null,
+  onToggleMoodFlow: () -> Unit = {}
 ) {
   BackHandler { onClose() }
   LaunchedEffect(song.id) {
@@ -527,6 +531,65 @@ fun NowPlayingSheet(
       }
 
       Spacer(modifier = Modifier.height(10.dp))
+
+      // MoodFlow Intelligent Mood Shuffle Toggle Chip + Live Match % Badge
+      Row(
+        modifier = Modifier.fillMaxWidth(),
+        horizontalArrangement = Arrangement.Center,
+        verticalAlignment = Alignment.CenterVertically
+      ) {
+        Surface(
+          onClick = onToggleMoodFlow,
+          shape = CircleShape,
+          color = if (moodFlowEnabled) c1.copy(alpha = 0.26f) else Color.White.copy(alpha = 0.12f),
+          border = androidx.compose.foundation.BorderStroke(
+            1.dp,
+            if (moodFlowEnabled) c1.copy(alpha = 0.80f) else Color.White.copy(alpha = 0.20f)
+          ),
+          modifier = Modifier
+            .defaultMinSize(minHeight = 48.dp)
+            .testTag("np_moodflow_chip")
+        ) {
+          Row(
+            modifier = Modifier.padding(horizontal = 14.dp, vertical = 8.dp),
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.spacedBy(8.dp)
+          ) {
+            Icon(
+              imageVector = Icons.Rounded.AutoAwesome,
+              contentDescription = stringResource(id = R.string.moodflow_toggle_cd),
+              tint = if (moodFlowEnabled) Color.White else Color.White.copy(alpha = 0.72f),
+              modifier = Modifier.size(16.dp)
+            )
+            Text(
+              text = stringResource(
+                id = if (moodFlowEnabled) R.string.moodflow_on_label else R.string.moodflow_off_label
+              ),
+              style = MaterialTheme.typography.labelLarge.copy(fontWeight = FontWeight.Bold),
+              color = if (moodFlowEnabled) Color.White else Color.White.copy(alpha = 0.78f)
+            )
+            if (moodFlowEnabled && moodFlowPick != null) {
+              Surface(
+                shape = CircleShape,
+                color = Color.White.copy(alpha = 0.20f),
+                modifier = Modifier.testTag("np_moodflow_match_badge")
+              ) {
+                Text(
+                  text = stringResource(id = R.string.moodflow_match_badge, moodFlowPick.matchPercent),
+                  style = MaterialTheme.typography.labelSmall.copy(
+                    fontWeight = FontWeight.ExtraBold,
+                    fontSize = 11.sp
+                  ),
+                  color = Color.White,
+                  modifier = Modifier.padding(horizontal = 8.dp, vertical = 3.dp)
+                )
+              }
+            }
+          }
+        }
+      }
+
+      Spacer(modifier = Modifier.height(6.dp))
 
       // Sleep timer, Equalizer & speed toggles
       Row(
