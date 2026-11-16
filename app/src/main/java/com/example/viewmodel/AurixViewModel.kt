@@ -41,6 +41,8 @@ import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.async
+import kotlinx.coroutines.awaitAll
+import kotlinx.coroutines.coroutineScope
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.*
 import kotlinx.coroutines.isActive
@@ -59,10 +61,10 @@ enum class DailyFeedCategory(
   val badgeText: String,
   val subtitle: String
 ) {
-  TIKTOK_VIRAL("tiktok", "TikTok Viral", "TikTok Viral", "Trending sounds on TikTok today"),
-  DAILY_CHARTS("charts", "Daily Top", "Daily Chart", "Global top songs updated daily"),
-  PHONK_EDITS("phonk", "Phonk & Edits", "Viral Edits", "Trending montage & phonk edits"),
-  KHMER_ASIA("khmer", "Khmer & Asia", "Regional Hits", "Popular Khmer & Asian hits")
+  TIKTOK_VIRAL("tiktok", "TikTok Viral", "TikTok Viral", "Trending TikTok hits from iTunes"),
+  DAILY_CHARTS("charts", "Daily Top", "Daily Chart", "Global top songs from iTunes & YouTube"),
+  PHONK_EDITS("phonk", "Phonk & Edits", "Viral Edits", "Phonk & montage tracks from YouTube"),
+  KHMER_ASIA("khmer", "Khmer & Asia", "Regional Hits", "Popular Khmer & Asian hits from iTunes & YouTube")
 }
 
 class AurixViewModel(application: Application) : AndroidViewModel(application) {
@@ -176,8 +178,8 @@ class AurixViewModel(application: Application) : AndroidViewModel(application) {
   private val _downloadedSongIds = MutableStateFlow<Set<String>>(emptySet())
   val downloadedSongIds: StateFlow<Set<String>> = _downloadedSongIds
 
-  // Daily Chart & Viral Recommendations (auto-updates daily)
-  private val _selectedDailyFeed = MutableStateFlow(DailyFeedCategory.DAILY_CHARTS)
+  // Daily Chart & Viral Recommendations (auto-updates daily, TikTok Viral powered by iTunes)
+  private val _selectedDailyFeed = MutableStateFlow(DailyFeedCategory.TIKTOK_VIRAL)
   val selectedDailyFeed: StateFlow<DailyFeedCategory> = _selectedDailyFeed
 
   private val _dailyUpdatedLabel = MutableStateFlow(formatTodayBadge())
@@ -196,6 +198,25 @@ class AurixViewModel(application: Application) : AndroidViewModel(application) {
 
   private val _featuredError = MutableStateFlow<String?>(null)
   val featuredError: StateFlow<String?> = _featuredError
+
+  // Popular Songs from YouTube ("Song List" on Home)
+  private val _rawPopularYoutube = MutableStateFlow<List<Song>>(emptyList())
+  private val _isLoadingPopularYoutube = MutableStateFlow(false)
+  val isLoadingPopularYoutube: StateFlow<Boolean> = _isLoadingPopularYoutube.asStateFlow()
+
+  // TikTok Viral Chart Songs fetched via NewPipeExtractor ("TikTok Viral" on Home)
+  private val _rawTiktokViralNewPipe = MutableStateFlow<List<Song>>(emptyList())
+  private val _isLoadingTiktokViralNewPipe = MutableStateFlow(false)
+  val isLoadingTiktokViralNewPipe: StateFlow<Boolean> = _isLoadingTiktokViralNewPipe.asStateFlow()
+
+  // New Albums from Apple Charts / iTunes ("New Albums" on Home)
+  private val _rawNewAlbums = MutableStateFlow<List<FeaturedAlbumItem>>(emptyList())
+  private val _isLoadingNewAlbums = MutableStateFlow(false)
+  val isLoadingNewAlbums: StateFlow<Boolean> = _isLoadingNewAlbums.asStateFlow()
+
+  private val _remoteAlbumInfo = MutableStateFlow<AlbumInfo?>(null)
+  private val _isShowingRemoteAlbum = MutableStateFlow(false)
+  private var remoteAlbumJob: Job? = null
 
   private val _rawSearchResults = MutableStateFlow<List<Song>>(emptyList())
   private val _isSearching = MutableStateFlow(false)
@@ -225,19 +246,12 @@ class AurixViewModel(application: Application) : AndroidViewModel(application) {
     return artist.trim().lowercase(Locale.ROOT)
   }
 
-  private fun isItunesSong(song: Song): Boolean {
-    return song.id.startsWith("itunes_", ignoreCase = true) ||
-      song.source.contains("itunes", ignoreCase = true) ||
-      song.streamUrl.contains("itunes.apple.com", ignoreCase = true)
-  }
-
   private fun isTrackVisible(
     song: Song,
     hiddenIds: Set<String>,
     blocked: Set<String>
   ): Boolean {
-    return !isItunesSong(song) &&
-      song.id !in hiddenIds &&
+    return song.id !in hiddenIds &&
       normalizeArtistKey(song.artist) !in blocked
   }
 
@@ -279,25 +293,19 @@ class AurixViewModel(application: Application) : AndroidViewModel(application) {
     dao.getFavorites(),
     albumCoverEntities
   ) { list, covers ->
-    list
-      .filterNot {
-        it.id.startsWith("itunes_", ignoreCase = true) ||
-          it.source.contains("itunes", ignoreCase = true) ||
-          it.streamUrl.contains("itunes.apple.com", ignoreCase = true)
-      }
-      .map {
-        val base = Song(
-          id = it.id,
-          title = it.title,
-          artist = it.artist,
-          artworkUrl = it.artworkUrl,
-          durationSeconds = it.durationSeconds,
-          streamUrl = it.streamUrl,
-          source = it.source,
-          isFavorite = true
-        )
-        TrackMetadataClassifier.enrich(effectiveArtworkForSong(base, covers))
-      }
+    list.map {
+      val base = Song(
+        id = it.id,
+        title = it.title,
+        artist = it.artist,
+        artworkUrl = it.artworkUrl,
+        durationSeconds = it.durationSeconds,
+        streamUrl = it.streamUrl,
+        source = it.source,
+        isFavorite = true
+      )
+      TrackMetadataClassifier.enrich(effectiveArtworkForSong(base, covers))
+    }
   }.stateIn(viewModelScope, SharingStarted.Lazily, emptyList())
 
   private val favoriteIds: StateFlow<Set<String>> = rawFavorites.map { list ->
@@ -423,11 +431,30 @@ class AurixViewModel(application: Application) : AndroidViewModel(application) {
     }
   }.stateIn(viewModelScope, SharingStarted.Lazily, null)
 
-  private val storedCatalogSongs: StateFlow<List<Song>> = analyticsRepository.observeStoredCatalogSongs()
-    .map { list -> list.filterNot(::isItunesSong) }
-    .stateIn(viewModelScope, SharingStarted.Lazily, emptyList())
+  val popularYoutubeSongs: StateFlow<List<Song>> = combine(
+    _rawPopularYoutube,
+    favoriteIds,
+    hiddenSongIds,
+    blockedArtists
+  ) { tracks, favs, hidden, blocked ->
+    tracks
+      .filter { isTrackVisible(it, hidden, blocked) }
+      .map { it.copy(isFavorite = it.id in favs) }
+  }.stateIn(viewModelScope, SharingStarted.Lazily, emptyList())
 
-  private val _youtubeMoodPool = MutableStateFlow<List<Song>>(emptyList())
+  val tiktokViralNewPipeSongs: StateFlow<List<Song>> = combine(
+    _rawTiktokViralNewPipe,
+    favoriteIds,
+    hiddenSongIds,
+    blockedArtists
+  ) { tracks, favs, hidden, blocked ->
+    tracks
+      .filter { isTrackVisible(it, hidden, blocked) }
+      .map { it.copy(isFavorite = it.id in favs) }
+  }.stateIn(viewModelScope, SharingStarted.Lazily, emptyList())
+
+  private val storedCatalogSongs: StateFlow<List<Song>> = analyticsRepository.observeStoredCatalogSongs()
+    .stateIn(viewModelScope, SharingStarted.Lazily, emptyList())
 
   val richPlayHistory: StateFlow<List<RichPlayRecord>> = combine(
     analyticsRepository.observeRichPlayHistory(),
@@ -440,44 +467,17 @@ class AurixViewModel(application: Application) : AndroidViewModel(application) {
       .map { rec -> rec.copy(song = rec.song.copy(isFavorite = rec.song.id in favs)) }
   }.stateIn(viewModelScope, SharingStarted.Eagerly, emptyList())
 
-  val songFeedbackMap: StateFlow<Map<String, Boolean>> = analyticsRepository.observeSongFeedback()
-    .stateIn(viewModelScope, SharingStarted.Eagerly, emptyMap())
-
   private val catalogTracks: StateFlow<List<Song>> = combine(
     featuredTracks,
+    popularYoutubeSongs,
+    tiktokViralNewPipeSongs,
     localSongs,
-    favorites,
-    searchResults,
-    combine(storedCatalogSongs, _youtubeMoodPool) { stored, moodPool ->
-      (stored + moodPool).filterNot(::isItunesSong)
-    }
-  ) { featured, local, favs, search, storedAndMood ->
-    (featured + local + favs + search + storedAndMood)
-      .filterNot(::isItunesSong)
+    combine(favorites, searchResults, storedCatalogSongs) { favs, search, stored -> favs + search + stored }
+  ) { featured, popularYt, tiktokCharts, local, extra ->
+    (popularYt + tiktokCharts + featured + local + extra)
       .distinctBy { it.id }
       .map { TrackMetadataClassifier.enrich(it) }
   }.stateIn(viewModelScope, SharingStarted.Lazily, emptyList())
-
-  val becauseYouListened: StateFlow<BecauseYouListenedResult> = combine(
-    catalogTracks,
-    richPlayHistory,
-    favorites,
-    songFeedbackMap
-  ) { catalog, history, favs, feedback ->
-    val popularity = history.groupingBy { it.song.id }.eachCount()
-    BecauseYouListenedEngine.recommend(
-      catalog = catalog,
-      playHistory = history,
-      favorites = favs,
-      favoriteIds = favs.map { it.id }.toSet(),
-      feedbackBySongId = feedback,
-      popularityBySongId = popularity
-    )
-  }.stateIn(
-    viewModelScope,
-    SharingStarted.Lazily,
-    BecauseYouListenedResult()
-  )
 
   private val _moodFlowCurrentPick = MutableStateFlow<MoodFlowPick?>(null)
   val moodFlowCurrentPick: StateFlow<MoodFlowPick?> = _moodFlowCurrentPick.asStateFlow()
@@ -563,9 +563,11 @@ class AurixViewModel(application: Application) : AndroidViewModel(application) {
     favorites,
     recentlyPlayed,
     featuredTracks,
-    searchResults
-  ) { local, favs, recent, featured, search ->
-    (local + favs + recent.filterNot(::isItunesSong) + featured + search).distinctBy { it.id }
+    combine(popularYoutubeSongs, tiktokViralNewPipeSongs, searchResults) { popYt, tiktokCharts, search ->
+      popYt + tiktokCharts + search
+    }
+  ) { local, favs, recent, featured, ytAndSearch ->
+    (local + favs + recent + featured + ytAndSearch).distinctBy { it.id }
   }.stateIn(viewModelScope, SharingStarted.Eagerly, emptyList())
 
   private val albumMetaFlow = combine(
@@ -696,23 +698,54 @@ class AurixViewModel(application: Application) : AndroidViewModel(application) {
     val covers: Map<String, AlbumCoverEntity>
   )
 
+  val newAlbums: StateFlow<List<FeaturedAlbumItem>> = combine(
+    _rawNewAlbums,
+    libraryAlbums,
+    blockedArtists
+  ) { remote, local, blocked ->
+    val remoteFiltered = remote.filter { normalizeArtistKey(it.artist) !in blocked }
+    if (remoteFiltered.isNotEmpty()) {
+      remoteFiltered
+    } else {
+      local.map { alb ->
+        FeaturedAlbumItem(
+          id = alb.albumId,
+          collectionId = "",
+          title = alb.title,
+          artist = alb.artist,
+          artworkUrl = alb.coverUrl ?: alb.automaticCoverUrl.orEmpty(),
+          year = alb.year,
+          source = "Library",
+          localAlbumId = alb.albumId
+        )
+      }
+    }
+  }.stateIn(viewModelScope, SharingStarted.Eagerly, emptyList())
+
   val activeAlbumInfo: StateFlow<AlbumInfo> = combine(
     libraryAlbums,
-    _selectedAlbumId
-  ) { albums, selectedId ->
-    val fallback = albums.firstOrNull() ?: AlbumInfo(
-      albumId = computeAlbumId("Album Title", "Artist Name"),
-      title = "Album Title",
-      artist = "Artist Name",
-      year = "",
-      coverUrl = null,
-      automaticCoverUrl = null,
-      tracks = emptyList()
-    )
-    if (selectedId != null) {
-      albums.firstOrNull { it.albumId == selectedId } ?: fallback
+    _selectedAlbumId,
+    _isShowingRemoteAlbum,
+    _remoteAlbumInfo,
+    favoriteIds
+  ) { albums, selectedId, showingRemote, remoteAlbum, favs ->
+    if (showingRemote && remoteAlbum != null) {
+      remoteAlbum.copy(tracks = remoteAlbum.tracks.map { it.copy(isFavorite = it.id in favs) })
     } else {
-      fallback
+      val fallback = albums.firstOrNull() ?: AlbumInfo(
+        albumId = computeAlbumId("Album Title", "Artist Name"),
+        title = "Album Title",
+        artist = "Artist Name",
+        year = "",
+        coverUrl = null,
+        automaticCoverUrl = null,
+        tracks = emptyList()
+      )
+      if (selectedId != null) {
+        albums.firstOrNull { it.albumId == selectedId } ?: fallback
+      } else {
+        fallback
+      }
     }
   }.stateIn(
     viewModelScope,
@@ -905,7 +938,6 @@ class AurixViewModel(application: Application) : AndroidViewModel(application) {
       try {
         dao.clearAllBadLyrics()
         dao.clearReportedLyricsCache()
-        dao.purgeItunesMetadata()
         val eqEnabled = prefsManager.eqEnabled.first()
         val eqPreset = prefsManager.eqPreset.first()
         val eqBands = prefsManager.eqBands.first()
@@ -937,8 +969,9 @@ class AurixViewModel(application: Application) : AndroidViewModel(application) {
     observeDiscoverWeeklyUpdates()
     observeCatalogMetadataSync()
     connectPlaybackController(application)
-    loadDailyRecommendations(DailyFeedCategory.DAILY_CHARTS)
-    loadYoutubeMoodCatalog()
+    loadDailyRecommendations(DailyFeedCategory.TIKTOK_VIRAL)
+    loadPopularYoutubeSongs()
+    loadTiktokViralNewPipeSongs()
     startPositionTicker()
     if (updateManager.uiState.value.stage == UpdateStage.Idle) {
       checkForUpdates(application, silent = true)
@@ -947,10 +980,14 @@ class AurixViewModel(application: Application) : AndroidViewModel(application) {
 
   private fun observeCatalogMetadataSync() {
     viewModelScope.launch {
-      combine(featuredTracks, localSongs, searchResults, _youtubeMoodPool) { f, l, s, m ->
-        (f + l + s + m)
-          .filterNot(::isItunesSong)
-          .distinctBy { it.id }
+      combine(
+        featuredTracks,
+        popularYoutubeSongs,
+        tiktokViralNewPipeSongs,
+        localSongs,
+        searchResults
+      ) { f, p, t, l, s ->
+        (p + t + f + l + s).distinctBy { it.id }
       }
         .debounce(1_000L)
         .collectLatest { tracks ->
@@ -1209,8 +1246,16 @@ class AurixViewModel(application: Application) : AndroidViewModel(application) {
   }
 
   fun setSearchMode(mode: String) {
-    val normalizedMode = if (mode == "youtube") "youtube" else "youtube_search"
-    val nextEnum = if (normalizedMode == "youtube") SearchMode.YouTubeLink else SearchMode.YouTubeSearch
+    val normalizedMode = when (mode) {
+      "youtube" -> "youtube"
+      "itunes" -> "itunes"
+      else -> "youtube_search"
+    }
+    val nextEnum = when (normalizedMode) {
+      "youtube" -> SearchMode.YouTubeLink
+      "itunes" -> SearchMode.ITunes30s
+      else -> SearchMode.YouTubeSearch
+    }
     val changed = _searchMode.value != normalizedMode
     _searchMode.value = normalizedMode
     _searchModeEnum.value = nextEnum
@@ -1218,7 +1263,7 @@ class AurixViewModel(application: Application) : AndroidViewModel(application) {
       val currentQ = if (nextEnum == SearchMode.YouTubeLink) _youtubeUrl.value else _searchQuery.value
       if (currentQ.isBlank()) {
         _searchDispatch.tryEmit(SearchDispatch("", nextEnum, 0L, ++searchDispatchNonce))
-      } else if (nextEnum == SearchMode.YouTubeSearch) {
+      } else if (nextEnum == SearchMode.YouTubeSearch || nextEnum == SearchMode.ITunes30s) {
         _searchDispatch.tryEmit(SearchDispatch(currentQ, nextEnum, 0L, ++searchDispatchNonce))
       } else if (_youtubeAnalysis.value == null && !_isAnalyzingYoutube.value) {
         analyzeYoutubeUrl()
@@ -1868,6 +1913,7 @@ class AurixViewModel(application: Application) : AndroidViewModel(application) {
     val t = title.orEmpty().lowercase(Locale.US)
     val a = artist.orEmpty().lowercase(Locale.US)
     if (t.isBlank()) return false
+    val combined = "$t $a"
     val blocked = listOf(
       "workout mix",
       "power music",
@@ -1881,9 +1927,33 @@ class AurixViewModel(application: Application) : AndroidViewModel(application) {
       "8d audio",
       "sleep music",
       "baby sleep",
-      "bpm)"
+      "bpm)",
+      "ai cover",
+      "ai version",
+      "ai song",
+      "ai music",
+      "ai sound",
+      "ai generated",
+      "ai voice",
+      "ai remix",
+      "made with ai",
+      "suno",
+      "udio",
+      "tiktok sound",
+      "viral sound",
+      "meme sound",
+      "sound effect",
+      "sfx",
+      "sped up",
+      "slowed",
+      "reverb",
+      "nightcore",
+      "type beat",
+      "instrumental"
     )
-    return blocked.none { kw -> t.contains(kw) || a.contains(kw) }
+    if (blocked.any { kw -> combined.contains(kw) }) return false
+    if (Regex("""\b(ai|a\.i\.)\b""").containsMatchIn(combined)) return false
+    return true
   }
 
   private fun isSingleQualityYoutubeSong(item: YoutubeSearchItem, parsedTitle: String, parsedArtist: String): Boolean {
@@ -1891,12 +1961,12 @@ class AurixViewModel(application: Application) : AndroidViewModel(application) {
     if (!isQualityViralTrack(parsedTitle, parsedArtist)) return false
     val combined = "${item.rawTitle} ${item.author}".lowercase(Locale.US)
     val compilationKeywords = listOf(
-      "playlist", "1 hour", "2 hours", "hour mix", "megamix", "full album",
+      "#shorts", "shorts", "playlist", "1 hour", "2 hours", "hour mix", "megamix", "full album",
       "top 50", "top 40", "top 20", "nonstop", "compilation", "study with me"
     )
     if (compilationKeywords.any { combined.contains(it) }) return false
-    // Skip very long mixes (> 10 min) and ultra-short clips (< 45 sec) when duration is known
-    if (item.durationSeconds in 1L..44L || item.durationSeconds > 600L) return false
+    // Require full-length YouTube songs (60s..600s); reject shorts/snippets and long mixes
+    if (item.durationSeconds < 60L || item.durationSeconds > 600L) return false
     return true
   }
 
@@ -1957,38 +2027,297 @@ class AurixViewModel(application: Application) : AndroidViewModel(application) {
     collected.values.toList()
   }
 
-  private fun loadYoutubeMoodCatalog() {
-    viewModelScope.launch(Dispatchers.IO) {
-      val sadDeferred = async {
-        fetchYoutubeFeedTracks(
+  private fun mapItunesTracks(
+    results: List<ItunesTrack>,
+    sourceTag: String = "iTunes 30s",
+    albumOverride: String? = null
+  ): List<Song> {
+    return results.mapNotNull { track ->
+      val preview = track.previewUrl?.trim()?.takeIf { it.isNotBlank() } ?: return@mapNotNull null
+      val title = track.trackName?.trim()?.takeIf { it.isNotBlank() } ?: return@mapNotNull null
+      val artist = track.artistName?.trim()?.takeIf { it.isNotBlank() } ?: "Unknown Artist"
+      if (!isQualityViralTrack(title, artist)) return@mapNotNull null
+      val artworkRaw = track.artworkUrl100?.takeIf { it.isNotBlank() }
+        ?: track.artworkUrl60?.takeIf { it.isNotBlank() }
+        ?: ""
+      val artwork = artworkRaw
+        .replace("100x100bb", "600x600bb")
+        .replace("60x60bb", "600x600bb")
+      val durationSec = ((track.trackTimeMillis ?: 30_000L) / 1000L).coerceAtLeast(1L)
+      val year = track.releaseDate?.take(4).orEmpty()
+      TrackMetadataClassifier.enrich(
+        Song(
+          id = "itunes_${track.trackId}",
+          title = title,
+          artist = artist,
+          artworkUrl = artwork,
+          durationSeconds = durationSec,
+          streamUrl = preview,
+          source = sourceTag,
+          fullDurationSeconds = durationSec,
+          genre = track.primaryGenreName.orEmpty(),
+          album = albumOverride ?: track.collectionName.orEmpty(),
+          year = year
+        ),
+        genreHint = track.primaryGenreName
+      )
+    }
+  }
+
+  private suspend fun fetchItunesFeedTracks(
+    queries: List<String>,
+    sourceTag: String = "iTunes 30s",
+    countries: List<String> = listOf("US", "GB"),
+    targetCount: Int = 24
+  ): List<Song> = withContext(Dispatchers.IO) {
+    val collected = LinkedHashMap<String, Song>()
+    val seenKeys = HashSet<String>()
+    for (country in countries) {
+      for (q in queries) {
+        val resp = runCatching {
+          NetworkClient.itunesApi.searchTracks(term = q, limit = 25, country = country)
+        }.getOrNull()
+        val mapped = mapItunesTracks(resp?.results.orEmpty(), sourceTag = sourceTag)
+        for (song in mapped) {
+          val dedupeKey = "${normalizeForMatch(song.title)}::${normalizeArtistKey(song.artist)}"
+          if (song.id !in collected && dedupeKey !in seenKeys) {
+            collected[song.id] = song
+            seenKeys.add(dedupeKey)
+          }
+        }
+        if (collected.size >= targetCount) break
+      }
+      if (collected.size >= targetCount) break
+    }
+    collected.values.toList()
+  }
+
+  private suspend fun fetchAppleDailyChartTracks(
+    sourceTag: String = "iTunes 30s",
+    countries: List<String> = listOf("us"),
+    fallbackQueries: List<String> = listOf("billboard hot 100", "today's hits", "pop hits 2026")
+  ): List<Song> = withContext(Dispatchers.IO) {
+    val chartEntries = mutableListOf<AppleChartEntry>()
+    val seenChartKeys = HashSet<String>()
+    for (country in countries) {
+      val entries = runCatching {
+        NetworkClient.appleChartsApi.getTopSongs(country).feed?.results.orEmpty()
+      }.getOrNull().orEmpty()
+      for (entry in entries) {
+        val title = entry.name?.trim().orEmpty()
+        val artist = entry.artistName?.trim().orEmpty()
+        if (title.isBlank() || artist.isBlank()) continue
+        if (!isQualityViralTrack(title, artist)) continue
+        val key = "${normalizeForMatch(title)}::${normalizeArtistKey(artist)}"
+        if (seenChartKeys.add(key)) {
+          chartEntries.add(entry)
+        }
+        if (chartEntries.size >= 24) break
+      }
+      if (chartEntries.size >= 24) break
+    }
+
+    val resolved = mutableListOf<Song>()
+    if (chartEntries.isNotEmpty()) {
+      val semaphore = Semaphore(4)
+      val pairs = coroutineScope {
+        chartEntries.map { entry ->
+          async {
+            semaphore.withPermit {
+              val title = entry.name?.trim().orEmpty()
+              val artist = entry.artistName?.trim().orEmpty()
+              val search = runCatching {
+                NetworkClient.itunesApi.searchTracks(term = "$title $artist", limit = 4, country = "US")
+              }.getOrNull()
+              val mapped = mapItunesTracks(search?.results.orEmpty(), sourceTag = sourceTag)
+              val exact = mapped.firstOrNull {
+                normalizeForMatch(it.title).contains(normalizeForMatch(title)) ||
+                  normalizeArtistKey(it.artist).contains(normalizeArtistKey(artist))
+              } ?: mapped.firstOrNull()
+              exact?.let { matched ->
+                val hiArt = entry.artworkUrl100
+                  ?.replace("100x100bb", "600x600bb")
+                  ?.takeIf { it.isNotBlank() }
+                if (hiArt != null && matched.artworkUrl.isBlank()) matched.copy(artworkUrl = hiArt) else matched
+              }
+            }
+          }
+        }.awaitAll()
+      }
+      val seen = HashSet<String>()
+      for (song in pairs) {
+        if (song != null) {
+          val key = "${normalizeForMatch(song.title)}::${normalizeArtistKey(song.artist)}"
+          if (seen.add(key)) resolved.add(song)
+        }
+      }
+    }
+
+    if (resolved.size < 12) {
+      val extra = fetchItunesFeedTracks(
+        queries = fallbackQueries,
+        sourceTag = sourceTag,
+        targetCount = 24
+      )
+      val seenIds = resolved.mapTo(HashSet()) { it.id }
+      for (s in extra) {
+        if (seenIds.add(s.id)) resolved.add(s)
+        if (resolved.size >= 24) break
+      }
+    }
+    resolved
+  }
+
+  private fun interleaveTracks(
+    first: List<Song>,
+    second: List<Song>,
+    limit: Int = 24
+  ): List<Song> {
+    val result = ArrayList<Song>(minOf(first.size + second.size, limit))
+    val seenIds = HashSet<String>()
+    val maxLen = maxOf(first.size, second.size)
+    for (i in 0 until maxLen) {
+      if (i < first.size) {
+        val track = first[i]
+        if (seenIds.add(track.id)) result.add(track)
+      }
+      if (result.size >= limit) break
+      if (i < second.size) {
+        val track = second[i]
+        if (seenIds.add(track.id)) result.add(track)
+      }
+      if (result.size >= limit) break
+    }
+    return result
+  }
+
+  fun loadPopularYoutubeSongs(forceRefresh: Boolean = false) {
+    if (!forceRefresh && _rawPopularYoutube.value.isNotEmpty()) return
+    if (_isLoadingPopularYoutube.value) return
+    viewModelScope.launch {
+      _isLoadingPopularYoutube.value = true
+      try {
+        val tracks = fetchYoutubeFeedTracks(
           queries = listOf(
-            "sad indie vocal songs official audio",
-            "emotional r&b heartbreak songs lyrics",
-            "sad pop ballad official audio"
+            "top popular songs 2026 official audio",
+            "trending music hits 2026 official audio",
+            "billboard hot hits pop r&b official audio"
           ),
           sourceTag = "YouTube",
-          limitPerQuery = 14,
-          moodHint = "Sad",
-          genreHint = "Indie"
+          limitPerQuery = 22
         )
+        if (tracks.isNotEmpty()) {
+          _rawPopularYoutube.value = tracks
+        }
+      } catch (_: Exception) {
+      } finally {
+        _isLoadingPopularYoutube.value = false
       }
-      val chillDeferred = async {
-        fetchYoutubeFeedTracks(
-          queries = listOf(
-            "chill r&b late night vocal songs official audio",
-            "chill indie pop songs official audio",
-            "acoustic chill vocal songs lyrics"
-          ),
-          sourceTag = "YouTube",
-          limitPerQuery = 14,
-          moodHint = "Chill",
-          genreHint = "R&B"
-        )
+    }
+  }
+
+  fun loadTiktokViralNewPipeSongs(forceRefresh: Boolean = false) {
+    if (!forceRefresh && _rawTiktokViralNewPipe.value.isNotEmpty()) return
+    if (_isLoadingTiktokViralNewPipe.value) return
+    viewModelScope.launch {
+      _isLoadingTiktokViralNewPipe.value = true
+      try {
+        val tracks = withContext(Dispatchers.IO) {
+          val rawItems = runCatching { YoutubeExtractor.fetchTikTokViralChartTracks(limit = 32) }
+            .getOrNull()
+            .orEmpty()
+          val collected = LinkedHashMap<String, Song>()
+          val seenKeys = HashSet<String>()
+          for (item in rawItems) {
+            val (parsedTitle, parsedArtist) = parseYoutubeTitleAndArtist(item.rawTitle, item.author)
+            if (!isSingleQualityYoutubeSong(item, parsedTitle, parsedArtist)) continue
+            val song = mapYoutubeSearchItem(
+              item = item,
+              sourceTag = "YouTube",
+              genreHint = "Pop"
+            )
+            val dedupeKey = "${normalizeForMatch(song.title)}::${normalizeArtistKey(song.artist)}"
+            if (song.id !in collected && dedupeKey !in seenKeys) {
+              collected[song.id] = song
+              seenKeys.add(dedupeKey)
+            }
+          }
+          collected.values.toList()
+        }
+        if (tracks.isNotEmpty()) {
+          _rawTiktokViralNewPipe.value = tracks
+        }
+      } catch (_: Exception) {
+      } finally {
+        _isLoadingTiktokViralNewPipe.value = false
       }
-      val combined = (sadDeferred.await() + chillDeferred.await()).distinctBy { it.id }
-      if (combined.isNotEmpty()) {
-        _youtubeMoodPool.value = combined
-        analyticsRepository.upsertCatalogMetadata(combined)
+    }
+  }
+
+  fun loadNewAlbums(forceRefresh: Boolean = false) {
+    if (!forceRefresh && _rawNewAlbums.value.isNotEmpty()) return
+    if (_isLoadingNewAlbums.value) return
+    viewModelScope.launch {
+      _isLoadingNewAlbums.value = true
+      try {
+        val loaded = withContext(Dispatchers.IO) {
+          val chartAlbums = runCatching {
+            NetworkClient.appleChartsApi.getTopAlbums("us").feed?.results.orEmpty()
+          }.getOrNull().orEmpty()
+
+          val fromCharts = chartAlbums.mapNotNull { entry ->
+            val colId = entry.id?.trim().orEmpty()
+            val title = entry.name?.trim()?.takeIf { it.isNotBlank() } ?: return@mapNotNull null
+            val artist = entry.artistName?.trim()?.takeIf { it.isNotBlank() } ?: "Unknown Artist"
+            val art = entry.artworkUrl100
+              ?.replace("100x100bb", "600x600bb")
+              ?.replace("100x100", "600x600")
+              .orEmpty()
+            FeaturedAlbumItem(
+              id = "itunes_album_${colId.ifBlank { computeAlbumId(title, artist) }}",
+              collectionId = colId,
+              title = title,
+              artist = artist,
+              artworkUrl = art,
+              year = entry.releaseDate?.take(4).orEmpty(),
+              source = "iTunes"
+            )
+          }
+
+          if (fromCharts.isNotEmpty()) {
+            fromCharts
+          } else {
+            val fallbackSearch = runCatching {
+              NetworkClient.itunesApi.searchTracks(term = "new album hits 2026", limit = 25, country = "US")
+            }.getOrNull()?.results.orEmpty()
+            val seenCollections = HashSet<String>()
+            fallbackSearch.mapNotNull { tr ->
+              val colId = tr.collectionId?.toString().orEmpty()
+              val colTitle = tr.collectionName?.trim()?.takeIf { it.isNotBlank() } ?: return@mapNotNull null
+              val artist = tr.artistName?.trim()?.takeIf { it.isNotBlank() } ?: "Unknown Artist"
+              val key = colId.ifBlank { computeAlbumId(colTitle, artist) }
+              if (!seenCollections.add(key)) return@mapNotNull null
+              val art = tr.artworkUrl100
+                ?.replace("100x100bb", "600x600bb")
+                .orEmpty()
+              FeaturedAlbumItem(
+                id = "itunes_album_$key",
+                collectionId = colId,
+                title = colTitle,
+                artist = artist,
+                artworkUrl = art,
+                year = tr.releaseDate?.take(4).orEmpty(),
+                source = "iTunes"
+              )
+            }
+          }
+        }
+        if (loaded.isNotEmpty()) {
+          _rawNewAlbums.value = loaded
+        }
+      } catch (_: Exception) {
+      } finally {
+        _isLoadingNewAlbums.value = false
       }
     }
   }
@@ -2005,6 +2334,8 @@ class AurixViewModel(application: Application) : AndroidViewModel(application) {
       dailyFeedCache.clear()
       _dailyUpdatedLabel.value = formatTodayBadge()
       loadDailyRecommendations(category = _selectedDailyFeed.value, forceRefresh = true)
+      loadPopularYoutubeSongs(forceRefresh = true)
+      loadTiktokViralNewPipeSongs(forceRefresh = true)
     }
   }
 
@@ -2014,6 +2345,10 @@ class AurixViewModel(application: Application) : AndroidViewModel(application) {
   ) {
     if (forceRefresh && _isLoadingFeatured.value) {
       return
+    }
+    if (forceRefresh) {
+      loadPopularYoutubeSongs(forceRefresh = true)
+      loadTiktokViralNewPipeSongs(forceRefresh = true)
     }
     val today = todayDateKey()
     if (today != lastFeedDateKey) {
@@ -2042,46 +2377,86 @@ class AurixViewModel(application: Application) : AndroidViewModel(application) {
       try {
         val loaded: List<Song> = when (category) {
           DailyFeedCategory.TIKTOK_VIRAL -> {
-            fetchYoutubeFeedTracks(
-              queries = listOf(
-                "tiktok viral songs 2026 official audio",
-                "trending tiktok music hits official audio"
-              ),
-              sourceTag = "TikTok Viral",
-              limitPerQuery = 22
+            // Strictly from real iTunes / Apple Music viral & top chart tracks (no AI uploads)
+            val chartHits = fetchAppleDailyChartTracks(
+              sourceTag = "iTunes 30s",
+              countries = listOf("us", "gb"),
+              fallbackQueries = listOf("billboard hot 100", "today's hits", "pop hits 2026", "r&b hits")
             )
+            if (chartHits.size >= 16) {
+              chartHits
+            } else {
+              val extraHits = fetchItunesFeedTracks(
+                queries = listOf("pop hits 2026", "billboard hot 100", "dance pop hits", "hip hop hits"),
+                sourceTag = "iTunes 30s",
+                countries = listOf("US", "GB"),
+                targetCount = 24
+              )
+              (chartHits + extraHits).distinctBy { it.id }.take(24)
+            }
           }
           DailyFeedCategory.DAILY_CHARTS -> {
-            fetchYoutubeFeedTracks(
-              queries = listOf(
-                "top trending music 2026 official audio",
-                "global top hits pop r&b official audio"
-              ),
-              sourceTag = "Daily Chart",
-              limitPerQuery = 22
-            )
+            // Daily Top combined from iTunes + YouTube
+            coroutineScope {
+              val itunesDeferred = async {
+                fetchAppleDailyChartTracks(
+                  sourceTag = "iTunes 30s",
+                  countries = listOf("us")
+                )
+              }
+              val ytDeferred = async {
+                fetchYoutubeFeedTracks(
+                  queries = listOf(
+                    "top global songs 2026 official audio",
+                    "billboard hot 100 hits official audio"
+                  ),
+                  sourceTag = "YouTube",
+                  limitPerQuery = 16
+                )
+              }
+              interleaveTracks(itunesDeferred.await(), ytDeferred.await(), limit = 24)
+            }
           }
           DailyFeedCategory.PHONK_EDITS -> {
+            // Phonk strictly from full-length YouTube tracks
             fetchYoutubeFeedTracks(
               queries = listOf(
+                "brazilian phonk official audio",
                 "montagem phonk viral official audio",
-                "tiktok phonk edit songs"
+                "drift phonk song official audio",
+                "phonk house trending music"
               ),
-              sourceTag = "TikTok Phonk",
-              limitPerQuery = 22,
+              sourceTag = "YouTube",
+              limitPerQuery = 18,
               genreHint = "Phonk"
             )
           }
           DailyFeedCategory.KHMER_ASIA -> {
-            fetchYoutubeFeedTracks(
-              queries = listOf(
-                "khmer new song 2026 official audio",
-                "khmer sad chill song official mv"
-              ),
-              sourceTag = "Khmer Hits",
-              limitPerQuery = 22,
-              genreHint = "Pop"
-            )
+            // Khmer & Asia combined from iTunes and YouTube
+            coroutineScope {
+              val itunesDeferred = async {
+                fetchItunesFeedTracks(
+                  queries = listOf("vannda", "suly pheng", "tena", "khmer pop", "asian pop hits"),
+                  sourceTag = "iTunes 30s",
+                  countries = listOf("US", "SG"),
+                  targetCount = 14
+                )
+              }
+              val ytDeferred = async {
+                fetchYoutubeFeedTracks(
+                  queries = listOf(
+                    "vannda official audio",
+                    "suly pheng new song official",
+                    "khmer new song 2026 official audio",
+                    "asian pop trending song official audio"
+                  ),
+                  sourceTag = "YouTube",
+                  limitPerQuery = 14,
+                  genreHint = "Pop"
+                )
+              }
+              interleaveTracks(itunesDeferred.await(), ytDeferred.await(), limit = 24)
+            }
           }
         }
 
@@ -2159,6 +2534,21 @@ class AurixViewModel(application: Application) : AndroidViewModel(application) {
                   mapYoutubeSearchItem(item = item, sourceTag = "YouTube")
                 }
               }
+              _rawSearchResults.value = mapped
+              val visible = mapped
+                .filter { isTrackVisible(it, hiddenSongIds.value, blockedArtists.value) }
+                .map { it.copy(isFavorite = it.id in favoriteIds.value) }
+              _searchUiState.value = if (visible.isEmpty()) {
+                SearchUiState.Empty
+              } else {
+                SearchUiState.Results(visible)
+              }
+            }
+            SearchMode.ITunes30s -> {
+              val response = withContext(Dispatchers.IO) {
+                NetworkClient.itunesApi.searchTracks(term = trimmed, limit = 25, country = "US")
+              }
+              val mapped = mapItunesTracks(response.results, sourceTag = "iTunes 30s")
               _rawSearchResults.value = mapped
               val visible = mapped
                 .filter { isTrackVisible(it, hiddenSongIds.value, blockedArtists.value) }
@@ -2417,28 +2807,6 @@ class AurixViewModel(application: Application) : AndroidViewModel(application) {
     }
   }
 
-  fun submitSongFeedback(song: Song, liked: Boolean) {
-    val currentFeedback = songFeedbackMap.value[song.id]
-    val nextFeedback: Boolean? = if (currentFeedback == liked) null else liked
-    val appContext = localizedAppContext()
-    viewModelScope.launch {
-      analyticsRepository.setSongFeedback(song, nextFeedback)
-      val msgRes = when (nextFeedback) {
-        true -> R.string.because_feedback_liked
-        false -> R.string.because_feedback_disliked
-        null -> R.string.because_feedback_cleared
-      }
-      Toast.makeText(appContext, appContext.getString(msgRes, song.title), Toast.LENGTH_SHORT).show()
-    }
-  }
-
-  fun playBecauseYouListenedMix(items: List<VocalRecommendationItem>, startSong: Song? = null) {
-    if (items.isEmpty()) return
-    val tracks = items.map { it.song }
-    val first = startSong ?: tracks.first()
-    playSong(first, tracks)
-  }
-
   fun toggleRepeat() {
     val next = !_repeatEnabled.value
     _repeatEnabled.value = next
@@ -2528,7 +2896,47 @@ class AurixViewModel(application: Application) : AndroidViewModel(application) {
   }
 
   fun openAlbum(albumId: String? = null) {
+    remoteAlbumJob?.cancel()
+    _isShowingRemoteAlbum.value = false
+    _remoteAlbumInfo.value = null
     _selectedAlbumId.value = albumId
+  }
+
+  fun openFeaturedAlbum(item: FeaturedAlbumItem) {
+    if (item.localAlbumId != null) {
+      openAlbum(item.localAlbumId)
+      return
+    }
+    remoteAlbumJob?.cancel()
+    _isShowingRemoteAlbum.value = true
+    _remoteAlbumInfo.value = AlbumInfo(
+      albumId = item.id,
+      title = item.title,
+      artist = item.artist,
+      year = item.year,
+      coverUrl = item.artworkUrl.ifBlank { null },
+      automaticCoverUrl = item.artworkUrl.ifBlank { null },
+      tracks = emptyList()
+    )
+    remoteAlbumJob = viewModelScope.launch {
+      val tracks = withContext(Dispatchers.IO) {
+        val byLookup = if (item.collectionId.isNotBlank()) {
+          runCatching {
+            NetworkClient.itunesApi.lookupAlbumTracks(collectionId = item.collectionId, limit = 25)
+          }.getOrNull()?.results.orEmpty()
+        } else emptyList()
+        val mapped = mapItunesTracks(byLookup, sourceTag = "iTunes 30s", albumOverride = item.title)
+        if (mapped.isNotEmpty()) {
+          mapped
+        } else {
+          val bySearch = runCatching {
+            NetworkClient.itunesApi.searchTracks(term = "${item.artist} ${item.title}", limit = 15)
+          }.getOrNull()?.results.orEmpty()
+          mapItunesTracks(bySearch, sourceTag = "iTunes 30s", albumOverride = item.title)
+        }
+      }
+      _remoteAlbumInfo.value = _remoteAlbumInfo.value?.copy(tracks = tracks)
+    }
   }
 
   fun createAlbum(title: String, artist: String = "", year: String = ""): String? {

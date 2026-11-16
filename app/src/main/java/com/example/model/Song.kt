@@ -54,6 +54,17 @@ data class AlbumInfo(
   val tracks: List<Song> = emptyList()
 )
 
+data class FeaturedAlbumItem(
+  val id: String,
+  val collectionId: String = "",
+  val title: String,
+  val artist: String,
+  val artworkUrl: String,
+  val year: String = "",
+  val source: String = "iTunes",
+  val localAlbumId: String? = null
+)
+
 fun computeAlbumId(albumName: String, artistName: String): String {
   val normAlbum = albumName.trim().ifBlank { "Unknown Album" }.lowercase()
   val normArtist = artistName.trim().ifBlank { "Unknown Artist" }.lowercase()
@@ -128,6 +139,7 @@ typealias Track = Song
 
 enum class SearchMode {
   YouTubeSearch,
+  ITunes30s,
   YouTubeLink
 }
 

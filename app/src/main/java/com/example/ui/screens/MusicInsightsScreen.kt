@@ -29,6 +29,7 @@ import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.StrokeCap
 import androidx.compose.ui.graphics.drawscope.Stroke
+import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
@@ -36,7 +37,9 @@ import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import coil.compose.AsyncImage
 import com.example.R
+import com.example.model.FeaturedAlbumItem
 import com.example.model.Song
 import com.example.recommendation.*
 
@@ -803,13 +806,17 @@ fun PlaylistDetailScreen(
   darkTheme: Boolean,
   reducedMotion: Boolean,
   verifiedLyricsIds: Set<String> = emptySet(),
+  resolvingSongId: String? = null,
+  downloadedSongIds: Set<String> = emptySet(),
+  songDownloadProgress: Map<String, Float> = emptyMap(),
   onBack: () -> Unit,
   onRefresh: () -> Unit = {},
   onPlayAll: () -> Unit,
   onShuffleAll: () -> Unit,
   onCheckLyrics: (Song) -> Unit,
   onSongClick: (Song, List<Song>) -> Unit,
-  onFavoriteClick: (Song) -> Unit
+  onFavoriteClick: (Song) -> Unit,
+  onYoutubeSongDownloadClick: ((Song) -> Unit)? = null
 ) {
   LazyColumn(
     modifier = Modifier
@@ -932,35 +939,58 @@ fun PlaylistDetailScreen(
       }
 
       item {
-        GlassCard(
-          darkTheme = darkTheme,
-          cornerRadius = 24.dp,
-          modifier = Modifier.fillMaxWidth()
-        ) {
-          Column(
-            modifier = Modifier
-              .fillMaxWidth()
-              .padding(horizontal = 8.dp, vertical = 6.dp)
-          ) {
+        if (onYoutubeSongDownloadClick != null) {
+          Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
             tracks.forEachIndexed { idx, track ->
-              SongRow(
+              SongDownloadRow(
                 song = track,
+                index = idx,
                 isPlaying = isPlaying,
                 isCurrent = currentSong?.id == track.id,
+                isResolving = resolvingSongId == track.id,
                 reducedMotion = reducedMotion,
                 darkTheme = darkTheme,
                 hasLyrics = track.id in verifiedLyricsIds,
-                rank = idx + 1,
-                showSourceBadge = false,
+                downloadProgress = songDownloadProgress[track.id],
+                isDownloaded = track.id in downloadedSongIds,
                 onCheckLyrics = onCheckLyrics,
                 onSongClick = { onSongClick(track, tracks) },
-                onFavoriteClick = { onFavoriteClick(track) }
+                onFavoriteClick = { onFavoriteClick(track) },
+                onDownloadClick = { onYoutubeSongDownloadClick(track) }
               )
-              if (idx < tracks.lastIndex) {
-                HorizontalDivider(
-                  modifier = Modifier.padding(horizontal = 14.dp),
-                  color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.06f)
+            }
+          }
+        } else {
+          GlassCard(
+            darkTheme = darkTheme,
+            cornerRadius = 24.dp,
+            modifier = Modifier.fillMaxWidth()
+          ) {
+            Column(
+              modifier = Modifier
+                .fillMaxWidth()
+                .padding(horizontal = 8.dp, vertical = 6.dp)
+            ) {
+              tracks.forEachIndexed { idx, track ->
+                SongRow(
+                  song = track,
+                  isPlaying = isPlaying,
+                  isCurrent = currentSong?.id == track.id,
+                  reducedMotion = reducedMotion,
+                  darkTheme = darkTheme,
+                  hasLyrics = track.id in verifiedLyricsIds,
+                  rank = idx + 1,
+                  showSourceBadge = false,
+                  onCheckLyrics = onCheckLyrics,
+                  onSongClick = { onSongClick(track, tracks) },
+                  onFavoriteClick = { onFavoriteClick(track) }
                 )
+                if (idx < tracks.lastIndex) {
+                  HorizontalDivider(
+                    modifier = Modifier.padding(horizontal = 14.dp),
+                    color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.06f)
+                  )
+                }
               }
             }
           }
@@ -1057,5 +1087,164 @@ private fun InsightsEmptyHint(
       color = MaterialTheme.colorScheme.onSurfaceVariant,
       textAlign = TextAlign.Center
     )
+  }
+}
+
+@Composable
+fun NewAlbumsDetailScreen(
+  albums: List<FeaturedAlbumItem>,
+  hasCurrentSong: Boolean,
+  darkTheme: Boolean,
+  onBack: () -> Unit,
+  onRefresh: () -> Unit,
+  onAlbumClick: (FeaturedAlbumItem) -> Unit
+) {
+  LazyColumn(
+    modifier = Modifier
+      .fillMaxSize()
+      .padding(horizontal = 20.dp)
+      .testTag("new_albums_detail_screen"),
+    verticalArrangement = Arrangement.spacedBy(14.dp),
+    contentPadding = PaddingValues(
+      top = WindowInsets.statusBars.asPaddingValues().calculateTopPadding() + 14.dp,
+      bottom = if (hasCurrentSong) 205.dp else 135.dp
+    )
+  ) {
+    item {
+      Row(
+        modifier = Modifier.fillMaxWidth(),
+        verticalAlignment = Alignment.CenterVertically,
+        horizontalArrangement = Arrangement.spacedBy(12.dp)
+      ) {
+        val iconBg = if (darkTheme) Color(0xFF151F30) else Color.White.copy(alpha = 0.85f)
+        val iconBorder = if (darkTheme) Color(0xFF273348) else Color.White
+        IconButton(
+          onClick = onBack,
+          modifier = Modifier
+            .minimumInteractiveComponentSize()
+            .size(44.dp)
+            .clip(CircleShape)
+            .background(iconBg)
+            .border(1.dp, iconBorder, CircleShape)
+            .testTag("new_albums_back_button")
+        ) {
+          Icon(
+            imageVector = Icons.AutoMirrored.Rounded.ArrowBack,
+            contentDescription = stringResource(id = R.string.insights_back_cd),
+            tint = MaterialTheme.colorScheme.onSurface
+          )
+        }
+        Column(modifier = Modifier.weight(1f)) {
+          Text(
+            text = stringResource(id = R.string.home_itunes_badge).uppercase(),
+            style = MaterialTheme.typography.labelSmall.copy(
+              fontWeight = FontWeight.ExtraBold,
+              letterSpacing = 0.8.sp
+            ),
+            color = AurixTealAccent
+          )
+          Text(
+            text = stringResource(id = R.string.home_new_albums_title),
+            style = MaterialTheme.typography.titleLarge.copy(
+              fontWeight = FontWeight.ExtraBold,
+              fontSize = 24.sp
+            ),
+            color = MaterialTheme.colorScheme.onBackground,
+            maxLines = 1,
+            overflow = TextOverflow.Ellipsis
+          )
+        }
+        IconButton(
+          onClick = onRefresh,
+          modifier = Modifier
+            .minimumInteractiveComponentSize()
+            .size(44.dp)
+            .clip(CircleShape)
+            .background(iconBg)
+            .border(1.dp, iconBorder, CircleShape)
+            .testTag("new_albums_refresh_button")
+        ) {
+          Icon(
+            imageVector = Icons.Rounded.Refresh,
+            contentDescription = stringResource(id = R.string.home_refresh_cd),
+            tint = MaterialTheme.colorScheme.onSurface
+          )
+        }
+      }
+    }
+
+    if (albums.isEmpty()) {
+      item {
+        InsightsEmptyHint(
+          message = stringResource(id = R.string.home_new_albums_empty),
+          darkTheme = darkTheme
+        )
+      }
+    } else {
+      val rows = albums.chunked(2)
+      itemsIndexed(rows) { _, pair ->
+        Row(
+          modifier = Modifier.fillMaxWidth(),
+          horizontalArrangement = Arrangement.spacedBy(14.dp)
+        ) {
+          pair.forEach { album ->
+            GlassCard(
+              darkTheme = darkTheme,
+              cornerRadius = 20.dp,
+              modifier = Modifier
+                .weight(1f)
+                .clickable { onAlbumClick(album) }
+                .testTag("new_album_grid_card_${album.id}")
+            ) {
+              Column(modifier = Modifier.padding(10.dp)) {
+                Box(
+                  modifier = Modifier
+                    .fillMaxWidth()
+                    .aspectRatio(1f)
+                    .clip(RoundedCornerShape(14.dp))
+                    .background(MaterialTheme.colorScheme.onSurface.copy(alpha = 0.08f))
+                    .border(1.dp, Color.White.copy(alpha = 0.14f), RoundedCornerShape(14.dp)),
+                  contentAlignment = Alignment.Center
+                ) {
+                  if (album.artworkUrl.isNotBlank()) {
+                    AsyncImage(
+                      model = album.artworkUrl,
+                      contentDescription = album.title,
+                      contentScale = ContentScale.Crop,
+                      modifier = Modifier.fillMaxSize()
+                    )
+                  } else {
+                    Icon(
+                      imageVector = Icons.Rounded.Album,
+                      contentDescription = null,
+                      tint = MaterialTheme.colorScheme.onSurfaceVariant,
+                      modifier = Modifier.size(36.dp)
+                    )
+                  }
+                }
+                Spacer(modifier = Modifier.height(8.dp))
+                Text(
+                  text = album.title,
+                  style = MaterialTheme.typography.bodyMedium.copy(fontWeight = FontWeight.Bold),
+                  color = MaterialTheme.colorScheme.onSurface,
+                  maxLines = 1,
+                  overflow = TextOverflow.Ellipsis
+                )
+                Text(
+                  text = if (album.year.isNotBlank()) "${album.artist} · ${album.year}" else album.artist,
+                  style = MaterialTheme.typography.bodySmall,
+                  color = MaterialTheme.colorScheme.onSurfaceVariant,
+                  maxLines = 1,
+                  overflow = TextOverflow.Ellipsis
+                )
+              }
+            }
+          }
+          if (pair.size == 1) {
+            Spacer(modifier = Modifier.weight(1f))
+          }
+        }
+      }
+    }
   }
 }

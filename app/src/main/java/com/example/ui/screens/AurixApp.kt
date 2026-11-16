@@ -174,6 +174,9 @@ private fun AurixMainShell(
   val featuredTracks by viewModel.featuredTracks.collectAsStateWithLifecycle()
   val isLoadingFeatured by viewModel.isLoadingFeatured.collectAsStateWithLifecycle()
   val featuredError by viewModel.featuredError.collectAsStateWithLifecycle()
+  val popularYoutubeSongs by viewModel.popularYoutubeSongs.collectAsStateWithLifecycle()
+  val tiktokViralNewPipeSongs by viewModel.tiktokViralNewPipeSongs.collectAsStateWithLifecycle()
+  val isLoadingTiktokViralNewPipe by viewModel.isLoadingTiktokViralNewPipe.collectAsStateWithLifecycle()
   val selectedDailyFeed by viewModel.selectedDailyFeed.collectAsStateWithLifecycle()
   val dailyUpdatedLabel by viewModel.dailyUpdatedLabel.collectAsStateWithLifecycle()
   val dailyUpdatedJustNow by viewModel.dailyUpdatedJustNow.collectAsStateWithLifecycle()
@@ -212,7 +215,6 @@ private fun AurixMainShell(
   var albumDetailSong by remember { mutableStateOf<com.example.model.Song?>(null) }
   var songForAlbumPicker by remember { mutableStateOf<com.example.model.Song?>(null) }
   val smartRecommendations by viewModel.smartRecommendations.collectAsStateWithLifecycle()
-  val becauseYouListened by viewModel.becauseYouListened.collectAsStateWithLifecycle()
   val moodFlowEnabled by viewModel.moodFlowEnabled.collectAsStateWithLifecycle()
   val moodFlowCurrentPick by viewModel.moodFlowCurrentPick.collectAsStateWithLifecycle()
   val discoverWeekly by viewModel.discoverWeekly.collectAsStateWithLifecycle()
@@ -363,6 +365,9 @@ private fun AurixMainShell(
               featuredTracks = featuredTracks,
               isLoadingFeatured = isLoadingFeatured,
               featuredError = featuredError,
+              popularYoutubeSongs = popularYoutubeSongs,
+              tiktokViralChartSongs = tiktokViralNewPipeSongs,
+              isLoadingTiktokViralChart = isLoadingTiktokViralNewPipe,
               selectedFeed = selectedDailyFeed,
               dailyUpdatedLabel = dailyUpdatedLabel,
               dailyUpdatedJustNow = dailyUpdatedJustNow,
@@ -374,6 +379,9 @@ private fun AurixMainShell(
               darkTheme = darkTheme,
               reducedMotion = reducedMotion,
               verifiedLyricsIds = verifiedLyricsIds,
+              resolvingSongId = resolvingSongId,
+              downloadedSongIds = downloadedSongIds,
+              songDownloadProgress = songDownloadProgress,
               onCheckLyrics = { viewModel.ensureLyricsVerified(it) },
               onSelectFeed = { viewModel.selectDailyFeed(it) },
               onRefreshDailyFeed = { viewModel.loadDailyRecommendations(selectedDailyFeed, forceRefresh = true) },
@@ -389,31 +397,16 @@ private fun AurixMainShell(
                 viewModel.openAlbum(null)
                 currentScreen = Screen.Album
               },
+              onOpenAllTiktokViral = { currentScreen = Screen.PlaylistDetail("tiktok_viral_charts") },
+              onRefreshTiktokViral = { viewModel.loadTiktokViralNewPipeSongs(forceRefresh = true) },
+              onYoutubeSongDownloadClick = { viewModel.openYoutubeFormatSheet(it) },
               smartRecommendations = smartRecommendations,
-              becauseYouListened = becauseYouListened,
               discoverWeekly = discoverWeekly,
               moodPlaylists = moodPlaylists,
               musicDna = musicDna,
               onOpenInsights = { currentScreen = Screen.Insights },
               onOpenDiscoverWeekly = { currentScreen = Screen.PlaylistDetail("discover_weekly") },
               onOpenMoodPlaylist = { mood -> currentScreen = Screen.PlaylistDetail("mood_${mood.id}") },
-              onPlayBecauseMix = { items, startSong ->
-                if (startSong != null && currentSong?.id == startSong.id) {
-                  viewModel.togglePlayPause()
-                } else {
-                  viewModel.playBecauseYouListenedMix(items, startSong)
-                }
-              },
-              onOpenBecauseItem = { items, song ->
-                if (currentSong?.id != song.id) {
-                  viewModel.playBecauseYouListenedMix(items, song)
-                }
-                showNowPlaying = true
-              },
-              onSongFeedback = { song, liked -> viewModel.submitSongFeedback(song, liked) },
-              onOpenBecauseDetail = { isSad ->
-                currentScreen = Screen.PlaylistDetail(if (isSad) "because_sad" else "because_chill")
-              },
               onSongClick = { song, queue -> viewModel.playSong(song, queue) },
               onFavoriteClick = { viewModel.toggleFavorite(it) }
             )
@@ -435,7 +428,32 @@ private fun AurixMainShell(
               onFavoriteClick = { viewModel.toggleFavorite(it) }
             )
             is Screen.PlaylistDetail -> {
-              if (screen.key == "discover_weekly") {
+              if (screen.key == "tiktok_viral_charts") {
+                PlaylistDetailScreen(
+                  title = stringResource(id = R.string.home_tiktok_viral_charts_title),
+                  subtitle = stringResource(id = R.string.home_tiktok_viral_charts_sub),
+                  badgeLabel = stringResource(id = R.string.home_tiktok_newpipe_badge),
+                  tracks = tiktokViralNewPipeSongs,
+                  emptyMessage = stringResource(id = R.string.home_tiktok_viral_empty),
+                  showRefreshButton = true,
+                  currentSong = currentSong,
+                  isPlaying = isPlaying,
+                  darkTheme = darkTheme,
+                  reducedMotion = reducedMotion,
+                  verifiedLyricsIds = verifiedLyricsIds,
+                  resolvingSongId = resolvingSongId,
+                  downloadedSongIds = downloadedSongIds,
+                  songDownloadProgress = songDownloadProgress,
+                  onBack = { currentScreen = Screen.Home },
+                  onRefresh = { viewModel.loadTiktokViralNewPipeSongs(forceRefresh = true) },
+                  onPlayAll = { viewModel.playPlaylist(tiktokViralNewPipeSongs) },
+                  onShuffleAll = { viewModel.shuffleAlbum(tiktokViralNewPipeSongs) },
+                  onCheckLyrics = { viewModel.ensureLyricsVerified(it) },
+                  onSongClick = { song, queue -> viewModel.playSong(song, queue) },
+                  onFavoriteClick = { viewModel.toggleFavorite(it) },
+                  onYoutubeSongDownloadClick = { viewModel.openYoutubeFormatSheet(it) }
+                )
+              } else if (screen.key == "discover_weekly") {
                 val dw = discoverWeekly
                 val dwTracks = dw?.tracks.orEmpty()
                 val dwSubtitle = if (dw != null && dwTracks.isNotEmpty()) {
@@ -467,29 +485,6 @@ private fun AurixMainShell(
                   onCheckLyrics = { viewModel.ensureLyricsVerified(it) },
                   onSongClick = { song, queue -> viewModel.playSong(song, queue) },
                   onFavoriteClick = { viewModel.toggleFavorite(it) }
-                )
-              } else if (screen.key == "because_sad" || screen.key == "because_chill") {
-                val isSad = screen.key == "because_sad"
-                val items = if (isSad) becauseYouListened.sadVibes else becauseYouListened.chillMix
-                BecauseYouListenedDetailScreen(
-                  title = stringResource(id = if (isSad) R.string.because_tab_sad else R.string.because_tab_chill),
-                  subtitle = stringResource(
-                    id = if (becauseYouListened.isColdStart) R.string.because_section_sub_cold else R.string.because_section_sub_warm
-                  ),
-                  items = items,
-                  emptyMessage = stringResource(id = if (isSad) R.string.because_empty_sad else R.string.because_empty_chill),
-                  currentSong = currentSong,
-                  isPlaying = isPlaying,
-                  darkTheme = darkTheme,
-                  reducedMotion = reducedMotion,
-                  verifiedLyricsIds = verifiedLyricsIds,
-                  onBack = { currentScreen = Screen.Home },
-                  onPlayAll = { viewModel.playBecauseYouListenedMix(items, null) },
-                  onShuffleAll = { viewModel.shuffleAlbum(items.map { it.song }) },
-                  onCheckLyrics = { viewModel.ensureLyricsVerified(it) },
-                  onPlayItem = { item -> viewModel.playBecauseYouListenedMix(items, item.song) },
-                  onFavoriteClick = { viewModel.toggleFavorite(it) },
-                  onFeedback = { song, liked -> viewModel.submitSongFeedback(song, liked) }
                 )
               } else {
                 val moodId = screen.key.removePrefix("mood_")
@@ -909,6 +904,30 @@ private fun AurixMainShell(
           onSelectAlbum = { album -> viewModel.addSongToAlbum(album.albumId, pickerSong) },
           onCreateAlbumWithSong = { title, artist, year ->
             viewModel.createAlbumWithSong(title, artist, year, pickerSong)
+          }
+        )
+      }
+
+      // YouTube Format Picker Sheet when invoked from Home or Popular YouTube Detail
+      if (currentScreen !is Screen.Search && formatSheetState !is YoutubeFormatSheetState.Closed) {
+        YoutubeFormatPickerSheet(
+          state = formatSheetState,
+          darkTheme = darkTheme,
+          reducedMotion = reducedMotion,
+          onDismiss = { viewModel.closeYoutubeFormatSheet() },
+          onSelectFormat = { viewModel.selectFormatSheetOption(it) },
+          onPlayNow = { viewModel.playFromFormatSheet() },
+          onDownload = { viewModel.downloadFromFormatSheet(context) },
+          onRetry = {
+            val errState = formatSheetState as? YoutubeFormatSheetState.Error
+            if (errState != null) {
+              viewModel.openYoutubeFormatSheet(errState.song)
+            }
+          },
+          onOpenMySongs = {
+            viewModel.closeYoutubeFormatSheet()
+            libraryTab = 0
+            currentScreen = Screen.Library
           }
         )
       }

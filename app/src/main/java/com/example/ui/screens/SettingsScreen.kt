@@ -1144,15 +1144,15 @@ private fun UpdateCardPreviewHost(
   totalBytes: Long = 0L,
   speedBytesPerSec: Long = 0L
 ) {
-  val installed = InstalledAppInfo("com.aurix.music", "1.6.7", 10607L, emptySet())
+  val installed = InstalledAppInfo("com.aurix.music", "1.6.8", 10608L, emptySet())
   val release = RemoteVersionInfo(
-    versionName = "1.6.7",
-    versionCode = 10607L,
+    versionName = "1.6.8",
+    versionCode = 10608L,
     releaseDate = "2026-11-16",
     apkUrl = "",
     sha256 = "",
     notes = UpdateManager.CURRENT_RELEASE_NOTES,
-    releasePageUrl = "https://github.com/MEYYYNASH/AURIX/releases/tag/v1.6.7"
+    releasePageUrl = "https://github.com/MEYYYNASH/AURIX/releases/tag/v1.6.8"
   )
   val uiState = UpdateUiState(
     stage = stage,
@@ -1190,8 +1190,8 @@ private fun UpdateCardAvailablePreview() {
   UpdateCardPreviewHost(
     logoState = UpdateLogoState.Available,
     stage = UpdateStage.Available,
-    subtitle = "AURIX v1.6.7 is ready to download",
-    statusText = "Update available: v1.6.7 (code 10607)"
+    subtitle = "AURIX v1.6.8 is ready to download",
+    statusText = "Update available: v1.6.8 (code 10608)"
   )
 }
 
@@ -1201,7 +1201,7 @@ private fun UpdateCardDownloadingPreview() {
   UpdateCardPreviewHost(
     logoState = UpdateLogoState.Downloading,
     stage = UpdateStage.Downloading,
-    subtitle = "Downloading v1.6.7 · 4.2 MB/s",
+    subtitle = "Downloading v1.6.8 · 4.2 MB/s",
     statusText = "Downloading 62% (4.2 MB/s)",
     progress = 0.62f,
     downloadedBytes = 24L * 1024L * 1024L,
@@ -1217,7 +1217,7 @@ private fun UpdateCardDonePreview() {
     logoState = UpdateLogoState.Done,
     stage = UpdateStage.Done,
     subtitle = "Installer finished — tap Restart App to apply",
-    statusText = "Ready to restart (v1.6.7)",
+    statusText = "Ready to restart (v1.6.8)",
     progress = 1f
   )
 }

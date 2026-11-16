@@ -1,12 +1,13 @@
 # AURIX — ONE APP. ALL YOUR MUSIC.
 
-AURIX (`v1.6.7`, release date `2026-11-16`) is a modern Android music player and sound finder app built with Kotlin, Jetpack Compose, and Material 3.
+AURIX (`v1.6.8`, release date `2026-11-16`) is a modern Android music player and sound finder app built with Kotlin, Jetpack Compose, and Material 3.
 
 ## Features
 
-- **Because You Listened**: 30-day vocal sad & chill recommendation engine (`"Sad Vibes"` and `"Chill Mix"`, 20 songs each) with `Match %` badges, `"Because you listened to X"` reasons, dislike removal, artist diversity, and cold-start support.
+- **Home Discovery**: Featured Hero Spotlight banner, **New Albums** grid, **Popular YouTube Song List** with format & quality downloads, and **TikTok Viral** & Daily Top charts powered by iTunes & Apple Charts.
+- **Because You Listened**: 30-day vocal sad & chill recommendation engine (`"Sad Vibes"` and `"Chill Mix"`, 20 songs each) with dark glassmorphism rows, `Match %` badges, `"Because you listened to X"` reasons, and cold-start support.
 - **MoodFlow — Intelligent Mood Shuffle**: 5-dimensional mood-aware shuffle (`happy`, `sad`, `calm`, `energetic`, `romantic`) blending the active and recent tracks with 60/25/10/5 roulette buckets and live `Match %` display in Now Playing.
-- **YouTube Search, Format Picker & Local Music**: Search full songs on YouTube, preview or pick audio format & quality (M4A / WebM), and import local audio files from device storage.
+- **YouTube Search, iTunes 30s & Local Music**: Search full songs on YouTube, preview iTunes 30s tracks, pick audio format & quality (M4A / WebM), and import local audio files from device storage.
 - **Link Matcher & Synced Lyrics**: Match YouTube links in Search and follow real-time synced `.lrc` lyrics via LRCLIB, with plain lyrics fallback.
 - **Background Playback**: Powered by AndroidX Media3 (ExoPlayer) with equalizer, crossfade, and media controls.
 - **Animated OTA Updates (`UpdateManager`)**: `version.json`-backed updater (`MEYYYNASH/AURIX`) with resumable APK downloads, real-time speed & progress, SHA-256 and package signature verification, reduced-motion aware planet animations, and in-app installer.

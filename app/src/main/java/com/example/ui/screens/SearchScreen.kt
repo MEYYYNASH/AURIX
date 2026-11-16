@@ -106,7 +106,11 @@ fun SearchScreen(
   onRetryFormatSheet: () -> Unit = {},
   searchUiState: SearchUiState = when {
     isSearching -> SearchUiState.Loading(
-      mode = if (searchMode == "youtube") SearchMode.YouTubeLink else SearchMode.YouTubeSearch,
+      mode = when (searchMode) {
+        "youtube" -> SearchMode.YouTubeLink
+        "itunes" -> SearchMode.ITunes30s
+        else -> SearchMode.YouTubeSearch
+      },
       query = searchQuery
     )
     !searchError.isNullOrBlank() -> SearchUiState.Error(searchError)
@@ -121,7 +125,11 @@ fun SearchScreen(
   val context = LocalContext.current
   val keyboardController = LocalSoftwareKeyboardController.current
   val quickTags = listOf("TikTok Viral", "Khmer", "Phonk", "Pop", "R&B", "Hip-Hop")
-  val activeModeEnum = if (searchMode == "youtube") SearchMode.YouTubeLink else SearchMode.YouTubeSearch
+  val activeModeEnum = when (searchMode) {
+    "youtube" -> SearchMode.YouTubeLink
+    "itunes" -> SearchMode.ITunes30s
+    else -> SearchMode.YouTubeSearch
+  }
 
   Box(modifier = Modifier.fillMaxSize()) {
     Column(
@@ -145,19 +153,28 @@ fun SearchScreen(
 
       Spacer(modifier = Modifier.height(14.dp))
 
-      // Unified Liquid Glass 2-Mode YouTube Switcher
+      // Unified Liquid Glass 3-Mode Switcher (YouTube | iTunes 30s | YT Link)
       GlassSegmentedBar(
         options = listOf(
           stringResource(id = R.string.search_mode_yt_search) to Icons.Rounded.PlayCircle,
+          stringResource(id = R.string.search_mode_itunes) to Icons.Rounded.MusicNote,
           stringResource(id = R.string.search_mode_youtube) to Icons.Rounded.Link
         ),
-        selectedIndex = if (searchMode == "youtube") 1 else 0,
+        selectedIndex = when (searchMode) {
+          "itunes" -> 1
+          "youtube" -> 2
+          else -> 0
+        },
         darkTheme = darkTheme,
         onSelect = { idx ->
-          val next = if (idx == 1) "youtube" else "youtube_search"
+          val next = when (idx) {
+            1 -> "itunes"
+            2 -> "youtube"
+            else -> "youtube_search"
+          }
           onSearchModeChanged(next)
         },
-        testTags = listOf("mode_youtube_search_button", "mode_youtube_button"),
+        testTags = listOf("mode_youtube_search_button", "mode_itunes_button", "mode_youtube_button"),
         reducedMotion = reducedMotion
       )
 
@@ -708,20 +725,24 @@ fun SearchResultsArea(
                 contentAlignment = Alignment.Center
               ) {
                 Icon(
-                  imageVector = Icons.Rounded.PlayCircle,
+                  imageVector = if (isYtSearch) Icons.Rounded.PlayCircle else Icons.Rounded.MusicNote,
                   contentDescription = null,
                   tint = badgeColor,
                   modifier = Modifier.size(28.dp)
                 )
               }
               Text(
-                text = stringResource(id = R.string.search_yt_idle_title),
+                text = stringResource(
+                  id = if (isYtSearch) R.string.search_yt_idle_title else R.string.search_itunes_idle_title
+                ),
                 style = MaterialTheme.typography.titleMedium.copy(fontWeight = FontWeight.Bold),
                 color = MaterialTheme.colorScheme.onSurface,
                 textAlign = TextAlign.Center
               )
               Text(
-                text = stringResource(id = R.string.search_yt_idle_sub),
+                text = stringResource(
+                  id = if (isYtSearch) R.string.search_yt_idle_sub else R.string.search_itunes_idle_sub
+                ),
                 style = MaterialTheme.typography.bodySmall,
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
                 textAlign = TextAlign.Center
@@ -758,6 +779,7 @@ fun SearchResultsArea(
             Text(
               text = when (state.mode) {
                 SearchMode.YouTubeSearch -> stringResource(id = R.string.search_loading_yt)
+                SearchMode.ITunes30s -> stringResource(id = R.string.search_loading_itunes)
                 SearchMode.YouTubeLink -> stringResource(id = R.string.search_loading_link)
               },
               style = MaterialTheme.typography.bodySmall.copy(fontWeight = FontWeight.Medium),

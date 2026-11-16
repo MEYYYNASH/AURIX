@@ -14,6 +14,8 @@ import androidx.compose.foundation.clickable
 import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.pager.HorizontalPager
+import androidx.compose.foundation.pager.rememberPagerState
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
@@ -23,10 +25,9 @@ import androidx.compose.material3.*
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.draw.alpha
-import androidx.compose.ui.draw.blur
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
@@ -56,6 +57,9 @@ fun HomeScreen(
   featuredTracks: List<Song>,
   isLoadingFeatured: Boolean,
   featuredError: String?,
+  popularYoutubeSongs: List<Song> = emptyList(),
+  tiktokViralChartSongs: List<Song> = emptyList(),
+  isLoadingTiktokViralChart: Boolean = false,
   selectedFeed: DailyFeedCategory,
   dailyUpdatedLabel: String,
   dailyUpdatedJustNow: Boolean = false,
@@ -67,27 +71,35 @@ fun HomeScreen(
   darkTheme: Boolean,
   reducedMotion: Boolean,
   verifiedLyricsIds: Set<String> = emptySet(),
+  resolvingSongId: String? = null,
+  downloadedSongIds: Set<String> = emptySet(),
+  songDownloadProgress: Map<String, Float> = emptyMap(),
   onCheckLyrics: (Song) -> Unit = {},
   onSelectFeed: (DailyFeedCategory) -> Unit,
   onRefreshDailyFeed: () -> Unit,
   onOpenSearch: () -> Unit,
   onOpenLibraryTab: (Int) -> Unit,
   onOpenAlbum: () -> Unit = {},
+  onOpenAllTiktokViral: () -> Unit = {},
+  onRefreshTiktokViral: () -> Unit = {},
+  onYoutubeSongDownloadClick: (Song) -> Unit = {},
   smartRecommendations: List<RecommendedTrack> = emptyList(),
-  becauseYouListened: BecauseYouListenedResult = BecauseYouListenedResult(),
   discoverWeekly: DiscoverWeeklyPlaylist? = null,
   moodPlaylists: List<MoodPlaylist> = emptyList(),
   musicDna: MusicDnaProfile? = null,
   onOpenInsights: () -> Unit = {},
   onOpenDiscoverWeekly: () -> Unit = {},
   onOpenMoodPlaylist: (MoodCategory) -> Unit = {},
-  onPlayBecauseMix: (List<VocalRecommendationItem>, Song?) -> Unit = { _, _ -> },
-  onOpenBecauseItem: (List<VocalRecommendationItem>, Song) -> Unit = { items, song -> onPlayBecauseMix(items, song) },
-  onSongFeedback: (Song, Boolean) -> Unit = { _, _ -> },
-  onOpenBecauseDetail: (Boolean) -> Unit = {},
   onSongClick: (Song, List<Song>) -> Unit,
   onFavoriteClick: (Song) -> Unit
 ) {
+  val heroSongs = remember(tiktokViralChartSongs, popularYoutubeSongs) {
+    (tiktokViralChartSongs + popularYoutubeSongs)
+      .distinctBy { it.id }
+      .take(4)
+  }
+  val heroPagerState = rememberPagerState(pageCount = { heroSongs.size.coerceAtLeast(1) })
+
   Box(modifier = Modifier.fillMaxSize()) {
     LazyColumn(
       modifier = Modifier
@@ -99,7 +111,7 @@ fun HomeScreen(
         bottom = if (currentSong != null) 205.dp else 135.dp
       )
     ) {
-      // Minimal Editorial Brand Header + Refresh & Search Controls
+      // Clean Editorial Header with Indicator Dots + Refresh & Search Circles
       item {
         Row(
           modifier = Modifier.fillMaxWidth(),
@@ -107,7 +119,9 @@ fun HomeScreen(
           verticalAlignment = Alignment.CenterVertically
         ) {
           Row(
-            modifier = Modifier.weight(1f).padding(end = 10.dp),
+            modifier = Modifier
+              .weight(1f)
+              .padding(end = 10.dp),
             verticalAlignment = Alignment.CenterVertically,
             horizontalArrangement = Arrangement.spacedBy(12.dp)
           ) {
@@ -117,31 +131,62 @@ fun HomeScreen(
               animated = true,
               reducedMotion = reducedMotion
             )
-            Column {
+            Column(verticalArrangement = Arrangement.spacedBy(2.dp)) {
               Text(
                 text = "AURIX",
                 style = MaterialTheme.typography.titleLarge.copy(
                   fontWeight = FontWeight.ExtraBold,
-                  fontSize = 22.sp,
+                  fontSize = 23.sp,
                   letterSpacing = 0.5.sp
                 ),
                 color = MaterialTheme.colorScheme.onBackground,
                 maxLines = 1,
                 overflow = TextOverflow.Ellipsis
               )
-              val statusText = if (dailyUpdatedJustNow) {
-                stringResource(id = R.string.home_updated_just_now)
-              } else {
-                dailyUpdatedLabel
+              Row(
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.spacedBy(8.dp)
+              ) {
+                val activeDotIndex = if (heroSongs.size > 1) heroPagerState.currentPage % 2 else 0
+                Row(
+                  verticalAlignment = Alignment.CenterVertically,
+                  horizontalArrangement = Arrangement.spacedBy(4.dp)
+                ) {
+                  Box(
+                    modifier = Modifier
+                      .width(if (activeDotIndex == 0) 14.dp else 5.dp)
+                      .height(4.dp)
+                      .clip(CircleShape)
+                      .background(
+                        if (activeDotIndex == 0) MaterialTheme.colorScheme.onBackground
+                        else MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.35f)
+                      )
+                  )
+                  Box(
+                    modifier = Modifier
+                      .width(if (activeDotIndex == 1) 14.dp else 5.dp)
+                      .height(4.dp)
+                      .clip(CircleShape)
+                      .background(
+                        if (activeDotIndex == 1) MaterialTheme.colorScheme.onBackground
+                        else MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.35f)
+                      )
+                  )
+                }
+                val statusText = if (dailyUpdatedJustNow) {
+                  stringResource(id = R.string.home_updated_just_now)
+                } else {
+                  dailyUpdatedLabel
+                }
+                Text(
+                  text = statusText,
+                  style = MaterialTheme.typography.labelMedium.copy(fontWeight = FontWeight.Medium),
+                  color = AurixTealAccent,
+                  maxLines = 1,
+                  overflow = TextOverflow.Ellipsis,
+                  modifier = Modifier.testTag("home_header_status_label")
+                )
               }
-              Text(
-                text = statusText,
-                style = MaterialTheme.typography.labelMedium.copy(fontWeight = FontWeight.Medium),
-                color = AurixTealAccent,
-                maxLines = 1,
-                overflow = TextOverflow.Ellipsis,
-                modifier = Modifier.testTag("home_header_status_label")
-              )
             }
           }
 
@@ -166,7 +211,7 @@ fun HomeScreen(
             ) {
               if (isLoadingFeatured) {
                 OrbitLoader(
-                  size = 30.dp,
+                  size = 28.dp,
                   cardColor = iconBg,
                   ringColor = if (darkTheme) OrbitRingDefault else Color(0xFF3A3C48),
                   planetColor = if (darkTheme) OrbitPlanetDefault else Color.White,
@@ -203,55 +248,565 @@ fun HomeScreen(
         }
       }
 
-      // Slim Library Quick Access Pills
-      item {
-        Row(
-          modifier = Modifier.fillMaxWidth(),
-          horizontalArrangement = Arrangement.spacedBy(10.dp)
-        ) {
-          HomeLibraryPill(
-            title = stringResource(id = R.string.my_songs),
-            countLabel = if (localSongsCount == 1) "1" else "$localSongsCount",
-            icon = Icons.Rounded.FolderOpen,
-            iconTint = MaterialTheme.colorScheme.primary,
-            darkTheme = darkTheme,
-            modifier = Modifier.weight(1f).testTag("home_library_local_tile"),
-            onClick = { onOpenLibraryTab(0) }
-          )
-          HomeLibraryPill(
-            title = stringResource(id = R.string.home_favorites),
-            countLabel = if (favoritesCount == 1) "1" else "$favoritesCount",
-            icon = Icons.Rounded.Favorite,
-            iconTint = HeartRed,
-            darkTheme = darkTheme,
-            modifier = Modifier.weight(1f).testTag("home_library_favorites_tile"),
-            onClick = { onOpenLibraryTab(1) }
-          )
+      // Featured Spotlight Hero Banner (Clean Rounded Visual Card)
+      if (heroSongs.isNotEmpty()) {
+        item {
+          Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
+            HorizontalPager(
+              state = heroPagerState,
+              pageSpacing = 12.dp,
+              modifier = Modifier
+                .fillMaxWidth()
+                .testTag("home_hero_pager")
+            ) { page ->
+              val song = heroSongs[page]
+              val isCurrentHero = currentSong?.id == song.id
+              val badgeText = "${stringResource(id = R.string.home_featured_badge)} · YT"
+              HeroBannerCard(
+                song = song,
+                badgeLabel = badgeText,
+                isCurrent = isCurrentHero,
+                isPlaying = isPlaying,
+                darkTheme = darkTheme,
+                reducedMotion = reducedMotion,
+                onClick = { onSongClick(song, heroSongs) }
+              )
+            }
+            if (heroSongs.size > 1) {
+              Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.Center,
+                verticalAlignment = Alignment.CenterVertically
+              ) {
+                repeat(heroSongs.size) { index ->
+                  val active = heroPagerState.currentPage == index
+                  Box(
+                    modifier = Modifier
+                      .padding(horizontal = 3.dp)
+                      .width(if (active) 16.dp else 6.dp)
+                      .height(5.dp)
+                      .clip(CircleShape)
+                      .background(
+                        if (active) AurixTealAccent
+                        else MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.28f)
+                      )
+                  )
+                }
+              }
+            }
+          }
         }
-        Spacer(modifier = Modifier.height(10.dp))
-        Row(
-          modifier = Modifier.fillMaxWidth(),
-          horizontalArrangement = Arrangement.spacedBy(10.dp)
+      }
+
+      // Slim Library Quick Access 2x2 Grid
+      item {
+        Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
+          Row(
+            modifier = Modifier.fillMaxWidth(),
+            horizontalArrangement = Arrangement.spacedBy(10.dp)
+          ) {
+            HomeLibraryPill(
+              title = stringResource(id = R.string.my_songs),
+              countLabel = if (localSongsCount == 1) "1" else "$localSongsCount",
+              icon = Icons.Rounded.FolderOpen,
+              iconTint = MaterialTheme.colorScheme.primary,
+              darkTheme = darkTheme,
+              modifier = Modifier
+                .weight(1f)
+                .testTag("home_library_local_tile"),
+              onClick = { onOpenLibraryTab(0) }
+            )
+            HomeLibraryPill(
+              title = stringResource(id = R.string.home_favorites),
+              countLabel = if (favoritesCount == 1) "1" else "$favoritesCount",
+              icon = Icons.Rounded.Favorite,
+              iconTint = HeartRed,
+              darkTheme = darkTheme,
+              modifier = Modifier
+                .weight(1f)
+                .testTag("home_library_favorites_tile"),
+              onClick = { onOpenLibraryTab(1) }
+            )
+          }
+          Row(
+            modifier = Modifier.fillMaxWidth(),
+            horizontalArrangement = Arrangement.spacedBy(10.dp)
+          ) {
+            HomeLibraryPill(
+              title = stringResource(id = R.string.library_tab_albums),
+              countLabel = stringResource(id = R.string.album_nav_label),
+              icon = Icons.Rounded.Album,
+              iconTint = Color(0xFFC4B5FF),
+              darkTheme = darkTheme,
+              modifier = Modifier
+                .weight(1f)
+                .testTag("home_album_tile"),
+              onClick = onOpenAlbum
+            )
+            HomeLibraryPill(
+              title = stringResource(id = R.string.insights_pill_title),
+              countLabel = musicDna?.takeIf { it.hasEnoughHistory }?.let { "${it.totalQualifiedPlays}" }
+                ?: stringResource(id = R.string.insights_pill_sub),
+              icon = Icons.Rounded.GraphicEq,
+              iconTint = AurixTealAccent,
+              darkTheme = darkTheme,
+              modifier = Modifier
+                .weight(1f)
+                .testTag("home_insights_tile"),
+              onClick = onOpenInsights
+            )
+          }
+        }
+      }
+
+      // TikTok Viral Chart Section (NewPipe Extractor — Full YouTube Chart Tracks)
+      item {
+        Column(
+          modifier = Modifier
+            .fillMaxWidth()
+            .testTag("home_tiktok_viral_chart_section"),
+          verticalArrangement = Arrangement.spacedBy(12.dp)
         ) {
-          HomeLibraryPill(
-            title = stringResource(id = R.string.album_placeholder_title),
-            countLabel = stringResource(id = R.string.album_nav_label),
-            icon = Icons.Rounded.Album,
-            iconTint = Color(0xFFC4B5FF),
-            darkTheme = darkTheme,
-            modifier = Modifier.weight(1f).testTag("home_album_tile"),
-            onClick = onOpenAlbum
+          HomeSectionHeader(
+            title = stringResource(id = R.string.home_tiktok_viral_charts_title),
+            badgeText = stringResource(id = R.string.home_tiktok_newpipe_badge),
+            seeAllLabel = stringResource(id = R.string.home_see_all),
+            seeAllTestTag = "home_tiktok_viral_see_all",
+            onSeeAllClick = onOpenAllTiktokViral
           )
-          HomeLibraryPill(
-            title = stringResource(id = R.string.insights_pill_title),
-            countLabel = musicDna?.takeIf { it.hasEnoughHistory }?.let { "${it.totalQualifiedPlays}" }
-              ?: stringResource(id = R.string.insights_pill_sub),
-            icon = Icons.Rounded.GraphicEq,
-            iconTint = AurixTealAccent,
+
+          GlassCard(
             darkTheme = darkTheme,
-            modifier = Modifier.weight(1f).testTag("home_insights_tile"),
-            onClick = onOpenInsights
-          )
+            cornerRadius = 24.dp,
+            modifier = Modifier.fillMaxWidth()
+          ) {
+            if (tiktokViralChartSongs.isEmpty()) {
+              Row(
+                modifier = Modifier
+                  .fillMaxWidth()
+                  .padding(horizontal = 18.dp, vertical = 20.dp),
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.spacedBy(14.dp)
+              ) {
+                if (isLoadingTiktokViralChart) {
+                  OrbitLoader(
+                    size = 36.dp,
+                    cardColor = if (darkTheme) Color(0xFF151F30) else Color.White,
+                    ringColor = if (darkTheme) OrbitRingDefault else Color(0xFF3A3C48),
+                    planetColor = if (darkTheme) OrbitPlanetDefault else Color.White,
+                    reducedMotion = reducedMotion
+                  )
+                  Text(
+                    text = stringResource(id = R.string.home_tiktok_viral_loading),
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    modifier = Modifier.weight(1f)
+                  )
+                } else {
+                  Icon(
+                    imageVector = Icons.Rounded.Whatshot,
+                    contentDescription = null,
+                    tint = AurixTealAccent,
+                    modifier = Modifier.size(26.dp)
+                  )
+                  Text(
+                    text = stringResource(id = R.string.home_tiktok_viral_empty),
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    modifier = Modifier.weight(1f)
+                  )
+                  TextButton(
+                    onClick = onRefreshTiktokViral,
+                    modifier = Modifier
+                      .minimumInteractiveComponentSize()
+                      .testTag("home_tiktok_viral_retry_button")
+                  ) {
+                    Text(
+                      text = stringResource(id = R.string.home_retry),
+                      color = AurixTealAccent,
+                      fontWeight = FontWeight.Bold
+                    )
+                  }
+                }
+              }
+            } else {
+              val chartPreviewList = tiktokViralChartSongs.take(5)
+              Column(
+                modifier = Modifier
+                  .fillMaxWidth()
+                  .padding(horizontal = 8.dp, vertical = 6.dp)
+              ) {
+                chartPreviewList.forEachIndexed { idx, song ->
+                  PopularYoutubeSongRow(
+                    song = song,
+                    isCurrent = currentSong?.id == song.id,
+                    isPlaying = isPlaying,
+                    isResolving = resolvingSongId == song.id,
+                    darkTheme = darkTheme,
+                    reducedMotion = reducedMotion,
+                    hasLyrics = song.id in verifiedLyricsIds,
+                    downloadProgress = songDownloadProgress[song.id],
+                    isDownloaded = song.id in downloadedSongIds,
+                    onCheckLyrics = onCheckLyrics,
+                    onClick = { onSongClick(song, tiktokViralChartSongs) },
+                    onFavoriteClick = { onFavoriteClick(song) },
+                    onDownloadClick = { onYoutubeSongDownloadClick(song) }
+                  )
+                  if (idx < chartPreviewList.lastIndex) {
+                    HorizontalDivider(
+                      modifier = Modifier.padding(horizontal = 14.dp),
+                      color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.06f)
+                    )
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+
+      // Daily Feeds Section (TikTok Viral / Daily Top / Phonk & Edits / Khmer & Asia)
+      item {
+        Column(verticalArrangement = Arrangement.spacedBy(14.dp)) {
+          Row(
+            modifier = Modifier.fillMaxWidth(),
+            horizontalArrangement = Arrangement.SpaceBetween,
+            verticalAlignment = Alignment.CenterVertically
+          ) {
+            Column(
+              modifier = Modifier.weight(1f),
+              verticalArrangement = Arrangement.spacedBy(3.dp)
+            ) {
+              val feedLabel = feedLocalizedLabel(selectedFeed)
+              val feedSubtitle = feedLocalizedSubtitle(selectedFeed)
+              Row(
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.spacedBy(8.dp)
+              ) {
+                Text(
+                  text = feedLabel,
+                  style = MaterialTheme.typography.titleLarge.copy(
+                    fontWeight = FontWeight.ExtraBold,
+                    fontSize = 21.sp,
+                    lineHeight = 28.sp
+                  ),
+                  color = MaterialTheme.colorScheme.onBackground,
+                  maxLines = 1,
+                  overflow = TextOverflow.Ellipsis
+                )
+                Surface(
+                  shape = CircleShape,
+                  color = AurixTealAccent.copy(alpha = 0.14f)
+                ) {
+                  Row(
+                    modifier = Modifier.padding(horizontal = 8.dp, vertical = 3.dp),
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.spacedBy(5.dp)
+                  ) {
+                    Box(
+                      modifier = Modifier
+                        .size(6.dp)
+                        .clip(CircleShape)
+                        .background(AurixTealAccent)
+                    )
+                    Text(
+                      text = when (selectedFeed) {
+                        DailyFeedCategory.TIKTOK_VIRAL -> stringResource(id = R.string.home_itunes_badge).uppercase()
+                        DailyFeedCategory.DAILY_CHARTS, DailyFeedCategory.KHMER_ASIA -> stringResource(id = R.string.home_itunes_yt_badge).uppercase()
+                        DailyFeedCategory.PHONK_EDITS -> stringResource(id = R.string.home_yt_badge).uppercase()
+                      },
+                      style = MaterialTheme.typography.labelSmall.copy(
+                        fontWeight = FontWeight.Bold,
+                        fontSize = 10.sp,
+                        lineHeight = 14.sp
+                      ),
+                      color = AurixTealAccent
+                    )
+                  }
+                }
+              }
+              Text(
+                text = feedSubtitle,
+                style = MaterialTheme.typography.bodySmall.copy(
+                  fontSize = 13.sp,
+                  lineHeight = 19.sp
+                ),
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                maxLines = 1,
+                overflow = TextOverflow.Ellipsis
+              )
+            }
+
+            if (!isLoadingFeatured && featuredTracks.isNotEmpty()) {
+              Surface(
+                shape = CircleShape,
+                color = if (darkTheme) Color(0xFF151F30) else Color.White.copy(alpha = 0.85f),
+                border = androidx.compose.foundation.BorderStroke(
+                  1.dp,
+                  if (darkTheme) Color(0xFF273348) else Color.White
+                )
+              ) {
+                Row(
+                  modifier = Modifier.padding(horizontal = 10.dp, vertical = 5.dp),
+                  verticalAlignment = Alignment.CenterVertically,
+                  horizontalArrangement = Arrangement.spacedBy(4.dp)
+                ) {
+                  Icon(
+                    imageVector = Icons.Rounded.QueueMusic,
+                    contentDescription = null,
+                    tint = AurixTealAccent,
+                    modifier = Modifier.size(14.dp)
+                  )
+                  Text(
+                    text = featuredTracks.take(20).size.toString(),
+                    style = MaterialTheme.typography.labelSmall.copy(fontWeight = FontWeight.Bold),
+                    color = MaterialTheme.colorScheme.onSurface
+                  )
+                }
+              }
+            }
+          }
+
+          Row(
+            modifier = Modifier
+              .fillMaxWidth()
+              .horizontalScroll(rememberScrollState()),
+            horizontalArrangement = Arrangement.spacedBy(8.dp)
+          ) {
+            DailyFeedCategory.entries.forEach { category ->
+              val selected = category == selectedFeed
+              val chipBg by animateColorAsState(
+                targetValue = when {
+                  selected -> AurixTealAccent
+                  darkTheme -> Color(0xFF151F30)
+                  else -> Color.White.copy(alpha = 0.84f)
+                },
+                animationSpec = if (reducedMotion) snap() else tween(200),
+                label = "chip_bg_${category.id}"
+              )
+              val chipBorder by animateColorAsState(
+                targetValue = when {
+                  selected -> AurixTealAccent
+                  darkTheme -> Color(0xFF273348)
+                  else -> Color.White
+                },
+                animationSpec = if (reducedMotion) snap() else tween(200),
+                label = "chip_border_${category.id}"
+              )
+              val chipTextColor = if (selected) Color(0xFF06201C) else MaterialTheme.colorScheme.onSurface
+
+              Row(
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.spacedBy(6.dp),
+                modifier = Modifier
+                  .heightIn(min = 40.dp)
+                  .clip(CircleShape)
+                  .background(chipBg)
+                  .border(1.dp, chipBorder, CircleShape)
+                  .clickable { onSelectFeed(category) }
+                  .testTag("home_feed_chip_${category.id}")
+                  .padding(horizontal = 14.dp, vertical = 8.dp)
+              ) {
+                Icon(
+                  imageVector = feedCategoryIcon(category),
+                  contentDescription = null,
+                  tint = if (selected) Color(0xFF06201C) else AurixTealAccent,
+                  modifier = Modifier.size(15.dp)
+                )
+                Text(
+                  text = feedLocalizedLabel(category),
+                  style = MaterialTheme.typography.bodySmall.copy(
+                    fontWeight = if (selected) FontWeight.Bold else FontWeight.SemiBold,
+                    fontSize = 13.sp,
+                    lineHeight = 18.sp
+                  ),
+                  color = chipTextColor
+                )
+              }
+            }
+          }
+        }
+      }
+
+      // Unified Daily / iTunes TikTok Viral Recommendations Card
+      item {
+        val cardBgColor = if (darkTheme) Color(0xFF151F30) else Color.White.copy(alpha = 0.92f)
+        val cardBorderColor = if (darkTheme) Color(0xFF273348) else Color.White
+        val cardShape = RoundedCornerShape(28.dp)
+        val cardState = when {
+          isLoadingFeatured -> DailyCardState.LOADING
+          featuredTracks.isEmpty() -> DailyCardState.ERROR
+          else -> DailyCardState.LOADED
+        }
+
+        Box(
+          modifier = Modifier
+            .fillMaxWidth()
+            .then(
+              if (cardState == DailyCardState.LOADED) {
+                Modifier.heightIn(min = 240.dp)
+              } else {
+                Modifier.height(260.dp)
+              }
+            )
+            .clip(cardShape)
+            .background(cardBgColor)
+            .border(1.dp, cardBorderColor, cardShape)
+            .semantics { liveRegion = LiveRegionMode.Polite }
+            .testTag("home_daily_feed_card")
+        ) {
+          AnimatedContent(
+            targetState = cardState,
+            modifier = Modifier.fillMaxWidth(),
+            transitionSpec = {
+              if (reducedMotion) {
+                fadeIn(snap()) togetherWith fadeOut(snap())
+              } else if (targetState == DailyCardState.LOADED) {
+                (fadeIn(tween(350)) + slideInVertically(tween(350)) { it / 16 }) togetherWith fadeOut(tween(180))
+              } else {
+                fadeIn(tween(220)) togetherWith fadeOut(tween(160))
+              }
+            },
+            label = "daily_card_state_transition"
+          ) { state ->
+            when (state) {
+              DailyCardState.ERROR -> {
+                Column(
+                  modifier = Modifier
+                    .fillMaxWidth()
+                    .height(260.dp)
+                    .padding(horizontal = 24.dp),
+                  horizontalAlignment = Alignment.CenterHorizontally,
+                  verticalArrangement = Arrangement.Center
+                ) {
+                  Box(
+                    modifier = Modifier
+                      .size(52.dp)
+                      .clip(CircleShape)
+                      .background(AurixTealAccent.copy(alpha = 0.14f)),
+                    contentAlignment = Alignment.Center
+                  ) {
+                    Icon(
+                      imageVector = Icons.Rounded.MusicNote,
+                      contentDescription = null,
+                      tint = AurixTealAccent,
+                      modifier = Modifier.size(26.dp)
+                    )
+                  }
+                  Spacer(modifier = Modifier.height(12.dp))
+                  Text(
+                    text = featuredError ?: stringResource(id = R.string.home_refresh_error),
+                    style = MaterialTheme.typography.bodyMedium.copy(
+                      fontWeight = FontWeight.Medium,
+                      lineHeight = 20.sp
+                    ),
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    textAlign = TextAlign.Center
+                  )
+                  Spacer(modifier = Modifier.height(14.dp))
+                  Button(
+                    onClick = {
+                      if (!isLoadingFeatured) {
+                        onRefreshDailyFeed()
+                      }
+                    },
+                    enabled = !isLoadingFeatured,
+                    shape = CircleShape,
+                    colors = ButtonDefaults.buttonColors(
+                      containerColor = AurixTealAccent,
+                      contentColor = Color(0xFF06201C)
+                    ),
+                    contentPadding = PaddingValues(horizontal = 20.dp, vertical = 10.dp),
+                    modifier = Modifier
+                      .defaultMinSize(minHeight = 48.dp)
+                      .testTag("home_daily_retry_button")
+                  ) {
+                    Icon(
+                      imageVector = Icons.Rounded.Refresh,
+                      contentDescription = null,
+                      modifier = Modifier.size(18.dp)
+                    )
+                    Spacer(modifier = Modifier.width(8.dp))
+                    Text(
+                      text = stringResource(id = R.string.home_retry),
+                      style = MaterialTheme.typography.labelLarge.copy(
+                        fontWeight = FontWeight.Bold,
+                        lineHeight = 20.sp
+                      )
+                    )
+                  }
+                }
+              }
+
+              DailyCardState.LOADING -> {
+                Column(
+                  modifier = Modifier
+                    .fillMaxWidth()
+                    .height(260.dp)
+                    .padding(horizontal = 24.dp),
+                  horizontalAlignment = Alignment.CenterHorizontally,
+                  verticalArrangement = Arrangement.Center
+                ) {
+                  OrbitLoader(
+                    size = 72.dp,
+                    cardColor = cardBgColor,
+                    ringColor = if (darkTheme) OrbitRingDefault else Color(0xFF3A3C48),
+                    planetColor = if (darkTheme) OrbitPlanetDefault else Color.White,
+                    reducedMotion = reducedMotion,
+                    modifier = Modifier.testTag("home_daily_orbit_loader")
+                  )
+                  Spacer(modifier = Modifier.height(14.dp))
+                  Text(
+                    text = stringResource(id = R.string.home_refreshing_title),
+                    style = MaterialTheme.typography.titleMedium.copy(
+                      fontWeight = FontWeight.Bold,
+                      lineHeight = 24.sp
+                    ),
+                    color = MaterialTheme.colorScheme.onSurface,
+                    textAlign = TextAlign.Center
+                  )
+                  Spacer(modifier = Modifier.height(4.dp))
+                  Text(
+                    text = stringResource(id = R.string.home_refreshing_subtitle),
+                    style = MaterialTheme.typography.bodySmall.copy(lineHeight = 18.sp),
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    textAlign = TextAlign.Center
+                  )
+                }
+              }
+
+              DailyCardState.LOADED -> {
+                val displayTracks = featuredTracks.take(10)
+                Column(
+                  modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(horizontal = 8.dp, vertical = 6.dp)
+                ) {
+                  displayTracks.forEachIndexed { idx, song ->
+                    SongRow(
+                      song = song,
+                      isPlaying = isPlaying,
+                      isCurrent = currentSong?.id == song.id,
+                      reducedMotion = reducedMotion,
+                      darkTheme = darkTheme,
+                      hasLyrics = song.id in verifiedLyricsIds,
+                      rank = idx + 1,
+                      showSourceBadge = true,
+                      onCheckLyrics = onCheckLyrics,
+                      onSongClick = { onSongClick(song, featuredTracks) },
+                      onFavoriteClick = { onFavoriteClick(song) }
+                    )
+                    if (idx < displayTracks.lastIndex) {
+                      HorizontalDivider(
+                        modifier = Modifier.padding(horizontal = 14.dp),
+                        color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.06f)
+                      )
+                    }
+                  }
+                }
+              }
+            }
+          }
         }
       }
 
@@ -310,7 +865,9 @@ fun HomeScreen(
                     Box {
                       SongArtwork(
                         song = recent,
-                        modifier = Modifier.fillMaxWidth().height(106.dp),
+                        modifier = Modifier
+                          .fillMaxWidth()
+                          .height(106.dp),
                         cornerRadius = 14.dp,
                         iconSize = 26.dp
                       )
@@ -365,24 +922,6 @@ fun HomeScreen(
             }
           }
         }
-      }
-
-      // "Because You Listened" — Vocal Sad Vibes & Chill Mix
-      item {
-        BecauseYouListenedSection(
-          result = becauseYouListened,
-          currentSong = currentSong,
-          isPlaying = isPlaying,
-          darkTheme = darkTheme,
-          reducedMotion = reducedMotion,
-          verifiedLyricsIds = verifiedLyricsIds,
-          onCheckLyrics = onCheckLyrics,
-          onPlayAll = { items -> onPlayBecauseMix(items, null) },
-          onPlayItem = { item, items -> onPlayBecauseMix(items, item.song) },
-          onOpenItem = { item, items -> onOpenBecauseItem(items, item.song) },
-          onFeedback = onSongFeedback,
-          onOpenDetail = onOpenBecauseDetail
-        )
       }
 
       // Discover Weekly + Mood Playlists Section
@@ -510,36 +1049,30 @@ fun HomeScreen(
         }
       }
 
-      // Smart Recommendations Section
-      item {
-        Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
-          Text(
-            text = stringResource(id = R.string.home_smart_recs_title),
-            style = MaterialTheme.typography.titleMedium.copy(fontWeight = FontWeight.Bold, lineHeight = 24.sp),
-            color = MaterialTheme.colorScheme.onBackground
-          )
-          GlassCard(
-            darkTheme = darkTheme,
-            cornerRadius = 22.dp,
-            modifier = Modifier
-              .fillMaxWidth()
-              .testTag("home_smart_recommendations_card")
-          ) {
-            if (smartRecommendations.isEmpty()) {
-              Text(
-                text = stringResource(id = R.string.home_smart_recs_empty),
-                style = MaterialTheme.typography.bodySmall,
-                color = MaterialTheme.colorScheme.onSurfaceVariant,
-                modifier = Modifier.padding(16.dp)
-              )
-            } else {
+      // Smart Recommendations Section (shown only once user has personalized matches)
+      if (smartRecommendations.isNotEmpty()) {
+        item {
+          Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
+            Text(
+              text = stringResource(id = R.string.home_smart_recs_title),
+              style = MaterialTheme.typography.titleMedium.copy(fontWeight = FontWeight.Bold, lineHeight = 24.sp),
+              color = MaterialTheme.colorScheme.onBackground
+            )
+            GlassCard(
+              darkTheme = darkTheme,
+              cornerRadius = 22.dp,
+              modifier = Modifier
+                .fillMaxWidth()
+                .testTag("home_smart_recommendations_card")
+            ) {
               val recQueue = smartRecommendations.map { it.song }
+              val previewRecs = smartRecommendations.take(4)
               Column(
                 modifier = Modifier
                   .fillMaxWidth()
                   .padding(horizontal = 8.dp, vertical = 6.dp)
               ) {
-                smartRecommendations.take(5).forEachIndexed { idx, rec ->
+                previewRecs.forEachIndexed { idx, rec ->
                   Column {
                     SongRow(
                       song = rec.song,
@@ -562,373 +1095,11 @@ fun HomeScreen(
                       modifier = Modifier.padding(start = 70.dp, end = 12.dp, bottom = 6.dp)
                     )
                   }
-                  if (idx < minOf(4, smartRecommendations.lastIndex)) {
+                  if (idx < previewRecs.lastIndex) {
                     HorizontalDivider(
                       modifier = Modifier.padding(horizontal = 14.dp),
                       color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.06f)
                     )
-                  }
-                }
-              }
-            }
-          }
-        }
-      }
-
-      // Daily Feed Editorial Header & Category Filter Pills
-      item {
-        Column(verticalArrangement = Arrangement.spacedBy(14.dp)) {
-          Row(
-            modifier = Modifier.fillMaxWidth(),
-            horizontalArrangement = Arrangement.SpaceBetween,
-            verticalAlignment = Alignment.CenterVertically
-          ) {
-            Column(
-              modifier = Modifier.weight(1f),
-              verticalArrangement = Arrangement.spacedBy(3.dp)
-            ) {
-              val feedLabel = feedLocalizedLabel(selectedFeed)
-              val feedSubtitle = feedLocalizedSubtitle(selectedFeed)
-              Row(
-                verticalAlignment = Alignment.CenterVertically,
-                horizontalArrangement = Arrangement.spacedBy(8.dp)
-              ) {
-                Text(
-                  text = feedLabel,
-                  style = MaterialTheme.typography.titleLarge.copy(
-                    fontWeight = FontWeight.ExtraBold,
-                    fontSize = 22.sp,
-                    lineHeight = 30.sp
-                  ),
-                  color = MaterialTheme.colorScheme.onBackground,
-                  maxLines = 1,
-                  overflow = TextOverflow.Ellipsis
-                )
-                Surface(
-                  shape = CircleShape,
-                  color = AurixTealAccent.copy(alpha = 0.14f)
-                ) {
-                  Row(
-                    modifier = Modifier.padding(horizontal = 8.dp, vertical = 3.dp),
-                    verticalAlignment = Alignment.CenterVertically,
-                    horizontalArrangement = Arrangement.spacedBy(5.dp)
-                  ) {
-                    Box(
-                      modifier = Modifier
-                        .size(6.dp)
-                        .clip(CircleShape)
-                        .background(AurixTealAccent)
-                    )
-                    Text(
-                      text = stringResource(id = R.string.home_daily_badge),
-                      style = MaterialTheme.typography.labelSmall.copy(
-                        fontWeight = FontWeight.Bold,
-                        fontSize = 10.sp,
-                        lineHeight = 14.sp
-                      ),
-                      color = AurixTealAccent
-                    )
-                  }
-                }
-              }
-              Text(
-                text = feedSubtitle,
-                style = MaterialTheme.typography.bodySmall.copy(
-                  fontSize = 13.sp,
-                  lineHeight = 19.sp
-                ),
-                color = MaterialTheme.colorScheme.onSurfaceVariant,
-                maxLines = 1,
-                overflow = TextOverflow.Ellipsis
-              )
-            }
-
-            if (!isLoadingFeatured && featuredTracks.isNotEmpty()) {
-              Surface(
-                shape = CircleShape,
-                color = if (darkTheme) Color(0xFF151F30) else Color.White.copy(alpha = 0.85f),
-                border = androidx.compose.foundation.BorderStroke(
-                  1.dp,
-                  if (darkTheme) Color(0xFF273348) else Color.White
-                )
-              ) {
-                Row(
-                  modifier = Modifier.padding(horizontal = 10.dp, vertical = 5.dp),
-                  verticalAlignment = Alignment.CenterVertically,
-                  horizontalArrangement = Arrangement.spacedBy(4.dp)
-                ) {
-                  Icon(
-                    imageVector = Icons.Rounded.QueueMusic,
-                    contentDescription = null,
-                    tint = AurixTealAccent,
-                    modifier = Modifier.size(14.dp)
-                  )
-                  Text(
-                    text = featuredTracks.take(20).size.toString(),
-                    style = MaterialTheme.typography.labelSmall.copy(fontWeight = FontWeight.Bold),
-                    color = MaterialTheme.colorScheme.onSurface
-                  )
-                }
-              }
-            }
-          }
-
-          Row(
-            modifier = Modifier
-              .fillMaxWidth()
-              .horizontalScroll(rememberScrollState()),
-            horizontalArrangement = Arrangement.spacedBy(8.dp)
-          ) {
-            DailyFeedCategory.entries.forEach { category ->
-              val selected = category == selectedFeed
-              val chipBg by animateColorAsState(
-                targetValue = when {
-                  selected -> AurixTealAccent
-                  darkTheme -> Color(0xFF151F30)
-                  else -> Color.White.copy(alpha = 0.84f)
-                },
-                animationSpec = if (reducedMotion) snap() else tween(200),
-                label = "chip_bg_${category.id}"
-              )
-              val chipBorder by animateColorAsState(
-                targetValue = when {
-                  selected -> AurixTealAccent
-                  darkTheme -> Color(0xFF273348)
-                  else -> Color.White
-                },
-                animationSpec = if (reducedMotion) snap() else tween(200),
-                label = "chip_border_${category.id}"
-              )
-              val chipTextColor = if (selected) Color(0xFF06201C) else MaterialTheme.colorScheme.onSurface
-
-              Row(
-                verticalAlignment = Alignment.CenterVertically,
-                horizontalArrangement = Arrangement.spacedBy(6.dp),
-                modifier = Modifier
-                  .heightIn(min = 40.dp)
-                  .clip(CircleShape)
-                  .background(chipBg)
-                  .border(1.dp, chipBorder, CircleShape)
-                  .clickable { onSelectFeed(category) }
-                  .testTag("home_feed_chip_${category.id}")
-                  .padding(horizontal = 14.dp, vertical = 8.dp)
-              ) {
-                Icon(
-                  imageVector = feedCategoryIcon(category),
-                  contentDescription = null,
-                  tint = if (selected) Color(0xFF06201C) else AurixTealAccent,
-                  modifier = Modifier.size(15.dp)
-                )
-                Text(
-                  text = feedLocalizedLabel(category),
-                  style = MaterialTheme.typography.bodySmall.copy(
-                    fontWeight = if (selected) FontWeight.Bold else FontWeight.SemiBold,
-                    fontSize = 13.sp,
-                    lineHeight = 18.sp
-                  ),
-                  color = chipTextColor
-                )
-              }
-            }
-          }
-        }
-      }
-
-      // Unified Daily Recommendations Card (zero card-inside-card, fixed min height during Loading/Error)
-      item {
-        val cardBgColor = if (darkTheme) Color(0xFF151F30) else Color.White.copy(alpha = 0.92f)
-        val cardBorderColor = if (darkTheme) Color(0xFF273348) else Color.White
-        val cardShape = RoundedCornerShape(28.dp)
-        val cardState = when {
-          isLoadingFeatured -> DailyCardState.LOADING
-          featuredTracks.isEmpty() -> DailyCardState.ERROR
-          else -> DailyCardState.LOADED
-        }
-
-        Box(
-          modifier = Modifier
-            .fillMaxWidth()
-            .then(
-              if (cardState == DailyCardState.LOADED) {
-                Modifier.heightIn(min = 420.dp)
-              } else {
-                Modifier.height(420.dp)
-              }
-            )
-            .clip(cardShape)
-            .background(cardBgColor)
-            .border(1.dp, cardBorderColor, cardShape)
-            .semantics { liveRegion = LiveRegionMode.Polite }
-            .testTag("home_daily_feed_card")
-        ) {
-          AnimatedContent(
-            targetState = cardState,
-            modifier = Modifier.fillMaxWidth(),
-            transitionSpec = {
-              if (reducedMotion) {
-                fadeIn(snap()) togetherWith fadeOut(snap())
-              } else if (targetState == DailyCardState.LOADED) {
-                (fadeIn(tween(350)) + slideInVertically(tween(350)) { it / 16 }) togetherWith fadeOut(tween(180))
-              } else {
-                fadeIn(tween(220)) togetherWith fadeOut(tween(160))
-              }
-            },
-            label = "daily_card_state_transition"
-          ) { state ->
-            when (state) {
-              DailyCardState.ERROR -> {
-                Column(
-                  modifier = Modifier
-                    .fillMaxWidth()
-                    .height(420.dp)
-                    .padding(horizontal = 24.dp),
-                  horizontalAlignment = Alignment.CenterHorizontally,
-                  verticalArrangement = Arrangement.Center
-                ) {
-                  Box(
-                    modifier = Modifier
-                      .size(58.dp)
-                      .clip(CircleShape)
-                      .background(AurixTealAccent.copy(alpha = 0.14f)),
-                    contentAlignment = Alignment.Center
-                  ) {
-                    Icon(
-                      imageVector = Icons.Rounded.MusicNote,
-                      contentDescription = null,
-                      tint = AurixTealAccent,
-                      modifier = Modifier.size(30.dp)
-                    )
-                  }
-                  Spacer(modifier = Modifier.height(14.dp))
-                  Text(
-                    text = featuredError ?: stringResource(id = R.string.home_refresh_error),
-                    style = MaterialTheme.typography.bodyMedium.copy(
-                      fontWeight = FontWeight.Medium,
-                      lineHeight = 22.sp
-                    ),
-                    color = MaterialTheme.colorScheme.onSurfaceVariant,
-                    textAlign = TextAlign.Center
-                  )
-                  Spacer(modifier = Modifier.height(18.dp))
-                  Button(
-                    onClick = {
-                      if (!isLoadingFeatured) {
-                        onRefreshDailyFeed()
-                      }
-                    },
-                    enabled = !isLoadingFeatured,
-                    shape = CircleShape,
-                    colors = ButtonDefaults.buttonColors(
-                      containerColor = AurixTealAccent,
-                      contentColor = Color(0xFF06201C)
-                    ),
-                    contentPadding = PaddingValues(horizontal = 20.dp, vertical = 10.dp),
-                    modifier = Modifier
-                      .defaultMinSize(minHeight = 48.dp)
-                      .testTag("home_daily_retry_button")
-                  ) {
-                    Icon(
-                      imageVector = Icons.Rounded.Refresh,
-                      contentDescription = null,
-                      modifier = Modifier.size(18.dp)
-                    )
-                    Spacer(modifier = Modifier.width(8.dp))
-                    Text(
-                      text = stringResource(id = R.string.home_retry),
-                      style = MaterialTheme.typography.labelLarge.copy(
-                        fontWeight = FontWeight.Bold,
-                        lineHeight = 20.sp
-                      )
-                    )
-                  }
-                }
-              }
-
-              DailyCardState.LOADING -> {
-                Column(
-                  modifier = Modifier
-                    .fillMaxWidth()
-                    .height(420.dp)
-                    .padding(horizontal = 24.dp),
-                  horizontalAlignment = Alignment.CenterHorizontally,
-                  verticalArrangement = Arrangement.Center
-                ) {
-                  OrbitLoader(
-                    size = 84.dp,
-                    cardColor = cardBgColor,
-                    ringColor = if (darkTheme) OrbitRingDefault else Color(0xFF3A3C48),
-                    planetColor = if (darkTheme) OrbitPlanetDefault else Color.White,
-                    reducedMotion = reducedMotion,
-                    modifier = Modifier.testTag("home_daily_orbit_loader")
-                  )
-                  Spacer(modifier = Modifier.height(16.dp))
-                  Text(
-                    text = stringResource(id = R.string.home_refreshing_title),
-                    style = MaterialTheme.typography.titleMedium.copy(
-                      fontWeight = FontWeight.Bold,
-                      lineHeight = 24.sp
-                    ),
-                    color = MaterialTheme.colorScheme.onSurface,
-                    textAlign = TextAlign.Center
-                  )
-                  Spacer(modifier = Modifier.height(4.dp))
-                  Text(
-                    text = stringResource(id = R.string.home_refreshing_subtitle),
-                    style = MaterialTheme.typography.bodySmall.copy(lineHeight = 18.sp),
-                    color = MaterialTheme.colorScheme.onSurfaceVariant,
-                    textAlign = TextAlign.Center
-                  )
-                }
-              }
-
-              DailyCardState.LOADED -> {
-                val heroSong = featuredTracks.first()
-                val restTracks = featuredTracks.drop(1).take(19)
-                Column(modifier = Modifier.fillMaxWidth()) {
-                  IntegratedHeroSpotlight(
-                    song = heroSong,
-                    badgeLabel = "#1 ${selectedFeed.badgeText.uppercase()}",
-                    isCurrent = currentSong?.id == heroSong.id,
-                    isPlaying = isPlaying,
-                    darkTheme = darkTheme,
-                    reducedMotion = reducedMotion,
-                    hasLyrics = heroSong.id in verifiedLyricsIds,
-                    onCheckLyrics = onCheckLyrics,
-                    onPlayClick = { onSongClick(heroSong, featuredTracks) },
-                    onFavoriteClick = { onFavoriteClick(heroSong) }
-                  )
-
-                  if (restTracks.isNotEmpty()) {
-                    HorizontalDivider(
-                      color = if (darkTheme) Color(0xFF273348).copy(alpha = 0.8f) else MaterialTheme.colorScheme.onSurface.copy(alpha = 0.08f)
-                    )
-                    Column(
-                      modifier = Modifier
-                        .fillMaxWidth()
-                        .padding(horizontal = 8.dp, vertical = 6.dp)
-                    ) {
-                      restTracks.forEachIndexed { idx, song ->
-                        SongRow(
-                          song = song,
-                          isPlaying = isPlaying,
-                          isCurrent = currentSong?.id == song.id,
-                          reducedMotion = reducedMotion,
-                          darkTheme = darkTheme,
-                          hasLyrics = song.id in verifiedLyricsIds,
-                          rank = idx + 2,
-                          showSourceBadge = false,
-                          onCheckLyrics = onCheckLyrics,
-                          onSongClick = { onSongClick(song, featuredTracks) },
-                          onFavoriteClick = { onFavoriteClick(song) }
-                        )
-                        if (idx < restTracks.lastIndex) {
-                          HorizontalDivider(
-                            modifier = Modifier.padding(horizontal = 14.dp),
-                            color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.06f)
-                          )
-                        }
-                      }
-                    }
                   }
                 }
               }
@@ -959,183 +1130,362 @@ fun HomeScreen(
 }
 
 @Composable
-private fun IntegratedHeroSpotlight(
-  song: Song,
-  badgeLabel: String,
-  isCurrent: Boolean,
-  isPlaying: Boolean,
-  darkTheme: Boolean,
-  reducedMotion: Boolean,
-  hasLyrics: Boolean = false,
-  onCheckLyrics: (Song) -> Unit = {},
-  onPlayClick: () -> Unit,
-  onFavoriteClick: () -> Unit
+private fun HomeSectionHeader(
+  title: String,
+  seeAllLabel: String,
+  seeAllTestTag: String,
+  badgeText: String? = null,
+  onSeeAllClick: () -> Unit
 ) {
-  LaunchedEffect(song.id) {
-    onCheckLyrics(song)
-  }
-  val (c1, c2) = rememberArtworkColors(song.artworkUrl, song.title)
-
-  Box(
-    modifier = Modifier
-      .fillMaxWidth()
-      .clickable { onPlayClick() }
-      .testTag("home_hero_spotlight")
+  Row(
+    modifier = Modifier.fillMaxWidth(),
+    horizontalArrangement = Arrangement.SpaceBetween,
+    verticalAlignment = Alignment.CenterVertically
   ) {
-    if (song.artworkUrl.isNotBlank()) {
-      AsyncImage(
-        model = song.artworkUrl,
-        contentDescription = null,
-        contentScale = ContentScale.Crop,
-        modifier = Modifier
-          .matchParentSize()
-          .alpha(if (darkTheme) 0.24f else 0.14f)
-          .blur(38.dp)
-      )
-    }
-    Box(
-      modifier = Modifier
-        .matchParentSize()
-        .background(
-          Brush.horizontalGradient(
-            colors = listOf(
-              c1.copy(alpha = if (darkTheme) 0.22f else 0.12f),
-              c2.copy(alpha = if (darkTheme) 0.10f else 0.05f),
-              Color.Transparent
-            )
-          )
-        )
-    )
-
     Row(
-      modifier = Modifier
-        .fillMaxWidth()
-        .padding(16.dp),
       verticalAlignment = Alignment.CenterVertically,
-      horizontalArrangement = Arrangement.spacedBy(14.dp)
+      horizontalArrangement = Arrangement.spacedBy(8.dp),
+      modifier = Modifier.weight(1f)
     ) {
-      Box(
-        modifier = Modifier
-          .size(84.dp)
-          .clip(RoundedCornerShape(18.dp))
-          .border(1.dp, Color.White.copy(alpha = 0.26f), RoundedCornerShape(18.dp))
-      ) {
-        SongArtwork(
-          song = song,
-          modifier = Modifier.fillMaxSize(),
-          cornerRadius = 18.dp,
-          iconSize = 30.dp
-        )
-      }
-
-      Column(modifier = Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(4.dp)) {
+      Text(
+        text = title,
+        style = MaterialTheme.typography.titleLarge.copy(
+          fontWeight = FontWeight.ExtraBold,
+          fontSize = 20.sp,
+          lineHeight = 26.sp
+        ),
+        color = MaterialTheme.colorScheme.onBackground,
+        maxLines = 1,
+        overflow = TextOverflow.Ellipsis
+      )
+      if (!badgeText.isNullOrBlank()) {
         Surface(
           shape = CircleShape,
-          color = AurixTealAccent.copy(alpha = 0.16f)
+          color = AurixTealAccent.copy(alpha = 0.14f)
         ) {
           Text(
-            text = badgeLabel,
+            text = badgeText,
             style = MaterialTheme.typography.labelSmall.copy(
-              fontWeight = FontWeight.ExtraBold,
+              fontWeight = FontWeight.Bold,
               fontSize = 10.sp
             ),
             color = AurixTealAccent,
             modifier = Modifier.padding(horizontal = 8.dp, vertical = 3.dp)
           )
         }
+      }
+    }
 
-        Row(verticalAlignment = Alignment.CenterVertically) {
+    Row(
+      verticalAlignment = Alignment.CenterVertically,
+      horizontalArrangement = Arrangement.spacedBy(2.dp),
+      modifier = Modifier
+        .heightIn(min = 36.dp)
+        .clip(CircleShape)
+        .clickable { onSeeAllClick() }
+        .testTag(seeAllTestTag)
+        .padding(horizontal = 8.dp, vertical = 4.dp)
+    ) {
+      Text(
+        text = seeAllLabel,
+        style = MaterialTheme.typography.labelLarge.copy(fontWeight = FontWeight.SemiBold),
+        color = MaterialTheme.colorScheme.onSurfaceVariant
+      )
+      Icon(
+        imageVector = Icons.Rounded.ChevronRight,
+        contentDescription = null,
+        tint = MaterialTheme.colorScheme.onSurfaceVariant,
+        modifier = Modifier.size(16.dp)
+      )
+    }
+  }
+}
+
+@Composable
+private fun HeroBannerCard(
+  song: Song,
+  badgeLabel: String,
+  isCurrent: Boolean,
+  isPlaying: Boolean,
+  darkTheme: Boolean,
+  reducedMotion: Boolean,
+  onClick: () -> Unit
+) {
+  val (c1, c2) = rememberArtworkColors(song.artworkUrl, song.title)
+  val bannerShape = RoundedCornerShape(24.dp)
+  val borderColor = if (darkTheme) Color.White.copy(alpha = 0.18f) else Color.White.copy(alpha = 0.85f)
+
+  Box(
+    modifier = Modifier
+      .fillMaxWidth()
+      .height(178.dp)
+      .clip(bannerShape)
+      .background(
+        Brush.linearGradient(
+          colors = listOf(c1.copy(alpha = 0.85f), c2.copy(alpha = 0.78f))
+        )
+      )
+      .border(1.dp, borderColor, bannerShape)
+      .clickable { onClick() }
+      .testTag("home_hero_banner_card")
+  ) {
+    if (song.artworkUrl.isNotBlank()) {
+      AsyncImage(
+        model = song.artworkUrl,
+        contentDescription = song.title,
+        contentScale = ContentScale.Crop,
+        modifier = Modifier.fillMaxSize()
+      )
+    }
+
+    Box(
+      modifier = Modifier
+        .fillMaxSize()
+        .background(
+          Brush.verticalGradient(
+            colors = listOf(
+              Color.Black.copy(alpha = 0.12f),
+              Color.Black.copy(alpha = 0.36f),
+              Color.Black.copy(alpha = 0.82f)
+            )
+          )
+        )
+    )
+
+    Column(
+      modifier = Modifier
+        .fillMaxSize()
+        .padding(16.dp),
+      verticalArrangement = Arrangement.SpaceBetween
+    ) {
+      Surface(
+        shape = CircleShape,
+        color = Color.Black.copy(alpha = 0.45f),
+        border = androidx.compose.foundation.BorderStroke(1.dp, Color.White.copy(alpha = 0.22f))
+      ) {
+        Text(
+          text = badgeLabel,
+          style = MaterialTheme.typography.labelSmall.copy(
+            fontWeight = FontWeight.ExtraBold,
+            fontSize = 10.sp,
+            letterSpacing = 0.5.sp
+          ),
+          color = Color.White,
+          modifier = Modifier.padding(horizontal = 10.dp, vertical = 4.dp)
+        )
+      }
+
+      Row(
+        modifier = Modifier.fillMaxWidth(),
+        verticalAlignment = Alignment.CenterVertically,
+        horizontalArrangement = Arrangement.spacedBy(12.dp)
+      ) {
+        Column(modifier = Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(2.dp)) {
           Text(
             text = song.title,
             style = MaterialTheme.typography.titleMedium.copy(
               fontWeight = FontWeight.ExtraBold,
-              lineHeight = 22.sp
+              fontSize = 18.sp
             ),
-            color = MaterialTheme.colorScheme.onSurface,
+            color = Color.White,
             maxLines = 1,
-            overflow = TextOverflow.Ellipsis,
-            modifier = Modifier.weight(1f, fill = false)
+            overflow = TextOverflow.Ellipsis
           )
-          LyricsTag(
-            visible = hasLyrics,
-            size = LyricsTagSize.Standard,
-            darkTheme = darkTheme,
-            reducedMotion = reducedMotion,
-            modifier = Modifier.padding(start = 8.dp)
+          Text(
+            text = song.artist,
+            style = MaterialTheme.typography.bodySmall,
+            color = Color.White.copy(alpha = 0.82f),
+            maxLines = 1,
+            overflow = TextOverflow.Ellipsis
           )
         }
-        Text(
-          text = song.artist,
-          style = MaterialTheme.typography.bodySmall.copy(lineHeight = 18.sp),
-          color = MaterialTheme.colorScheme.onSurfaceVariant,
-          maxLines = 1,
-          overflow = TextOverflow.Ellipsis
-        )
 
-        Spacer(modifier = Modifier.height(2.dp))
-
-        Row(
-          verticalAlignment = Alignment.CenterVertically,
-          horizontalArrangement = Arrangement.spacedBy(8.dp)
+        Surface(
+          shape = CircleShape,
+          color = AurixTealAccent,
+          modifier = Modifier
+            .minimumInteractiveComponentSize()
+            .size(44.dp)
+            .clip(CircleShape)
+            .clickable { onClick() }
         ) {
-          Surface(
-            shape = CircleShape,
-            color = AurixTealAccent,
-            modifier = Modifier
-              .clip(CircleShape)
-              .clickable { onPlayClick() }
-          ) {
-            Row(
-              modifier = Modifier.padding(horizontal = 14.dp, vertical = 7.dp),
-              verticalAlignment = Alignment.CenterVertically,
-              horizontalArrangement = Arrangement.spacedBy(5.dp)
-            ) {
-              if (isCurrent && isPlaying) {
-                EqualizerBars(
-                  isPlaying = true,
-                  color = Color(0xFF06201C),
-                  reducedMotion = reducedMotion,
-                  barWidth = 2.dp,
-                  maxHeight = 11.dp
-                )
-              } else {
-                Icon(
-                  imageVector = Icons.Rounded.PlayArrow,
-                  contentDescription = "Play",
-                  tint = Color(0xFF06201C),
-                  modifier = Modifier.size(16.dp)
-                )
-              }
-              Text(
-                text = if (isCurrent && isPlaying) {
-                  stringResource(id = R.string.home_playing_now)
-                } else {
-                  stringResource(id = R.string.home_play_now)
-                },
-                style = MaterialTheme.typography.labelMedium.copy(
-                  fontWeight = FontWeight.Bold,
-                  lineHeight = 17.sp
-                ),
-                color = Color(0xFF06201C)
+          Box(contentAlignment = Alignment.Center) {
+            if (isCurrent && isPlaying) {
+              EqualizerBars(
+                isPlaying = true,
+                color = Color(0xFF06201C),
+                reducedMotion = reducedMotion,
+                barWidth = 2.5.dp,
+                maxHeight = 13.dp
+              )
+            } else {
+              Icon(
+                imageVector = Icons.Rounded.PlayArrow,
+                contentDescription = stringResource(id = R.string.home_play_now),
+                tint = Color(0xFF06201C),
+                modifier = Modifier.size(24.dp)
               )
             }
           }
-
-          IconButton(
-            onClick = onFavoriteClick,
-            modifier = Modifier
-              .minimumInteractiveComponentSize()
-              .size(40.dp)
-          ) {
-            Icon(
-              imageVector = if (song.isFavorite) Icons.Rounded.Favorite else Icons.Rounded.FavoriteBorder,
-              contentDescription = "Favorite",
-              tint = if (song.isFavorite) HeartRed else MaterialTheme.colorScheme.onSurfaceVariant,
-              modifier = Modifier.size(20.dp)
-            )
-          }
         }
       }
+    }
+  }
+}
+
+@Composable
+private fun PopularYoutubeSongRow(
+  song: Song,
+  isCurrent: Boolean,
+  isPlaying: Boolean,
+  isResolving: Boolean,
+  darkTheme: Boolean,
+  reducedMotion: Boolean,
+  hasLyrics: Boolean,
+  downloadProgress: Float?,
+  isDownloaded: Boolean,
+  onCheckLyrics: (Song) -> Unit,
+  onClick: () -> Unit,
+  onFavoriteClick: () -> Unit,
+  onDownloadClick: () -> Unit
+) {
+  LaunchedEffect(song.id) {
+    onCheckLyrics(song)
+  }
+
+  Row(
+    modifier = Modifier
+      .fillMaxWidth()
+      .clip(RoundedCornerShape(16.dp))
+      .then(
+        if (isCurrent) Modifier.background(MaterialTheme.colorScheme.primary.copy(alpha = 0.14f))
+        else Modifier
+      )
+      .clickable { onClick() }
+      .padding(horizontal = 8.dp, vertical = 8.dp)
+      .testTag("home_yt_song_row_${song.id}"),
+    verticalAlignment = Alignment.CenterVertically
+  ) {
+    Box(
+      modifier = Modifier
+        .size(52.dp)
+        .clip(RoundedCornerShape(14.dp))
+        .border(1.dp, Color.White.copy(alpha = 0.22f), RoundedCornerShape(14.dp))
+    ) {
+      SongArtwork(song = song, modifier = Modifier.fillMaxSize(), cornerRadius = 14.dp)
+      if (isResolving) {
+        Box(
+          modifier = Modifier
+            .fillMaxSize()
+            .background(Color.Black.copy(alpha = 0.55f)),
+          contentAlignment = Alignment.Center
+        ) {
+          CircularProgressIndicator(
+            modifier = Modifier.size(20.dp),
+            strokeWidth = 2.dp,
+            color = AurixTealAccent
+          )
+        }
+      } else if (isCurrent) {
+        Box(
+          modifier = Modifier
+            .fillMaxSize()
+            .background(Color.Black.copy(alpha = 0.45f)),
+          contentAlignment = Alignment.Center
+        ) {
+          EqualizerBars(
+            isPlaying = isPlaying,
+            color = AurixTealAccent,
+            reducedMotion = reducedMotion,
+            barWidth = 2.5.dp,
+            maxHeight = 14.dp
+          )
+        }
+      }
+    }
+
+    Spacer(modifier = Modifier.width(12.dp))
+
+    Column(modifier = Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(2.dp)) {
+      Row(verticalAlignment = Alignment.CenterVertically) {
+        Text(
+          text = song.title,
+          style = MaterialTheme.typography.bodyMedium.copy(fontWeight = FontWeight.Bold),
+          color = if (isCurrent) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurface,
+          maxLines = 1,
+          overflow = TextOverflow.Ellipsis,
+          modifier = Modifier.weight(1f, fill = false)
+        )
+        LyricsTag(
+          visible = hasLyrics,
+          size = LyricsTagSize.Mini,
+          darkTheme = darkTheme,
+          reducedMotion = reducedMotion,
+          modifier = Modifier.padding(start = 6.dp)
+        )
+      }
+      val metaText = if (song.durationSeconds > 0L) {
+        "${song.artist} · ${song.durationSeconds / 60}:${String.format("%02d", song.durationSeconds % 60)}"
+      } else {
+        song.artist
+      }
+      Text(
+        text = metaText,
+        style = MaterialTheme.typography.bodySmall,
+        color = MaterialTheme.colorScheme.onSurfaceVariant,
+        maxLines = 1,
+        overflow = TextOverflow.Ellipsis
+      )
+    }
+
+    IconButton(
+      onClick = onDownloadClick,
+      modifier = Modifier
+        .minimumInteractiveComponentSize()
+        .size(40.dp)
+        .testTag("home_yt_download_${song.id}")
+    ) {
+      when {
+        downloadProgress != null -> {
+          CircularProgressIndicator(
+            progress = { downloadProgress.coerceIn(0.05f, 1f) },
+            modifier = Modifier.size(18.dp),
+            strokeWidth = 2.dp,
+            color = AurixTealAccent
+          )
+        }
+        isDownloaded -> {
+          Icon(
+            imageVector = Icons.Rounded.CheckCircle,
+            contentDescription = stringResource(id = R.string.yt_saved_banner),
+            tint = AurixTealAccent,
+            modifier = Modifier.size(20.dp)
+          )
+        }
+        else -> {
+          Icon(
+            imageVector = Icons.Rounded.Download,
+            contentDescription = stringResource(id = R.string.yt_select_format_title),
+            tint = MaterialTheme.colorScheme.onSurfaceVariant,
+            modifier = Modifier.size(20.dp)
+          )
+        }
+      }
+    }
+
+    IconButton(
+      onClick = onFavoriteClick,
+      modifier = Modifier
+        .minimumInteractiveComponentSize()
+        .size(40.dp)
+        .testTag("home_yt_favorite_${song.id}")
+    ) {
+      Icon(
+        imageVector = if (song.isFavorite) Icons.Rounded.Favorite else Icons.Rounded.FavoriteBorder,
+        contentDescription = stringResource(id = R.string.home_favorites),
+        tint = if (song.isFavorite) HeartRed else MaterialTheme.colorScheme.onSurfaceVariant,
+        modifier = Modifier.size(20.dp)
+      )
     }
   }
 }

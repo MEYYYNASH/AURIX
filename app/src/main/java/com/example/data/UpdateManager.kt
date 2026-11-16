@@ -45,13 +45,13 @@ import kotlin.coroutines.coroutineContext
  * Editable release manifest endpoint for AURIX OTA updates.
  * Expected JSON format:
  * {
- *   "versionName": "1.6.7",
- *   "versionCode": 10607,
+ *   "versionName": "1.6.8",
+ *   "versionCode": 10608,
  *   "releaseDate": "2026-11-16",
- *   "apkUrl": "https://github.com/MEYYYNASH/AURIX/releases/download/v1.6.7/AURIX-v1.6.7.apk",
+ *   "apkUrl": "https://github.com/MEYYYNASH/AURIX/releases/download/v1.6.8/AURIX-v1.6.8.apk",
  *   "sha256": "...",
  *   "notes": ["..."],
- *   "releasePageUrl": "https://github.com/MEYYYNASH/AURIX/releases/tag/v1.6.7"
+ *   "releasePageUrl": "https://github.com/MEYYYNASH/AURIX/releases/tag/v1.6.8"
  * }
  */
 const val VERSION_JSON_URL = "https://raw.githubusercontent.com/MEYYYNASH/AURIX/main/version.json"
@@ -162,10 +162,10 @@ class UpdateManager(
     private const val META_FILE_NAME = "aurix_update.apk.meta.json"
 
     val CURRENT_RELEASE_NOTES = listOf(
-      "Because You Listened: Redesigned dark glassmorphism rows with 30-day vocal YouTube picks",
-      "Full YouTube-sourced daily feeds, recommendations, search, and format/quality downloads",
-      "MoodFlow: Intelligent 5D mood-aware shuffle with live Match % badge in Now Playing",
-      "Animated 7-state Planet-Smiley OTA updater with SHA-256 verification"
+      "Clean Home Discovery: Hero Spotlight pager, 3-across New Albums shelf, and Popular YouTube Song List with format & quality downloads",
+      "Restored iTunes 30s & Apple Charts: TikTok Viral and Daily Top charts from iTunes alongside full-track YouTube search",
+      "Because You Listened: Dark glassmorphism recommendation rows with 30-day vocal taste matching",
+      "MoodFlow & Planet-Smiley OTA Updater: 5D mood shuffle and SHA-256 verified updates"
     )
 
     fun parseVersionJson(rawJson: String): RemoteVersionInfo {

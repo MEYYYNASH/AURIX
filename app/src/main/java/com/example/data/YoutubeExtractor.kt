@@ -21,6 +21,8 @@ import org.schabi.newpipe.extractor.downloader.Request as NpRequest
 import org.schabi.newpipe.extractor.downloader.Response as NpResponse
 import org.schabi.newpipe.extractor.exceptions.ReCaptchaException
 import org.schabi.newpipe.extractor.localization.Localization
+import org.schabi.newpipe.extractor.playlist.PlaylistInfo
+import org.schabi.newpipe.extractor.playlist.PlaylistInfoItem
 import org.schabi.newpipe.extractor.search.SearchInfo
 import org.schabi.newpipe.extractor.stream.DeliveryMethod
 import org.schabi.newpipe.extractor.stream.StreamInfo
@@ -474,6 +476,76 @@ object YoutubeExtractor {
     emptyList()
   }
 
+  /**
+   * Fetches trending tracks from TikTok-related YouTube music charts & playlists
+   * primarily using NewPipeExtractor (SearchInfo + PlaylistInfo), with InnerTube/mirror fallback.
+   */
+  suspend fun fetchTikTokViralChartTracks(
+    limit: Int = 28
+  ): List<YoutubeSearchItem> = withContext(Dispatchers.IO) {
+    val collected = LinkedHashMap<String, YoutubeSearchItem>()
+
+    // 1. Discover TikTok viral music chart playlists via NewPipe SearchInfo + PlaylistInfo
+    runCatching {
+      ensureNewPipeInitialized()
+      val playlistQueries = listOf(
+        "TikTok Viral Hits Chart 2026 playlist",
+        "TikTok Trending Songs Chart official playlist"
+      )
+      for (pq in playlistQueries) {
+        if (collected.size >= limit) break
+        val qh = runCatching {
+          ServiceList.YouTube.searchQHFactory.fromQuery(pq, listOf("playlists"), "")
+        }.getOrNull() ?: ServiceList.YouTube.searchQHFactory.fromQuery(pq)
+        val searchInfo = runCatching { SearchInfo.getInfo(ServiceList.YouTube, qh) }.getOrNull() ?: continue
+        val playlistUrls = searchInfo.relatedItems
+          .filterIsInstance<PlaylistInfoItem>()
+          .mapNotNull { it.url?.takeIf { u -> u.isNotBlank() } }
+          .take(2)
+
+        for (pUrl in playlistUrls) {
+          if (collected.size >= limit) break
+          val playlistInfo = runCatching { PlaylistInfo.getInfo(ServiceList.YouTube, pUrl) }.getOrNull() ?: continue
+          for (stream in playlistInfo.relatedItems) {
+            if (collected.size >= limit) break
+            mapStreamInfoItem(stream)?.let { ytItem ->
+              collected.putIfAbsent(ytItem.videoId, ytItem)
+            }
+          }
+        }
+      }
+    }
+
+    // 2. Supplement via direct NewPipeExtractor SearchInfo across TikTok chart queries
+    val chartQueries = listOf(
+      "TikTok Viral Hits Chart 2026 official audio",
+      "TikTok Trending Music Chart songs official",
+      "TikTok Top Viral Songs official audio"
+    )
+    for (q in chartQueries) {
+      if (collected.size >= limit) break
+      val npItems = runCatching { searchViaNewPipe(q, 14) }.getOrNull().orEmpty()
+      for (item in npItems) {
+        collected.putIfAbsent(item.videoId, item)
+        if (collected.size >= limit) break
+      }
+    }
+
+    // 3. Fallback to InnerTube / mirrors only if NewPipe could not reach enough tracks
+    if (collected.size < 8) {
+      for (q in chartQueries) {
+        if (collected.size >= limit) break
+        val fallbackItems = runCatching { searchSongs(q, 14) }.getOrNull().orEmpty()
+        for (item in fallbackItems) {
+          collected.putIfAbsent(item.videoId, item)
+          if (collected.size >= limit) break
+        }
+      }
+    }
+
+    collected.values.take(limit)
+  }
+
   private fun searchViaInnerTube(query: String, limit: Int): List<YoutubeSearchItem> {
     val clientObj = JSONObject().apply {
       put("clientName", "WEB")
@@ -579,28 +651,32 @@ object YoutubeExtractor {
     for (item in searchInfo.relatedItems) {
       if (out.size >= limit) break
       if (item !is StreamInfoItem) continue
-      if (item.streamType == StreamType.LIVE_STREAM || item.streamType == StreamType.AUDIO_LIVE_STREAM) continue
-      val videoId = extractVideoId(item.url.orEmpty()) ?: continue
-      val title = item.name.orEmpty().trim()
-      if (title.isBlank()) continue
-      val durSec = item.duration.coerceAtLeast(0L)
-      if (durSec <= 0L) continue
-      val thumb = item.thumbnails
-        .maxByOrNull { it.width * it.height }
-        ?.url
-        ?.takeIf { it.isNotBlank() }
-        ?: "https://i.ytimg.com/vi/$videoId/hqdefault.jpg"
-      out.add(
-        YoutubeSearchItem(
-          videoId = videoId,
-          rawTitle = title,
-          author = item.uploaderName.orEmpty().trim().ifBlank { "YouTube" },
-          thumbnailUrl = thumb,
-          durationSeconds = durSec
-        )
-      )
+      mapStreamInfoItem(item)?.let { out.add(it) }
     }
     return out.distinctBy { it.videoId }
+  }
+
+  private fun mapStreamInfoItem(item: StreamInfoItem): YoutubeSearchItem? {
+    if (item.streamType == StreamType.LIVE_STREAM || item.streamType == StreamType.AUDIO_LIVE_STREAM) {
+      return null
+    }
+    val videoId = extractVideoId(item.url.orEmpty()) ?: return null
+    val title = item.name.orEmpty().trim()
+    if (title.isBlank()) return null
+    val durSec = item.duration.coerceAtLeast(0L)
+    if (durSec <= 0L) return null
+    val thumb = item.thumbnails
+      .maxByOrNull { it.width * it.height }
+      ?.url
+      ?.takeIf { it.isNotBlank() }
+      ?: "https://i.ytimg.com/vi/$videoId/hqdefault.jpg"
+    return YoutubeSearchItem(
+      videoId = videoId,
+      rawTitle = title,
+      author = item.uploaderName.orEmpty().trim().ifBlank { "YouTube" },
+      thumbnailUrl = thumb,
+      durationSeconds = durSec
+    )
   }
 
   private fun searchViaPiped(base: String, query: String, limit: Int): List<YoutubeSearchItem> {

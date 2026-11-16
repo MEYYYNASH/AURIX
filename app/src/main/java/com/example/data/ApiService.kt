@@ -15,6 +15,49 @@ import retrofit2.http.Query
 import java.util.concurrent.TimeUnit
 
 @JsonClass(generateAdapter = true)
+data class ItunesSearchResponse(
+  @param:Json(name = "resultCount") val resultCount: Int = 0,
+  @param:Json(name = "results") val results: List<ItunesTrack> = emptyList()
+)
+
+@JsonClass(generateAdapter = true)
+data class ItunesTrack(
+  @param:Json(name = "trackId") val trackId: Long = 0L,
+  @param:Json(name = "collectionId") val collectionId: Long? = null,
+  @param:Json(name = "trackName") val trackName: String? = null,
+  @param:Json(name = "artistName") val artistName: String? = null,
+  @param:Json(name = "collectionName") val collectionName: String? = null,
+  @param:Json(name = "artworkUrl100") val artworkUrl100: String? = null,
+  @param:Json(name = "artworkUrl60") val artworkUrl60: String? = null,
+  @param:Json(name = "previewUrl") val previewUrl: String? = null,
+  @param:Json(name = "trackTimeMillis") val trackTimeMillis: Long? = null,
+  @param:Json(name = "primaryGenreName") val primaryGenreName: String? = null,
+  @param:Json(name = "releaseDate") val releaseDate: String? = null
+)
+
+@JsonClass(generateAdapter = true)
+data class AppleChartResponse(
+  @param:Json(name = "feed") val feed: AppleChartFeed? = null
+)
+
+@JsonClass(generateAdapter = true)
+data class AppleChartFeed(
+  @param:Json(name = "title") val title: String? = null,
+  @param:Json(name = "updated") val updated: String? = null,
+  @param:Json(name = "results") val results: List<AppleChartEntry> = emptyList()
+)
+
+@JsonClass(generateAdapter = true)
+data class AppleChartEntry(
+  @param:Json(name = "id") val id: String? = null,
+  @param:Json(name = "name") val name: String? = null,
+  @param:Json(name = "artistName") val artistName: String? = null,
+  @param:Json(name = "artworkUrl100") val artworkUrl100: String? = null,
+  @param:Json(name = "url") val url: String? = null,
+  @param:Json(name = "releaseDate") val releaseDate: String? = null
+)
+
+@JsonClass(generateAdapter = true)
 data class DeezerTracksResponse(
   @param:Json(name = "data") val data: List<DeezerTrack> = emptyList()
 )
@@ -94,6 +137,37 @@ data class LrcLibResponse(
   @param:Json(name = "plainLyrics") val plainLyrics: String? = null
 )
 
+interface ItunesApiService {
+  @GET("search")
+  suspend fun searchTracks(
+    @Query("term") term: String,
+    @Query("media") media: String = "music",
+    @Query("entity") entity: String = "song",
+    @Query("limit") limit: Int = 25,
+    @Query("country") country: String = "US"
+  ): ItunesSearchResponse
+
+  @GET("lookup")
+  suspend fun lookupAlbumTracks(
+    @Query("id") collectionId: String,
+    @Query("entity") entity: String = "song",
+    @Query("limit") limit: Int = 25,
+    @Query("country") country: String = "US"
+  ): ItunesSearchResponse
+}
+
+interface AppleChartsApiService {
+  @GET("{country}/music/most-played/25/songs.json")
+  suspend fun getTopSongs(
+    @Path("country") country: String = "us"
+  ): AppleChartResponse
+
+  @GET("{country}/music/most-played/15/albums.json")
+  suspend fun getTopAlbums(
+    @Path("country") country: String = "us"
+  ): AppleChartResponse
+}
+
 interface DeezerApiService {
   @GET("chart/0/tracks")
   suspend fun getChartTracks(
@@ -167,6 +241,18 @@ object NetworkClient {
     "https://pipedapi.adminforge.de"
   )
 
+  private val itunesRetrofit = Retrofit.Builder()
+    .baseUrl("https://itunes.apple.com/")
+    .client(httpClient)
+    .addConverterFactory(MoshiConverterFactory.create())
+    .build()
+
+  private val appleChartsRetrofit = Retrofit.Builder()
+    .baseUrl("https://rss.applemarketingtools.com/api/v2/")
+    .client(httpClient)
+    .addConverterFactory(MoshiConverterFactory.create())
+    .build()
+
   private val deezerRetrofit = Retrofit.Builder()
     .baseUrl("https://api.deezer.com/")
     .client(httpClient)
@@ -185,6 +271,8 @@ object NetworkClient {
     .addConverterFactory(MoshiConverterFactory.create())
     .build()
 
+  val itunesApi: ItunesApiService = itunesRetrofit.create(ItunesApiService::class.java)
+  val appleChartsApi: AppleChartsApiService = appleChartsRetrofit.create(AppleChartsApiService::class.java)
   val deezerApi: DeezerApiService = deezerRetrofit.create(DeezerApiService::class.java)
   val youtubeOEmbedApi: YouTubeOEmbedService = youtubeRetrofit.create(YouTubeOEmbedService::class.java)
   val lrcLibApi: LrcLibApiService = lrcLibRetrofit.create(LrcLibApiService::class.java)

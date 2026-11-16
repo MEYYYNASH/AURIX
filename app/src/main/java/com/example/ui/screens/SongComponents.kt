@@ -891,6 +891,18 @@ fun SongRow(
               modifier = Modifier.padding(horizontal = 5.dp, vertical = 1.dp)
             )
           }
+        } else if (showSourceBadge && song.source == "YouTube") {
+          Surface(
+            shape = RoundedCornerShape(6.dp),
+            color = Color(0xFFEF4444).copy(alpha = if (darkTheme) 0.20f else 0.14f)
+          ) {
+            Text(
+              text = "YT",
+              style = MaterialTheme.typography.labelSmall.copy(fontWeight = FontWeight.Bold, fontSize = 10.sp),
+              color = if (darkTheme) Color(0xFFFF8A8A) else Color(0xFFDC2626),
+              modifier = Modifier.padding(horizontal = 5.dp, vertical = 1.dp)
+            )
+          }
         }
       }
     }
