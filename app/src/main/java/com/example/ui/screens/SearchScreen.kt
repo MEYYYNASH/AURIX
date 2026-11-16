@@ -60,6 +60,7 @@ import com.example.model.SearchUiState
 import com.example.model.Song
 import com.example.model.YoutubeAnalysisResult
 import com.example.model.YoutubeDownloadState
+import com.example.model.YoutubeFormatSheetState
 import com.example.ui.theme.AurixTheme
 import java.util.Locale
 
@@ -82,6 +83,8 @@ fun SearchScreen(
   reducedMotion: Boolean,
   songDownloadProgress: Map<String, Float>,
   downloadedSongIds: Set<String>,
+  resolvingSongId: String? = null,
+  formatSheetState: YoutubeFormatSheetState = YoutubeFormatSheetState.Closed,
   verifiedLyricsIds: Set<String> = emptySet(),
   onCheckLyrics: (Song) -> Unit = {},
   onSearchModeChanged: (String) -> Unit,
@@ -90,13 +93,24 @@ fun SearchScreen(
   onAnalyzeYoutube: () -> Unit,
   onSelectYoutubeFormat: (String) -> Unit,
   onDownloadYoutube: () -> Unit,
+  onPlayAnalyzedYoutube: () -> Unit = {},
   onOpenMySongs: () -> Unit,
   onSongClick: (Song, List<Song>) -> Unit,
   onFavoriteClick: (Song) -> Unit,
   onDownloadClick: (Song) -> Unit,
+  onYoutubeSongDownloadClick: (Song) -> Unit = onDownloadClick,
+  onCloseFormatSheet: () -> Unit = {},
+  onSelectFormatSheetOption: (String) -> Unit = {},
+  onPlayFromFormatSheet: () -> Unit = {},
+  onDownloadFromFormatSheet: () -> Unit = {},
+  onRetryFormatSheet: () -> Unit = {},
   searchUiState: SearchUiState = when {
     isSearching -> SearchUiState.Loading(
-      mode = if (searchMode == "youtube") SearchMode.YouTubeLink else SearchMode.ITunes30s,
+      mode = when (searchMode) {
+        "youtube" -> SearchMode.YouTubeLink
+        "itunes" -> SearchMode.ITunes30s
+        else -> SearchMode.YouTubeSearch
+      },
       query = searchQuery
     )
     !searchError.isNullOrBlank() -> SearchUiState.Error(searchError)
@@ -111,6 +125,11 @@ fun SearchScreen(
   val context = LocalContext.current
   val keyboardController = LocalSoftwareKeyboardController.current
   val quickTags = listOf("TikTok Viral", "Khmer", "Phonk", "Pop", "R&B", "Hip-Hop")
+  val activeModeEnum = when (searchMode) {
+    "youtube" -> SearchMode.YouTubeLink
+    "itunes" -> SearchMode.ITunes30s
+    else -> SearchMode.YouTubeSearch
+  }
 
   Box(modifier = Modifier.fillMaxSize()) {
     Column(
@@ -134,16 +153,29 @@ fun SearchScreen(
 
       Spacer(modifier = Modifier.height(14.dp))
 
-      // Unified Liquid Glass Mode Switcher (ONLY in Search)
+      // Unified Liquid Glass 3-Mode Switcher
       GlassSegmentedBar(
         options = listOf(
-          stringResource(id = R.string.search_mode_itunes) to Icons.Rounded.Search,
-          stringResource(id = R.string.search_mode_youtube) to Icons.Rounded.PlayArrow
+          stringResource(id = R.string.search_mode_yt_search) to Icons.Rounded.PlayCircle,
+          stringResource(id = R.string.search_mode_youtube) to Icons.Rounded.Link,
+          stringResource(id = R.string.search_mode_itunes) to Icons.Rounded.MusicNote
         ),
-        selectedIndex = if (searchMode == "youtube") 1 else 0,
+        selectedIndex = when (searchMode) {
+          "youtube_search" -> 0
+          "youtube" -> 1
+          else -> 2
+        },
         darkTheme = darkTheme,
-        onSelect = { idx -> onSearchModeChanged(if (idx == 1) "youtube" else "itunes") },
-        testTags = listOf("mode_search_button", "mode_youtube_button")
+        onSelect = { idx ->
+          val next = when (idx) {
+            0 -> "youtube_search"
+            1 -> "youtube"
+            else -> "itunes"
+          }
+          onSearchModeChanged(next)
+        },
+        testTags = listOf("mode_youtube_search_button", "mode_youtube_button", "mode_search_button"),
+        reducedMotion = reducedMotion
       )
 
       Spacer(modifier = Modifier.height(14.dp))
@@ -407,6 +439,7 @@ fun SearchScreen(
                   verifiedLyricsIds = verifiedLyricsIds,
                   onCheckLyrics = onCheckLyrics,
                   onSelectFormat = onSelectYoutubeFormat,
+                  onPlayClick = onPlayAnalyzedYoutube,
                   onDownload = onDownloadYoutube,
                   onPlaySaved = { saved -> onSongClick(saved, listOf(saved)) },
                   onOpenMySongs = onOpenMySongs
@@ -453,50 +486,80 @@ fun SearchScreen(
           }
         } else {
           Column(modifier = Modifier.fillMaxSize()) {
-            val fieldBg = if (darkTheme) Color(0xFF172034).copy(alpha = 0.78f) else Color.White.copy(alpha = 0.88f)
-            val fieldBorder = if (darkTheme) Color.White.copy(alpha = 0.18f) else Color.White
+            val fieldBrush = if (darkTheme) {
+              Brush.linearGradient(
+                colors = listOf(Color(0xFF1F2B44).copy(alpha = 0.84f), Color(0xFF141D31).copy(alpha = 0.78f))
+              )
+            } else {
+              Brush.linearGradient(
+                colors = listOf(Color.White.copy(alpha = 0.94f), Color(0xFFF2F6FF).copy(alpha = 0.84f))
+              )
+            }
+            val fieldBorder = Brush.verticalGradient(
+              colors = if (darkTheme) {
+                listOf(Color.White.copy(alpha = 0.30f), Color.White.copy(alpha = 0.10f))
+              } else {
+                listOf(Color.White, Color.White.copy(alpha = 0.70f))
+              }
+            )
+            val placeholderId = if (mode == "youtube_search") {
+              R.string.search_yt_songs_placeholder
+            } else {
+              R.string.search_placeholder
+            }
 
-            TextField(
-              value = searchQuery,
-              onValueChange = onSearchQueryChanged,
-              placeholder = { Text(stringResource(id = R.string.search_placeholder)) },
-              leadingIcon = {
-                Icon(
-                  Icons.Rounded.Search,
-                  contentDescription = null,
-                  tint = MaterialTheme.colorScheme.primary
-                )
-              },
-              trailingIcon = {
-                if (searchQuery.isNotEmpty()) {
-                  IconButton(
-                    onClick = onClearSearch,
-                    modifier = Modifier.testTag("search_clear_button")
-                  ) {
-                    Icon(Icons.Rounded.Close, contentDescription = "Clear search")
-                  }
-                }
-              },
-              keyboardOptions = KeyboardOptions(imeAction = ImeAction.Search),
-              keyboardActions = KeyboardActions(onSearch = {
-                keyboardController?.hide()
-                if (searchQuery.isNotBlank()) onImmediateSearch(searchQuery)
-              }),
-              colors = TextFieldDefaults.colors(
-                focusedContainerColor = fieldBg,
-                unfocusedContainerColor = fieldBg,
-                focusedIndicatorColor = Color.Transparent,
-                unfocusedIndicatorColor = Color.Transparent,
-                disabledIndicatorColor = Color.Transparent
-              ),
-              shape = CircleShape,
+            Box(
               modifier = Modifier
                 .fillMaxWidth()
-                .border(1.dp, fieldBorder, CircleShape)
                 .clip(CircleShape)
-                .testTag("search_input_field"),
-              singleLine = true
-            )
+                .background(fieldBrush)
+                .border(1.dp, fieldBorder, CircleShape)
+            ) {
+              TextField(
+                value = searchQuery,
+                onValueChange = onSearchQueryChanged,
+                placeholder = {
+                  Text(
+                    text = stringResource(id = placeholderId),
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis
+                  )
+                },
+                leadingIcon = {
+                  Icon(
+                    imageVector = if (mode == "youtube_search") Icons.Rounded.PlayCircle else Icons.Rounded.Search,
+                    contentDescription = null,
+                    tint = if (mode == "youtube_search") Color(0xFFEF4444) else MaterialTheme.colorScheme.primary
+                  )
+                },
+                trailingIcon = {
+                  if (searchQuery.isNotEmpty()) {
+                    IconButton(
+                      onClick = onClearSearch,
+                      modifier = Modifier.testTag("search_clear_button")
+                    ) {
+                      Icon(Icons.Rounded.Close, contentDescription = "Clear search")
+                    }
+                  }
+                },
+                keyboardOptions = KeyboardOptions(imeAction = ImeAction.Search),
+                keyboardActions = KeyboardActions(onSearch = {
+                  keyboardController?.hide()
+                  if (searchQuery.isNotBlank()) onImmediateSearch(searchQuery)
+                }),
+                colors = TextFieldDefaults.colors(
+                  focusedContainerColor = Color.Transparent,
+                  unfocusedContainerColor = Color.Transparent,
+                  focusedIndicatorColor = Color.Transparent,
+                  unfocusedIndicatorColor = Color.Transparent,
+                  disabledIndicatorColor = Color.Transparent
+                ),
+                modifier = Modifier
+                  .fillMaxWidth()
+                  .testTag("search_input_field"),
+                singleLine = true
+              )
+            }
 
             Spacer(modifier = Modifier.height(12.dp))
 
@@ -508,15 +571,23 @@ fun SearchScreen(
                 horizontalArrangement = Arrangement.spacedBy(8.dp)
               ) {
                 quickTags.forEach { tag ->
-                  val chipBg = if (darkTheme) Color.White.copy(alpha = 0.09f) else Color.White.copy(alpha = 0.85f)
-                  val chipBorder = if (darkTheme) Color.White.copy(alpha = 0.16f) else Color.White
+                  val chipBrush = if (darkTheme) {
+                    Brush.linearGradient(
+                      colors = listOf(Color.White.copy(alpha = 0.14f), Color.White.copy(alpha = 0.06f))
+                    )
+                  } else {
+                    Brush.linearGradient(
+                      colors = listOf(Color.White.copy(alpha = 0.92f), Color(0xFFF3F6FF).copy(alpha = 0.80f))
+                    )
+                  }
+                  val chipBorder = if (darkTheme) Color.White.copy(alpha = 0.22f) else Color.White
                   Box(
                     modifier = Modifier
                       .clip(CircleShape)
-                      .background(chipBg)
+                      .background(chipBrush)
                       .border(1.dp, chipBorder, CircleShape)
                       .clickable { onSearchQueryChanged(tag) }
-                      .padding(horizontal = 14.dp, vertical = 8.dp)
+                      .padding(horizontal = 14.dp, vertical = 9.dp)
                   ) {
                     Text(
                       text = tag,
@@ -531,8 +602,10 @@ fun SearchScreen(
 
             SearchResultsArea(
               uiState = searchUiState,
+              searchMode = activeModeEnum,
               currentSong = currentSong,
               isPlaying = isPlaying,
+              resolvingSongId = resolvingSongId,
               darkTheme = darkTheme,
               reducedMotion = reducedMotion,
               songDownloadProgress = songDownloadProgress,
@@ -541,7 +614,9 @@ fun SearchScreen(
               onCheckLyrics = onCheckLyrics,
               onSongClick = onSongClick,
               onFavoriteClick = onFavoriteClick,
-              onDownloadClick = onDownloadClick,
+              onDownloadClick = { song ->
+                if (song.source == "YouTube") onYoutubeSongDownloadClick(song) else onDownloadClick(song)
+              },
               onRetry = onRetrySearch,
               modifier = Modifier.weight(1f).fillMaxWidth()
             )
@@ -549,14 +624,30 @@ fun SearchScreen(
         }
       }
     }
+
+    if (formatSheetState !is YoutubeFormatSheetState.Closed) {
+      YoutubeFormatPickerSheet(
+        state = formatSheetState,
+        darkTheme = darkTheme,
+        reducedMotion = reducedMotion,
+        onDismiss = onCloseFormatSheet,
+        onSelectFormat = onSelectFormatSheetOption,
+        onPlayNow = onPlayFromFormatSheet,
+        onDownload = onDownloadFromFormatSheet,
+        onRetry = onRetryFormatSheet,
+        onOpenMySongs = onOpenMySongs
+      )
+    }
   }
 }
 
 @Composable
 fun SearchResultsArea(
   uiState: SearchUiState,
+  searchMode: SearchMode = SearchMode.YouTubeSearch,
   currentSong: Song?,
   isPlaying: Boolean,
+  resolvingSongId: String? = null,
   darkTheme: Boolean,
   reducedMotion: Boolean,
   songDownloadProgress: Map<String, Float> = emptyMap(),
@@ -617,28 +708,41 @@ fun SearchResultsArea(
             .padding(bottom = centerBottomPadding),
           contentAlignment = Alignment.Center
         ) {
-          GlassCard(darkTheme = darkTheme, cornerRadius = 24.dp, modifier = Modifier.fillMaxWidth()) {
+          GlassCard(darkTheme = darkTheme, cornerRadius = 26.dp, modifier = Modifier.fillMaxWidth()) {
             Column(
               modifier = Modifier.fillMaxWidth().padding(24.dp),
               horizontalAlignment = Alignment.CenterHorizontally,
-              verticalArrangement = Arrangement.spacedBy(8.dp)
+              verticalArrangement = Arrangement.spacedBy(10.dp)
             ) {
+              val isYtSearch = searchMode == SearchMode.YouTubeSearch
+              val badgeColor = if (isYtSearch) Color(0xFFEF4444) else MaterialTheme.colorScheme.primary
               Box(
                 modifier = Modifier
-                  .size(52.dp)
+                  .size(56.dp)
                   .clip(CircleShape)
-                  .background(MaterialTheme.colorScheme.primary.copy(alpha = 0.14f)),
+                  .background(badgeColor.copy(alpha = 0.16f))
+                  .border(1.dp, badgeColor.copy(alpha = 0.30f), CircleShape),
                 contentAlignment = Alignment.Center
               ) {
-                Icon(Icons.Rounded.MusicNote, contentDescription = null, tint = MaterialTheme.colorScheme.primary, modifier = Modifier.size(26.dp))
+                Icon(
+                  imageVector = if (isYtSearch) Icons.Rounded.PlayCircle else Icons.Rounded.MusicNote,
+                  contentDescription = null,
+                  tint = badgeColor,
+                  modifier = Modifier.size(28.dp)
+                )
               }
               Text(
-                text = "iTunes 30s Music Search",
+                text = stringResource(
+                  id = if (isYtSearch) R.string.search_yt_idle_title else R.string.search_itunes_idle_title
+                ),
                 style = MaterialTheme.typography.titleMedium.copy(fontWeight = FontWeight.Bold),
-                color = MaterialTheme.colorScheme.onSurface
+                color = MaterialTheme.colorScheme.onSurface,
+                textAlign = TextAlign.Center
               )
               Text(
-                text = "Type a song or artist above, or pick a quick trend tag.",
+                text = stringResource(
+                  id = if (isYtSearch) R.string.search_yt_idle_sub else R.string.search_itunes_idle_sub
+                ),
                 style = MaterialTheme.typography.bodySmall,
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
                 textAlign = TextAlign.Center
@@ -673,7 +777,11 @@ fun SearchResultsArea(
               reducedMotion = reducedMotion
             )
             Text(
-              text = if (state.mode == SearchMode.YouTubeLink) "Analyzing link…" else "Searching iTunes…",
+              text = when (state.mode) {
+                SearchMode.YouTubeSearch -> stringResource(id = R.string.search_loading_yt)
+                SearchMode.YouTubeLink -> stringResource(id = R.string.search_loading_link)
+                SearchMode.ITunes30s -> stringResource(id = R.string.search_loading_itunes)
+              },
               style = MaterialTheme.typography.bodySmall.copy(fontWeight = FontWeight.Medium),
               color = MaterialTheme.colorScheme.onSurfaceVariant,
               textAlign = TextAlign.Center
@@ -694,6 +802,7 @@ fun SearchResultsArea(
               index = index + 1,
               isPlaying = isPlaying,
               isCurrent = currentSong?.id == song.id,
+              isResolving = resolvingSongId == song.id,
               reducedMotion = reducedMotion,
               darkTheme = darkTheme,
               hasLyrics = song.id in verifiedLyricsIds,
@@ -799,6 +908,7 @@ private fun YoutubeAnalysisResultCard(
   verifiedLyricsIds: Set<String> = emptySet(),
   onCheckLyrics: (Song) -> Unit = {},
   onSelectFormat: (String) -> Unit,
+  onPlayClick: () -> Unit,
   onDownload: () -> Unit,
   onPlaySaved: (Song) -> Unit,
   onOpenMySongs: () -> Unit
@@ -1066,100 +1176,71 @@ private fun YoutubeAnalysisResultCard(
         YoutubeDownloadState.Idle -> Unit
       }
 
-      // Download CTA
-      Button(
-        onClick = onDownload,
-        enabled = !isDownloading && selectedFormat != null,
-        modifier = Modifier
-          .fillMaxWidth()
-          .height(50.dp)
-          .testTag("youtube_download_button"),
-        shape = CircleShape,
-        colors = ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.primary)
+      // Play Now + Download Selected Format CTAs
+      Row(
+        modifier = Modifier.fillMaxWidth(),
+        horizontalArrangement = Arrangement.spacedBy(10.dp),
+        verticalAlignment = Alignment.CenterVertically
       ) {
-        if (isDownloading) {
-          CircularProgressIndicator(
-            modifier = Modifier.size(18.dp),
-            strokeWidth = 2.dp,
-            color = Color.White
+        OutlinedButton(
+          onClick = onPlayClick,
+          modifier = Modifier
+            .weight(0.9f)
+            .height(50.dp)
+            .testTag("youtube_play_button"),
+          shape = CircleShape,
+          border = BorderStroke(1.dp, MaterialTheme.colorScheme.primary.copy(alpha = 0.60f)),
+          colors = ButtonDefaults.outlinedButtonColors(
+            containerColor = if (darkTheme) Color.White.copy(alpha = 0.08f) else Color.White.copy(alpha = 0.72f),
+            contentColor = MaterialTheme.colorScheme.onSurface
+          ),
+          contentPadding = PaddingValues(horizontal = 12.dp)
+        ) {
+          Icon(
+            Icons.Rounded.PlayArrow,
+            contentDescription = null,
+            tint = MaterialTheme.colorScheme.primary,
+            modifier = Modifier.size(19.dp)
           )
-        } else {
-          Icon(Icons.Rounded.Download, contentDescription = null, modifier = Modifier.size(19.dp))
+          Spacer(modifier = Modifier.width(4.dp))
+          Text(
+            text = stringResource(id = R.string.action_play),
+            fontWeight = FontWeight.Bold,
+            maxLines = 1
+          )
         }
-        Spacer(modifier = Modifier.width(8.dp))
-        val ctaLabel = when {
-          isDownloading -> "Downloading..."
-          downloadState is YoutubeDownloadState.Saved -> "Download Another Format"
-          selectedFormat != null -> "Download ${selectedFormat.formatLabel} (${selectedFormat.qualityLabel})"
-          else -> "Download"
+
+        Button(
+          onClick = onDownload,
+          enabled = !isDownloading && selectedFormat != null,
+          modifier = Modifier
+            .weight(1.45f)
+            .height(50.dp)
+            .testTag("youtube_download_button"),
+          shape = CircleShape,
+          contentPadding = PaddingValues(horizontal = 14.dp),
+          colors = ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.primary)
+        ) {
+          if (isDownloading) {
+            CircularProgressIndicator(
+              modifier = Modifier.size(18.dp),
+              strokeWidth = 2.dp,
+              color = Color.White
+            )
+          } else {
+            Icon(Icons.Rounded.Download, contentDescription = null, modifier = Modifier.size(19.dp))
+          }
+          Spacer(modifier = Modifier.width(6.dp))
+          val ctaLabel = when {
+            isDownloading -> "Downloading..."
+            downloadState is YoutubeDownloadState.Saved -> stringResource(id = R.string.yt_download_another)
+            selectedFormat != null -> "${selectedFormat.formatLabel} (${selectedFormat.qualityLabel})"
+            else -> stringResource(id = R.string.album_track_download)
+          }
+          Text(text = ctaLabel, fontWeight = FontWeight.Bold, maxLines = 1, overflow = TextOverflow.Ellipsis)
         }
-        Text(text = ctaLabel, fontWeight = FontWeight.Bold, maxLines = 1, overflow = TextOverflow.Ellipsis)
       }
     }
-  }
-}
-
-@Composable
-private fun FormatOptionRow(
-  option: AudioFormatOption,
-  selected: Boolean,
-  enabled: Boolean,
-  darkTheme: Boolean,
-  onClick: () -> Unit
-) {
-  val bg = when {
-    selected -> MaterialTheme.colorScheme.primary.copy(alpha = if (darkTheme) 0.22f else 0.14f)
-    darkTheme -> Color.White.copy(alpha = 0.06f)
-    else -> Color.White.copy(alpha = 0.72f)
-  }
-  val borderColor = when {
-    selected -> MaterialTheme.colorScheme.primary
-    darkTheme -> Color.White.copy(alpha = 0.14f)
-    else -> Color.White
-  }
-
-  Row(
-    modifier = Modifier
-      .fillMaxWidth()
-      .clip(RoundedCornerShape(16.dp))
-      .background(bg)
-      .border(if (selected) 1.5.dp else 1.dp, borderColor, RoundedCornerShape(16.dp))
-      .clickable(enabled = enabled) { onClick() }
-      .testTag("youtube_format_${option.id}")
-      .padding(horizontal = 14.dp, vertical = 12.dp),
-    verticalAlignment = Alignment.CenterVertically,
-    horizontalArrangement = Arrangement.spacedBy(12.dp)
-  ) {
-    Surface(
-      shape = RoundedCornerShape(10.dp),
-      color = if (selected) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.primary.copy(alpha = 0.14f)
-    ) {
-      Text(
-        text = option.formatLabel,
-        style = MaterialTheme.typography.labelMedium.copy(fontWeight = FontWeight.ExtraBold),
-        color = if (selected) Color.White else MaterialTheme.colorScheme.primary,
-        modifier = Modifier.padding(horizontal = 10.dp, vertical = 5.dp)
-      )
-    }
-
-    Column(modifier = Modifier.weight(1f)) {
-      Text(
-        text = option.qualityLabel,
-        style = MaterialTheme.typography.bodyMedium.copy(fontWeight = FontWeight.Bold),
-        color = MaterialTheme.colorScheme.onSurface
-      )
-      Text(
-        text = option.detailLabel,
-        style = MaterialTheme.typography.bodySmall,
-        color = MaterialTheme.colorScheme.onSurfaceVariant
-      )
-    }
-
-    Icon(
-      imageVector = if (selected) Icons.Rounded.RadioButtonChecked else Icons.Rounded.RadioButtonUnchecked,
-      contentDescription = if (selected) "Selected" else "Select format",
-      tint = if (selected) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurfaceVariant
-    )
   }
 }
 

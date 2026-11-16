@@ -117,8 +117,21 @@ sealed interface YoutubeDownloadState {
 typealias Track = Song
 
 enum class SearchMode {
-  ITunes30s,
-  YouTubeLink
+  YouTubeSearch,
+  YouTubeLink,
+  ITunes30s
+}
+
+sealed interface YoutubeFormatSheetState {
+  data object Closed : YoutubeFormatSheetState
+  data class Loading(val song: Song, val videoId: String) : YoutubeFormatSheetState
+  data class Ready(
+    val song: Song,
+    val analysis: YoutubeAnalysisResult,
+    val selectedFormatId: String,
+    val downloadState: YoutubeDownloadState
+  ) : YoutubeFormatSheetState
+  data class Error(val song: Song, val videoId: String, val message: String) : YoutubeFormatSheetState
 }
 
 sealed interface SearchUiState {

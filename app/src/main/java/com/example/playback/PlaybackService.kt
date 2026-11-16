@@ -10,13 +10,19 @@ import androidx.media3.common.MediaItem
 import androidx.media3.common.PlaybackException
 import androidx.media3.common.Player
 import androidx.media3.common.util.UnstableApi
+import androidx.media3.datasource.DefaultDataSource
+import androidx.media3.datasource.DefaultHttpDataSource
+import androidx.media3.datasource.ResolvingDataSource
 import androidx.media3.exoplayer.DefaultRenderersFactory
 import androidx.media3.exoplayer.ExoPlayer
+import androidx.media3.exoplayer.source.DefaultMediaSourceFactory
 import androidx.media3.session.DefaultMediaNotificationProvider
 import androidx.media3.session.MediaSession
 import androidx.media3.session.MediaSessionService
 import com.example.MainActivity
 import com.example.R
+import com.example.data.StreamHeaderRegistry
+import com.example.data.YoutubeExtractor
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
@@ -50,7 +56,29 @@ class PlaybackService : MediaSessionService() {
     val renderersFactory = DefaultRenderersFactory(this)
       .setEnableDecoderFallback(true)
 
+    val httpFactory = DefaultHttpDataSource.Factory()
+      .setAllowCrossProtocolRedirects(true)
+      .setConnectTimeoutMs(15_000)
+      .setReadTimeoutMs(25_000)
+    val upstreamFactory = DefaultDataSource.Factory(this, httpFactory)
+    val resolvingFactory = ResolvingDataSource.Factory(upstreamFactory) { dataSpec ->
+      val url = dataSpec.uri.toString()
+      val ua = StreamHeaderRegistry.resolveUserAgent(url)
+        ?: YoutubeExtractor.inferPrimaryUserAgentForUrl(url)
+      if (!ua.isNullOrBlank()) {
+        dataSpec.withAdditionalHeaders(
+          mapOf(
+            "User-Agent" to ua,
+            "Accept" to "*/*"
+          )
+        )
+      } else {
+        dataSpec
+      }
+    }
+
     return ExoPlayer.Builder(this, renderersFactory)
+      .setMediaSourceFactory(DefaultMediaSourceFactory(resolvingFactory))
       .setAudioAttributes(playbackAudioAttributes, handleAudioFocus)
       .apply {
         if (handleAudioFocus) {

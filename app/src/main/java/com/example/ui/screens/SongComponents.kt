@@ -352,24 +352,50 @@ fun GlassCard(
   content: @Composable ColumnScope.() -> Unit
 ) {
   val shape = RoundedCornerShape(cornerRadius)
-  val fillColor = if (darkTheme) {
-    Color(0xFF172034).copy(alpha = 0.68f)
+  val glassBrush = if (darkTheme) {
+    Brush.linearGradient(
+      colors = listOf(
+        Color(0xFF212D46).copy(alpha = 0.78f),
+        Color(0xFF151E32).copy(alpha = 0.68f),
+        Color(0xFF101728).copy(alpha = 0.76f)
+      )
+    )
   } else {
-    Color.White.copy(alpha = 0.78f)
+    Brush.linearGradient(
+      colors = listOf(
+        Color.White.copy(alpha = 0.90f),
+        Color(0xFFF3F6FF).copy(alpha = 0.76f),
+        Color.White.copy(alpha = 0.84f)
+      )
+    )
   }
   val borderBrush = Brush.verticalGradient(
     colors = if (darkTheme) {
-      listOf(Color.White.copy(alpha = 0.24f), Color.White.copy(alpha = 0.06f))
+      listOf(Color.White.copy(alpha = 0.32f), Color.White.copy(alpha = 0.12f), Color.White.copy(alpha = 0.05f))
     } else {
-      listOf(Color.White.copy(alpha = 0.96f), Color.White.copy(alpha = 0.50f))
+      listOf(Color.White, Color.White.copy(alpha = 0.68f), Color.White.copy(alpha = 0.42f))
     }
   )
-  val topSpecular = Color.White.copy(alpha = if (darkTheme) 0.30f else 0.95f)
+  val topSpecular = Color.White.copy(alpha = if (darkTheme) 0.42f else 0.98f)
 
   Box(
     modifier = modifier
+      .drawBehind {
+        val r = cornerRadius.toPx()
+        drawRoundRect(
+          brush = Brush.verticalGradient(
+            colors = listOf(
+              Color.Black.copy(alpha = if (darkTheme) 0.22f else 0.05f),
+              Color.Black.copy(alpha = if (darkTheme) 0.34f else 0.10f)
+            )
+          ),
+          topLeft = Offset(0f, 5.dp.toPx()),
+          size = Size(size.width, size.height),
+          cornerRadius = CornerRadius(r, r)
+        )
+      }
       .clip(shape)
-      .background(fillColor)
+      .background(glassBrush)
       .border(1.dp, borderBrush, shape)
       .drawBehind {
         val stroke15 = 1.5.dp.toPx()
@@ -377,9 +403,9 @@ fun GlassCard(
         val r = (cornerRadius.toPx() - inset).coerceAtLeast(0f)
         drawRoundRect(
           brush = Brush.verticalGradient(
-            colors = listOf(topSpecular, Color.Transparent),
+            colors = listOf(topSpecular, topSpecular.copy(alpha = 0.14f), Color.Transparent),
             startY = 0f,
-            endY = size.height * 0.32f
+            endY = size.height * 0.36f
           ),
           topLeft = Offset(inset, inset),
           size = Size(size.width - stroke15, size.height - stroke15),
@@ -402,10 +428,10 @@ fun GlassSegmentedBar(
   testTags: List<String> = emptyList(),
   reducedMotion: Boolean = false
 ) {
-  val barBg = if (darkTheme) Color.White.copy(alpha = 0.08f) else Color.White.copy(alpha = 0.68f)
-  val barBorder = if (darkTheme) Color.White.copy(alpha = 0.16f) else Color.White.copy(alpha = 0.95f)
-  val pillBg = if (darkTheme) Color(0xFF28344E) else Color.White
-  val pillBorderColor = Color.White.copy(alpha = if (darkTheme) 0.18f else 0.9f)
+  val barBg = if (darkTheme) Color(0xFF151E32).copy(alpha = 0.72f) else Color.White.copy(alpha = 0.72f)
+  val barBorder = if (darkTheme) Color.White.copy(alpha = 0.22f) else Color.White.copy(alpha = 0.96f)
+  val pillBg = if (darkTheme) Color(0xFF283652).copy(alpha = 0.94f) else Color.White.copy(alpha = 0.96f)
+  val pillBorderColor = Color.White.copy(alpha = if (darkTheme) 0.28f else 0.98f)
   val colorSpec = if (reducedMotion) snap<Color>() else tween<Color>(durationMillis = 220, easing = FastOutSlowInEasing)
 
   Row(
@@ -947,6 +973,7 @@ fun SongDownloadRow(
   index: Int,
   isPlaying: Boolean = false,
   isCurrent: Boolean = false,
+  isResolving: Boolean = false,
   reducedMotion: Boolean = false,
   darkTheme: Boolean = true,
   hasLyrics: Boolean = false,
@@ -960,53 +987,107 @@ fun SongDownloadRow(
   LaunchedEffect(song.id) {
     onCheckLyrics?.invoke(song)
   }
-  Surface(
+  val rowShape = RoundedCornerShape(22.dp)
+  val accentColor = MaterialTheme.colorScheme.primary
+  val glassBrush = when {
+    isCurrent -> Brush.linearGradient(
+      colors = listOf(
+        accentColor.copy(alpha = if (darkTheme) 0.28f else 0.18f),
+        if (darkTheme) Color(0xFF19243C).copy(alpha = 0.84f) else Color.White.copy(alpha = 0.88f)
+      )
+    )
+    darkTheme -> Brush.linearGradient(
+      colors = listOf(
+        Color(0xFF1D2840).copy(alpha = 0.76f),
+        Color(0xFF131B2E).copy(alpha = 0.68f)
+      )
+    )
+    else -> Brush.linearGradient(
+      colors = listOf(
+        Color.White.copy(alpha = 0.88f),
+        Color(0xFFF2F6FF).copy(alpha = 0.78f)
+      )
+    )
+  }
+  val borderBrush = Brush.verticalGradient(
+    colors = if (isCurrent) {
+      listOf(accentColor.copy(alpha = 0.55f), Color.White.copy(alpha = 0.14f))
+    } else if (darkTheme) {
+      listOf(Color.White.copy(alpha = 0.24f), Color.White.copy(alpha = 0.06f))
+    } else {
+      listOf(Color.White, Color.White.copy(alpha = 0.55f))
+    }
+  )
+
+  Box(
     modifier = Modifier
       .fillMaxWidth()
       .padding(vertical = 3.dp)
-      .clip(RoundedCornerShape(20.dp))
-      .clickable { onSongClick() },
-    color = if (isCurrent) MaterialTheme.colorScheme.primary.copy(alpha = 0.16f) else MaterialTheme.colorScheme.surface.copy(alpha = 0.72f),
-    shape = RoundedCornerShape(20.dp)
+      .clip(rowShape)
+      .background(glassBrush)
+      .border(1.dp, borderBrush, rowShape)
+      .drawBehind {
+        val stroke = 1.2.dp.toPx()
+        val inset = stroke * 0.5f
+        val r = (22.dp.toPx() - inset).coerceAtLeast(0f)
+        drawRoundRect(
+          brush = Brush.verticalGradient(
+            colors = listOf(
+              Color.White.copy(alpha = if (darkTheme) 0.28f else 0.92f),
+              Color.Transparent
+            ),
+            startY = 0f,
+            endY = size.height * 0.42f
+          ),
+          topLeft = Offset(inset, inset),
+          size = Size(size.width - stroke, size.height - stroke),
+          cornerRadius = CornerRadius(r, r),
+          style = Stroke(width = stroke)
+        )
+      }
+      .clickable { onSongClick() }
+      .testTag("song_row_${song.id}")
   ) {
     Row(
       modifier = Modifier
         .fillMaxWidth()
-        .border(
-          1.dp,
-          Color.White.copy(alpha = 0.14f),
-          RoundedCornerShape(20.dp)
-        )
         .padding(horizontal = 12.dp, vertical = 10.dp),
       verticalAlignment = Alignment.CenterVertically
     ) {
       if (isCurrent) {
         EqualizerBars(
           isPlaying = isPlaying,
-          color = MaterialTheme.colorScheme.primary,
+          color = accentColor,
           reducedMotion = reducedMotion,
-          modifier = Modifier.width(26.dp)
+          modifier = Modifier.width(24.dp)
         )
       } else {
         Text(
           text = String.format("%02d", index),
           style = MaterialTheme.typography.bodyMedium.copy(fontWeight = FontWeight.Bold),
           color = MaterialTheme.colorScheme.onSurfaceVariant,
-          modifier = Modifier.width(26.dp)
+          modifier = Modifier.width(24.dp)
         )
       }
 
-      SongArtwork(song = song, modifier = Modifier.size(48.dp), cornerRadius = 12.dp)
+      Box(
+        modifier = Modifier
+          .size(50.dp)
+          .clip(RoundedCornerShape(13.dp))
+          .border(1.dp, Color.White.copy(alpha = if (darkTheme) 0.24f else 0.8f), RoundedCornerShape(13.dp))
+      ) {
+        SongArtwork(song = song, modifier = Modifier.fillMaxSize(), cornerRadius = 13.dp)
+      }
 
       Spacer(modifier = Modifier.width(12.dp))
-      Column(modifier = Modifier.weight(1f)) {
+      Column(modifier = Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(2.dp)) {
         Row(verticalAlignment = Alignment.CenterVertically) {
           Text(
             text = song.title,
             style = MaterialTheme.typography.bodyMedium.copy(fontWeight = FontWeight.Bold),
             maxLines = 1,
             overflow = TextOverflow.Ellipsis,
-            color = if (isCurrent) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onBackground,
+            color = if (isCurrent) accentColor else MaterialTheme.colorScheme.onBackground,
             modifier = Modifier.weight(1f, fill = false)
           )
           LyricsTag(
@@ -1014,7 +1095,7 @@ fun SongDownloadRow(
             size = LyricsTagSize.Standard,
             darkTheme = darkTheme,
             reducedMotion = reducedMotion,
-            modifier = Modifier.padding(start = 8.dp)
+            modifier = Modifier.padding(start = 6.dp)
           )
         }
         Row(
@@ -1029,15 +1110,32 @@ fun SongDownloadRow(
             color = MaterialTheme.colorScheme.onSurfaceVariant,
             modifier = Modifier.weight(1f, fill = false)
           )
-          if (song.source == "iTunes 30s") {
+          if (song.source == "YouTube") {
+            val durStr = if (song.durationSeconds > 0L) {
+              "${song.durationSeconds / 60}:${String.format("%02d", song.durationSeconds % 60)}"
+            } else {
+              ""
+            }
             Surface(
               shape = RoundedCornerShape(6.dp),
-              color = MaterialTheme.colorScheme.primary.copy(alpha = 0.16f)
+              color = Color(0xFFEF4444).copy(alpha = if (darkTheme) 0.20f else 0.14f)
+            ) {
+              Text(
+                text = if (durStr.isNotBlank()) "YT • $durStr" else "YT",
+                style = MaterialTheme.typography.labelSmall.copy(fontWeight = FontWeight.Bold, fontSize = 10.sp),
+                color = if (darkTheme) Color(0xFFFF8A8A) else Color(0xFFDC2626),
+                modifier = Modifier.padding(horizontal = 5.dp, vertical = 1.dp)
+              )
+            }
+          } else if (song.source == "iTunes 30s") {
+            Surface(
+              shape = RoundedCornerShape(6.dp),
+              color = accentColor.copy(alpha = 0.16f)
             ) {
               Text(
                 text = "30s",
                 style = MaterialTheme.typography.labelSmall.copy(fontWeight = FontWeight.Bold, fontSize = 10.sp),
-                color = MaterialTheme.colorScheme.primary,
+                color = accentColor,
                 modifier = Modifier.padding(horizontal = 5.dp, vertical = 1.dp)
               )
             }
@@ -1056,13 +1154,13 @@ fun SongDownloadRow(
             progress = { downloadProgress.coerceIn(0f, 1f) },
             modifier = Modifier.size(20.dp),
             strokeWidth = 2.5.dp,
-            color = MaterialTheme.colorScheme.primary
+            color = accentColor
           )
         } else {
           Icon(
             imageVector = if (isDownloaded) Icons.Rounded.DownloadDone else Icons.Rounded.Download,
-            contentDescription = "Download Preview",
-            tint = if (isDownloaded) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurfaceVariant
+            contentDescription = if (song.source == "YouTube") "Install / Select format" else "Download Preview",
+            tint = if (isDownloaded) Color(0xFF10B981) else MaterialTheme.colorScheme.onSurfaceVariant
           )
         }
       }
@@ -1078,15 +1176,38 @@ fun SongDownloadRow(
         )
       }
 
-      IconButton(
-        onClick = onSongClick,
-        modifier = Modifier.minimumInteractiveComponentSize()
+      Box(
+        modifier = Modifier
+          .size(40.dp)
+          .clip(CircleShape)
+          .background(
+            if (isCurrent) accentColor
+            else if (darkTheme) Color.White.copy(alpha = 0.12f)
+            else Color.Black.copy(alpha = 0.06f)
+          )
+          .border(
+            1.dp,
+            Color.White.copy(alpha = if (isCurrent) 0.45f else if (darkTheme) 0.18f else 0.7f),
+            CircleShape
+          )
+          .clickable { onSongClick() }
+          .testTag("song_play_button_${song.id}"),
+        contentAlignment = Alignment.Center
       ) {
-        Icon(
-          imageVector = if (isCurrent && isPlaying) Icons.Rounded.Pause else Icons.Rounded.PlayArrow,
-          contentDescription = "Play",
-          tint = MaterialTheme.colorScheme.onBackground
-        )
+        if (isResolving) {
+          CircularProgressIndicator(
+            modifier = Modifier.size(16.dp),
+            strokeWidth = 2.dp,
+            color = if (isCurrent) Color.White else accentColor
+          )
+        } else {
+          Icon(
+            imageVector = if (isCurrent && isPlaying) Icons.Rounded.Pause else Icons.Rounded.PlayArrow,
+            contentDescription = "Play",
+            tint = if (isCurrent) Color.White else MaterialTheme.colorScheme.onBackground,
+            modifier = Modifier.size(20.dp)
+          )
+        }
       }
     }
   }

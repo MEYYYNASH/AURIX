@@ -44,6 +44,7 @@ import com.example.LocaleHelper
 import com.example.R
 import com.example.data.ApkDownloadState
 import com.example.data.UpdateCheckStatus
+import com.example.model.YoutubeFormatSheetState
 import com.example.recommendation.MoodCategory
 import com.example.ui.theme.*
 import com.example.viewmodel.AurixViewModel
@@ -158,6 +159,8 @@ private fun AurixMainShell(
   val youtubeDownloadState by viewModel.youtubeDownloadState.collectAsStateWithLifecycle()
   val isAnalyzingYoutube by viewModel.isAnalyzingYoutube.collectAsStateWithLifecycle()
   val youtubeError by viewModel.youtubeError.collectAsStateWithLifecycle()
+  val resolvingSongId by viewModel.resolvingSongId.collectAsStateWithLifecycle()
+  val formatSheetState by viewModel.formatSheetState.collectAsStateWithLifecycle()
 
   val installedAppInfo by viewModel.installedAppInfo.collectAsStateWithLifecycle()
   val updateCheckStatus by viewModel.updateCheckStatus.collectAsStateWithLifecycle()
@@ -373,7 +376,7 @@ private fun AurixMainShell(
               onSelectFeed = { viewModel.selectDailyFeed(it) },
               onRefreshDailyFeed = { viewModel.loadDailyRecommendations(selectedDailyFeed, forceRefresh = true) },
               onOpenSearch = {
-                viewModel.setSearchMode("itunes")
+                viewModel.setSearchMode("youtube_search")
                 currentScreen = Screen.Search
               },
               onOpenLibraryTab = { tab ->
@@ -531,6 +534,8 @@ private fun AurixMainShell(
               reducedMotion = reducedMotion,
               songDownloadProgress = songDownloadProgress,
               downloadedSongIds = downloadedSongIds,
+              resolvingSongId = resolvingSongId,
+              formatSheetState = formatSheetState,
               verifiedLyricsIds = verifiedLyricsIds,
               onCheckLyrics = { viewModel.ensureLyricsVerified(it) },
               onSearchModeChanged = { viewModel.setSearchMode(it) },
@@ -539,6 +544,7 @@ private fun AurixMainShell(
               onAnalyzeYoutube = { viewModel.analyzeYoutubeUrl() },
               onSelectYoutubeFormat = { viewModel.selectYoutubeFormat(it) },
               onDownloadYoutube = { viewModel.downloadAnalyzedTrack(context) },
+              onPlayAnalyzedYoutube = { viewModel.playAnalyzedYoutubeTrack() },
               onOpenMySongs = {
                 libraryTab = 0
                 currentScreen = Screen.Library
@@ -546,6 +552,17 @@ private fun AurixMainShell(
               onSongClick = { song, queue -> viewModel.playSong(song, queue) },
               onFavoriteClick = { viewModel.toggleFavorite(it) },
               onDownloadClick = { viewModel.downloadSong(context, it) },
+              onYoutubeSongDownloadClick = { viewModel.openYoutubeFormatSheet(it) },
+              onCloseFormatSheet = { viewModel.closeYoutubeFormatSheet() },
+              onSelectFormatSheetOption = { viewModel.selectFormatSheetOption(it) },
+              onPlayFromFormatSheet = { viewModel.playFromFormatSheet() },
+              onDownloadFromFormatSheet = { viewModel.downloadFromFormatSheet(context) },
+              onRetryFormatSheet = {
+                val errState = formatSheetState as? YoutubeFormatSheetState.Error
+                if (errState != null) {
+                  viewModel.openYoutubeFormatSheet(errState.song)
+                }
+              },
               searchUiState = searchUiState,
               onClearSearch = { viewModel.clearSearch() },
               onRetrySearch = { viewModel.retrySearch() },

@@ -21,10 +21,39 @@ import org.schabi.newpipe.extractor.downloader.Request as NpRequest
 import org.schabi.newpipe.extractor.downloader.Response as NpResponse
 import org.schabi.newpipe.extractor.exceptions.ReCaptchaException
 import org.schabi.newpipe.extractor.localization.Localization
+import org.schabi.newpipe.extractor.search.SearchInfo
 import org.schabi.newpipe.extractor.stream.DeliveryMethod
 import org.schabi.newpipe.extractor.stream.StreamInfo
+import org.schabi.newpipe.extractor.stream.StreamInfoItem
+import org.schabi.newpipe.extractor.stream.StreamType
+import java.net.URLEncoder
 import java.util.Locale
+import java.util.concurrent.ConcurrentHashMap
 import java.util.concurrent.TimeUnit
+
+object StreamHeaderRegistry {
+  private val userAgents = ConcurrentHashMap<String, String>()
+
+  fun register(streamUrl: String, userAgent: String?) {
+    if (streamUrl.isBlank() || userAgent.isNullOrBlank()) return
+    if (userAgents.size > 200) {
+      userAgents.clear()
+    }
+    userAgents[streamUrl] = userAgent
+  }
+
+  fun resolveUserAgent(streamUrl: String): String? {
+    return userAgents[streamUrl]
+  }
+}
+
+data class YoutubeSearchItem(
+  val videoId: String,
+  val rawTitle: String,
+  val author: String,
+  val thumbnailUrl: String,
+  val durationSeconds: Long
+)
 
 data class ExtractedYoutubeData(
   val videoId: String,
@@ -212,6 +241,15 @@ object YoutubeExtractor {
     return "${cleanUrl}${separator}range=$start-$end"
   }
 
+  fun inferPrimaryUserAgentForUrl(streamUrl: String): String? {
+    if (!streamUrl.contains("googlevideo.com", ignoreCase = true) &&
+      !streamUrl.contains("youtube.com", ignoreCase = true)
+    ) {
+      return null
+    }
+    return inferUserAgentsForStreamUrl(streamUrl).firstOrNull()
+  }
+
   private fun inferUserAgentsForStreamUrl(streamUrl: String): List<String> {
     val clientParam = Regex("""[?&]c=([^&]+)""", RegexOption.IGNORE_CASE)
       .find(streamUrl)
@@ -376,20 +414,283 @@ object YoutubeExtractor {
 
   fun extractVideoId(rawUrl: String): String? {
     val trimmed = rawUrl.trim()
-    val uri = runCatching { Uri.parse(trimmed) }.getOrNull() ?: return null
-    val host = uri.host.orEmpty().lowercase(Locale.US)
-    val segments = uri.pathSegments.orEmpty()
+    if (trimmed.isBlank()) return null
+
+    val parsedUri = runCatching { java.net.URI(trimmed) }.getOrNull()
+    val host = parsedUri?.host.orEmpty().lowercase(Locale.US)
+    val path = parsedUri?.path.orEmpty()
+    val segments = path.split('/').filter { it.isNotBlank() }
+    val query = parsedUri?.rawQuery.orEmpty()
+    val vQueryParam = Regex("""(?:^|&)v=([^&]+)""")
+      .find(query)
+      ?.groupValues
+      ?.getOrNull(1)
+
     val rawId = when {
       host.contains("youtu.be") -> segments.firstOrNull()
-      uri.getQueryParameter("v")?.isNotBlank() == true -> uri.getQueryParameter("v")
+      !vQueryParam.isNullOrBlank() -> vQueryParam
       segments.size >= 2 && segments[0] in listOf("shorts", "embed", "live", "v") -> segments[1]
-      else -> null
+      else -> {
+        Regex("""(?:youtu\.be/|youtube\.com/(?:watch\?.*v=|shorts/|embed/|live/))([A-Za-z0-9_-]{8,16})""")
+          .find(trimmed)
+          ?.groupValues
+          ?.getOrNull(1)
+      }
     }
     return rawId
       ?.substringBefore('?')
       ?.substringBefore('&')
       ?.trim()
       ?.takeIf { it.length in 8..16 }
+  }
+
+  suspend fun searchSongs(
+    query: String,
+    limit: Int = 25
+  ): List<YoutubeSearchItem> = withContext(Dispatchers.IO) {
+    val trimmed = query.trim()
+    if (trimmed.isBlank()) return@withContext emptyList()
+
+    // 1. Direct InnerTube Search (fast, lightweight JSON)
+    val innerTubeResults = runCatching { searchViaInnerTube(trimmed, limit) }.getOrNull().orEmpty()
+    if (innerTubeResults.isNotEmpty()) return@withContext innerTubeResults
+
+    // 2. NewPipeExtractor YouTube Search
+    val newPipeResults = runCatching { searchViaNewPipe(trimmed, limit) }.getOrNull().orEmpty()
+    if (newPipeResults.isNotEmpty()) return@withContext newPipeResults
+
+    // 3. Piped public mirrors
+    for (base in basePipedMirrors.take(4)) {
+      val pipedResults = runCatching { searchViaPiped(base, trimmed, limit) }.getOrNull().orEmpty()
+      if (pipedResults.isNotEmpty()) return@withContext pipedResults
+    }
+
+    // 4. Invidious public mirrors
+    for (base in getInvidiousMirrors().take(4)) {
+      val invResults = runCatching { searchViaInvidious(base, trimmed, limit) }.getOrNull().orEmpty()
+      if (invResults.isNotEmpty()) return@withContext invResults
+    }
+
+    emptyList()
+  }
+
+  private fun searchViaInnerTube(query: String, limit: Int): List<YoutubeSearchItem> {
+    val clientObj = JSONObject().apply {
+      put("clientName", "WEB")
+      put("clientVersion", "2.20250201.00.00")
+      put("hl", "en")
+      put("gl", "US")
+    }
+    val payload = JSONObject().apply {
+      put("query", query)
+      put("context", JSONObject().put("client", clientObj))
+    }
+    val request = Request.Builder()
+      .url("https://www.youtube.com/youtubei/v1/search?prettyPrint=false")
+      .post(payload.toString().toRequestBody(jsonMediaType))
+      .header("User-Agent", NewPipeOkHttpDownloader.DESKTOP_CHROME_UA)
+      .header("Content-Type", "application/json")
+      .build()
+
+    client.newCall(request).execute().use { resp ->
+      if (!resp.isSuccessful) return emptyList()
+      val body = resp.body?.string().orEmpty()
+      if (body.isBlank()) return emptyList()
+      val root = JSONObject(body)
+      val collected = mutableListOf<YoutubeSearchItem>()
+      collectVideoRenderers(root, collected, limit)
+      return collected.distinctBy { it.videoId }.take(limit)
+    }
+  }
+
+  private fun collectVideoRenderers(
+    node: Any?,
+    out: MutableList<YoutubeSearchItem>,
+    limit: Int
+  ) {
+    if (out.size >= limit || node == null) return
+    when (node) {
+      is JSONObject -> {
+        val vr = node.optJSONObject("videoRenderer")
+        if (vr != null) {
+          parseVideoRenderer(vr)?.let { out.add(it) }
+        }
+        val keys = node.keys()
+        while (keys.hasNext() && out.size < limit) {
+          val k = keys.next()
+          if (k != "videoRenderer") {
+            collectVideoRenderers(node.opt(k), out, limit)
+          }
+        }
+      }
+      is JSONArray -> {
+        for (i in 0 until node.length()) {
+          if (out.size >= limit) break
+          collectVideoRenderers(node.opt(i), out, limit)
+        }
+      }
+    }
+  }
+
+  private fun parseVideoRenderer(vr: JSONObject): YoutubeSearchItem? {
+    val videoId = vr.optString("videoId").trim().takeIf { it.length in 8..16 } ?: return null
+    val title = extractRunsOrSimpleText(vr.optJSONObject("title")).trim()
+    if (title.isBlank()) return null
+
+    val author = extractRunsOrSimpleText(vr.optJSONObject("ownerText"))
+      .ifBlank { extractRunsOrSimpleText(vr.optJSONObject("longBylineText")) }
+      .ifBlank { extractRunsOrSimpleText(vr.optJSONObject("shortBylineText")) }
+      .trim()
+
+    val lengthText = extractRunsOrSimpleText(vr.optJSONObject("lengthText"))
+    val durationSec = parseDurationTextSeconds(lengthText)
+    // Skip live streams without fixed duration
+    if (durationSec <= 0L && lengthText.isBlank()) return null
+
+    val thumb = bestThumbnailUrl(vr.optJSONObject("thumbnail")?.optJSONArray("thumbnails"))
+      ?: "https://i.ytimg.com/vi/$videoId/hqdefault.jpg"
+
+    return YoutubeSearchItem(
+      videoId = videoId,
+      rawTitle = title,
+      author = author.ifBlank { "YouTube" },
+      thumbnailUrl = thumb,
+      durationSeconds = durationSec
+    )
+  }
+
+  private fun extractRunsOrSimpleText(obj: JSONObject?): String {
+    if (obj == null) return ""
+    val simple = obj.optString("simpleText").trim()
+    if (simple.isNotBlank()) return simple
+    val runs = obj.optJSONArray("runs") ?: return ""
+    val sb = StringBuilder()
+    for (i in 0 until runs.length()) {
+      sb.append(runs.optJSONObject(i)?.optString("text").orEmpty())
+    }
+    return sb.toString()
+  }
+
+  private fun searchViaNewPipe(query: String, limit: Int): List<YoutubeSearchItem> {
+    ensureNewPipeInitialized()
+    val queryHandler = ServiceList.YouTube.searchQHFactory.fromQuery(query)
+    val searchInfo = SearchInfo.getInfo(ServiceList.YouTube, queryHandler)
+    val out = mutableListOf<YoutubeSearchItem>()
+    for (item in searchInfo.relatedItems) {
+      if (out.size >= limit) break
+      if (item !is StreamInfoItem) continue
+      if (item.streamType == StreamType.LIVE_STREAM || item.streamType == StreamType.AUDIO_LIVE_STREAM) continue
+      val videoId = extractVideoId(item.url.orEmpty()) ?: continue
+      val title = item.name.orEmpty().trim()
+      if (title.isBlank()) continue
+      val durSec = item.duration.coerceAtLeast(0L)
+      if (durSec <= 0L) continue
+      val thumb = item.thumbnails
+        .maxByOrNull { it.width * it.height }
+        ?.url
+        ?.takeIf { it.isNotBlank() }
+        ?: "https://i.ytimg.com/vi/$videoId/hqdefault.jpg"
+      out.add(
+        YoutubeSearchItem(
+          videoId = videoId,
+          rawTitle = title,
+          author = item.uploaderName.orEmpty().trim().ifBlank { "YouTube" },
+          thumbnailUrl = thumb,
+          durationSeconds = durSec
+        )
+      )
+    }
+    return out.distinctBy { it.videoId }
+  }
+
+  private fun searchViaPiped(base: String, query: String, limit: Int): List<YoutubeSearchItem> {
+    val encoded = URLEncoder.encode(query, "UTF-8")
+    for (filter in listOf("music_songs", "videos")) {
+      val req = Request.Builder()
+        .url("$base/search?q=$encoded&filter=$filter")
+        .header("User-Agent", "AURIX-Android")
+        .build()
+      val items = runCatching {
+        probeClient.newCall(req).execute().use { resp ->
+          if (!resp.isSuccessful) return@use emptyList<YoutubeSearchItem>()
+          val body = resp.body?.string().orEmpty()
+          if (body.isBlank()) return@use emptyList<YoutubeSearchItem>()
+          val arr = JSONObject(body).optJSONArray("items") ?: return@use emptyList<YoutubeSearchItem>()
+          val out = mutableListOf<YoutubeSearchItem>()
+          for (i in 0 until minOf(arr.length(), limit)) {
+            val obj = arr.optJSONObject(i) ?: continue
+            val itemUrl = obj.optString("url").trim()
+            val fullUrl = if (itemUrl.startsWith("http")) itemUrl else "https://www.youtube.com$itemUrl"
+            val videoId = extractVideoId(fullUrl) ?: continue
+            val title = obj.optString("title").trim()
+            if (title.isBlank()) continue
+            val durSec = obj.optLong("duration", 0L)
+            if (durSec <= 0L) continue
+            val thumb = obj.optString("thumbnail").trim()
+              .ifBlank { "https://i.ytimg.com/vi/$videoId/hqdefault.jpg" }
+            out.add(
+              YoutubeSearchItem(
+                videoId = videoId,
+                rawTitle = title,
+                author = obj.optString("uploaderName").trim().ifBlank { "YouTube" },
+                thumbnailUrl = thumb,
+                durationSeconds = durSec
+              )
+            )
+          }
+          out
+        }
+      }.getOrDefault(emptyList())
+      if (items.isNotEmpty()) return items.distinctBy { it.videoId }
+    }
+    return emptyList()
+  }
+
+  private fun searchViaInvidious(base: String, query: String, limit: Int): List<YoutubeSearchItem> {
+    val encoded = URLEncoder.encode(query, "UTF-8")
+    val req = Request.Builder()
+      .url("$base/api/v1/search?q=$encoded&type=video")
+      .header("User-Agent", "AURIX-Android")
+      .build()
+    return probeClient.newCall(req).execute().use { resp ->
+      if (!resp.isSuccessful) return emptyList()
+      val body = resp.body?.string().orEmpty()
+      if (body.isBlank()) return emptyList()
+      val arr = JSONArray(body)
+      val out = mutableListOf<YoutubeSearchItem>()
+      for (i in 0 until minOf(arr.length(), limit)) {
+        val obj = arr.optJSONObject(i) ?: continue
+        val videoId = obj.optString("videoId").trim().takeIf { it.length in 8..16 } ?: continue
+        val title = obj.optString("title").trim()
+        if (title.isBlank()) continue
+        val durSec = obj.optLong("lengthSeconds", 0L)
+        if (durSec <= 0L) continue
+        val thumb = bestThumbnailUrl(obj.optJSONArray("videoThumbnails"))
+          ?: "https://i.ytimg.com/vi/$videoId/hqdefault.jpg"
+        out.add(
+          YoutubeSearchItem(
+            videoId = videoId,
+            rawTitle = title,
+            author = obj.optString("author").trim().ifBlank { "YouTube" },
+            thumbnailUrl = thumb,
+            durationSeconds = durSec
+          )
+        )
+      }
+      out.distinctBy { it.videoId }
+    }
+  }
+
+  fun parseDurationTextSeconds(raw: String): Long {
+    val clean = raw.trim()
+    if (clean.isBlank()) return 0L
+    val parts = clean.split(':').mapNotNull { it.trim().toLongOrNull() }
+    if (parts.isEmpty()) return 0L
+    return when (parts.size) {
+      2 -> parts[0] * 60L + parts[1]
+      3 -> parts[0] * 3600L + parts[1] * 60L + parts[2]
+      else -> 0L
+    }
   }
 
   suspend fun extractFullAudio(
@@ -683,7 +984,7 @@ object YoutubeExtractor {
 
     val verified = mutableListOf<AudioFormatOption>()
     // Group by extension ("m4a", "webm", "mp4") so a block on M4A doesn't hide working WEBM, or vice versa.
-    val modeByExt = mutableMapOf<String, StreamDownloadMode?>()
+    val modeByExt = mutableMapOf<String, Pair<StreamDownloadMode, String>?>()
 
     for (fmt in formats) {
       val extKey = fmt.extension.lowercase(Locale.US)
@@ -704,8 +1005,9 @@ object YoutubeExtractor {
             }
           }
         }
-        modeByExt[extKey] = foundMode
+        modeByExt[extKey] = foundMode?.let { it to workingUa }
         if (foundMode != null) {
+          StreamHeaderRegistry.register(workingUrl, workingUa)
           verified.add(
             fmt.copy(
               streamUrl = workingUrl,
@@ -715,9 +1017,12 @@ object YoutubeExtractor {
           )
         }
       } else {
-        val extMode = modeByExt[extKey]
-        if (extMode != null) {
-          verified.add(fmt.copy(downloadMode = extMode))
+        val extResolved = modeByExt[extKey]
+        if (extResolved != null) {
+          val (extMode, extUa) = extResolved
+          val resolvedUa = fmt.requiredUserAgent ?: extUa
+          StreamHeaderRegistry.register(fmt.streamUrl, resolvedUa)
+          verified.add(fmt.copy(requiredUserAgent = resolvedUa, downloadMode = extMode))
         }
       }
     }

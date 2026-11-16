@@ -104,7 +104,7 @@ class AurixViewModel(application: Application) : AndroidViewModel(application) {
   val githubRepo = prefsManager.githubRepo.stateIn(viewModelScope, SharingStarted.Lazily, "AURIX")
 
   // Search-Only Mode & YouTube Analyze/Download States
-  private val _searchMode = MutableStateFlow("itunes") // "itunes" | "youtube"
+  private val _searchMode = MutableStateFlow("youtube_search") // "youtube_search" | "youtube" | "itunes"
   val searchMode: StateFlow<String> = _searchMode
 
   private val _searchQuery = MutableStateFlow("")
@@ -127,6 +127,17 @@ class AurixViewModel(application: Application) : AndroidViewModel(application) {
 
   private val _youtubeError = MutableStateFlow<String?>(null)
   val youtubeError: StateFlow<String?> = _youtubeError
+
+  private val _resolvingSongId = MutableStateFlow<String?>(null)
+  val resolvingSongId: StateFlow<String?> = _resolvingSongId
+
+  private val _formatSheetState = MutableStateFlow<YoutubeFormatSheetState>(YoutubeFormatSheetState.Closed)
+  val formatSheetState: StateFlow<YoutubeFormatSheetState> = _formatSheetState
+
+  private val youtubeExtractCache = ConcurrentHashMap<String, Pair<Long, ExtractedYoutubeData>>()
+  private val retriedPlaybackIds = ConcurrentHashMap.newKeySet<String>()
+  private var playResolveJob: Job? = null
+  private var formatSheetJob: Job? = null
 
   // GitHub Smart Update States (backed by actual Android PackageManager info)
   private val _installedAppInfo = MutableStateFlow(GitHubUpdater.getInstalledAppInfo(application))
@@ -194,7 +205,7 @@ class AurixViewModel(application: Application) : AndroidViewModel(application) {
     val nonce: Long
   )
 
-  private val _searchModeEnum = MutableStateFlow(SearchMode.ITunes30s)
+  private val _searchModeEnum = MutableStateFlow(SearchMode.YouTubeSearch)
   private val _searchDispatch = MutableSharedFlow<SearchDispatch>(extraBufferCapacity = 16)
   private var searchDispatchNonce = 0L
   private val _searchUiState = MutableStateFlow<SearchUiState>(SearchUiState.Idle)
@@ -777,6 +788,14 @@ class AurixViewModel(application: Application) : AndroidViewModel(application) {
             }
           }
         }
+      } else if (
+        playbackState == Player.STATE_ENDED &&
+        controller.mediaItemCount <= 1 &&
+        _queue.value.size > 1 &&
+        !_repeatEnabled.value &&
+        _resolvingSongId.value == null
+      ) {
+        nextTrack()
       }
       _currentPosition.value = controller.currentPosition.coerceAtLeast(0L)
     }
@@ -784,6 +803,29 @@ class AurixViewModel(application: Application) : AndroidViewModel(application) {
     override fun onPlayerError(error: PlaybackException) {
       _isPlaying.value = false
       flushActivePlaySessionDuration()
+      val failing = _rawCurrentSong.value
+      if (failing != null && failing.id.startsWith("yt_") && retriedPlaybackIds.add(failing.id)) {
+        val videoId = failing.id.removePrefix("yt_")
+        youtubeExtractCache.remove(videoId)
+        val fallbackQueue = _queue.value
+        playResolveJob?.cancel()
+        playResolveJob = viewModelScope.launch {
+          _resolvingSongId.value = failing.id
+          val extracted = getOrExtractYoutubeData(videoId, forceRefresh = true)
+          val bestFmt = pickBestPlayableFormat(extracted?.audioFormats.orEmpty())
+          _resolvingSongId.value = null
+          if (bestFmt != null) {
+            StreamHeaderRegistry.register(bestFmt.streamUrl, bestFmt.requiredUserAgent)
+            val refreshedSong = failing.copy(streamUrl = bestFmt.streamUrl)
+            val updatedQueue = fallbackQueue.map { if (it.id == refreshedSong.id) refreshedSong else it }
+            playSong(refreshedSong, updatedQueue)
+          } else {
+            Toast.makeText(getApplication(), "Unable to stream this YouTube track. Try downloading a format.", Toast.LENGTH_SHORT).show()
+          }
+        }
+      } else if (failing != null && failing.id.startsWith("yt_")) {
+        Toast.makeText(getApplication(), "Stream failed. Try another track or format.", Toast.LENGTH_SHORT).show()
+      }
     }
   }
 
@@ -972,7 +1014,9 @@ class AurixViewModel(application: Application) : AndroidViewModel(application) {
   }
 
   private fun startQueueOnController(controller: MediaController, song: Song, resolvedQueue: List<Song>) {
-    val playableQueue = resolvedQueue.filter { it.streamUrl.isNotBlank() }.ifEmpty { listOf(song) }
+    val playableQueue = resolvedQueue
+      .filter { it.streamUrl.isNotBlank() && (!isUnresolvedYoutubeWatchUrl(it) || it.id == song.id) }
+      .ifEmpty { listOf(song) }
     val startIndex = playableQueue.indexOfFirst { it.id == song.id }.coerceAtLeast(0)
     val mediaItems = playableQueue.map { buildMediaItem(it) }
 
@@ -986,15 +1030,19 @@ class AurixViewModel(application: Application) : AndroidViewModel(application) {
   }
 
   fun setSearchMode(mode: String) {
-    val nextEnum = if (mode == "youtube") SearchMode.YouTubeLink else SearchMode.ITunes30s
+    val nextEnum = when (mode) {
+      "youtube_search" -> SearchMode.YouTubeSearch
+      "youtube" -> SearchMode.YouTubeLink
+      else -> SearchMode.ITunes30s
+    }
     val changed = _searchMode.value != mode
     _searchMode.value = mode
     _searchModeEnum.value = nextEnum
     if (changed) {
-      val currentQ = if (nextEnum == SearchMode.ITunes30s) _searchQuery.value else _youtubeUrl.value
+      val currentQ = if (nextEnum == SearchMode.YouTubeLink) _youtubeUrl.value else _searchQuery.value
       if (currentQ.isBlank()) {
         _searchDispatch.tryEmit(SearchDispatch("", nextEnum, 0L, ++searchDispatchNonce))
-      } else if (nextEnum == SearchMode.ITunes30s) {
+      } else if (nextEnum == SearchMode.ITunes30s || nextEnum == SearchMode.YouTubeSearch) {
         _searchDispatch.tryEmit(SearchDispatch(currentQ, nextEnum, 0L, ++searchDispatchNonce))
       } else if (_youtubeAnalysis.value == null && !_isAnalyzingYoutube.value) {
         analyzeYoutubeUrl()
@@ -1152,12 +1200,303 @@ class AurixViewModel(application: Application) : AndroidViewModel(application) {
           durationSeconds = videoDurSec,
           formats = fullFormats
         )
+        extracted?.let { youtubeExtractCache[videoId] = System.currentTimeMillis() to it }
         _youtubeAnalysis.value = analysis
         _selectedYoutubeFormatId.value = fullFormats.first().id
       } catch (_: Exception) {
         _youtubeError.value = "Unable to analyze YouTube link. Check your network connection."
       } finally {
         _isAnalyzingYoutube.value = false
+      }
+    }
+  }
+
+  fun playAnalyzedYoutubeTrack() {
+    val analysis = _youtubeAnalysis.value ?: return
+    val selectedId = _selectedYoutubeFormatId.value
+    val selectedFmt = analysis.formats.firstOrNull { it.id == selectedId }
+    val playableFmt = selectedFmt?.takeIf { it.extension.equals("m4a", ignoreCase = true) || it.extension.equals("mp4", ignoreCase = true) }
+      ?: pickBestPlayableFormat(analysis.formats)
+      ?: selectedFmt
+      ?: return
+    StreamHeaderRegistry.register(playableFmt.streamUrl, playableFmt.requiredUserAgent)
+    val song = TrackMetadataClassifier.enrich(
+      Song(
+        id = "yt_${analysis.videoId}",
+        title = analysis.matchedTrackTitle,
+        artist = analysis.matchedArtist,
+        artworkUrl = analysis.thumbnailUrl,
+        durationSeconds = analysis.durationSeconds,
+        streamUrl = playableFmt.streamUrl,
+        source = "YouTube",
+        isFavorite = "yt_${analysis.videoId}" in favoriteIds.value,
+        fullDurationSeconds = analysis.durationSeconds
+      )
+    )
+    playSong(song, listOf(song))
+  }
+
+  private fun isUnresolvedYoutubeWatchUrl(song: Song): Boolean {
+    return song.id.startsWith("yt_") &&
+      (song.streamUrl.contains("youtube.com/watch", ignoreCase = true) ||
+        song.streamUrl.contains("youtu.be/", ignoreCase = true))
+  }
+
+  private fun pickBestPlayableFormat(formats: List<AudioFormatOption>): AudioFormatOption? {
+    if (formats.isEmpty()) return null
+    val m4a = formats.filter { it.extension.equals("m4a", ignoreCase = true) }
+    if (m4a.isNotEmpty()) return m4a.first()
+    val mp4 = formats.filter { it.extension.equals("mp4", ignoreCase = true) }
+    if (mp4.isNotEmpty()) return mp4.first()
+    return formats.first()
+  }
+
+  private suspend fun getOrExtractYoutubeData(
+    videoId: String,
+    forceRefresh: Boolean = false
+  ): ExtractedYoutubeData? {
+    val now = System.currentTimeMillis()
+    if (!forceRefresh) {
+      val cached = youtubeExtractCache[videoId]
+      if (cached != null && now - cached.first < 15 * 60_000L && cached.second.audioFormats.isNotEmpty()) {
+        return cached.second
+      }
+    }
+    val extracted = YoutubeExtractor.extractFullAudio(videoId)
+    if (extracted != null && extracted.audioFormats.isNotEmpty()) {
+      youtubeExtractCache[videoId] = now to extracted
+    }
+    return extracted
+  }
+
+  fun openYoutubeFormatSheet(song: Song) {
+    val videoId = if (song.id.startsWith("yt_")) {
+      song.id.removePrefix("yt_")
+    } else {
+      YoutubeExtractor.extractVideoId(song.streamUrl)
+    }
+    if (videoId.isNullOrBlank()) {
+      downloadSong(getApplication(), song)
+      return
+    }
+
+    formatSheetJob?.cancel()
+    _formatSheetState.value = YoutubeFormatSheetState.Loading(song = song, videoId = videoId)
+    formatSheetJob = viewModelScope.launch {
+      try {
+        val extracted = getOrExtractYoutubeData(videoId)
+        val formats = extracted?.audioFormats.orEmpty()
+        if (extracted == null || formats.isEmpty()) {
+          val reason = extracted?.extractorError?.takeIf { it.isNotBlank() }
+          _formatSheetState.value = YoutubeFormatSheetState.Error(
+            song = song,
+            videoId = videoId,
+            message = reason ?: "Could not load audio formats for this track."
+          )
+          return@launch
+        }
+        val durSec = extracted.durationSeconds.takeIf { it > 0L } ?: song.durationSeconds
+        val analysis = YoutubeAnalysisResult(
+          videoId = videoId,
+          originalUrl = "https://www.youtube.com/watch?v=$videoId",
+          videoTitle = extracted.title.ifBlank { song.title },
+          channelName = extracted.author.ifBlank { song.artist },
+          thumbnailUrl = extracted.thumbnailUrl.ifBlank { song.artworkUrl },
+          matchedTrackTitle = song.title,
+          matchedArtist = song.artist,
+          durationSeconds = durSec,
+          formats = formats
+        )
+        _formatSheetState.value = YoutubeFormatSheetState.Ready(
+          song = song.copy(durationSeconds = durSec, fullDurationSeconds = durSec),
+          analysis = analysis,
+          selectedFormatId = formats.first().id,
+          downloadState = YoutubeDownloadState.Idle
+        )
+      } catch (ce: CancellationException) {
+        throw ce
+      } catch (_: Exception) {
+        _formatSheetState.value = YoutubeFormatSheetState.Error(
+          song = song,
+          videoId = videoId,
+          message = "Unable to load formats. Check your connection."
+        )
+      }
+    }
+  }
+
+  fun closeYoutubeFormatSheet() {
+    val current = _formatSheetState.value
+    if (current is YoutubeFormatSheetState.Ready && current.downloadState is YoutubeDownloadState.Downloading) {
+      // Allow closing only if not actively downloading, or keep closing safe without losing state
+      formatSheetJob?.cancel()
+    } else {
+      formatSheetJob?.cancel()
+    }
+    _formatSheetState.value = YoutubeFormatSheetState.Closed
+  }
+
+  fun selectFormatSheetOption(formatId: String) {
+    val current = _formatSheetState.value
+    if (current is YoutubeFormatSheetState.Ready && current.downloadState !is YoutubeDownloadState.Downloading) {
+      _formatSheetState.value = current.copy(
+        selectedFormatId = formatId,
+        downloadState = if (current.downloadState is YoutubeDownloadState.Error) {
+          YoutubeDownloadState.Idle
+        } else {
+          current.downloadState
+        }
+      )
+    }
+  }
+
+  fun playFromFormatSheet() {
+    val current = _formatSheetState.value
+    if (current is YoutubeFormatSheetState.Ready) {
+      val dl = current.downloadState
+      if (dl is YoutubeDownloadState.Saved) {
+        playSong(dl.song, listOf(dl.song))
+        return
+      }
+      val selected = current.analysis.formats.firstOrNull { it.id == current.selectedFormatId }
+      val fmt = selected?.takeIf { it.extension.equals("m4a", ignoreCase = true) || it.extension.equals("mp4", ignoreCase = true) }
+        ?: pickBestPlayableFormat(current.analysis.formats)
+        ?: selected
+      if (fmt != null) {
+        StreamHeaderRegistry.register(fmt.streamUrl, fmt.requiredUserAgent)
+        val playable = current.song.copy(
+          streamUrl = fmt.streamUrl,
+          durationSeconds = current.analysis.durationSeconds.takeIf { it > 0L } ?: current.song.durationSeconds,
+          fullDurationSeconds = current.analysis.durationSeconds.takeIf { it > 0L } ?: current.song.fullDurationSeconds
+        )
+        playSong(playable, listOf(playable))
+      }
+    } else if (current is YoutubeFormatSheetState.Loading) {
+      playSong(current.song, listOf(current.song))
+    }
+  }
+
+  fun downloadFromFormatSheet(context: Context) {
+    val current = _formatSheetState.value
+    if (current !is YoutubeFormatSheetState.Ready) return
+    if (current.downloadState is YoutubeDownloadState.Downloading) return
+
+    val analysis = current.analysis
+    val format = analysis.formats.firstOrNull { it.id == current.selectedFormatId }
+      ?: analysis.formats.firstOrNull()
+      ?: return
+
+    viewModelScope.launch {
+      var activeFormat = format
+      var formatLabel = "${activeFormat.formatLabel} (${activeFormat.qualityLabel})"
+
+      fun updateDlState(dlState: YoutubeDownloadState) {
+        val latest = _formatSheetState.value
+        if (latest is YoutubeFormatSheetState.Ready && latest.analysis.videoId == analysis.videoId) {
+          _formatSheetState.value = latest.copy(downloadState = dlState)
+        }
+      }
+
+      updateDlState(YoutubeDownloadState.Downloading(0.02f, 0L, activeFormat.contentLengthBytes, formatLabel))
+
+      var downloadRes = SongDownloader.downloadFormatToApp(
+        context = context,
+        title = analysis.matchedTrackTitle,
+        artist = analysis.matchedArtist,
+        format = activeFormat
+      ) { progressInfo ->
+        updateDlState(
+          YoutubeDownloadState.Downloading(
+            progress = progressInfo.fraction,
+            downloadedBytes = progressInfo.downloadedBytes,
+            totalBytes = progressInfo.totalBytes,
+            formatLabel = formatLabel
+          )
+        )
+      }
+
+      if (downloadRes.isFailure) {
+        updateDlState(
+          YoutubeDownloadState.Downloading(
+            progress = 0.04f,
+            downloadedBytes = 0L,
+            totalBytes = activeFormat.contentLengthBytes,
+            formatLabel = "Switching stream mirror..."
+          )
+        )
+        val refreshed = YoutubeExtractor.extractFreshWorkingFormat(
+          videoId = analysis.videoId,
+          preferredExtension = activeFormat.extension,
+          failedFormatId = activeFormat.id
+        )
+        if (refreshed != null) {
+          activeFormat = refreshed
+          formatLabel = "${activeFormat.formatLabel} (${activeFormat.qualityLabel})"
+          downloadRes = SongDownloader.downloadFormatToApp(
+            context = context,
+            title = analysis.matchedTrackTitle,
+            artist = analysis.matchedArtist,
+            format = activeFormat
+          ) { progressInfo ->
+            updateDlState(
+              YoutubeDownloadState.Downloading(
+                progress = progressInfo.fraction,
+                downloadedBytes = progressInfo.downloadedBytes,
+                totalBytes = progressInfo.totalBytes,
+                formatLabel = formatLabel
+              )
+            )
+          }
+        }
+      }
+
+      downloadRes.onSuccess { savedAudio ->
+        _downloadedSongIds.value = _downloadedSongIds.value + current.song.id
+        val cachedCover = SongDownloader.cacheRemoteArtwork(
+          context = context,
+          songId = savedAudio.uri.toString(),
+          imageUrl = analysis.thumbnailUrl
+        )
+        val artwork = cachedCover ?: analysis.thumbnailUrl.ifBlank { APP_ICON_ARTWORK }
+        val finalDuration = savedAudio.durationSeconds
+          .takeIf { it > 0L }
+          ?: analysis.durationSeconds.takeIf { it > 0L }
+          ?: activeFormat.durationSeconds
+
+        val entity = LocalSongEntity(
+          id = savedAudio.uri.toString(),
+          title = analysis.matchedTrackTitle,
+          artist = analysis.matchedArtist,
+          artworkUrl = artwork,
+          durationSeconds = finalDuration,
+          streamUrl = savedAudio.uri.toString(),
+          source = "Downloaded"
+        )
+        dao.insertLocalSong(entity)
+
+        val savedSong = TrackMetadataClassifier.enrich(
+          Song(
+            id = entity.id,
+            title = entity.title,
+            artist = entity.artist,
+            artworkUrl = entity.artworkUrl,
+            durationSeconds = entity.durationSeconds,
+            streamUrl = entity.streamUrl,
+            source = entity.source,
+            isFavorite = entity.id in favoriteIds.value,
+            fullDurationSeconds = entity.durationSeconds
+          )
+        )
+        updateDlState(YoutubeDownloadState.Saved(savedSong))
+        Toast.makeText(
+          context,
+          "Saved full song (${YoutubeExtractor.formatDurationShort(finalDuration)}): ${savedSong.title}",
+          Toast.LENGTH_LONG
+        ).show()
+      }.onFailure { err ->
+        val msg = err.localizedMessage ?: "Download failed"
+        updateDlState(YoutubeDownloadState.Error(msg))
+        Toast.makeText(context, msg, Toast.LENGTH_LONG).show()
       }
     }
   }
@@ -1219,6 +1558,7 @@ class AurixViewModel(application: Application) : AndroidViewModel(application) {
       }
 
       downloadRes.onSuccess { savedAudio ->
+        _downloadedSongIds.value = _downloadedSongIds.value + "yt_${analysis.videoId}"
         val cachedCover = SongDownloader.cacheRemoteArtwork(
           context = context,
           songId = savedAudio.uri.toString(),
@@ -1764,6 +2104,59 @@ class AurixViewModel(application: Application) : AndroidViewModel(application) {
         _searchUiState.value = SearchUiState.Loading(mode = dispatch.mode, query = trimmed)
         try {
           when (dispatch.mode) {
+            SearchMode.YouTubeSearch -> {
+              val isLink = (trimmed.contains("youtube.com", ignoreCase = true) || trimmed.contains("youtu.be", ignoreCase = true))
+              val pastedVideoId = if (isLink) YoutubeExtractor.extractVideoId(trimmed) else null
+              val mapped = if (!pastedVideoId.isNullOrBlank()) {
+                val extracted = getOrExtractYoutubeData(pastedVideoId)
+                val bestFmt = pickBestPlayableFormat(extracted?.audioFormats.orEmpty())
+                if (extracted != null && bestFmt != null) {
+                  val (parsedTitle, parsedArtist) = parseYoutubeTitleAndArtist(extracted.title, extracted.author)
+                  StreamHeaderRegistry.register(bestFmt.streamUrl, bestFmt.requiredUserAgent)
+                  listOf(
+                    TrackMetadataClassifier.enrich(
+                      Song(
+                        id = "yt_$pastedVideoId",
+                        title = parsedTitle.ifBlank { extracted.title },
+                        artist = parsedArtist.ifBlank { extracted.author.ifBlank { "YouTube" } },
+                        artworkUrl = extracted.thumbnailUrl,
+                        durationSeconds = extracted.durationSeconds,
+                        streamUrl = bestFmt.streamUrl,
+                        source = "YouTube",
+                        fullDurationSeconds = extracted.durationSeconds
+                      )
+                    )
+                  )
+                } else {
+                  emptyList()
+                }
+              } else {
+                YoutubeExtractor.searchSongs(query = trimmed, limit = 25).map { item ->
+                  val (parsedTitle, parsedArtist) = parseYoutubeTitleAndArtist(item.rawTitle, item.author)
+                  TrackMetadataClassifier.enrich(
+                    Song(
+                      id = "yt_${item.videoId}",
+                      title = parsedTitle.ifBlank { item.rawTitle },
+                      artist = parsedArtist.ifBlank { item.author.ifBlank { "YouTube" } },
+                      artworkUrl = item.thumbnailUrl,
+                      durationSeconds = item.durationSeconds,
+                      streamUrl = "https://www.youtube.com/watch?v=${item.videoId}",
+                      source = "YouTube",
+                      fullDurationSeconds = item.durationSeconds
+                    )
+                  )
+                }
+              }
+              _rawSearchResults.value = mapped
+              val visible = mapped
+                .filter { isTrackVisible(it, hiddenSongIds.value, blockedArtists.value) }
+                .map { it.copy(isFavorite = it.id in favoriteIds.value) }
+              _searchUiState.value = if (visible.isEmpty()) {
+                SearchUiState.Empty
+              } else {
+                SearchUiState.Results(visible)
+              }
+            }
             SearchMode.ITunes30s -> {
               val res = NetworkClient.itunesApi.searchSongs(term = trimmed, limit = 30)
               val mapped = mapItunesTracks(res.results)
@@ -1828,7 +2221,7 @@ class AurixViewModel(application: Application) : AndroidViewModel(application) {
       SearchDispatch(
         query = query,
         mode = _searchModeEnum.value,
-        debounceMs = if (immediate) 0L else 400L,
+        debounceMs = if (immediate) 0L else 420L,
         nonce = ++searchDispatchNonce
       )
     )
@@ -1849,12 +2242,61 @@ class AurixViewModel(application: Application) : AndroidViewModel(application) {
 
   fun playSong(song: Song, newQueue: List<Song> = _rawFeatured.value.ifEmpty { listOf(song) }) {
     if (song.streamUrl.isBlank()) {
-      Toast.makeText(getApplication(), "No playable 30s preview URL for this track.", Toast.LENGTH_SHORT).show()
+      Toast.makeText(getApplication(), "No playable stream URL for this track.", Toast.LENGTH_SHORT).show()
       return
     }
 
     val resolvedQueue = if (newQueue.any { it.id == song.id }) newQueue else listOf(song) + newQueue
     _queue.value = resolvedQueue
+
+    if (isUnresolvedYoutubeWatchUrl(song)) {
+      playResolveJob?.cancel()
+      _rawCurrentSong.value = song
+      _resolvingSongId.value = song.id
+      val videoId = song.id.removePrefix("yt_")
+      playResolveJob = viewModelScope.launch {
+        try {
+          val extracted = getOrExtractYoutubeData(videoId)
+          val bestFmt = pickBestPlayableFormat(extracted?.audioFormats.orEmpty())
+          if (bestFmt == null) {
+            _resolvingSongId.value = null
+            Toast.makeText(getApplication(), "Could not load YouTube audio stream. Try downloading a format.", Toast.LENGTH_SHORT).show()
+            return@launch
+          }
+          StreamHeaderRegistry.register(bestFmt.streamUrl, bestFmt.requiredUserAgent)
+          val resolvedDur = extracted?.durationSeconds?.takeIf { it > 0L }
+            ?: bestFmt.durationSeconds.takeIf { it > 0L }
+            ?: song.durationSeconds
+          val resolvedSong = song.copy(
+            streamUrl = bestFmt.streamUrl,
+            durationSeconds = resolvedDur,
+            fullDurationSeconds = resolvedDur
+          )
+          val updatedQueue = resolvedQueue.map { if (it.id == resolvedSong.id) resolvedSong else it }
+          _queue.value = updatedQueue
+          _resolvingSongId.value = null
+          retriedPlaybackIds.remove(resolvedSong.id)
+          onTrackActivated(resolvedSong)
+
+          val controller = mediaController
+          if (controller == null) {
+            pendingPlayRequest = resolvedSong to updatedQueue
+          } else {
+            startQueueOnController(controller, resolvedSong, updatedQueue)
+          }
+        } catch (ce: CancellationException) {
+          throw ce
+        } catch (_: Exception) {
+          _resolvingSongId.value = null
+          Toast.makeText(getApplication(), "Unable to stream this track right now.", Toast.LENGTH_SHORT).show()
+        }
+      }
+      return
+    }
+
+    playResolveJob?.cancel()
+    _resolvingSongId.value = null
+    retriedPlaybackIds.remove(song.id)
     onTrackActivated(song)
 
     val controller = mediaController
