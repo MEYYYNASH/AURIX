@@ -4,6 +4,7 @@ import android.content.Context
 import androidx.datastore.preferences.core.booleanPreferencesKey
 import androidx.datastore.preferences.core.edit
 import androidx.datastore.preferences.core.intPreferencesKey
+import androidx.datastore.preferences.core.longPreferencesKey
 import androidx.datastore.preferences.core.stringPreferencesKey
 import androidx.datastore.preferences.core.stringSetPreferencesKey
 import androidx.datastore.preferences.preferencesDataStore
@@ -30,6 +31,8 @@ class PreferencesManager(private val context: Context) {
     val EQ_BASS_BOOST = intPreferencesKey("eq_bass_boost")
     val CROSSFADE_SECONDS = intPreferencesKey("crossfade_seconds")
     val CROSSFADE_MANUAL_SKIP = booleanPreferencesKey("crossfade_manual_skip")
+    val LAST_SEEN_VERSION_CODE = longPreferencesKey("last_seen_version_code")
+    val UPDATE_DOWNLOAD_META = stringPreferencesKey("update_download_meta")
   }
 
   val themeMode: Flow<String> = context.dataStore.data.map { prefs -> prefs[THEME_MODE] ?: "system" }
@@ -50,6 +53,8 @@ class PreferencesManager(private val context: Context) {
   val eqBassBoost: Flow<Int> = context.dataStore.data.map { prefs -> prefs[EQ_BASS_BOOST] ?: 0 }
   val crossfadeSeconds: Flow<Int> = context.dataStore.data.map { prefs -> prefs[CROSSFADE_SECONDS] ?: 0 }
   val crossfadeManualSkip: Flow<Boolean> = context.dataStore.data.map { prefs -> prefs[CROSSFADE_MANUAL_SKIP] ?: true }
+  val lastSeenVersionCode: Flow<Long> = context.dataStore.data.map { prefs -> prefs[LAST_SEEN_VERSION_CODE] ?: 0L }
+  val updateDownloadMeta: Flow<String> = context.dataStore.data.map { prefs -> prefs[UPDATE_DOWNLOAD_META] ?: "" }
 
   suspend fun setThemeMode(mode: String) { context.dataStore.edit { it[THEME_MODE] = mode } }
   suspend fun setAccentColor(color: String) { context.dataStore.edit { it[ACCENT_COLOR] = color } }
@@ -100,6 +105,19 @@ class PreferencesManager(private val context: Context) {
     context.dataStore.edit { prefs ->
       prefs[CROSSFADE_SECONDS] = durationSeconds.coerceIn(0, 12)
       prefs[CROSSFADE_MANUAL_SKIP] = fadeOnManualSkip
+    }
+  }
+
+  suspend fun setLastSeenVersionCode(versionCode: Long) {
+    context.dataStore.edit { prefs ->
+      prefs[LAST_SEEN_VERSION_CODE] = versionCode
+    }
+  }
+
+  suspend fun setUpdateDownloadMeta(metaJson: String) {
+    context.dataStore.edit { prefs ->
+      if (metaJson.isBlank()) prefs.remove(UPDATE_DOWNLOAD_META)
+      else prefs[UPDATE_DOWNLOAD_META] = metaJson
     }
   }
 }

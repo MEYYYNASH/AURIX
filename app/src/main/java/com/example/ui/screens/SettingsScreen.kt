@@ -1,15 +1,24 @@
 package com.example.ui.screens
 
 import android.content.Context
+import androidx.compose.animation.AnimatedContent
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.animateContentSize
+import androidx.compose.animation.core.FastOutSlowInEasing
+import androidx.compose.animation.core.RepeatMode
+import androidx.compose.animation.core.animateFloat
 import androidx.compose.animation.core.animateFloatAsState
+import androidx.compose.animation.core.infiniteRepeatable
+import androidx.compose.animation.core.rememberInfiniteTransition
 import androidx.compose.animation.core.snap
 import androidx.compose.animation.core.tween
 import androidx.compose.animation.expandVertically
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
 import androidx.compose.animation.shrinkVertically
+import androidx.compose.animation.slideInVertically
+import androidx.compose.animation.slideOutVertically
+import androidx.compose.animation.togetherWith
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
@@ -25,8 +34,10 @@ import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.lerp
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.res.stringResource
@@ -38,15 +49,19 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import com.example.BuildConfig
 import com.example.R
-import com.example.data.ApkDownloadState
-import com.example.data.GitHubRelease
 import com.example.data.InstalledAppInfo
-import com.example.data.UpdateCheckStatus
+import com.example.data.RemoteVersionInfo
+import com.example.data.UpdateMainAction
+import com.example.data.UpdateManager
+import com.example.data.UpdateStage
+import com.example.data.UpdateUiState
 import com.example.playback.CrossfadeSettings
 import com.example.playback.EqPreset
 import com.example.playback.EqualizerUiState
 import com.example.ui.theme.*
+import kotlin.math.roundToInt
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -60,16 +75,16 @@ fun SettingsScreen(
   hasCurrentSong: Boolean,
   githubOwner: String,
   githubRepo: String,
-  installedAppInfo: InstalledAppInfo,
-  updateCheckStatus: UpdateCheckStatus,
-  updateStatus: String,
-  latestRelease: GitHubRelease?,
-  apkDownloadState: ApkDownloadState,
+  updateUiState: UpdateUiState,
   onGithubOwnerChanged: (String) -> Unit,
   onGithubRepoChanged: (String) -> Unit,
   onCheckUpdate: (Context) -> Unit,
-  onDownloadUpdate: (Context) -> Unit,
-  onInstallUpdate: (Context) -> Unit,
+  onDownloadOrInstallUpdate: (Context) -> Unit,
+  onPauseDownload: () -> Unit,
+  onCancelDownload: () -> Unit,
+  onRetryUpdate: () -> Unit,
+  onOpenInstallSettings: () -> Unit,
+  onRestartApp: (Context) -> Unit,
   onOpenGitHubRepo: (Context) -> Unit,
   onThemeChanged: (String) -> Unit,
   onAccentChanged: (String) -> Unit,
@@ -109,17 +124,10 @@ fun SettingsScreen(
   var showEqualizerSheet by remember { mutableStateOf(false) }
   var showCrossfadeSheet by remember { mutableStateOf(false) }
 
-  val isDownloading = apkDownloadState is ApkDownloadState.Downloading
-  val isValidatedReady = apkDownloadState is ApkDownloadState.ValidatedReady
-  val isUpdateAvailable = updateCheckStatus is UpdateCheckStatus.UpdateAvailable
-  val isMandatory = (updateCheckStatus as? UpdateCheckStatus.UpdateAvailable)?.isMandatory == true
-  val isUpToDate = updateCheckStatus is UpdateCheckStatus.UpToDate
-  val isDowngradeBlocked = updateCheckStatus is UpdateCheckStatus.DowngradeBlocked
-
   val animatedProgress by animateFloatAsState(
-    targetValue = when (apkDownloadState) {
-      is ApkDownloadState.Downloading -> if (apkDownloadState.progress >= 0f) apkDownloadState.progress else 0.35f
-      is ApkDownloadState.ValidatedReady -> 1f
+    targetValue = when (updateUiState.stage) {
+      UpdateStage.Downloading, UpdateStage.Available -> if (updateUiState.progress >= 0f) updateUiState.progress else 0.35f
+      UpdateStage.Verifying, UpdateStage.Installing, UpdateStage.Done -> 1f
       else -> 0f
     },
     animationSpec = if (reducedMotion) snap() else tween(260),
@@ -168,7 +176,7 @@ fun SettingsScreen(
           color = MaterialTheme.colorScheme.primary.copy(alpha = 0.14f)
         ) {
           Text(
-            text = "v${installedAppInfo.versionName}",
+            text = "v${updateUiState.installed.versionName}",
             style = MaterialTheme.typography.bodySmall.copy(fontWeight = FontWeight.Bold),
             color = MaterialTheme.colorScheme.primary,
             modifier = Modifier.padding(horizontal = 12.dp, vertical = 6.dp)
@@ -181,18 +189,26 @@ fun SettingsScreen(
     item {
       AppUpdateReleaseCard(
         logoState = logoState,
-        installedAppInfo = installedAppInfo,
-        updateCheckStatus = updateCheckStatus,
-        updateStatus = updateStatus,
-        latestRelease = latestRelease,
-        apkDownloadState = apkDownloadState,
+        updateUiState = updateUiState,
         animatedProgress = animatedProgress,
         darkTheme = darkTheme,
         reducedMotion = reducedMotion,
         onCheckUpdate = { onCheckUpdate(context) },
         onOpenReleaseNotes = { showReleaseNotesSheet = true },
-        onDownloadUpdate = { onDownloadUpdate(context) },
-        onInstallUpdate = { onInstallUpdate(context) },
+        onMainAction = {
+          when (updateUiState.mainAction) {
+            UpdateMainAction.DownloadAndInstall,
+            UpdateMainAction.ResumeDownload,
+            UpdateMainAction.InstallVerifiedApk -> onDownloadOrInstallUpdate(context)
+            UpdateMainAction.OpenInstallSettings -> onOpenInstallSettings()
+            UpdateMainAction.RestartApp -> onRestartApp(context)
+            UpdateMainAction.Retry -> onRetryUpdate()
+            UpdateMainAction.None -> Unit
+          }
+        },
+        onPauseDownload = onPauseDownload,
+        onResumeDownload = { onDownloadOrInstallUpdate(context) },
+        onCancelDownload = onCancelDownload,
         onOpenGitHubRepo = { onOpenGitHubRepo(context) }
       )
     }
@@ -500,8 +516,9 @@ fun SettingsScreen(
           Text(
             text = stringResource(
               id = R.string.settings_about_body,
-              installedAppInfo.versionName,
-              installedAppInfo.versionCode
+              updateUiState.installed.versionName,
+              updateUiState.installed.versionCode,
+              BuildConfig.RELEASE_DATE
             ),
             style = MaterialTheme.typography.bodyMedium.copy(lineHeight = 22.sp),
             color = MaterialTheme.colorScheme.onSurfaceVariant
@@ -511,41 +528,19 @@ fun SettingsScreen(
     }
   }
 
-  if (showReleaseNotesSheet && latestRelease != null) {
-    ModalBottomSheet(
-      onDismissRequest = { showReleaseNotesSheet = false },
-      shape = RoundedCornerShape(topStart = 28.dp, topEnd = 28.dp)
-    ) {
-      Column(
-        modifier = Modifier
-          .fillMaxWidth()
-          .padding(horizontal = 24.dp, vertical = 16.dp)
-          .windowInsetsPadding(WindowInsets.navigationBars),
-        verticalArrangement = Arrangement.spacedBy(12.dp)
-      ) {
-        Text(
-          text = stringResource(id = R.string.settings_release_notes_title, latestRelease.tagName, latestRelease.versionCode),
-          style = MaterialTheme.typography.titleLarge.copy(fontWeight = FontWeight.Bold, lineHeight = 30.sp),
-          color = MaterialTheme.colorScheme.onSurface
-        )
-        Text(
-          text = latestRelease.body.ifBlank { stringResource(id = R.string.settings_no_changelog) },
-          style = MaterialTheme.typography.bodyMedium.copy(lineHeight = 22.sp),
-          color = MaterialTheme.colorScheme.onSurfaceVariant
-        )
-        if (isUpdateAvailable) {
-          Spacer(modifier = Modifier.height(6.dp))
-          Button(
-            onClick = { showReleaseNotesSheet = false; onDownloadUpdate(context) },
-            modifier = Modifier.fillMaxWidth().height(48.dp),
-            shape = RoundedCornerShape(16.dp)
-          ) {
-            Text(stringResource(id = R.string.settings_update_now, latestRelease.tagName), fontWeight = FontWeight.Bold)
-          }
-        }
-        Spacer(modifier = Modifier.height(8.dp))
-      }
-    }
+  if (showReleaseNotesSheet) {
+    val canDownloadUpdate = updateUiState.latestRelease != null &&
+      updateUiState.latestRelease.versionCode > updateUiState.installed.versionCode &&
+      updateUiState.stage != UpdateStage.Downloading &&
+      updateUiState.stage != UpdateStage.Done
+    ReleaseNotesBottomSheet(
+      latestRelease = updateUiState.latestRelease,
+      installedVersionName = updateUiState.installed.versionName,
+      installedVersionCode = updateUiState.installed.versionCode,
+      canDownloadUpdate = canDownloadUpdate,
+      onDownloadAndInstall = { onDownloadOrInstallUpdate(context) },
+      onDismiss = { showReleaseNotesSheet = false }
+    )
   }
 
   if (showEqualizerSheet) {
@@ -574,28 +569,99 @@ fun SettingsScreen(
 @Composable
 fun AppUpdateReleaseCard(
   logoState: UpdateLogoState,
-  installedAppInfo: InstalledAppInfo,
-  updateCheckStatus: UpdateCheckStatus,
-  updateStatus: String,
-  latestRelease: GitHubRelease?,
-  apkDownloadState: ApkDownloadState,
+  updateUiState: UpdateUiState,
   animatedProgress: Float = 0f,
   darkTheme: Boolean = true,
   reducedMotion: Boolean = false,
   onCheckUpdate: () -> Unit,
   onOpenReleaseNotes: () -> Unit,
-  onDownloadUpdate: () -> Unit = {},
-  onInstallUpdate: () -> Unit = {},
+  onMainAction: () -> Unit = {},
+  onPauseDownload: () -> Unit = {},
+  onResumeDownload: () -> Unit = {},
+  onCancelDownload: () -> Unit = {},
   onOpenGitHubRepo: () -> Unit,
   modifier: Modifier = Modifier
 ) {
-  val isDownloading = apkDownloadState is ApkDownloadState.Downloading
-  val isValidatedReady = apkDownloadState is ApkDownloadState.ValidatedReady
-  val isUpdateAvailable = updateCheckStatus is UpdateCheckStatus.UpdateAvailable
-  val isMandatory = (updateCheckStatus as? UpdateCheckStatus.UpdateAvailable)?.isMandatory == true
-  val isUpToDate = updateCheckStatus is UpdateCheckStatus.UpToDate
-  val isDowngradeBlocked = updateCheckStatus is UpdateCheckStatus.DowngradeBlocked
-  val isChecking = logoState == UpdateLogoState.Checking || updateCheckStatus is UpdateCheckStatus.Checking
+  val isBusy = updateUiState.isBusy
+  val isDownloading = updateUiState.stage == UpdateStage.Downloading
+  val isPausedPartial = (updateUiState.stage == UpdateStage.Available && (updateUiState.isPaused || updateUiState.canResumePartial))
+  val isVerifyingOrInstalling = updateUiState.stage == UpdateStage.Verifying || updateUiState.stage == UpdateStage.Installing
+  val isChecking = logoState == UpdateLogoState.Checking || updateUiState.stage == UpdateStage.Checking
+  val isMandatory = updateUiState.latestRelease?.isMandatory == true &&
+    updateUiState.stage == UpdateStage.Available
+
+  // Continuous sweeping shine across the card title (faster while busy)
+  var shinePhase by remember { mutableFloatStateOf(0f) }
+  LaunchedEffect(isBusy, reducedMotion) {
+    if (reducedMotion) return@LaunchedEffect
+    var lastNanos = withFrameNanos { it }
+    while (true) {
+      withFrameNanos { now ->
+        val dt = ((now - lastNanos) / 1_000_000_000f).coerceIn(0f, 0.08f)
+        lastNanos = now
+        val cyclesPerSec = if (isBusy) 0.92f else 0.34f
+        shinePhase = (shinePhase + dt * cyclesPerSec) % 1f
+      }
+    }
+  }
+
+  val baseTitleColor = MaterialTheme.colorScheme.onSurface
+  val shineAccentColor = lerp(MaterialTheme.colorScheme.primary, Color.White, if (darkTheme) 0.55f else 0.35f)
+  val titleBrush = remember(shinePhase, baseTitleColor, shineAccentColor, reducedMotion) {
+    if (reducedMotion) {
+      null
+    } else {
+      val center = -0.35f + shinePhase * 1.70f
+      val start = (center - 0.24f).coerceIn(0f, 1f)
+      val mid = center.coerceIn(0f, 1f)
+      val end = (center + 0.24f).coerceIn(0f, 1f)
+      if (end <= start) {
+        Brush.linearGradient(listOf(baseTitleColor, baseTitleColor))
+      } else {
+        Brush.linearGradient(
+          colorStops = arrayOf(
+            0f to baseTitleColor,
+            start to baseTitleColor,
+            mid to shineAccentColor,
+            end to baseTitleColor,
+            1f to baseTitleColor
+          ),
+          start = Offset(0f, 0f),
+          end = Offset(540f, 90f)
+        )
+      }
+    }
+  }
+
+  // Pulsing status pill configuration
+  val (pillLabelRes, pillColor) = when (updateUiState.stage) {
+    UpdateStage.Idle, UpdateStage.UpToDate -> R.string.settings_status_pill_up_to_date to AccentGreen
+    UpdateStage.Checking -> R.string.settings_status_pill_checking to MaterialTheme.colorScheme.primary
+    UpdateStage.Available -> R.string.settings_status_pill_available to AccentAmber
+    UpdateStage.Downloading -> if (updateUiState.isPaused) {
+      R.string.settings_status_pill_available to AccentAmber
+    } else {
+      R.string.settings_status_pill_downloading to Color(0xFF3B82F6)
+    }
+    UpdateStage.Verifying, UpdateStage.Installing -> R.string.settings_status_pill_installing to Color(0xFF10B981)
+    UpdateStage.Done -> R.string.settings_status_pill_updated to AccentGreen
+    UpdateStage.Error -> R.string.settings_status_pill_failed to MaterialTheme.colorScheme.error
+  }
+
+  val pulseTransition = rememberInfiniteTransition(label = "status_pill_dot")
+  val dotPulse by if (reducedMotion) {
+    remember { mutableFloatStateOf(0.85f) }
+  } else {
+    pulseTransition.animateFloat(
+      initialValue = 0.45f,
+      targetValue = 1f,
+      animationSpec = infiniteRepeatable(
+        animation = tween(durationMillis = if (isBusy) 650 else 1250, easing = FastOutSlowInEasing),
+        repeatMode = RepeatMode.Reverse
+      ),
+      label = "pill_dot_alpha"
+    )
+  }
 
   GlassCard(
     darkTheme = darkTheme,
@@ -608,7 +674,7 @@ fun AppUpdateReleaseCard(
       modifier = Modifier.padding(18.dp),
       verticalArrangement = Arrangement.spacedBy(14.dp)
     ) {
-      // Card Top Header: 84.dp animated UpdateLogo on left, title & blue subtitle on right
+      // Card Top Header: 84.dp animated UpdateLogo on left, sweeping title, sliding subtitle & status pill on right
       Row(
         modifier = Modifier.fillMaxWidth(),
         verticalAlignment = Alignment.CenterVertically
@@ -616,29 +682,79 @@ fun AppUpdateReleaseCard(
         UpdateLogo(
           state = logoState,
           size = 84.dp,
+          downloadProgress = updateUiState.progress,
           reducedMotion = reducedMotion,
           modifier = Modifier.testTag("settings_update_logo")
         )
         Spacer(modifier = Modifier.width(14.dp))
-        Column(modifier = Modifier.weight(1f)) {
+        Column(
+          modifier = Modifier.weight(1f),
+          verticalArrangement = Arrangement.spacedBy(5.dp)
+        ) {
           Text(
             text = stringResource(id = R.string.settings_update_title),
-            style = MaterialTheme.typography.titleMedium.copy(fontWeight = FontWeight.Bold, lineHeight = 24.sp),
-            color = MaterialTheme.colorScheme.onSurface,
+            style = MaterialTheme.typography.titleMedium.copy(
+              fontWeight = FontWeight.Bold,
+              lineHeight = 24.sp,
+              brush = titleBrush
+            ),
+            color = if (titleBrush == null) baseTitleColor else Color.Unspecified,
             maxLines = 1,
             overflow = TextOverflow.Ellipsis
           )
-          Text(
-            text = stringResource(id = R.string.settings_update_subtitle),
-            style = MaterialTheme.typography.bodySmall.copy(lineHeight = 18.sp),
-            color = MaterialTheme.colorScheme.primary,
-            maxLines = 2,
-            overflow = TextOverflow.Ellipsis
-          )
+
+          AnimatedContent(
+            targetState = updateUiState.subtitleMessage,
+            transitionSpec = {
+              if (reducedMotion) {
+                fadeIn(snap()) togetherWith fadeOut(snap())
+              } else {
+                (fadeIn(tween(240)) + slideInVertically(tween(260)) { it / 3 }) togetherWith
+                  (fadeOut(tween(180)) + slideOutVertically(tween(200)) { -it / 3 })
+              }
+            },
+            label = "update_subtitle_transition"
+          ) { subtitle ->
+            Text(
+              text = subtitle,
+              style = MaterialTheme.typography.bodySmall.copy(lineHeight = 17.sp),
+              color = MaterialTheme.colorScheme.primary,
+              maxLines = 2,
+              overflow = TextOverflow.Ellipsis
+            )
+          }
+
+          Surface(
+            shape = RoundedCornerShape(999.dp),
+            color = pillColor.copy(alpha = if (darkTheme) 0.16f else 0.12f),
+            modifier = Modifier.testTag("settings_update_status_pill")
+          ) {
+            Row(
+              modifier = Modifier.padding(horizontal = 10.dp, vertical = 4.dp),
+              verticalAlignment = Alignment.CenterVertically,
+              horizontalArrangement = Arrangement.spacedBy(6.dp)
+            ) {
+              Box(
+                modifier = Modifier
+                  .size(7.dp)
+                  .clip(CircleShape)
+                  .background(pillColor.copy(alpha = dotPulse))
+              )
+              Text(
+                text = stringResource(id = pillLabelRes),
+                style = MaterialTheme.typography.labelSmall.copy(
+                  fontWeight = FontWeight.Bold,
+                  fontSize = 11.sp
+                ),
+                color = pillColor,
+                maxLines = 1
+              )
+            }
+          }
         }
       }
 
-      // Inner Key-Value Status Summary Panel
+      // Inner Key-Value Status Summary Panel (4 rows)
       Surface(
         shape = RoundedCornerShape(18.dp),
         color = if (darkTheme) Color.Black.copy(alpha = 0.24f) else MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.55f),
@@ -650,27 +766,26 @@ fun AppUpdateReleaseCard(
         ) {
           UpdateSummaryRow(
             label = stringResource(id = R.string.settings_installed_version),
-            value = "v${installedAppInfo.versionName} (code ${installedAppInfo.versionCode})"
+            value = "v${updateUiState.installed.versionName} (code ${updateUiState.installed.versionCode})"
           )
           UpdateSummaryRow(
             label = stringResource(id = R.string.settings_latest_release),
-            value = latestRelease?.let { "${it.tagName} (code ${it.versionCode})" }
+            value = updateUiState.latestRelease?.let { "v${it.versionName} (code ${it.versionCode})" }
               ?: stringResource(id = R.string.settings_not_checked)
           )
           UpdateSummaryRow(
             label = stringResource(id = R.string.settings_release_date),
-            value = latestRelease?.releaseDate?.ifBlank { "-" } ?: "-"
+            value = updateUiState.latestRelease?.releaseDate?.ifBlank { updateUiState.installedReleaseDate }
+              ?: updateUiState.installedReleaseDate
           )
           UpdateSummaryRow(
             label = stringResource(id = R.string.settings_update_status),
-            value = updateStatus,
-            valueColor = when {
-              apkDownloadState is ApkDownloadState.Error -> MaterialTheme.colorScheme.error
-              isDowngradeBlocked -> AccentAmber
-              isUpToDate || isValidatedReady -> AccentGreen
-              isMandatory -> MaterialTheme.colorScheme.error
-              isUpdateAvailable -> MaterialTheme.colorScheme.primary
-              updateCheckStatus is UpdateCheckStatus.Error -> MaterialTheme.colorScheme.error
+            value = updateUiState.statusMessage,
+            valueColor = when (updateUiState.stage) {
+              UpdateStage.Error -> MaterialTheme.colorScheme.error
+              UpdateStage.UpToDate, UpdateStage.Done -> AccentGreen
+              UpdateStage.Available -> if (isMandatory) MaterialTheme.colorScheme.error else AccentAmber
+              UpdateStage.Installing, UpdateStage.Verifying -> Color(0xFF10B981)
               else -> MaterialTheme.colorScheme.primary
             },
             valueModifier = Modifier
@@ -680,7 +795,7 @@ fun AppUpdateReleaseCard(
         }
       }
 
-      if (isMandatory && isUpdateAvailable) {
+      if (isMandatory) {
         Surface(
           shape = RoundedCornerShape(14.dp),
           color = MaterialTheme.colorScheme.error.copy(alpha = 0.14f),
@@ -706,60 +821,153 @@ fun AppUpdateReleaseCard(
         }
       }
 
-      // Animated Download Progress Bar
+      // Download Progress + Speed + Pause/Resume & Cancel Controls
       AnimatedVisibility(
-        visible = isDownloading,
-        enter = expandVertically() + fadeIn(),
-        exit = shrinkVertically() + fadeOut()
+        visible = isDownloading || isPausedPartial || isVerifyingOrInstalling,
+        enter = if (reducedMotion) fadeIn(snap()) else expandVertically() + fadeIn(),
+        exit = if (reducedMotion) fadeOut(snap()) else shrinkVertically() + fadeOut()
       ) {
-        val dl = apkDownloadState as? ApkDownloadState.Downloading
-        val mbText = if (dl != null && dl.totalBytes > 0L) {
-          val dMb = dl.downloadedBytes / (1024f * 1024f)
-          val tMb = dl.totalBytes / (1024f * 1024f)
-          String.format("%.1f / %.1f MB", dMb, tMb)
-        } else if (dl != null) {
-          String.format("%.1f MB", dl.downloadedBytes / (1024f * 1024f))
-        } else ""
+        val dlText = buildString {
+          if (updateUiState.totalBytes > 0L) {
+            append(UpdateManager.formatBytesMb(updateUiState.downloadedBytes))
+            append(" / ")
+            append(UpdateManager.formatBytesMb(updateUiState.totalBytes))
+          } else if (updateUiState.downloadedBytes > 0L) {
+            append(UpdateManager.formatBytesMb(updateUiState.downloadedBytes))
+          }
+          if (isDownloading && !updateUiState.isPaused && updateUiState.speedBytesPerSec > 0L) {
+            if (isNotEmpty()) append(" · ")
+            append(UpdateManager.formatSpeed(updateUiState.speedBytesPerSec))
+          }
+        }
 
-        Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
+        val leftLabel = when (updateUiState.stage) {
+          UpdateStage.Verifying -> stringResource(id = R.string.settings_verifying_hash)
+          UpdateStage.Installing -> stringResource(id = R.string.settings_installing_update)
+          else -> {
+            val pct = if (updateUiState.progress >= 0f) " ${(updateUiState.progress * 100f).roundToInt().coerceIn(0, 100)}%" else ""
+            stringResource(id = R.string.settings_downloading_verifying) + pct
+          }
+        }
+
+        Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
           Row(
             modifier = Modifier.fillMaxWidth(),
-            horizontalArrangement = Arrangement.SpaceBetween
+            horizontalArrangement = Arrangement.SpaceBetween,
+            verticalAlignment = Alignment.CenterVertically
           ) {
             Text(
-              text = stringResource(id = R.string.settings_downloading_verifying),
+              text = leftLabel,
               style = MaterialTheme.typography.bodySmall.copy(fontWeight = FontWeight.SemiBold, lineHeight = 18.sp),
-              color = MaterialTheme.colorScheme.primary
+              color = if (isVerifyingOrInstalling) Color(0xFF10B981) else MaterialTheme.colorScheme.primary,
+              maxLines = 1,
+              overflow = TextOverflow.Ellipsis,
+              modifier = Modifier.weight(1f)
             )
-            Text(
-              text = mbText,
-              style = MaterialTheme.typography.bodySmall,
-              color = MaterialTheme.colorScheme.onSurfaceVariant
+            if (dlText.isNotEmpty() && !isVerifyingOrInstalling) {
+              Spacer(modifier = Modifier.width(8.dp))
+              Text(
+                text = dlText,
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                maxLines = 1
+              )
+            }
+          }
+
+          if (updateUiState.stage == UpdateStage.Installing || updateUiState.stage == UpdateStage.Verifying) {
+            LinearProgressIndicator(
+              modifier = Modifier
+                .fillMaxWidth()
+                .height(7.dp)
+                .clip(RoundedCornerShape(999.dp)),
+              color = Color(0xFF10B981),
+              trackColor = MaterialTheme.colorScheme.surfaceVariant
+            )
+          } else {
+            LinearProgressIndicator(
+              progress = { animatedProgress },
+              modifier = Modifier
+                .fillMaxWidth()
+                .height(7.dp)
+                .clip(RoundedCornerShape(999.dp)),
+              color = if (isPausedPartial) AccentAmber else Color(0xFF1F7AFF),
+              trackColor = MaterialTheme.colorScheme.surfaceVariant
             )
           }
-          LinearProgressIndicator(
-            progress = { animatedProgress },
-            modifier = Modifier
-              .fillMaxWidth()
-              .height(7.dp)
-              .clip(RoundedCornerShape(999.dp)),
-            color = MaterialTheme.colorScheme.primary,
-            trackColor = MaterialTheme.colorScheme.surfaceVariant
-          )
+
+          if (isDownloading || isPausedPartial) {
+            Row(
+              modifier = Modifier.fillMaxWidth(),
+              horizontalArrangement = Arrangement.spacedBy(10.dp)
+            ) {
+              GlassActionPill(
+                text = if (isDownloading && !updateUiState.isPaused) {
+                  stringResource(id = R.string.settings_pause)
+                } else {
+                  stringResource(id = R.string.settings_resume)
+                },
+                icon = if (isDownloading && !updateUiState.isPaused) Icons.Rounded.Pause else Icons.Rounded.PlayArrow,
+                darkTheme = darkTheme,
+                enabled = true,
+                modifier = Modifier
+                  .weight(1f)
+                  .testTag("pause_resume_update_button"),
+                onClick = {
+                  if (isDownloading && !updateUiState.isPaused) onPauseDownload()
+                  else onResumeDownload()
+                }
+              )
+              GlassActionPill(
+                text = stringResource(id = R.string.action_cancel),
+                icon = Icons.Rounded.Close,
+                darkTheme = darkTheme,
+                enabled = true,
+                modifier = Modifier
+                  .weight(1f)
+                  .testTag("cancel_update_button"),
+                onClick = onCancelDownload
+              )
+            }
+          }
         }
       }
 
-      // Strict Smart Update Primary Action
-      if (isUpdateAvailable && latestRelease != null) {
-        val updateLabel = when {
-          isDownloading -> stringResource(id = R.string.settings_downloading_update)
-          isValidatedReady -> stringResource(id = R.string.settings_install_verified_update, latestRelease.tagName)
-          else -> stringResource(id = R.string.settings_update_now, latestRelease.tagName)
-        }
-        val updateIcon = when {
-          isDownloading -> Icons.Rounded.Downloading
-          isValidatedReady -> Icons.Rounded.InstallMobile
-          else -> Icons.Rounded.SystemUpdate
+      // Main Dynamic CTA Button ("Download & Install", "Resume Download", "Restart App", "Retry", etc.)
+      val mainAction = updateUiState.mainAction
+      if (mainAction != UpdateMainAction.None) {
+        val (ctaLabel, ctaIcon, ctaColor) = when (mainAction) {
+          UpdateMainAction.DownloadAndInstall -> Triple(
+            stringResource(id = R.string.settings_download_install),
+            Icons.Rounded.SystemUpdate,
+            MaterialTheme.colorScheme.primary
+          )
+          UpdateMainAction.ResumeDownload -> Triple(
+            stringResource(id = R.string.settings_resume_download),
+            Icons.Rounded.DownloadForOffline,
+            AccentAmber
+          )
+          UpdateMainAction.InstallVerifiedApk -> Triple(
+            stringResource(id = R.string.settings_download_install),
+            Icons.Rounded.InstallMobile,
+            MaterialTheme.colorScheme.primary
+          )
+          UpdateMainAction.OpenInstallSettings -> Triple(
+            stringResource(id = R.string.settings_open_install_settings),
+            Icons.Rounded.AdminPanelSettings,
+            AccentAmber
+          )
+          UpdateMainAction.RestartApp -> Triple(
+            stringResource(id = R.string.settings_restart_app),
+            Icons.Rounded.RestartAlt,
+            AccentGreen
+          )
+          UpdateMainAction.Retry -> Triple(
+            stringResource(id = R.string.settings_retry_update),
+            Icons.Rounded.Refresh,
+            MaterialTheme.colorScheme.error
+          )
+          UpdateMainAction.None -> Triple("", Icons.Rounded.SystemUpdate, MaterialTheme.colorScheme.primary)
         }
 
         Box(
@@ -769,15 +977,10 @@ fun AppUpdateReleaseCard(
             .clip(RoundedCornerShape(18.dp))
             .background(
               Brush.horizontalGradient(
-                colors = listOf(
-                  MaterialTheme.colorScheme.primary,
-                  MaterialTheme.colorScheme.primary.copy(alpha = 0.78f)
-                )
+                colors = listOf(ctaColor, ctaColor.copy(alpha = 0.80f))
               )
             )
-            .clickable(enabled = !isDownloading) {
-              if (isValidatedReady) onInstallUpdate() else onDownloadUpdate()
-            }
+            .clickable { onMainAction() }
             .testTag("update_now_button"),
           contentAlignment = Alignment.Center
         ) {
@@ -786,13 +989,13 @@ fun AppUpdateReleaseCard(
             horizontalArrangement = Arrangement.spacedBy(8.dp)
           ) {
             Icon(
-              imageVector = updateIcon,
+              imageVector = ctaIcon,
               contentDescription = null,
               tint = Color.White,
               modifier = Modifier.size(19.dp)
             )
             Text(
-              text = updateLabel,
+              text = ctaLabel,
               style = MaterialTheme.typography.bodyMedium.copy(fontWeight = FontWeight.Bold, lineHeight = 20.sp),
               color = Color.White,
               maxLines = 1,
@@ -802,7 +1005,7 @@ fun AppUpdateReleaseCard(
         }
       }
 
-      // Secondary Action Pills
+      // Secondary Action Pills: Check Updates, Release Notes, Open Release Page
       Row(
         modifier = Modifier.fillMaxWidth(),
         horizontalArrangement = Arrangement.spacedBy(10.dp)
@@ -815,16 +1018,20 @@ fun AppUpdateReleaseCard(
           },
           icon = Icons.Rounded.Refresh,
           darkTheme = darkTheme,
-          enabled = !isDownloading && !isChecking,
-          modifier = Modifier.weight(1f).testTag("check_update_button"),
+          enabled = !isDownloading && !isChecking && !isVerifyingOrInstalling,
+          modifier = Modifier
+            .weight(1f)
+            .testTag("check_update_button"),
           onClick = { if (!isChecking) onCheckUpdate() }
         )
         GlassActionPill(
           text = stringResource(id = R.string.settings_release_notes),
           icon = Icons.Rounded.Description,
           darkTheme = darkTheme,
-          enabled = latestRelease != null,
-          modifier = Modifier.weight(1f),
+          enabled = true,
+          modifier = Modifier
+            .weight(1f)
+            .testTag("release_notes_button"),
           onClick = onOpenReleaseNotes
         )
       }
@@ -838,7 +1045,9 @@ fun AppUpdateReleaseCard(
           icon = Icons.AutoMirrored.Rounded.OpenInNew,
           darkTheme = darkTheme,
           enabled = true,
-          modifier = Modifier.weight(1f),
+          modifier = Modifier
+            .weight(1f)
+            .testTag("open_release_page_button"),
           onClick = onOpenGitHubRepo
         )
       }
@@ -892,14 +1101,15 @@ private fun GlassActionPill(
     shape = RoundedCornerShape(16.dp),
     color = bg,
     modifier = modifier
-      .height(44.dp)
+      .heightIn(min = 48.dp)
       .border(1.dp, borderColor, RoundedCornerShape(16.dp))
       .clip(RoundedCornerShape(16.dp))
       .clickable(enabled = enabled) { onClick() }
   ) {
     Row(
       modifier = Modifier
-        .fillMaxSize()
+        .fillMaxWidth()
+        .heightIn(min = 48.dp)
         .padding(horizontal = 10.dp),
       horizontalArrangement = Arrangement.Center,
       verticalAlignment = Alignment.CenterVertically
@@ -926,11 +1136,35 @@ private fun GlassActionPill(
 @Composable
 private fun UpdateCardPreviewHost(
   logoState: UpdateLogoState,
-  checkStatus: UpdateCheckStatus,
-  statusText: String
+  stage: UpdateStage,
+  subtitle: String,
+  statusText: String,
+  progress: Float = 0f,
+  downloadedBytes: Long = 0L,
+  totalBytes: Long = 0L,
+  speedBytesPerSec: Long = 0L
 ) {
-  val installed = InstalledAppInfo("com.aurix.music", "1.6.2", 10602L, emptySet())
-  val release = GitHubRelease("v1.6.2", "AURIX v1.6.2", "Release notes", "", "2026-11-15", 10602L)
+  val installed = InstalledAppInfo("com.aurix.music", "1.6.5", 10605L, emptySet())
+  val release = RemoteVersionInfo(
+    versionName = "1.6.5",
+    versionCode = 10605L,
+    releaseDate = "2026-11-16",
+    apkUrl = "",
+    sha256 = "",
+    notes = UpdateManager.CURRENT_RELEASE_NOTES,
+    releasePageUrl = "https://github.com/MEYYYNASH/AURIX/releases/tag/v1.6.5"
+  )
+  val uiState = UpdateUiState(
+    stage = stage,
+    installed = installed,
+    latestRelease = release,
+    subtitleMessage = subtitle,
+    statusMessage = statusText,
+    progress = progress,
+    downloadedBytes = downloadedBytes,
+    totalBytes = totalBytes,
+    speedBytesPerSec = speedBytesPerSec
+  )
   AurixTheme(darkTheme = true) {
     Box(
       modifier = Modifier
@@ -939,11 +1173,8 @@ private fun UpdateCardPreviewHost(
     ) {
       AppUpdateReleaseCard(
         logoState = logoState,
-        installedAppInfo = installed,
-        updateCheckStatus = checkStatus,
-        updateStatus = statusText,
-        latestRelease = release,
-        apkDownloadState = ApkDownloadState.Idle,
+        updateUiState = uiState,
+        animatedProgress = progress,
         darkTheme = true,
         onCheckUpdate = {},
         onOpenReleaseNotes = {},
@@ -953,46 +1184,40 @@ private fun UpdateCardPreviewHost(
   }
 }
 
-@Preview(name = "UpdateCard - Intro", showBackground = true)
+@Preview(name = "UpdateCard - Available", showBackground = true)
 @Composable
-private fun UpdateCardIntroPreview() {
+private fun UpdateCardAvailablePreview() {
   UpdateCardPreviewHost(
-    logoState = UpdateLogoState.Intro,
-    checkStatus = UpdateCheckStatus.Idle,
-    statusText = "Ready to check for updates"
+    logoState = UpdateLogoState.Available,
+    stage = UpdateStage.Available,
+    subtitle = "AURIX v1.6.5 is ready to download",
+    statusText = "Update available: v1.6.5 (code 10605)"
   )
 }
 
-@Preview(name = "UpdateCard - Idle", showBackground = true)
+@Preview(name = "UpdateCard - Downloading", showBackground = true)
 @Composable
-private fun UpdateCardIdlePreview() {
-  val installed = InstalledAppInfo("com.aurix.music", "1.6.2", 10602L, emptySet())
-  val release = GitHubRelease("v1.6.2", "AURIX v1.6.2", "", "", "2026-11-15", 10602L)
+private fun UpdateCardDownloadingPreview() {
   UpdateCardPreviewHost(
-    logoState = UpdateLogoState.Idle,
-    checkStatus = UpdateCheckStatus.UpToDate(installed, release),
-    statusText = "You are already using the latest version."
-  )
-}
-
-@Preview(name = "UpdateCard - Checking", showBackground = true)
-@Composable
-private fun UpdateCardCheckingPreview() {
-  UpdateCardPreviewHost(
-    logoState = UpdateLogoState.Checking,
-    checkStatus = UpdateCheckStatus.Checking,
-    statusText = "Checking for updates…"
+    logoState = UpdateLogoState.Downloading,
+    stage = UpdateStage.Downloading,
+    subtitle = "Downloading v1.6.5 · 4.2 MB/s",
+    statusText = "Downloading 62% (4.2 MB/s)",
+    progress = 0.62f,
+    downloadedBytes = 24L * 1024L * 1024L,
+    totalBytes = 38L * 1024L * 1024L,
+    speedBytesPerSec = 4L * 1024L * 1024L
   )
 }
 
 @Preview(name = "UpdateCard - Done", showBackground = true)
 @Composable
 private fun UpdateCardDonePreview() {
-  val installed = InstalledAppInfo("com.aurix.music", "1.6.2", 10602L, emptySet())
-  val release = GitHubRelease("v1.6.2", "AURIX v1.6.2", "", "", "2026-11-15", 10602L)
   UpdateCardPreviewHost(
     logoState = UpdateLogoState.Done,
-    checkStatus = UpdateCheckStatus.UpToDate(installed, release),
-    statusText = "You are already using the latest version."
+    stage = UpdateStage.Done,
+    subtitle = "Installer finished — tap Restart App to apply",
+    statusText = "Ready to restart (v1.6.5)",
+    progress = 1f
   )
 }

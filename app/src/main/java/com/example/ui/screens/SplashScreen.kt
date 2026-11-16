@@ -55,6 +55,7 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.IntOffset
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import com.example.BuildConfig
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.launch
@@ -495,6 +496,21 @@ fun AurixLaunchOverlay(
           )
         }
       }
+
+      Spacer(modifier = Modifier.height(14.dp))
+
+      Text(
+        text = "v${BuildConfig.VERSION_NAME}",
+        style = MaterialTheme.typography.labelSmall.copy(
+          fontSize = 11.sp,
+          fontWeight = FontWeight.Medium,
+          letterSpacing = 1.sp
+        ),
+        color = dotColor.copy(alpha = 0.72f),
+        modifier = Modifier.graphicsLayer {
+          this.alpha = letterAlphas.lastOrNull()?.value ?: 1f
+        }
+      )
     }
   }
 }

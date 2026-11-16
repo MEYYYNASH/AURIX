@@ -42,8 +42,7 @@ import androidx.lifecycle.compose.LocalLifecycleOwner
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.example.LocaleHelper
 import com.example.R
-import com.example.data.ApkDownloadState
-import com.example.data.UpdateCheckStatus
+import com.example.data.UpdateStage
 import com.example.model.YoutubeFormatSheetState
 import com.example.recommendation.MoodCategory
 import com.example.ui.theme.*
@@ -118,6 +117,7 @@ private fun AurixAppContent(
         AurixMainShell(
           viewModel = viewModel,
           currentLanguage = currentLanguage,
+          launchSplashDismissed = launchSplashDismissed,
           dynamicBg = dynamicBg,
           reducedMotion = reducedMotion,
           darkTheme = darkTheme,
@@ -141,6 +141,7 @@ private fun AurixAppContent(
 private fun AurixMainShell(
   viewModel: AurixViewModel,
   currentLanguage: String,
+  launchSplashDismissed: Boolean,
   dynamicBg: Boolean,
   reducedMotion: Boolean,
   darkTheme: Boolean,
@@ -162,12 +163,9 @@ private fun AurixMainShell(
   val resolvingSongId by viewModel.resolvingSongId.collectAsStateWithLifecycle()
   val formatSheetState by viewModel.formatSheetState.collectAsStateWithLifecycle()
 
-  val installedAppInfo by viewModel.installedAppInfo.collectAsStateWithLifecycle()
-  val updateCheckStatus by viewModel.updateCheckStatus.collectAsStateWithLifecycle()
-  val updateStatus by viewModel.statusText.collectAsStateWithLifecycle()
+  val updateUiState by viewModel.updateUiState.collectAsStateWithLifecycle()
   val logoState by viewModel.logoState.collectAsStateWithLifecycle()
-  val latestRelease by viewModel.latestRelease.collectAsStateWithLifecycle()
-  val apkDownloadState by viewModel.apkDownloadState.collectAsStateWithLifecycle()
+  val showWhatsNewSheet by viewModel.showWhatsNewSheet.collectAsStateWithLifecycle()
   val songDownloadProgress by viewModel.songDownloadProgress.collectAsStateWithLifecycle()
   val downloadedSongIds by viewModel.downloadedSongIds.collectAsStateWithLifecycle()
   val githubOwner by viewModel.githubOwner.collectAsStateWithLifecycle()
@@ -246,12 +244,13 @@ private fun AurixMainShell(
     }
   }
 
-  // Automatically refresh recommendations if a new calendar day starts while app is backgrounded
+  // Automatically refresh recommendations on new day and notify UpdateManager on resume
   val lifecycleOwner = LocalLifecycleOwner.current
   DisposableEffect(lifecycleOwner) {
     val observer = LifecycleEventObserver { _, event ->
       if (event == Lifecycle.Event.ON_RESUME) {
         viewModel.refreshDailyFeedIfNewDay()
+        viewModel.onUpdateHostResumed()
       }
     }
     lifecycleOwner.lifecycle.addObserver(observer)
@@ -629,16 +628,16 @@ private fun AurixMainShell(
               hasCurrentSong = currentSong != null,
               githubOwner = githubOwner,
               githubRepo = githubRepo,
-              installedAppInfo = installedAppInfo,
-              updateCheckStatus = updateCheckStatus,
-              updateStatus = updateStatus,
-              latestRelease = latestRelease,
-              apkDownloadState = apkDownloadState,
+              updateUiState = updateUiState,
               onGithubOwnerChanged = { viewModel.setGithubOwner(it) },
               onGithubRepoChanged = { viewModel.setGithubRepo(it) },
               onCheckUpdate = { viewModel.checkForUpdates(it) },
-              onDownloadUpdate = { viewModel.downloadAndInstallUpdate(it) },
-              onInstallUpdate = { viewModel.installDownloadedApk(it) },
+              onDownloadOrInstallUpdate = { viewModel.downloadAndInstallUpdate(it) },
+              onPauseDownload = { viewModel.pauseUpdateDownload() },
+              onCancelDownload = { viewModel.cancelUpdateDownload() },
+              onRetryUpdate = { viewModel.retryUpdateAction() },
+              onOpenInstallSettings = { viewModel.openUnknownAppsSettings() },
+              onRestartApp = { viewModel.restartApp(it) },
               onOpenGitHubRepo = { viewModel.openGitHubRepo(it) },
               onThemeChanged = { viewModel.setThemeMode(it) },
               onAccentChanged = { viewModel.setAccentColor(it) },
@@ -867,34 +866,47 @@ private fun AurixMainShell(
         )
       }
 
+      // One-time What's New bottom sheet on Home after first launch on new version
+      if (launchSplashDismissed && showWhatsNewSheet && currentScreen is Screen.Home && !isNowPlayingOpen) {
+        WhatsNewBottomSheet(
+          reducedMotion = reducedMotion,
+          onOpenUpdatesTab = { currentScreen = Screen.Settings },
+          onDismiss = { viewModel.dismissWhatsNewSheet() }
+        )
+      }
+
       // Optional Mandatory Critical Update Dialog
-      val mandatoryUpdate = (updateCheckStatus as? UpdateCheckStatus.UpdateAvailable)?.takeIf { it.isMandatory }
-      if (mandatoryUpdate != null) {
-        val isDownloading = apkDownloadState is ApkDownloadState.Downloading
-        val isValidated = apkDownloadState is ApkDownloadState.ValidatedReady
+      val mandatoryRelease = updateUiState.latestRelease?.takeIf {
+        it.isMandatory &&
+          it.versionCode > updateUiState.installed.versionCode &&
+          updateUiState.stage != UpdateStage.Idle &&
+          updateUiState.stage != UpdateStage.Done
+      }
+      if (mandatoryRelease != null) {
+        val isDownloading = updateUiState.stage == UpdateStage.Downloading && !updateUiState.isPaused
+        val isValidated = updateUiState.isValidatedReady
         AlertDialog(
           onDismissRequest = {},
           properties = DialogProperties(dismissOnBackPress = false, dismissOnClickOutside = false),
-          title = { Text("Critical Update Required (${mandatoryUpdate.release.tagName})") },
+          title = { Text("Critical Update Required (${mandatoryRelease.tagName})") },
           text = {
             Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
               Text(
-                "Installed: v${mandatoryUpdate.installed.versionName} (code ${mandatoryUpdate.installed.versionCode})\n" +
-                  "Latest: ${mandatoryUpdate.release.tagName} (code ${mandatoryUpdate.release.versionCode})"
+                "Installed: v${updateUiState.installed.versionName} (code ${updateUiState.installed.versionCode})\n" +
+                  "Latest: ${mandatoryRelease.tagName} (code ${mandatoryRelease.versionCode})"
               )
-              if (mandatoryUpdate.release.body.isNotBlank()) {
-                Text(mandatoryUpdate.release.body, style = MaterialTheme.typography.bodySmall)
+              if (mandatoryRelease.formattedNotes.isNotBlank()) {
+                Text(mandatoryRelease.formattedNotes, style = MaterialTheme.typography.bodySmall)
               }
               if (isDownloading) {
-                val dl = apkDownloadState as ApkDownloadState.Downloading
                 LinearProgressIndicator(
-                  progress = { if (dl.progress >= 0f) dl.progress else 0.35f },
+                  progress = { if (updateUiState.progress >= 0f) updateUiState.progress else 0.35f },
                   modifier = Modifier.fillMaxWidth()
                 )
               }
-              if (apkDownloadState is ApkDownloadState.Error) {
+              if (updateUiState.stage == UpdateStage.Error && !updateUiState.errorMessage.isNullOrBlank()) {
                 Text(
-                  text = (apkDownloadState as ApkDownloadState.Error).message,
+                  text = updateUiState.errorMessage!!,
                   color = MaterialTheme.colorScheme.error,
                   style = MaterialTheme.typography.bodySmall
                 )
@@ -913,7 +925,7 @@ private fun AurixMainShell(
                 when {
                   isDownloading -> "Downloading..."
                   isValidated -> "Install Update"
-                  else -> "Update Now"
+                  else -> "Download & Install"
                 }
               )
             }

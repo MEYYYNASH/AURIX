@@ -1,14 +1,14 @@
 # AURIX — ONE APP. ALL YOUR MUSIC.
 
-AURIX (`v1.3.1`) is a modern Android music player and sound finder app built with Kotlin, Jetpack Compose, and Material 3.
+AURIX (`v1.6.5`, release date `2026-11-16`) is a modern Android music player and sound finder app built with Kotlin, Jetpack Compose, and Material 3.
 
 ## Features
 
-- **iTunes 30s Previews & Local Music**: Search real 30-second music previews via the iTunes Search API and import local audio files from device storage.
+- **YouTube Search, Format Picker & Local Music**: Search full songs on YouTube, preview or pick audio format & quality (M4A / WebM), explore 30-second iTunes previews, and import local audio files from device storage.
 - **Link Matcher & Synced Lyrics**: Match YouTube links in Search and follow real-time synced `.lrc` lyrics via LRCLIB, with plain lyrics fallback.
-- **Background Playback**: Powered by AndroidX Media3 (ExoPlayer) with media controls.
-- **GitHub OTA Updates**: Built-in release checker (`MEYYYNASH/AURIX`) with package signature validation, release notes display, APK download, and in-app installer.
-- **Customization & Localization**: English and Khmer (`values-km`), System/Light/Dark themes, 7 accent colors, dynamic artwork background, and reduced motion support.
+- **Background Playback**: Powered by AndroidX Media3 (ExoPlayer) with equalizer, crossfade, and media controls.
+- **Animated OTA Updates (`UpdateManager`)**: `version.json`-backed updater (`MEYYYNASH/AURIX`) with resumable APK downloads, real-time speed & progress, SHA-256 and package signature verification, reduced-motion aware planet animations, and in-app installer.
+- **Customization & Localization**: English and Khmer (`values-km`), System/Light/Dark/AMOLED themes, 7 accent colors, dynamic artwork background, and reduced motion support.
 
 ## Tech Stack
 
