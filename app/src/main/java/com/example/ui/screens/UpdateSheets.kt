@@ -18,16 +18,20 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.rounded.AutoAwesome
 import androidx.compose.material.icons.rounded.CheckCircle
+import androidx.compose.material.icons.rounded.Close
 import androidx.compose.material.icons.rounded.NewReleases
 import androidx.compose.material.icons.rounded.SystemUpdate
 import androidx.compose.material3.Button
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.Icon
+import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.ModalBottomSheet
+import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
+import androidx.compose.material3.minimumInteractiveComponentSize
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -101,6 +105,18 @@ fun ReleaseNotesBottomSheet(
             text = stringResource(id = R.string.settings_release_date_inline, releaseDate),
             style = MaterialTheme.typography.bodySmall,
             color = MaterialTheme.colorScheme.onSurfaceVariant
+          )
+        }
+        IconButton(
+          onClick = onDismiss,
+          modifier = Modifier
+            .minimumInteractiveComponentSize()
+            .testTag("release_notes_close_button")
+        ) {
+          Icon(
+            imageVector = Icons.Rounded.Close,
+            contentDescription = stringResource(id = R.string.cd_close_sheet),
+            tint = MaterialTheme.colorScheme.onSurfaceVariant
           )
         }
       }
@@ -191,6 +207,7 @@ fun ReleaseNotesBottomSheet(
 fun WhatsNewBottomSheet(
   reducedMotion: Boolean,
   onOpenUpdatesTab: () -> Unit,
+  onPreviewNavigation: (() -> Unit)? = null,
   onDismiss: () -> Unit
 ) {
   ModalBottomSheet(
@@ -258,6 +275,18 @@ fun WhatsNewBottomSheet(
             color = MaterialTheme.colorScheme.onSurface
           )
         }
+        IconButton(
+          onClick = onDismiss,
+          modifier = Modifier
+            .minimumInteractiveComponentSize()
+            .testTag("whats_new_close_button")
+        ) {
+          Icon(
+            imageVector = Icons.Rounded.Close,
+            contentDescription = stringResource(id = R.string.cd_close_sheet),
+            tint = MaterialTheme.colorScheme.onSurfaceVariant
+          )
+        }
       }
 
       Surface(
@@ -289,6 +318,31 @@ fun WhatsNewBottomSheet(
               )
             }
           }
+        }
+      }
+
+      if (onPreviewNavigation != null) {
+        OutlinedButton(
+          onClick = {
+            onDismiss()
+            onPreviewNavigation()
+          },
+          modifier = Modifier
+            .fillMaxWidth()
+            .height(48.dp)
+            .testTag("whats_new_preview_nav_button"),
+          shape = RoundedCornerShape(16.dp)
+        ) {
+          Icon(
+            imageVector = Icons.Rounded.AutoAwesome,
+            contentDescription = null,
+            modifier = Modifier.size(17.dp)
+          )
+          Spacer(modifier = Modifier.size(6.dp))
+          Text(
+            text = stringResource(id = R.string.nav_preview_whats_new_cta),
+            fontWeight = FontWeight.Bold
+          )
         }
       }
 

@@ -58,6 +58,8 @@ import androidx.compose.foundation.text.KeyboardActions
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.rounded.Analytics
+import androidx.compose.material.icons.rounded.BlurOff
+import androidx.compose.material.icons.rounded.BlurOn
 import androidx.compose.material.icons.rounded.Close
 import androidx.compose.material.icons.rounded.ContentPaste
 import androidx.compose.material.icons.rounded.Download
@@ -90,6 +92,7 @@ import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -199,11 +202,33 @@ fun SearchScreen(
     "itunes" -> SearchMode.ITunes30s
     else -> SearchMode.YouTubeSearch
   }
+  val hasPlayingSong = currentSong != null
+  val (artC1, artC2) = rememberArtworkColors(
+    artworkUrl = currentSong?.artworkUrl.orEmpty(),
+    fallbackTitle = currentSong?.title.orEmpty()
+  )
+  var showQuickTags by rememberSaveable { mutableStateOf(true) }
+  var showResultsPanel by rememberSaveable { mutableStateOf(true) }
+  var dynamicBlurGlass by rememberSaveable { mutableStateOf(true) }
 
   Box(
     modifier = Modifier.fillMaxSize(),
     contentAlignment = Alignment.TopCenter
   ) {
+    if (dynamicBlurGlass && hasPlayingSong) {
+      DynamicArtGlassBackdropLayer(
+        song = currentSong,
+        artColors = artC1 to artC2,
+        enabled = true,
+        darkTheme = darkTheme,
+        reducedMotion = reducedMotion,
+        blurRadius = 46.dp,
+        artAlpha = if (darkTheme) 0.22f else 0.14f,
+        scrimAlpha = if (darkTheme) 0.28f else 0.22f,
+        modifier = Modifier.matchParentSize()
+      )
+    }
+
     Column(
       modifier = Modifier
         .fillMaxSize()
@@ -325,38 +350,77 @@ fun SearchScreen(
               ),
               darkTheme = darkTheme,
               reducedMotion = reducedMotion,
-              onQueryChanged = onSearchQueryChanged,
+              ambientPrimary = if (dynamicBlurGlass && hasPlayingSong) artC1 else null,
+              ambientSecondary = if (dynamicBlurGlass && hasPlayingSong) artC2 else null,
+              onQueryChanged = { nextQuery ->
+                if (!showResultsPanel && nextQuery.isNotBlank()) showResultsPanel = true
+                onSearchQueryChanged(nextQuery)
+              },
               onClear = onClearSearch,
               onSubmit = {
                 keyboardController?.hide()
+                showResultsPanel = true
                 if (searchQuery.isNotBlank()) onImmediateSearch(searchQuery)
               }
             )
 
-            // Quick discovery glass chips (visible cleanly when search input is empty)
+            // Quick discovery glass chips with Open / Close control
             AnimatedVisibility(
               visible = searchQuery.isBlank(),
               enter = if (reducedMotion) fadeIn(snap()) else fadeIn(tween(180)) + expandVertically(),
               exit = if (reducedMotion) fadeOut(snap()) else fadeOut(tween(140)) + shrinkVertically()
             ) {
               Column {
-                Spacer(modifier = Modifier.height(12.dp))
+                Spacer(modifier = Modifier.height(10.dp))
                 Row(
-                  modifier = Modifier
-                    .fillMaxWidth()
-                    .horizontalScroll(rememberScrollState()),
-                  horizontalArrangement = Arrangement.spacedBy(8.dp)
+                  modifier = Modifier.fillMaxWidth(),
+                  horizontalArrangement = Arrangement.SpaceBetween,
+                  verticalAlignment = Alignment.CenterVertically
                 ) {
-                  quickTags.forEach { tag ->
-                    GlassQuickTagChip(
-                      label = tag,
-                      darkTheme = darkTheme,
-                      reducedMotion = reducedMotion,
-                      onClick = {
-                        keyboardController?.hide()
-                        onImmediateSearch(tag)
-                      }
+                  Text(
+                    text = stringResource(id = R.string.search_tags_title),
+                    style = MaterialTheme.typography.labelLarge.copy(fontWeight = FontWeight.Bold),
+                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                  )
+                  OpenCloseGlassPill(
+                    isOpen = showQuickTags,
+                    onToggle = { showQuickTags = !showQuickTags },
+                    darkTheme = darkTheme,
+                    reducedMotion = reducedMotion,
+                    testTag = "search_toggle_tags_button",
+                    contentDescription = stringResource(
+                      id = if (showQuickTags) R.string.section_close_cd else R.string.section_open_cd,
+                      stringResource(id = R.string.search_tags_title)
                     )
+                  )
+                }
+
+                AnimatedVisibility(
+                  visible = showQuickTags,
+                  enter = if (reducedMotion) fadeIn(snap()) else fadeIn(tween(180)) + expandVertically(),
+                  exit = if (reducedMotion) fadeOut(snap()) else fadeOut(tween(140)) + shrinkVertically()
+                ) {
+                  Column {
+                    Spacer(modifier = Modifier.height(6.dp))
+                    Row(
+                      modifier = Modifier
+                        .fillMaxWidth()
+                        .horizontalScroll(rememberScrollState()),
+                      horizontalArrangement = Arrangement.spacedBy(8.dp)
+                    ) {
+                      quickTags.forEach { tag ->
+                        GlassQuickTagChip(
+                          label = tag,
+                          darkTheme = darkTheme,
+                          reducedMotion = reducedMotion,
+                          onClick = {
+                            keyboardController?.hide()
+                            showResultsPanel = true
+                            onImmediateSearch(tag)
+                          }
+                        )
+                      }
+                    }
                   }
                 }
               }
@@ -375,6 +439,11 @@ fun SearchScreen(
               songDownloadProgress = songDownloadProgress,
               downloadedSongIds = downloadedSongIds,
               verifiedLyricsIds = verifiedLyricsIds,
+              artColors = if (hasPlayingSong) (artC1 to artC2) else null,
+              dynamicBlurGlass = dynamicBlurGlass,
+              onToggleDynamicBlur = { dynamicBlurGlass = !dynamicBlurGlass },
+              showResultsList = showResultsPanel,
+              onToggleResultsList = { showResultsPanel = !showResultsPanel },
               onCheckLyrics = onCheckLyrics,
               onSongClick = onSongClick,
               onFavoriteClick = onFavoriteClick,
@@ -384,6 +453,7 @@ fun SearchScreen(
               onRetry = onRetrySearch,
               onQuickSuggestionClick = { tag ->
                 keyboardController?.hide()
+                showResultsPanel = true
                 onImmediateSearch(tag)
               },
               onClearSearch = onClearSearch,
@@ -418,6 +488,8 @@ private fun LiquidGlassSearchBar(
   placeholder: String,
   darkTheme: Boolean,
   reducedMotion: Boolean,
+  ambientPrimary: Color? = null,
+  ambientSecondary: Color? = null,
   onQueryChanged: (String) -> Unit,
   onClear: () -> Unit,
   onSubmit: () -> Unit
@@ -427,8 +499,8 @@ private fun LiquidGlassSearchBar(
   val glassBrush = if (darkTheme) {
     Brush.linearGradient(
       colors = listOf(
-        Color(0xFF23304B).copy(alpha = 0.80f),
-        Color(0xFF151F35).copy(alpha = 0.72f),
+        (ambientPrimary ?: Color(0xFF23304B)).copy(alpha = if (ambientPrimary != null) 0.24f else 0.80f),
+        (ambientSecondary ?: Color(0xFF151F35)).copy(alpha = if (ambientSecondary != null) 0.16f else 0.72f),
         Color(0xFF101829).copy(alpha = 0.78f)
       )
     )
@@ -436,7 +508,7 @@ private fun LiquidGlassSearchBar(
     Brush.linearGradient(
       colors = listOf(
         Color.White.copy(alpha = 0.94f),
-        Color(0xFFF3F7FF).copy(alpha = 0.82f),
+        (ambientPrimary ?: Color(0xFFF3F7FF)).copy(alpha = if (ambientPrimary != null) 0.14f else 0.82f),
         Color.White.copy(alpha = 0.90f)
       )
     )
@@ -444,7 +516,8 @@ private fun LiquidGlassSearchBar(
 
   val borderColor by animateColorAsState(
     targetValue = when {
-      isFocused -> MaterialTheme.colorScheme.primary.copy(alpha = 0.80f)
+      isFocused -> (ambientPrimary ?: MaterialTheme.colorScheme.primary).copy(alpha = 0.84f)
+      ambientPrimary != null -> ambientPrimary.copy(alpha = if (darkTheme) 0.42f else 0.48f)
       darkTheme -> Color.White.copy(alpha = 0.24f)
       else -> Color.White
     },
@@ -641,6 +714,7 @@ private fun YoutubeLinkGlassPane(
   val inputBg = if (darkTheme) Color.White.copy(alpha = 0.08f) else Color.White.copy(alpha = 0.85f)
   val inputBorder = if (darkTheme) Color.White.copy(alpha = 0.22f) else Color.White
   val pasteBg = if (darkTheme) Color.White.copy(alpha = 0.10f) else Color.White.copy(alpha = 0.85f)
+  var showYoutubeGuide by rememberSaveable { mutableStateOf(true) }
 
   LazyColumn(
     modifier = Modifier.fillMaxSize(),
@@ -905,29 +979,55 @@ private fun YoutubeLinkGlassPane(
             modifier = Modifier.padding(18.dp),
             verticalArrangement = Arrangement.spacedBy(12.dp)
           ) {
-            Text(
-              text = stringResource(id = R.string.search_yt_guide_title),
-              style = MaterialTheme.typography.titleSmall.copy(fontWeight = FontWeight.Bold, lineHeight = 20.sp),
-              color = MaterialTheme.colorScheme.onSurface
-            )
-            MatcherGuideRow(
-              icon = Icons.Rounded.Link,
-              title = stringResource(id = R.string.search_yt_step1_title),
-              subtitle = stringResource(id = R.string.search_yt_step1_sub),
-              iconTint = MaterialTheme.colorScheme.primary
-            )
-            MatcherGuideRow(
-              icon = Icons.Rounded.Tune,
-              title = stringResource(id = R.string.search_yt_step2_title),
-              subtitle = stringResource(id = R.string.search_yt_step2_sub),
-              iconTint = Color(0xFF14B8A6)
-            )
-            MatcherGuideRow(
-              icon = Icons.Rounded.Download,
-              title = stringResource(id = R.string.search_yt_step3_title),
-              subtitle = stringResource(id = R.string.search_yt_step3_sub),
-              iconTint = Color(0xFFEC4899)
-            )
+            Row(
+              modifier = Modifier.fillMaxWidth(),
+              horizontalArrangement = Arrangement.SpaceBetween,
+              verticalAlignment = Alignment.CenterVertically
+            ) {
+              Text(
+                text = stringResource(id = R.string.search_yt_guide_title),
+                style = MaterialTheme.typography.titleSmall.copy(fontWeight = FontWeight.Bold, lineHeight = 20.sp),
+                color = MaterialTheme.colorScheme.onSurface,
+                modifier = Modifier.weight(1f)
+              )
+              OpenCloseGlassPill(
+                isOpen = showYoutubeGuide,
+                onToggle = { showYoutubeGuide = !showYoutubeGuide },
+                darkTheme = darkTheme,
+                reducedMotion = reducedMotion,
+                testTag = "search_yt_guide_toggle_button",
+                contentDescription = stringResource(
+                  id = if (showYoutubeGuide) R.string.section_close_cd else R.string.section_open_cd,
+                  stringResource(id = R.string.search_yt_guide_title)
+                )
+              )
+            }
+            AnimatedVisibility(
+              visible = showYoutubeGuide,
+              enter = if (reducedMotion) fadeIn(snap()) else fadeIn(tween(180)) + expandVertically(),
+              exit = if (reducedMotion) fadeOut(snap()) else fadeOut(tween(140)) + shrinkVertically()
+            ) {
+              Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
+                MatcherGuideRow(
+                  icon = Icons.Rounded.Link,
+                  title = stringResource(id = R.string.search_yt_step1_title),
+                  subtitle = stringResource(id = R.string.search_yt_step1_sub),
+                  iconTint = MaterialTheme.colorScheme.primary
+                )
+                MatcherGuideRow(
+                  icon = Icons.Rounded.Tune,
+                  title = stringResource(id = R.string.search_yt_step2_title),
+                  subtitle = stringResource(id = R.string.search_yt_step2_sub),
+                  iconTint = Color(0xFF14B8A6)
+                )
+                MatcherGuideRow(
+                  icon = Icons.Rounded.Download,
+                  title = stringResource(id = R.string.search_yt_step3_title),
+                  subtitle = stringResource(id = R.string.search_yt_step3_sub),
+                  iconTint = Color(0xFFEC4899)
+                )
+              }
+            }
           }
         }
       }
@@ -948,6 +1048,11 @@ fun SearchResultsArea(
   songDownloadProgress: Map<String, Float> = emptyMap(),
   downloadedSongIds: Set<String> = emptySet(),
   verifiedLyricsIds: Set<String> = emptySet(),
+  artColors: Pair<Color, Color>? = null,
+  dynamicBlurGlass: Boolean = true,
+  onToggleDynamicBlur: () -> Unit = {},
+  showResultsList: Boolean = true,
+  onToggleResultsList: () -> Unit = {},
   onCheckLyrics: (Song) -> Unit = {},
   onSongClick: (Song, List<Song>) -> Unit = { _, _ -> },
   onFavoriteClick: (Song) -> Unit = {},
@@ -1126,83 +1231,215 @@ fun SearchResultsArea(
       }
 
       is SearchUiState.Results -> {
-        LazyColumn(
-          modifier = Modifier.fillMaxSize(),
-          verticalArrangement = Arrangement.spacedBy(8.dp),
-          contentPadding = PaddingValues(bottom = listBottomPadding)
-        ) {
-          item {
-            val clearInteractionSource = remember { MutableInteractionSource() }
-            val isClearPressed by clearInteractionSource.collectIsPressedAsState()
-            val clearScale by animateFloatAsState(
-              targetValue = if (isClearPressed) 0.93f else 1f,
-              animationSpec = if (isStill) snap() else spring(dampingRatio = 0.68f, stiffness = Spring.StiffnessMedium),
-              label = "clear_pill_spring"
+        val activeArtPair = artColors ?: (
+          rememberArtworkColors(
+            artworkUrl = currentSong?.artworkUrl.orEmpty(),
+            fallbackTitle = currentSong?.title.orEmpty()
+          )
+        )
+        val useDynamicArt = dynamicBlurGlass && currentSong != null
+        val panelShape = RoundedCornerShape(26.dp)
+        val panelBorderBrush = Brush.verticalGradient(
+          colors = if (useDynamicArt) {
+            listOf(
+              activeArtPair.first.copy(alpha = if (darkTheme) 0.56f else 0.72f),
+              activeArtPair.second.copy(alpha = if (darkTheme) 0.24f else 0.36f)
             )
-            Row(
+          } else if (darkTheme) {
+            listOf(Color.White.copy(alpha = 0.22f), Color.White.copy(alpha = 0.06f))
+          } else {
+            listOf(Color.White, Color.White.copy(alpha = 0.55f))
+          }
+        )
+
+        Box(
+          modifier = Modifier
+            .fillMaxSize()
+            .padding(bottom = if (showResultsList) 0.dp else centerBottomPadding)
+        ) {
+          Box(
+            modifier = Modifier
+              .fillMaxWidth()
+              .clip(panelShape)
+              .border(1.dp, panelBorderBrush, panelShape)
+              .testTag("search_results_glass_panel")
+          ) {
+            DynamicArtGlassBackdropLayer(
+              song = currentSong,
+              artColors = activeArtPair,
+              enabled = useDynamicArt,
+              darkTheme = darkTheme,
+              reducedMotion = isStill,
+              blurRadius = 34.dp,
+              artAlpha = if (darkTheme) 0.34f else 0.22f,
+              scrimAlpha = if (darkTheme) 0.58f else 0.72f,
+              modifier = Modifier.matchParentSize()
+            )
+
+            Column(
               modifier = Modifier
                 .fillMaxWidth()
-                .padding(horizontal = 4.dp, vertical = 2.dp),
-              horizontalArrangement = Arrangement.SpaceBetween,
-              verticalAlignment = Alignment.CenterVertically
+                .padding(horizontal = 10.dp, vertical = 10.dp)
             ) {
-              Text(
-                text = stringResource(id = R.string.search_results_count, state.items.size),
-                style = MaterialTheme.typography.labelMedium.copy(fontWeight = FontWeight.Bold),
-                color = AurixTealAccent
+              val clearInteractionSource = remember { MutableInteractionSource() }
+              val isClearPressed by clearInteractionSource.collectIsPressedAsState()
+              val clearScale by animateFloatAsState(
+                targetValue = if (isClearPressed) 0.93f else 1f,
+                animationSpec = if (isStill) snap() else spring(dampingRatio = 0.68f, stiffness = Spring.StiffnessMedium),
+                label = "clear_pill_spring"
               )
-              Surface(
-                shape = CircleShape,
-                color = if (darkTheme) Color.White.copy(alpha = 0.08f) else Color.White.copy(alpha = 0.78f),
-                border = BorderStroke(
-                  1.dp,
-                  if (darkTheme) Color.White.copy(alpha = 0.16f) else Color.White
-                ),
+
+              Row(
                 modifier = Modifier
-                  .graphicsLayer {
-                    scaleX = clearScale
-                    scaleY = clearScale
-                  }
-                  .clip(CircleShape)
-                  .clickable(
-                    interactionSource = clearInteractionSource,
-                    indication = LocalIndication.current
-                  ) { onClearSearch() }
+                  .fillMaxWidth()
+                  .padding(horizontal = 4.dp, vertical = 2.dp),
+                horizontalArrangement = Arrangement.SpaceBetween,
+                verticalAlignment = Alignment.CenterVertically
               ) {
                 Text(
-                  text = stringResource(id = R.string.search_quick_clear),
-                  style = MaterialTheme.typography.labelSmall.copy(fontWeight = FontWeight.SemiBold),
-                  color = MaterialTheme.colorScheme.onSurfaceVariant,
-                  modifier = Modifier.padding(horizontal = 12.dp, vertical = 5.dp)
+                  text = stringResource(id = R.string.search_results_count, state.items.size),
+                  style = MaterialTheme.typography.labelMedium.copy(fontWeight = FontWeight.Bold),
+                  color = if (useDynamicArt) activeArtPair.first else AurixTealAccent,
+                  modifier = Modifier.weight(1f)
                 )
+
+                Row(
+                  verticalAlignment = Alignment.CenterVertically,
+                  horizontalArrangement = Arrangement.spacedBy(6.dp)
+                ) {
+                  // Dynamic Blur Glass Toggle Pill
+                  Surface(
+                    onClick = onToggleDynamicBlur,
+                    shape = CircleShape,
+                    color = if (dynamicBlurGlass) {
+                      (if (useDynamicArt) activeArtPair.first else AurixTealAccent).copy(alpha = if (darkTheme) 0.22f else 0.14f)
+                    } else if (darkTheme) {
+                      Color.White.copy(alpha = 0.08f)
+                    } else {
+                      Color.White.copy(alpha = 0.78f)
+                    },
+                    border = BorderStroke(
+                      1.dp,
+                      if (dynamicBlurGlass) {
+                        (if (useDynamicArt) activeArtPair.first else AurixTealAccent).copy(alpha = 0.55f)
+                      } else if (darkTheme) {
+                        Color.White.copy(alpha = 0.16f)
+                      } else {
+                        Color.White
+                      }
+                    ),
+                    modifier = Modifier
+                      .minimumInteractiveComponentSize()
+                      .testTag("search_blur_toggle_button")
+                  ) {
+                    Row(
+                      modifier = Modifier.padding(horizontal = 9.dp, vertical = 6.dp),
+                      verticalAlignment = Alignment.CenterVertically,
+                      horizontalArrangement = Arrangement.spacedBy(4.dp)
+                    ) {
+                      Icon(
+                        imageVector = if (dynamicBlurGlass) Icons.Rounded.BlurOn else Icons.Rounded.BlurOff,
+                        contentDescription = stringResource(
+                          id = if (dynamicBlurGlass) R.string.search_results_blur_on else R.string.search_results_blur_off
+                        ),
+                        tint = if (dynamicBlurGlass) {
+                          if (useDynamicArt) activeArtPair.first else AurixTealAccent
+                        } else {
+                          MaterialTheme.colorScheme.onSurfaceVariant
+                        },
+                        modifier = Modifier.size(14.dp)
+                      )
+                    }
+                  }
+
+                  // Open / Close Results Drawer Toggle
+                  OpenCloseGlassPill(
+                    isOpen = showResultsList,
+                    onToggle = onToggleResultsList,
+                    darkTheme = darkTheme,
+                    reducedMotion = isStill,
+                    testTag = "search_toggle_results_button",
+                    accentColor = if (useDynamicArt) activeArtPair.first else AurixTealAccent,
+                    contentDescription = stringResource(
+                      id = if (showResultsList) R.string.section_close_cd else R.string.section_open_cd,
+                      stringResource(id = R.string.search_results_count, state.items.size)
+                    )
+                  )
+
+                  // Clear / Dismiss Search Results Pill
+                  Surface(
+                    shape = CircleShape,
+                    color = if (darkTheme) Color.White.copy(alpha = 0.08f) else Color.White.copy(alpha = 0.78f),
+                    border = BorderStroke(
+                      1.dp,
+                      if (darkTheme) Color.White.copy(alpha = 0.16f) else Color.White
+                    ),
+                    modifier = Modifier
+                      .minimumInteractiveComponentSize()
+                      .graphicsLayer {
+                        scaleX = clearScale
+                        scaleY = clearScale
+                      }
+                      .clip(CircleShape)
+                      .clickable(
+                        interactionSource = clearInteractionSource,
+                        indication = LocalIndication.current
+                      ) { onClearSearch() }
+                      .testTag("search_close_results_button")
+                  ) {
+                    Text(
+                      text = stringResource(id = R.string.search_quick_clear),
+                      style = MaterialTheme.typography.labelSmall.copy(fontWeight = FontWeight.SemiBold),
+                      color = MaterialTheme.colorScheme.onSurfaceVariant,
+                      modifier = Modifier.padding(horizontal = 10.dp, vertical = 6.dp)
+                    )
+                  }
+                }
+              }
+
+              AnimatedVisibility(
+                visible = showResultsList,
+                enter = if (isStill) fadeIn(snap()) else fadeIn(tween(180)) + expandVertically(),
+                exit = if (isStill) fadeOut(snap()) else fadeOut(tween(140)) + shrinkVertically()
+              ) {
+                LazyColumn(
+                  modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(top = 6.dp),
+                  verticalArrangement = Arrangement.spacedBy(8.dp),
+                  contentPadding = PaddingValues(bottom = listBottomPadding)
+                ) {
+                  itemsIndexed(state.items, key = { _, song -> song.id }) { index, song ->
+                    SongDownloadRow(
+                      song = song,
+                      index = index + 1,
+                      isPlaying = isPlaying,
+                      isCurrent = currentSong?.id == song.id,
+                      isResolving = resolvingSongId == song.id,
+                      reducedMotion = isStill,
+                      darkTheme = darkTheme,
+                      hasLyrics = song.id in verifiedLyricsIds,
+                      downloadProgress = songDownloadProgress[song.id],
+                      isDownloaded = song.id in downloadedSongIds,
+                      ambientPrimaryColor = if (useDynamicArt) activeArtPair.first else null,
+                      ambientSecondaryColor = if (useDynamicArt) activeArtPair.second else null,
+                      onCheckLyrics = onCheckLyrics,
+                      onSongClick = { onSongClick(song, state.items) },
+                      onFavoriteClick = { onFavoriteClick(song) },
+                      onDownloadClick = { onDownloadClick(song) },
+                      modifier = Modifier.animateItem(
+                        fadeInSpec = if (isStill) null else spring(stiffness = Spring.StiffnessMediumLow),
+                        placementSpec = if (isStill) null else spring(
+                          dampingRatio = 0.82f,
+                          stiffness = Spring.StiffnessMediumLow
+                        ),
+                        fadeOutSpec = if (isStill) null else spring(stiffness = Spring.StiffnessMedium)
+                      )
+                    )
+                  }
+                }
               }
             }
-          }
-          itemsIndexed(state.items, key = { _, song -> song.id }) { index, song ->
-            SongDownloadRow(
-              song = song,
-              index = index + 1,
-              isPlaying = isPlaying,
-              isCurrent = currentSong?.id == song.id,
-              isResolving = resolvingSongId == song.id,
-              reducedMotion = isStill,
-              darkTheme = darkTheme,
-              hasLyrics = song.id in verifiedLyricsIds,
-              downloadProgress = songDownloadProgress[song.id],
-              isDownloaded = song.id in downloadedSongIds,
-              onCheckLyrics = onCheckLyrics,
-              onSongClick = { onSongClick(song, state.items) },
-              onFavoriteClick = { onFavoriteClick(song) },
-              onDownloadClick = { onDownloadClick(song) },
-              modifier = Modifier.animateItem(
-                fadeInSpec = if (isStill) null else spring(stiffness = Spring.StiffnessMediumLow),
-                placementSpec = if (isStill) null else spring(
-                  dampingRatio = 0.82f,
-                  stiffness = Spring.StiffnessMediumLow
-                ),
-                fadeOutSpec = if (isStill) null else spring(stiffness = Spring.StiffnessMedium)
-              )
-            )
           }
         }
       }

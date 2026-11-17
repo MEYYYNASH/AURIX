@@ -75,7 +75,9 @@ fun LiquidGlassTabBar(
   selectedIndex: Int,
   onSelect: (Int) -> Unit,
   modifier: Modifier = Modifier,
-  reducedMotion: Boolean = false
+  reducedMotion: Boolean = false,
+  ambientColors: Pair<Color, Color>? = null,
+  darkThemeOverride: Boolean? = null
 ) {
   if (tabs.isEmpty()) return
 
@@ -92,8 +94,10 @@ fun LiquidGlassTabBar(
   }
   val skipAnimations = reducedMotion || systemAnimScale == 0f
 
-  val darkTheme = MaterialTheme.colorScheme.background.luminance() < 0.5f ||
-    (isSystemInDarkTheme() && MaterialTheme.colorScheme.surface.luminance() < 0.5f)
+  val darkTheme = darkThemeOverride ?: (
+    MaterialTheme.colorScheme.background.luminance() < 0.5f ||
+      (isSystemInDarkTheme() && MaterialTheme.colorScheme.surface.luminance() < 0.5f)
+    )
   val accentColor = MaterialTheme.colorScheme.primary
 
   val barInnerHeightPx = with(density) { 54.dp.toPx() }
@@ -203,36 +207,48 @@ fun LiquidGlassTabBar(
         .matchParentSize()
         .clip(CircleShape)
     ) {
-      if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
-        Box(
-          modifier = Modifier
-            .matchParentSize()
-            .blur(20.dp)
-            .background(
-              Brush.horizontalGradient(
-                colors = if (darkTheme) {
-                  listOf(
-                    accentColor.copy(alpha = 0.14f),
-                    Color.White.copy(alpha = 0.10f),
-                    accentColor.copy(alpha = 0.12f)
-                  )
-                } else {
-                  listOf(
-                    accentColor.copy(alpha = 0.12f),
-                    Color.White.copy(alpha = 0.46f),
-                    Color(0xFFC4B5FD).copy(alpha = 0.24f)
-                  )
-                }
-              )
+      val glowStart = ambientColors?.first ?: accentColor
+      val glowEnd = ambientColors?.second ?: if (darkTheme) accentColor else Color(0xFFC4B5FD)
+      Box(
+        modifier = Modifier
+          .matchParentSize()
+          .then(if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) Modifier.blur(20.dp) else Modifier)
+          .background(
+            Brush.horizontalGradient(
+              colors = if (darkTheme) {
+                listOf(
+                  glowStart.copy(alpha = if (ambientColors != null) 0.24f else 0.14f),
+                  Color.White.copy(alpha = 0.08f),
+                  glowEnd.copy(alpha = if (ambientColors != null) 0.20f else 0.12f)
+                )
+              } else {
+                listOf(
+                  glowStart.copy(alpha = if (ambientColors != null) 0.18f else 0.12f),
+                  Color.White.copy(alpha = 0.44f),
+                  glowEnd.copy(alpha = if (ambientColors != null) 0.18f else 0.24f)
+                )
+              }
             )
+          )
+      )
+
+      val borderBrush = if (ambientColors != null) {
+        Brush.horizontalGradient(
+          colors = listOf(
+            glowStart.copy(alpha = if (darkTheme) 0.42f else 0.36f),
+            innerEdgeHighlight,
+            glowEnd.copy(alpha = if (darkTheme) 0.38f else 0.32f)
+          )
         )
+      } else {
+        Brush.horizontalGradient(colors = listOf(innerEdgeHighlight, innerEdgeHighlight))
       }
 
       Box(
         modifier = Modifier
           .matchParentSize()
           .background(glassBaseFill)
-          .border(1.dp, innerEdgeHighlight, CircleShape)
+          .border(1.dp, borderBrush, CircleShape)
           .drawBehind {
             val stroke15 = 1.5.dp.toPx()
             val inset = stroke15 * 0.5f

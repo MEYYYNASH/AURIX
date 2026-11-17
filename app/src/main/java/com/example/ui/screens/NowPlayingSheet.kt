@@ -1,7 +1,9 @@
 package com.example.ui.screens
 
+import android.os.Build
 import androidx.activity.compose.BackHandler
 import androidx.compose.animation.AnimatedContent
+import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.core.FastOutSlowInEasing
 import androidx.compose.animation.core.RepeatMode
 import androidx.compose.animation.core.Spring
@@ -12,8 +14,10 @@ import androidx.compose.animation.core.rememberInfiniteTransition
 import androidx.compose.animation.core.snap
 import androidx.compose.animation.core.spring
 import androidx.compose.animation.core.tween
+import androidx.compose.animation.expandVertically
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
+import androidx.compose.animation.shrinkVertically
 import androidx.compose.animation.togetherWith
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.background
@@ -31,6 +35,7 @@ import androidx.compose.material.icons.automirrored.rounded.QueueMusic
 import androidx.compose.material.icons.rounded.*
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
+import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.alpha
@@ -135,6 +140,8 @@ fun NowPlayingSheet(
   var showEqualizer by remember { mutableStateOf(false) }
   var showQueue by remember { mutableStateOf(false) }
   var showSleepSpeed by remember { mutableStateOf(false) }
+  var showControlsExtras by rememberSaveable { mutableStateOf(true) }
+  var dynamicControlsBlur by rememberSaveable { mutableStateOf(true) }
 
   val (c1, c2) = rememberArtworkColors(song.artworkUrl, song.title)
   val bgAlpha by animateFloatAsState(
@@ -486,241 +493,355 @@ fun NowPlayingSheet(
 
       Spacer(modifier = Modifier.height(10.dp))
 
-      // Seek bar with sleek circular white thumb (replaces tall vertical M3 thumb)
-      val totalMs = durationMs.coerceAtLeast(song.durationSeconds * 1000L).coerceAtLeast(1L)
-      val sliderPos = currentPositionMs.toFloat().coerceIn(0f, totalMs.toFloat())
-      val sliderInteraction = remember { MutableInteractionSource() }
-
-      Slider(
-        value = sliderPos,
-        onValueChange = { onSeek(it.toLong()) },
-        valueRange = 0f..totalMs.toFloat(),
-        interactionSource = sliderInteraction,
-        thumb = {
-          Box(
-            modifier = Modifier
-              .size(16.dp)
-              .clip(CircleShape)
-              .background(Color.White)
-              .border(1.dp, c1.copy(alpha = 0.45f), CircleShape)
+      // Player Controls Dock with Dynamic Album-Art-Color Blurred Glassmorphism + Open/Close Feature Toggle
+      val controlsShape = RoundedCornerShape(28.dp)
+      val controlsBlurActive = dynamicControlsBlur && dynamicBg
+      val controlsBorderBrush = Brush.verticalGradient(
+        colors = if (controlsBlurActive) {
+          listOf(
+            c1.copy(alpha = 0.54f),
+            c2.copy(alpha = 0.24f),
+            Color.White.copy(alpha = 0.14f)
           )
-        },
-        track = { sliderState ->
-          val fraction = ((sliderState.value - sliderState.valueRange.start) /
-            (sliderState.valueRange.endInclusive - sliderState.valueRange.start).coerceAtLeast(1f))
-            .coerceIn(0f, 1f)
-          Box(
-            modifier = Modifier
-              .fillMaxWidth()
-              .height(5.dp)
-              .clip(CircleShape)
-              .background(Color.White.copy(alpha = 0.24f))
-          ) {
-            Box(
-              modifier = Modifier
-                .fillMaxWidth(fraction)
-                .fillMaxHeight()
-                .clip(CircleShape)
-                .background(
-                  Brush.horizontalGradient(
-                    colors = listOf(Color.White, Color.White.copy(alpha = 0.92f))
-                  )
-                )
-            )
-          }
+        } else {
+          listOf(
+            Color.White.copy(alpha = 0.24f),
+            Color.White.copy(alpha = 0.10f)
+          )
         }
       )
 
-      Row(
-        modifier = Modifier.fillMaxWidth(),
-        horizontalArrangement = Arrangement.SpaceBetween
+      Box(
+        modifier = Modifier
+          .fillMaxWidth()
+          .clip(controlsShape)
+          .border(1.dp, controlsBorderBrush, controlsShape)
+          .testTag("np_controls_glass_card")
       ) {
-        Text(text = formatTime(currentPositionMs), style = MaterialTheme.typography.bodySmall, color = Color.White.copy(alpha = 0.78f))
-        Text(text = formatTime(totalMs), style = MaterialTheme.typography.bodySmall, color = Color.White.copy(alpha = 0.78f))
-      }
+        DynamicArtGlassBackdropLayer(
+          song = song,
+          artColors = c1 to c2,
+          enabled = controlsBlurActive,
+          darkTheme = true,
+          reducedMotion = reducedMotion,
+          blurRadius = 34.dp,
+          artAlpha = 0.38f,
+          scrimAlpha = if (controlsBlurActive) 0.46f else 0.56f,
+          modifier = Modifier.matchParentSize()
+        )
 
-      Spacer(modifier = Modifier.height(12.dp))
-
-      // Playback controls
-      Row(
-        modifier = Modifier.fillMaxWidth(),
-        horizontalArrangement = Arrangement.SpaceEvenly,
-        verticalAlignment = Alignment.CenterVertically
-      ) {
-        IconButton(onClick = onToggleShuffle, modifier = Modifier.minimumInteractiveComponentSize()) {
-          Icon(
-            Icons.Rounded.Shuffle,
-            contentDescription = "Shuffle",
-            tint = if (shuffleEnabled) c1 else Color.White.copy(alpha = 0.70f)
-          )
-        }
-        IconButton(onClick = onPrevious, modifier = Modifier.minimumInteractiveComponentSize()) {
-          Icon(Icons.Rounded.SkipPrevious, contentDescription = "Previous", modifier = Modifier.size(36.dp), tint = Color.White)
-        }
-        Surface(
+        Column(
           modifier = Modifier
-            .size(72.dp)
-            .clip(CircleShape)
-            .clickable { onPlayPause() }
-            .testTag("np_play_pause_button"),
-          shape = CircleShape,
-          color = Color.White,
-          shadowElevation = 12.dp
+            .fillMaxWidth()
+            .padding(horizontal = 14.dp, vertical = 10.dp),
+          horizontalAlignment = Alignment.CenterHorizontally
         ) {
-          Box(contentAlignment = Alignment.Center) {
-            Icon(
-              imageVector = if (isPlaying) Icons.Rounded.Pause else Icons.Rounded.PlayArrow,
-              contentDescription = "Play or Pause",
-              tint = Color(0xFF111111),
-              modifier = Modifier.size(34.dp)
-            )
-          }
-        }
-        IconButton(onClick = onNext, modifier = Modifier.minimumInteractiveComponentSize()) {
-          Icon(Icons.Rounded.SkipNext, contentDescription = "Next", modifier = Modifier.size(36.dp), tint = Color.White)
-        }
-        IconButton(onClick = onToggleRepeat, modifier = Modifier.minimumInteractiveComponentSize()) {
-          Icon(
-            Icons.Rounded.Repeat,
-            contentDescription = "Repeat",
-            tint = if (repeatEnabled) c1 else Color.White.copy(alpha = 0.70f)
-          )
-        }
-      }
+          // Seek bar with sleek circular white thumb
+          val totalMs = durationMs.coerceAtLeast(song.durationSeconds * 1000L).coerceAtLeast(1L)
+          val sliderPos = currentPositionMs.toFloat().coerceIn(0f, totalMs.toFloat())
+          val sliderInteraction = remember { MutableInteractionSource() }
 
-      Spacer(modifier = Modifier.height(10.dp))
-
-      // MoodFlow Intelligent Mood Shuffle Toggle Chip + Live Match % Badge
-      Row(
-        modifier = Modifier.fillMaxWidth(),
-        horizontalArrangement = Arrangement.Center,
-        verticalAlignment = Alignment.CenterVertically
-      ) {
-        Surface(
-          onClick = onToggleMoodFlow,
-          shape = CircleShape,
-          color = if (moodFlowEnabled) c1.copy(alpha = 0.26f) else Color.White.copy(alpha = 0.12f),
-          border = androidx.compose.foundation.BorderStroke(
-            1.dp,
-            if (moodFlowEnabled) c1.copy(alpha = 0.80f) else Color.White.copy(alpha = 0.20f)
-          ),
-          modifier = Modifier
-            .defaultMinSize(minHeight = 48.dp)
-            .testTag("np_moodflow_chip")
-        ) {
-          Row(
-            modifier = Modifier.padding(horizontal = 14.dp, vertical = 8.dp),
-            verticalAlignment = Alignment.CenterVertically,
-            horizontalArrangement = Arrangement.spacedBy(8.dp)
-          ) {
-            Icon(
-              imageVector = Icons.Rounded.AutoAwesome,
-              contentDescription = stringResource(id = R.string.moodflow_toggle_cd),
-              tint = if (moodFlowEnabled) Color.White else Color.White.copy(alpha = 0.72f),
-              modifier = Modifier.size(16.dp)
-            )
-            Text(
-              text = stringResource(
-                id = if (moodFlowEnabled) R.string.moodflow_on_label else R.string.moodflow_off_label
-              ),
-              style = MaterialTheme.typography.labelLarge.copy(fontWeight = FontWeight.Bold),
-              color = if (moodFlowEnabled) Color.White else Color.White.copy(alpha = 0.78f)
-            )
-            if (moodFlowEnabled && moodFlowPick != null) {
-              Surface(
-                shape = CircleShape,
-                color = Color.White.copy(alpha = 0.20f),
-                modifier = Modifier.testTag("np_moodflow_match_badge")
+          Slider(
+            value = sliderPos,
+            onValueChange = { onSeek(it.toLong()) },
+            valueRange = 0f..totalMs.toFloat(),
+            interactionSource = sliderInteraction,
+            thumb = {
+              Box(
+                modifier = Modifier
+                  .size(16.dp)
+                  .clip(CircleShape)
+                  .background(Color.White)
+                  .border(1.dp, c1.copy(alpha = 0.45f), CircleShape)
+              )
+            },
+            track = { sliderState ->
+              val fraction = ((sliderState.value - sliderState.valueRange.start) /
+                (sliderState.valueRange.endInclusive - sliderState.valueRange.start).coerceAtLeast(1f))
+                .coerceIn(0f, 1f)
+              Box(
+                modifier = Modifier
+                  .fillMaxWidth()
+                  .height(5.dp)
+                  .clip(CircleShape)
+                  .background(Color.White.copy(alpha = 0.24f))
               ) {
-                Text(
-                  text = stringResource(id = R.string.moodflow_match_badge, moodFlowPick.matchPercent),
-                  style = MaterialTheme.typography.labelSmall.copy(
-                    fontWeight = FontWeight.ExtraBold,
-                    fontSize = 11.sp
+                Box(
+                  modifier = Modifier
+                    .fillMaxWidth(fraction)
+                    .fillMaxHeight()
+                    .clip(CircleShape)
+                    .background(
+                      Brush.horizontalGradient(
+                        colors = listOf(Color.White, c1.copy(alpha = 0.85f), Color.White.copy(alpha = 0.92f))
+                      )
+                    )
+                )
+              }
+            }
+          )
+
+          Row(
+            modifier = Modifier.fillMaxWidth(),
+            horizontalArrangement = Arrangement.SpaceBetween
+          ) {
+            Text(text = formatTime(currentPositionMs), style = MaterialTheme.typography.bodySmall, color = Color.White.copy(alpha = 0.78f))
+            Text(text = formatTime(totalMs), style = MaterialTheme.typography.bodySmall, color = Color.White.copy(alpha = 0.78f))
+          }
+
+          Spacer(modifier = Modifier.height(6.dp))
+
+          // Playback controls
+          Row(
+            modifier = Modifier.fillMaxWidth(),
+            horizontalArrangement = Arrangement.SpaceEvenly,
+            verticalAlignment = Alignment.CenterVertically
+          ) {
+            IconButton(onClick = onToggleShuffle, modifier = Modifier.minimumInteractiveComponentSize()) {
+              Icon(
+                Icons.Rounded.Shuffle,
+                contentDescription = "Shuffle",
+                tint = if (shuffleEnabled) c1 else Color.White.copy(alpha = 0.70f)
+              )
+            }
+            IconButton(onClick = onPrevious, modifier = Modifier.minimumInteractiveComponentSize()) {
+              Icon(Icons.Rounded.SkipPrevious, contentDescription = "Previous", modifier = Modifier.size(34.dp), tint = Color.White)
+            }
+            Surface(
+              modifier = Modifier
+                .size(66.dp)
+                .clip(CircleShape)
+                .clickable { onPlayPause() }
+                .testTag("np_play_pause_button"),
+              shape = CircleShape,
+              color = Color.White,
+              shadowElevation = 12.dp
+            ) {
+              Box(contentAlignment = Alignment.Center) {
+                Icon(
+                  imageVector = if (isPlaying) Icons.Rounded.Pause else Icons.Rounded.PlayArrow,
+                  contentDescription = "Play or Pause",
+                  tint = Color(0xFF111111),
+                  modifier = Modifier.size(32.dp)
+                )
+              }
+            }
+            IconButton(onClick = onNext, modifier = Modifier.minimumInteractiveComponentSize()) {
+              Icon(Icons.Rounded.SkipNext, contentDescription = "Next", modifier = Modifier.size(34.dp), tint = Color.White)
+            }
+            IconButton(onClick = onToggleRepeat, modifier = Modifier.minimumInteractiveComponentSize()) {
+              Icon(
+                Icons.Rounded.Repeat,
+                contentDescription = "Repeat",
+                tint = if (repeatEnabled) c1 else Color.White.copy(alpha = 0.70f)
+              )
+            }
+          }
+
+          Spacer(modifier = Modifier.height(6.dp))
+
+          // Controls Utility Header: Art Blur Toggle + Open/Close Feature Dock Toggle
+          Row(
+            modifier = Modifier.fillMaxWidth(),
+            horizontalArrangement = Arrangement.SpaceBetween,
+            verticalAlignment = Alignment.CenterVertically
+          ) {
+            IconButton(
+              onClick = { dynamicControlsBlur = !dynamicControlsBlur },
+              modifier = Modifier
+                .minimumInteractiveComponentSize()
+                .testTag("np_toggle_controls_blur_button")
+            ) {
+              Icon(
+                imageVector = if (controlsBlurActive) Icons.Rounded.BlurOn else Icons.Rounded.BlurOff,
+                contentDescription = stringResource(id = R.string.np_controls_blur_cd),
+                tint = if (controlsBlurActive) Color.White else Color.White.copy(alpha = 0.62f),
+                modifier = Modifier.size(20.dp)
+              )
+            }
+
+            Surface(
+              onClick = { showControlsExtras = !showControlsExtras },
+              shape = CircleShape,
+              color = if (showControlsExtras) Color.White.copy(alpha = 0.10f) else c1.copy(alpha = 0.28f),
+              border = BorderStroke(
+                1.dp,
+                if (showControlsExtras) Color.White.copy(alpha = 0.18f) else c1.copy(alpha = 0.72f)
+              ),
+              modifier = Modifier
+                .minimumInteractiveComponentSize()
+                .testTag("np_toggle_extras_button")
+            ) {
+              Row(
+                modifier = Modifier.padding(horizontal = 12.dp, vertical = 6.dp),
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.spacedBy(5.dp)
+              ) {
+                Icon(
+                  imageVector = if (showControlsExtras) Icons.Rounded.Close else Icons.Rounded.KeyboardArrowUp,
+                  contentDescription = stringResource(
+                    id = if (showControlsExtras) R.string.np_controls_hide else R.string.np_controls_show
                   ),
-                  color = Color.White,
-                  modifier = Modifier.padding(horizontal = 8.dp, vertical = 3.dp)
+                  tint = Color.White,
+                  modifier = Modifier.size(15.dp)
+                )
+                Text(
+                  text = stringResource(
+                    id = if (showControlsExtras) R.string.np_controls_hide else R.string.np_controls_show
+                  ),
+                  style = MaterialTheme.typography.labelSmall.copy(fontWeight = FontWeight.Bold),
+                  color = Color.White
                 )
               }
             }
           }
-        }
-      }
 
-      Spacer(modifier = Modifier.height(6.dp))
+          AnimatedVisibility(
+            visible = showControlsExtras,
+            enter = if (reducedMotion) fadeIn(snap()) else expandVertically(tween(240)) + fadeIn(tween(200)),
+            exit = if (reducedMotion) fadeOut(snap()) else shrinkVertically(tween(200)) + fadeOut(tween(150))
+          ) {
+            Column(
+              modifier = Modifier.fillMaxWidth(),
+              horizontalAlignment = Alignment.CenterHorizontally
+            ) {
+              Spacer(modifier = Modifier.height(6.dp))
 
-      // Unified Liquid Glass Control Dock: Sleep, EQ, Queue, Speed
-      val activeQueueIdx = remember(queue, song.id) { queue.indexOfFirst { it.id == song.id } }
-      val upcomingCount = remember(queue, activeQueueIdx) {
-        if (queue.isEmpty()) 0
-        else if (activeQueueIdx >= 0) (queue.size - activeQueueIdx - 1).coerceAtLeast(0)
-        else queue.size
-      }
-      val sleepActive = sleepEndOfTrack || sleepRemainingSeconds > 0L || sleepMinutes > 0
-      val sleepChipText = when {
-        sleepEndOfTrack -> stringResource(id = R.string.np_sleep_end_short)
-        sleepRemainingSeconds > 0L -> "${sleepRemainingSeconds / 60}:${String.format("%02d", sleepRemainingSeconds % 60)}"
-        sleepMinutes > 0 -> "${sleepMinutes}m"
-        else -> stringResource(id = R.string.np_sleep_chip_off)
-      }
-      val eqActive = equalizerState.enabled
-      val eqPresetName = presetDisplayName(EqPreset.fromId(equalizerState.presetId))
-      val speedActive = abs(playbackSpeed - 1.0f) > 0.01f
-      val speedText = formatPlaybackSpeed(playbackSpeed)
+              // MoodFlow Intelligent Mood Shuffle Toggle Chip + Live Match % Badge
+              Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.Center,
+                verticalAlignment = Alignment.CenterVertically
+              ) {
+                Surface(
+                  onClick = onToggleMoodFlow,
+                  shape = CircleShape,
+                  color = if (moodFlowEnabled) c1.copy(alpha = 0.26f) else Color.White.copy(alpha = 0.12f),
+                  border = androidx.compose.foundation.BorderStroke(
+                    1.dp,
+                    if (moodFlowEnabled) c1.copy(alpha = 0.80f) else Color.White.copy(alpha = 0.20f)
+                  ),
+                  modifier = Modifier
+                    .defaultMinSize(minHeight = 48.dp)
+                    .testTag("np_moodflow_chip")
+                ) {
+                  Row(
+                    modifier = Modifier.padding(horizontal = 14.dp, vertical = 8.dp),
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.spacedBy(8.dp)
+                  ) {
+                    Icon(
+                      imageVector = Icons.Rounded.AutoAwesome,
+                      contentDescription = stringResource(id = R.string.moodflow_toggle_cd),
+                      tint = if (moodFlowEnabled) Color.White else Color.White.copy(alpha = 0.72f),
+                      modifier = Modifier.size(16.dp)
+                    )
+                    Text(
+                      text = stringResource(
+                        id = if (moodFlowEnabled) R.string.moodflow_on_label else R.string.moodflow_off_label
+                      ),
+                      style = MaterialTheme.typography.labelLarge.copy(fontWeight = FontWeight.Bold),
+                      color = if (moodFlowEnabled) Color.White else Color.White.copy(alpha = 0.78f)
+                    )
+                    if (moodFlowEnabled && moodFlowPick != null) {
+                      Surface(
+                        shape = CircleShape,
+                        color = Color.White.copy(alpha = 0.20f),
+                        modifier = Modifier.testTag("np_moodflow_match_badge")
+                      ) {
+                        Text(
+                          text = stringResource(id = R.string.moodflow_match_badge, moodFlowPick.matchPercent),
+                          style = MaterialTheme.typography.labelSmall.copy(
+                            fontWeight = FontWeight.ExtraBold,
+                            fontSize = 11.sp
+                          ),
+                          color = Color.White,
+                          modifier = Modifier.padding(horizontal = 8.dp, vertical = 3.dp)
+                        )
+                      }
+                    }
+                  }
+                }
+              }
 
-      Surface(
-        shape = RoundedCornerShape(26.dp),
-        color = Color.White.copy(alpha = 0.10f),
-        border = BorderStroke(1.dp, Color.White.copy(alpha = 0.18f)),
-        modifier = Modifier.fillMaxWidth()
-      ) {
-        Row(
-          modifier = Modifier
-            .fillMaxWidth()
-            .padding(4.dp),
-          horizontalArrangement = Arrangement.spacedBy(5.dp),
-          verticalAlignment = Alignment.CenterVertically
-        ) {
-          DockControlPill(
-            icon = Icons.Rounded.Bedtime,
-            label = sleepChipText,
-            active = sleepActive,
-            accent = c1,
-            contentDescription = stringResource(id = R.string.sleep_sheet_title),
-            testTag = "np_sleep_button",
-            modifier = Modifier.weight(1f),
-            onClick = { showSleepSpeed = true }
-          )
-          DockControlPill(
-            icon = Icons.Rounded.Equalizer,
-            label = if (eqActive) eqPresetName else stringResource(id = R.string.eq_button_short),
-            active = eqActive,
-            accent = c1,
-            contentDescription = stringResource(id = R.string.eq_title),
-            testTag = "np_equalizer_button",
-            modifier = Modifier.weight(1f),
-            onClick = { showEqualizer = true }
-          )
-          DockControlPill(
-            icon = Icons.AutoMirrored.Rounded.QueueMusic,
-            label = if (upcomingCount > 0) "${stringResource(id = R.string.np_queue_button)} · $upcomingCount" else stringResource(id = R.string.np_queue_button),
-            active = upcomingCount > 0,
-            accent = c1,
-            contentDescription = stringResource(id = R.string.queue_title),
-            testTag = "np_queue_button",
-            modifier = Modifier.weight(1f),
-            onClick = { showQueue = true }
-          )
-          DockControlPill(
-            icon = Icons.Rounded.Speed,
-            label = speedText,
-            active = speedActive,
-            accent = c1,
-            contentDescription = stringResource(id = R.string.speed_sheet_title),
-            testTag = "np_speed_button",
-            modifier = Modifier.weight(1f),
-            onClick = { showSleepSpeed = true }
-          )
+              Spacer(modifier = Modifier.height(6.dp))
+
+              // Unified Liquid Glass Control Dock: Sleep, EQ, Queue, Speed
+              val activeQueueIdx = remember(queue, song.id) { queue.indexOfFirst { it.id == song.id } }
+              val upcomingCount = remember(queue, activeQueueIdx) {
+                if (queue.isEmpty()) 0
+                else if (activeQueueIdx >= 0) (queue.size - activeQueueIdx - 1).coerceAtLeast(0)
+                else queue.size
+              }
+              val sleepActive = sleepEndOfTrack || sleepRemainingSeconds > 0L || sleepMinutes > 0
+              val sleepChipText = when {
+                sleepEndOfTrack -> stringResource(id = R.string.np_sleep_end_short)
+                sleepRemainingSeconds > 0L -> "${sleepRemainingSeconds / 60}:${String.format("%02d", sleepRemainingSeconds % 60)}"
+                sleepMinutes > 0 -> "${sleepMinutes}m"
+                else -> stringResource(id = R.string.np_sleep_chip_off)
+              }
+              val eqActive = equalizerState.enabled
+              val eqPresetName = presetDisplayName(EqPreset.fromId(equalizerState.presetId))
+              val speedActive = abs(playbackSpeed - 1.0f) > 0.01f
+              val speedText = formatPlaybackSpeed(playbackSpeed)
+
+              Surface(
+                shape = RoundedCornerShape(22.dp),
+                color = Color.White.copy(alpha = 0.10f),
+                border = BorderStroke(1.dp, Color.White.copy(alpha = 0.18f)),
+                modifier = Modifier.fillMaxWidth()
+              ) {
+                Row(
+                  modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(4.dp),
+                  horizontalArrangement = Arrangement.spacedBy(5.dp),
+                  verticalAlignment = Alignment.CenterVertically
+                ) {
+                  DockControlPill(
+                    icon = Icons.Rounded.Bedtime,
+                    label = sleepChipText,
+                    active = sleepActive,
+                    accent = c1,
+                    contentDescription = stringResource(id = R.string.sleep_sheet_title),
+                    testTag = "np_sleep_button",
+                    modifier = Modifier.weight(1f),
+                    onClick = { showSleepSpeed = true }
+                  )
+                  DockControlPill(
+                    icon = Icons.Rounded.Equalizer,
+                    label = if (eqActive) eqPresetName else stringResource(id = R.string.eq_button_short),
+                    active = eqActive,
+                    accent = c1,
+                    contentDescription = stringResource(id = R.string.eq_title),
+                    testTag = "np_equalizer_button",
+                    modifier = Modifier.weight(1f),
+                    onClick = { showEqualizer = true }
+                  )
+                  DockControlPill(
+                    icon = Icons.AutoMirrored.Rounded.QueueMusic,
+                    label = if (upcomingCount > 0) "${stringResource(id = R.string.np_queue_button)} · $upcomingCount" else stringResource(id = R.string.np_queue_button),
+                    active = upcomingCount > 0,
+                    accent = c1,
+                    contentDescription = stringResource(id = R.string.queue_title),
+                    testTag = "np_queue_button",
+                    modifier = Modifier.weight(1f),
+                    onClick = { showQueue = true }
+                  )
+                  DockControlPill(
+                    icon = Icons.Rounded.Speed,
+                    label = speedText,
+                    active = speedActive,
+                    accent = c1,
+                    contentDescription = stringResource(id = R.string.speed_sheet_title),
+                    testTag = "np_speed_button",
+                    modifier = Modifier.weight(1f),
+                    onClick = { showSleepSpeed = true }
+                  )
+                }
+              }
+            }
+          }
         }
       }
     }
@@ -968,22 +1089,39 @@ private fun SleepAndSpeedStudioSheet(
               color = MaterialTheme.colorScheme.onSurfaceVariant
             )
           }
-          if (sleepEndOfTrack || sleepRemainingSeconds > 0L) {
-            Surface(
-              shape = CircleShape,
-              color = accent.copy(alpha = 0.18f),
-              border = BorderStroke(1.dp, accent.copy(alpha = 0.55f))
-            ) {
-              val badgeText = if (sleepEndOfTrack) {
-                stringResource(id = R.string.sleep_end_of_track)
-              } else {
-                "${sleepRemainingSeconds / 60}:${String.format("%02d", sleepRemainingSeconds % 60)}"
+          Row(
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.spacedBy(4.dp)
+          ) {
+            if (sleepEndOfTrack || sleepRemainingSeconds > 0L) {
+              Surface(
+                shape = CircleShape,
+                color = accent.copy(alpha = 0.18f),
+                border = BorderStroke(1.dp, accent.copy(alpha = 0.55f))
+              ) {
+                val badgeText = if (sleepEndOfTrack) {
+                  stringResource(id = R.string.sleep_end_of_track)
+                } else {
+                  "${sleepRemainingSeconds / 60}:${String.format("%02d", sleepRemainingSeconds % 60)}"
+                }
+                Text(
+                  text = badgeText,
+                  style = MaterialTheme.typography.labelMedium.copy(fontWeight = FontWeight.Bold),
+                  color = accent,
+                  modifier = Modifier.padding(horizontal = 10.dp, vertical = 5.dp)
+                )
               }
-              Text(
-                text = badgeText,
-                style = MaterialTheme.typography.labelMedium.copy(fontWeight = FontWeight.Bold),
-                color = accent,
-                modifier = Modifier.padding(horizontal = 10.dp, vertical = 5.dp)
+            }
+            IconButton(
+              onClick = onDismiss,
+              modifier = Modifier
+                .minimumInteractiveComponentSize()
+                .testTag("sleep_speed_close_button")
+            ) {
+              Icon(
+                imageVector = Icons.Rounded.Close,
+                contentDescription = stringResource(id = R.string.cd_close_sheet),
+                tint = MaterialTheme.colorScheme.onSurfaceVariant
               )
             }
           }

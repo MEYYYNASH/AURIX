@@ -35,6 +35,7 @@ class PreferencesManager(private val context: Context) {
     val LAST_SEEN_VERSION_CODE = longPreferencesKey("last_seen_version_code")
     val UPDATE_DOWNLOAD_META = stringPreferencesKey("update_download_meta")
     val MOOD_FLOW_ENABLED = booleanPreferencesKey("mood_flow_enabled")
+    val NAV_STYLE = stringPreferencesKey("nav_style")
   }
 
   val themeMode: Flow<String> = context.dataStore.data.map { prefs -> prefs[THEME_MODE] ?: "system" }
@@ -59,6 +60,7 @@ class PreferencesManager(private val context: Context) {
   val lastSeenVersionCode: Flow<Long> = context.dataStore.data.map { prefs -> prefs[LAST_SEEN_VERSION_CODE] ?: 0L }
   val updateDownloadMeta: Flow<String> = context.dataStore.data.map { prefs -> prefs[UPDATE_DOWNLOAD_META] ?: "" }
   val moodFlowEnabled: Flow<Boolean> = context.dataStore.data.map { prefs -> prefs[MOOD_FLOW_ENABLED] ?: true }
+  val navStyle: Flow<String> = context.dataStore.data.map { prefs -> prefs[NAV_STYLE] ?: "classic" }
 
   suspend fun setThemeMode(mode: String) { context.dataStore.edit { it[THEME_MODE] = mode } }
   suspend fun setAccentColor(color: String) { context.dataStore.edit { it[ACCENT_COLOR] = color } }
@@ -68,6 +70,7 @@ class PreferencesManager(private val context: Context) {
   suspend fun setOnboardingCompleted(completed: Boolean) { context.dataStore.edit { it[ONBOARDING_COMPLETED] = completed } }
   suspend fun setGithubOwner(owner: String) { context.dataStore.edit { it[GITHUB_OWNER] = owner } }
   suspend fun setGithubRepo(repo: String) { context.dataStore.edit { it[GITHUB_REPO] = repo } }
+  suspend fun setNavStyle(style: String) { context.dataStore.edit { it[NAV_STYLE] = style } }
 
   suspend fun addHiddenSongId(songId: String) {
     context.dataStore.edit { prefs ->

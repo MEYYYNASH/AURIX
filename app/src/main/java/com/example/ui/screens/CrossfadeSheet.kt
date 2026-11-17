@@ -17,6 +17,7 @@ import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.rounded.Close
 import androidx.compose.material.icons.rounded.GraphicEq
 import androidx.compose.material.icons.rounded.RestartAlt
 import androidx.compose.material.icons.rounded.Tune
@@ -199,21 +200,38 @@ fun CrossfadeSheet(
             }
           }
 
-          IconButton(
-            onClick = {
-              haptics.performHapticFeedback(HapticFeedbackType.TextHandleMove)
-              onDurationChanged(0)
-            },
-            enabled = isActive,
-            modifier = Modifier
-              .minimumInteractiveComponentSize()
-              .testTag("crossfade_reset_button")
+          Row(
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.spacedBy(2.dp)
           ) {
-            Icon(
-              imageVector = Icons.Rounded.RestartAlt,
-              contentDescription = stringResource(id = R.string.eq_reset),
-              tint = if (isActive) MaterialTheme.colorScheme.onSurfaceVariant else MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.35f)
-            )
+            IconButton(
+              onClick = {
+                haptics.performHapticFeedback(HapticFeedbackType.TextHandleMove)
+                onDurationChanged(0)
+              },
+              enabled = isActive,
+              modifier = Modifier
+                .minimumInteractiveComponentSize()
+                .testTag("crossfade_reset_button")
+            ) {
+              Icon(
+                imageVector = Icons.Rounded.RestartAlt,
+                contentDescription = stringResource(id = R.string.eq_reset),
+                tint = if (isActive) MaterialTheme.colorScheme.onSurfaceVariant else MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.35f)
+              )
+            }
+            IconButton(
+              onClick = onDismiss,
+              modifier = Modifier
+                .minimumInteractiveComponentSize()
+                .testTag("crossfade_close_button")
+            ) {
+              Icon(
+                imageVector = Icons.Rounded.Close,
+                contentDescription = stringResource(id = R.string.cd_close_sheet),
+                tint = MaterialTheme.colorScheme.onSurfaceVariant
+              )
+            }
           }
         }
 

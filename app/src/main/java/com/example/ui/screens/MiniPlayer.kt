@@ -38,6 +38,7 @@ import androidx.compose.ui.graphics.StrokeCap
 import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.hapticfeedback.HapticFeedbackType
 import androidx.compose.ui.input.pointer.pointerInput
+import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.platform.LocalHapticFeedback
 import androidx.compose.ui.platform.testTag
@@ -45,6 +46,7 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.IntOffset
 import androidx.compose.ui.unit.dp
+import coil.compose.AsyncImage
 import com.example.model.Song
 import com.example.ui.theme.HeartRed
 import kotlinx.coroutines.launch
@@ -213,30 +215,48 @@ fun MiniPlayer(
         .clickable { onClick() }
         .testTag("mini_player_card")
     ) {
-      // Subtle blurred track-hue aura inside glass pill
-      if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
-        Box(
+      // Dynamic blurred album artwork + track-hue aura inside glass pill
+      val miniArtModel = resolveArtworkModel(song.artworkUrl, song.source)
+      if (miniArtModel != null && Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
+        AsyncImage(
+          model = miniArtModel,
+          contentDescription = null,
+          contentScale = ContentScale.Crop,
           modifier = Modifier
             .matchParentSize()
-            .blur(18.dp)
-            .background(
-              Brush.horizontalGradient(
-                colors = listOf(
-                  artC1.copy(alpha = if (darkTheme) 0.24f else 0.16f),
-                  artC2.copy(alpha = if (darkTheme) 0.14f else 0.12f),
-                  accentColor.copy(alpha = if (darkTheme) 0.16f else 0.10f)
-                )
-              )
-            )
+            .scale(1.24f)
+            .alpha(if (darkTheme) 0.34f else 0.18f)
+            .blur(22.dp)
         )
       }
+      Box(
+        modifier = Modifier
+          .matchParentSize()
+          .then(if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) Modifier.blur(18.dp) else Modifier)
+          .background(
+            Brush.horizontalGradient(
+              colors = listOf(
+                artC1.copy(alpha = if (darkTheme) 0.28f else 0.16f),
+                artC2.copy(alpha = if (darkTheme) 0.18f else 0.12f),
+                accentColor.copy(alpha = if (darkTheme) 0.14f else 0.08f)
+              )
+            )
+          )
+      )
 
-      // Base translucent fill + 1dp glass edge + bright 1.5dp top specular highlight
+      // Base translucent fill + art-tinted 1dp glass edge + bright 1.5dp top specular highlight
+      val miniRimBrush = Brush.horizontalGradient(
+        colors = listOf(
+          artC1.copy(alpha = if (darkTheme) 0.48f else 0.42f),
+          innerEdgeHighlight,
+          artC2.copy(alpha = if (darkTheme) 0.42f else 0.34f)
+        )
+      )
       Box(
         modifier = Modifier
           .matchParentSize()
           .background(glassFill)
-          .border(1.dp, innerEdgeHighlight, CircleShape)
+          .border(1.dp, miniRimBrush, CircleShape)
           .drawBehind {
             val stroke15 = 1.5.dp.toPx()
             val inset = stroke15 * 0.5f

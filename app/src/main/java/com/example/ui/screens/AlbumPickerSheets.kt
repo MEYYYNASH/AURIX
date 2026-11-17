@@ -57,6 +57,7 @@ import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.material3.TextField
 import androidx.compose.material3.TextFieldDefaults
+import androidx.compose.material3.minimumInteractiveComponentSize
 import androidx.compose.material3.rememberModalBottomSheetState
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
@@ -249,6 +250,18 @@ fun AlbumHoldOptionsSheet(
             color = AlbumDesignTokens.DimText,
             maxLines = 1,
             overflow = TextOverflow.Ellipsis
+          )
+        }
+        IconButton(
+          onClick = onDismiss,
+          modifier = Modifier
+            .minimumInteractiveComponentSize()
+            .testTag("album_hold_close_button")
+        ) {
+          Icon(
+            imageVector = Icons.Rounded.Close,
+            contentDescription = stringResource(id = R.string.cd_close_sheet),
+            tint = AlbumDesignTokens.DimText
           )
         }
       }

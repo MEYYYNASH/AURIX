@@ -1,5 +1,12 @@
 package com.example.ui.screens
 
+import androidx.compose.animation.AnimatedVisibility
+import androidx.compose.animation.core.snap
+import androidx.compose.animation.core.tween
+import androidx.compose.animation.expandVertically
+import androidx.compose.animation.fadeIn
+import androidx.compose.animation.fadeOut
+import androidx.compose.animation.shrinkVertically
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.background
@@ -19,6 +26,11 @@ import androidx.compose.material.icons.automirrored.rounded.TrendingUp
 import androidx.compose.material.icons.rounded.*
 import androidx.compose.material3.*
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.saveable.rememberSaveable
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
@@ -61,6 +73,18 @@ fun MusicInsightsScreen(
   onSongClick: (Song, List<Song>) -> Unit,
   onFavoriteClick: (Song) -> Unit
 ) {
+  var showDnaCard by rememberSaveable { mutableStateOf(true) }
+  var showMostPlayedCard by rememberSaveable { mutableStateOf(true) }
+  var showTrendingCard by rememberSaveable { mutableStateOf(true) }
+  var showRisingArtistsCard by rememberSaveable { mutableStateOf(true) }
+
+  val cardEnter = remember(reducedMotion) {
+    if (reducedMotion) fadeIn(snap()) else expandVertically(tween(240)) + fadeIn(tween(200))
+  }
+  val cardExit = remember(reducedMotion) {
+    if (reducedMotion) fadeOut(snap()) else shrinkVertically(tween(200)) + fadeOut(tween(150))
+  }
+
   LazyColumn(
     modifier = Modifier
       .fillMaxSize()
@@ -123,7 +147,10 @@ fun MusicInsightsScreen(
     item {
       MusicDnaCard(
         profile = musicDna,
-        darkTheme = darkTheme
+        darkTheme = darkTheme,
+        reducedMotion = reducedMotion,
+        isExpanded = showDnaCard,
+        onToggleExpand = { showDnaCard = !showDnaCard }
       )
     }
 
@@ -144,39 +171,52 @@ fun MusicInsightsScreen(
           SectionTitleRow(
             title = stringResource(id = R.string.insights_most_played_title),
             subtitle = stringResource(id = R.string.insights_most_played_sub),
-            icon = Icons.Rounded.Leaderboard
-          )
-
-          GlassSegmentedBar(
-            options = MostPlayedFilter.entries.map { it.label to null },
-            selectedIndex = MostPlayedFilter.entries.indexOf(mostPlayedFilter).coerceAtLeast(0),
+            icon = Icons.Rounded.Leaderboard,
+            isExpanded = showMostPlayedCard,
+            onToggleExpand = { showMostPlayedCard = !showMostPlayedCard },
             darkTheme = darkTheme,
-            onSelect = { idx -> onSelectMostPlayedFilter(MostPlayedFilter.entries[idx]) },
-            testTags = MostPlayedFilter.entries.map { "most_played_filter_${it.name.lowercase()}" }
+            reducedMotion = reducedMotion,
+            toggleTestTag = "insights_toggle_most_played_button"
           )
 
-          if (mostPlayed.isEmpty()) {
-            InsightsEmptyHint(
-              message = stringResource(id = R.string.insights_empty_most_played),
-              darkTheme = darkTheme
-            )
-          } else {
-            mostPlayed.take(10).forEachIndexed { idx, entry ->
-              RankedSongEntryRow(
-                entry = entry,
-                trailingBadge = "${entry.playCount}x",
-                direction = null,
-                isCurrent = currentSong?.id == entry.song.id,
-                isPlaying = isPlaying,
+          AnimatedVisibility(
+            visible = showMostPlayedCard,
+            enter = cardEnter,
+            exit = cardExit
+          ) {
+            Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
+              GlassSegmentedBar(
+                options = MostPlayedFilter.entries.map { it.label to null },
+                selectedIndex = MostPlayedFilter.entries.indexOf(mostPlayedFilter).coerceAtLeast(0),
                 darkTheme = darkTheme,
-                reducedMotion = reducedMotion,
-                hasLyrics = entry.song.id in verifiedLyricsIds,
-                onCheckLyrics = onCheckLyrics,
-                onSongClick = { onSongClick(entry.song, queue) },
-                onFavoriteClick = { onFavoriteClick(entry.song) }
+                onSelect = { idx -> onSelectMostPlayedFilter(MostPlayedFilter.entries[idx]) },
+                testTags = MostPlayedFilter.entries.map { "most_played_filter_${it.name.lowercase()}" }
               )
-              if (idx < minOf(9, mostPlayed.lastIndex)) {
-                HorizontalDivider(color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.06f))
+
+              if (mostPlayed.isEmpty()) {
+                InsightsEmptyHint(
+                  message = stringResource(id = R.string.insights_empty_most_played),
+                  darkTheme = darkTheme
+                )
+              } else {
+                mostPlayed.take(10).forEachIndexed { idx, entry ->
+                  RankedSongEntryRow(
+                    entry = entry,
+                    trailingBadge = "${entry.playCount}x",
+                    direction = null,
+                    isCurrent = currentSong?.id == entry.song.id,
+                    isPlaying = isPlaying,
+                    darkTheme = darkTheme,
+                    reducedMotion = reducedMotion,
+                    hasLyrics = entry.song.id in verifiedLyricsIds,
+                    onCheckLyrics = onCheckLyrics,
+                    onSongClick = { onSongClick(entry.song, queue) },
+                    onFavoriteClick = { onFavoriteClick(entry.song) }
+                  )
+                  if (idx < minOf(9, mostPlayed.lastIndex)) {
+                    HorizontalDivider(color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.06f))
+                  }
+                }
               }
             }
           }
@@ -201,31 +241,44 @@ fun MusicInsightsScreen(
           SectionTitleRow(
             title = stringResource(id = R.string.insights_trending_title),
             subtitle = stringResource(id = R.string.insights_trending_sub),
-            icon = Icons.Rounded.Whatshot
+            icon = Icons.Rounded.Whatshot,
+            isExpanded = showTrendingCard,
+            onToggleExpand = { showTrendingCard = !showTrendingCard },
+            darkTheme = darkTheme,
+            reducedMotion = reducedMotion,
+            toggleTestTag = "insights_toggle_trending_button"
           )
 
-          if (trendingTracks.isEmpty()) {
-            InsightsEmptyHint(
-              message = stringResource(id = R.string.insights_empty_history),
-              darkTheme = darkTheme
-            )
-          } else {
-            trendingTracks.take(10).forEachIndexed { idx, entry ->
-              RankedSongEntryRow(
-                entry = entry,
-                trailingBadge = "${entry.playCount} plays",
-                direction = entry.rankDirection,
-                isCurrent = currentSong?.id == entry.song.id,
-                isPlaying = isPlaying,
-                darkTheme = darkTheme,
-                reducedMotion = reducedMotion,
-                hasLyrics = entry.song.id in verifiedLyricsIds,
-                onCheckLyrics = onCheckLyrics,
-                onSongClick = { onSongClick(entry.song, queue) },
-                onFavoriteClick = { onFavoriteClick(entry.song) }
-              )
-              if (idx < minOf(9, trendingTracks.lastIndex)) {
-                HorizontalDivider(color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.06f))
+          AnimatedVisibility(
+            visible = showTrendingCard,
+            enter = cardEnter,
+            exit = cardExit
+          ) {
+            Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
+              if (trendingTracks.isEmpty()) {
+                InsightsEmptyHint(
+                  message = stringResource(id = R.string.insights_empty_history),
+                  darkTheme = darkTheme
+                )
+              } else {
+                trendingTracks.take(10).forEachIndexed { idx, entry ->
+                  RankedSongEntryRow(
+                    entry = entry,
+                    trailingBadge = "${entry.playCount} plays",
+                    direction = entry.rankDirection,
+                    isCurrent = currentSong?.id == entry.song.id,
+                    isPlaying = isPlaying,
+                    darkTheme = darkTheme,
+                    reducedMotion = reducedMotion,
+                    hasLyrics = entry.song.id in verifiedLyricsIds,
+                    onCheckLyrics = onCheckLyrics,
+                    onSongClick = { onSongClick(entry.song, queue) },
+                    onFavoriteClick = { onFavoriteClick(entry.song) }
+                  )
+                  if (idx < minOf(9, trendingTracks.lastIndex)) {
+                    HorizontalDivider(color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.06f))
+                  }
+                }
               }
             }
           }
@@ -249,73 +302,86 @@ fun MusicInsightsScreen(
           SectionTitleRow(
             title = stringResource(id = R.string.insights_rising_artists_title),
             subtitle = stringResource(id = R.string.insights_rising_artists_sub),
-            icon = Icons.Rounded.AutoGraph
+            icon = Icons.Rounded.AutoGraph,
+            isExpanded = showRisingArtistsCard,
+            onToggleExpand = { showRisingArtistsCard = !showRisingArtistsCard },
+            darkTheme = darkTheme,
+            reducedMotion = reducedMotion,
+            toggleTestTag = "insights_toggle_rising_artists_button"
           )
 
-          if (risingArtists.isEmpty()) {
-            InsightsEmptyHint(
-              message = stringResource(id = R.string.insights_empty_history),
-              darkTheme = darkTheme
-            )
-          } else {
-            risingArtists.take(8).forEachIndexed { idx, artist ->
-              Row(
-                modifier = Modifier
-                  .fillMaxWidth()
-                  .padding(vertical = 4.dp),
-                verticalAlignment = Alignment.CenterVertically,
-                horizontalArrangement = Arrangement.spacedBy(12.dp)
-              ) {
-                Text(
-                  text = String.format("%02d", idx + 1),
-                  style = MaterialTheme.typography.labelLarge.copy(fontWeight = FontWeight.Bold),
-                  color = if (idx < 3) AurixTealAccent else MaterialTheme.colorScheme.onSurfaceVariant,
-                  modifier = Modifier.width(26.dp)
+          AnimatedVisibility(
+            visible = showRisingArtistsCard,
+            enter = cardEnter,
+            exit = cardExit
+          ) {
+            Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
+              if (risingArtists.isEmpty()) {
+                InsightsEmptyHint(
+                  message = stringResource(id = R.string.insights_empty_history),
+                  darkTheme = darkTheme
                 )
-                SongArtwork(
-                  song = Song(
-                    id = "artist_${artist.artist}",
-                    title = artist.artist,
-                    artist = artist.artist,
-                    artworkUrl = artist.artworkUrl,
-                    durationSeconds = 0L,
-                    streamUrl = ""
-                  ),
-                  modifier = Modifier.size(42.dp),
-                  cornerRadius = 12.dp,
-                  iconSize = 18.dp
-                )
-                Column(modifier = Modifier.weight(1f)) {
-                  Text(
-                    text = artist.artist,
-                    style = MaterialTheme.typography.bodyMedium.copy(fontWeight = FontWeight.Bold),
-                    color = MaterialTheme.colorScheme.onSurface,
-                    maxLines = 1,
-                    overflow = TextOverflow.Ellipsis
-                  )
-                  Text(
-                    text = "${artist.recentPlays} plays recently" +
-                      if (artist.previousPlays > 0) " · prev ${artist.previousPlays}" else "",
-                    style = MaterialTheme.typography.bodySmall,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant,
-                    maxLines = 1,
-                    overflow = TextOverflow.Ellipsis
-                  )
+              } else {
+                risingArtists.take(8).forEachIndexed { idx, artist ->
+                  Row(
+                    modifier = Modifier
+                      .fillMaxWidth()
+                      .padding(vertical = 4.dp),
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.spacedBy(12.dp)
+                  ) {
+                    Text(
+                      text = String.format("%02d", idx + 1),
+                      style = MaterialTheme.typography.labelLarge.copy(fontWeight = FontWeight.Bold),
+                      color = if (idx < 3) AurixTealAccent else MaterialTheme.colorScheme.onSurfaceVariant,
+                      modifier = Modifier.width(26.dp)
+                    )
+                    SongArtwork(
+                      song = Song(
+                        id = "artist_${artist.artist}",
+                        title = artist.artist,
+                        artist = artist.artist,
+                        artworkUrl = artist.artworkUrl,
+                        durationSeconds = 0L,
+                        streamUrl = ""
+                      ),
+                      modifier = Modifier.size(42.dp),
+                      cornerRadius = 12.dp,
+                      iconSize = 18.dp
+                    )
+                    Column(modifier = Modifier.weight(1f)) {
+                      Text(
+                        text = artist.artist,
+                        style = MaterialTheme.typography.bodyMedium.copy(fontWeight = FontWeight.Bold),
+                        color = MaterialTheme.colorScheme.onSurface,
+                        maxLines = 1,
+                        overflow = TextOverflow.Ellipsis
+                      )
+                      Text(
+                        text = "${artist.recentPlays} plays recently" +
+                          if (artist.previousPlays > 0) " · prev ${artist.previousPlays}" else "",
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        maxLines = 1,
+                        overflow = TextOverflow.Ellipsis
+                      )
+                    }
+                    Surface(
+                      shape = CircleShape,
+                      color = AurixTealAccent.copy(alpha = 0.16f)
+                    ) {
+                      Text(
+                        text = "+${artist.growthPercentage}%",
+                        style = MaterialTheme.typography.labelSmall.copy(fontWeight = FontWeight.ExtraBold),
+                        color = AurixTealAccent,
+                        modifier = Modifier.padding(horizontal = 10.dp, vertical = 5.dp)
+                      )
+                    }
+                  }
+                  if (idx < minOf(7, risingArtists.lastIndex)) {
+                    HorizontalDivider(color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.06f))
+                  }
                 }
-                Surface(
-                  shape = CircleShape,
-                  color = AurixTealAccent.copy(alpha = 0.16f)
-                ) {
-                  Text(
-                    text = "+${artist.growthPercentage}%",
-                    style = MaterialTheme.typography.labelSmall.copy(fontWeight = FontWeight.ExtraBold),
-                    color = AurixTealAccent,
-                    modifier = Modifier.padding(horizontal = 10.dp, vertical = 5.dp)
-                  )
-                }
-              }
-              if (idx < minOf(7, risingArtists.lastIndex)) {
-                HorizontalDivider(color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.06f))
               }
             }
           }
@@ -328,7 +394,10 @@ fun MusicInsightsScreen(
 @Composable
 private fun MusicDnaCard(
   profile: MusicDnaProfile,
-  darkTheme: Boolean
+  darkTheme: Boolean,
+  reducedMotion: Boolean = false,
+  isExpanded: Boolean = true,
+  onToggleExpand: (() -> Unit)? = null
 ) {
   GlassCard(
     darkTheme = darkTheme,
@@ -344,15 +413,26 @@ private fun MusicDnaCard(
       SectionTitleRow(
         title = stringResource(id = R.string.insights_dna_title),
         subtitle = stringResource(id = R.string.insights_dna_sub),
-        icon = Icons.Rounded.GraphicEq
+        icon = Icons.Rounded.GraphicEq,
+        isExpanded = isExpanded,
+        onToggleExpand = onToggleExpand,
+        darkTheme = darkTheme,
+        reducedMotion = reducedMotion,
+        toggleTestTag = "insights_toggle_dna_button"
       )
 
-      if (!profile.hasEnoughHistory) {
-        InsightsEmptyHint(
-          message = stringResource(id = R.string.insights_empty_dna),
-          darkTheme = darkTheme
-        )
-      } else {
+      AnimatedVisibility(
+        visible = isExpanded,
+        enter = if (reducedMotion) fadeIn(snap()) else expandVertically(tween(240)) + fadeIn(tween(200)),
+        exit = if (reducedMotion) fadeOut(snap()) else shrinkVertically(tween(200)) + fadeOut(tween(150))
+      ) {
+        Column(verticalArrangement = Arrangement.spacedBy(14.dp)) {
+          if (!profile.hasEnoughHistory) {
+            InsightsEmptyHint(
+              message = stringResource(id = R.string.insights_empty_dna),
+              darkTheme = darkTheme
+            )
+          } else {
         // Key Metrics Row + Discovery Ring
         Row(
           modifier = Modifier.fillMaxWidth(),
@@ -551,6 +631,8 @@ private fun MusicDnaCard(
           }
         }
       }
+    }
+  }
     }
   }
 }
@@ -1033,9 +1115,15 @@ fun PlaylistDetailScreen(
 private fun SectionTitleRow(
   title: String,
   subtitle: String,
-  icon: androidx.compose.ui.graphics.vector.ImageVector
+  icon: androidx.compose.ui.graphics.vector.ImageVector,
+  isExpanded: Boolean? = null,
+  onToggleExpand: (() -> Unit)? = null,
+  darkTheme: Boolean = true,
+  reducedMotion: Boolean = false,
+  toggleTestTag: String? = null
 ) {
   Row(
+    modifier = Modifier.fillMaxWidth(),
     verticalAlignment = Alignment.CenterVertically,
     horizontalArrangement = Arrangement.spacedBy(10.dp)
   ) {
@@ -1053,7 +1141,7 @@ private fun SectionTitleRow(
         modifier = Modifier.size(18.dp)
       )
     }
-    Column {
+    Column(modifier = Modifier.weight(1f)) {
       Text(
         text = title,
         style = MaterialTheme.typography.titleMedium.copy(fontWeight = FontWeight.Bold),
@@ -1063,6 +1151,20 @@ private fun SectionTitleRow(
         text = subtitle,
         style = MaterialTheme.typography.bodySmall,
         color = MaterialTheme.colorScheme.onSurfaceVariant
+      )
+    }
+    if (isExpanded != null && onToggleExpand != null && toggleTestTag != null) {
+      OpenCloseGlassPill(
+        isOpen = isExpanded,
+        onToggle = onToggleExpand,
+        darkTheme = darkTheme,
+        reducedMotion = reducedMotion,
+        testTag = toggleTestTag,
+        contentDescription = stringResource(
+          id = if (isExpanded) R.string.section_close_cd else R.string.section_open_cd,
+          title
+        ),
+        accentColor = AurixTealAccent
       )
     }
   }

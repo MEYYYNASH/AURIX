@@ -105,7 +105,9 @@ fun SettingsScreen(
   blockedArtistsCount: Int = 0,
   onClearHiddenAndBlocked: () -> Unit = {},
   logoState: UpdateLogoState = UpdateLogoState.Idle,
-  onStartUpdateLogoIntro: () -> Unit = {}
+  onStartUpdateLogoIntro: () -> Unit = {},
+  navStyle: String = AurixNavStyle.CLASSIC.id,
+  onOpenNavPreview: () -> Unit = {}
 ) {
   val context = LocalContext.current
   LaunchedEffect(Unit) {
@@ -354,6 +356,64 @@ fun SettingsScreen(
               onCheckedChange = onReducedMotionChanged,
               modifier = Modifier.testTag("reduced_motion_toggle")
             )
+          }
+
+          HorizontalDivider(color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.08f))
+
+          Row(
+            modifier = Modifier
+              .fillMaxWidth()
+              .clickable { onOpenNavPreview() }
+              .padding(horizontal = 18.dp, vertical = 12.dp)
+              .testTag("settings_nav_style_row"),
+            horizontalArrangement = Arrangement.SpaceBetween,
+            verticalAlignment = Alignment.CenterVertically
+          ) {
+            Column(modifier = Modifier.weight(1f)) {
+              Text(
+                text = stringResource(id = R.string.nav_style_title),
+                style = MaterialTheme.typography.bodyLarge.copy(fontWeight = FontWeight.Medium, lineHeight = 22.sp),
+                color = MaterialTheme.colorScheme.onSurface
+              )
+              val activeStyleLabel = if (AurixNavStyle.fromId(navStyle) == AurixNavStyle.BLUR) {
+                stringResource(id = R.string.nav_style_blur)
+              } else {
+                stringResource(id = R.string.nav_style_classic)
+              }
+              Text(
+                text = "$activeStyleLabel · ${stringResource(id = R.string.nav_style_subtitle)}",
+                style = MaterialTheme.typography.bodySmall.copy(lineHeight = 18.sp),
+                color = MaterialTheme.colorScheme.primary
+              )
+            }
+            Spacer(modifier = Modifier.width(10.dp))
+            Surface(
+              shape = CircleShape,
+              color = MaterialTheme.colorScheme.primary.copy(alpha = 0.14f),
+              modifier = Modifier
+                .heightIn(min = 40.dp)
+                .clip(CircleShape)
+                .clickable { onOpenNavPreview() }
+                .testTag("settings_nav_preview_button")
+            ) {
+              Row(
+                modifier = Modifier.padding(horizontal = 12.dp, vertical = 8.dp),
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.spacedBy(5.dp)
+              ) {
+                Icon(
+                  imageVector = Icons.Rounded.Visibility,
+                  contentDescription = null,
+                  tint = MaterialTheme.colorScheme.primary,
+                  modifier = Modifier.size(16.dp)
+                )
+                Text(
+                  text = stringResource(id = R.string.nav_preview_button),
+                  style = MaterialTheme.typography.labelMedium.copy(fontWeight = FontWeight.Bold),
+                  color = MaterialTheme.colorScheme.primary
+                )
+              }
+            }
           }
 
           HorizontalDivider(color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.08f))

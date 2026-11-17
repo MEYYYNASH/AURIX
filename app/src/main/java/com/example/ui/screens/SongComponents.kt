@@ -1,11 +1,13 @@
 package com.example.ui.screens
 
 import android.graphics.Bitmap
+import android.os.Build
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.animateColorAsState
 import androidx.compose.animation.core.*
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
+import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.LocalIndication
@@ -22,6 +24,7 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.rounded.*
 import androidx.compose.material3.*
+import androidx.compose.ui.res.stringResource
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -772,6 +775,157 @@ fun DynamicArtworkBackdrop(
 }
 
 @Composable
+fun DynamicArtGlassBackdropLayer(
+  song: Song?,
+  artColors: Pair<Color, Color>,
+  enabled: Boolean,
+  darkTheme: Boolean,
+  reducedMotion: Boolean = false,
+  blurRadius: Dp = 32.dp,
+  artAlpha: Float = if (darkTheme) 0.30f else 0.20f,
+  scrimAlpha: Float = if (darkTheme) 0.58f else 0.72f,
+  modifier: Modifier = Modifier
+) {
+  val layerAlpha by animateFloatAsState(
+    targetValue = if (enabled && song != null) 1f else 0f,
+    animationSpec = if (reducedMotion) snap() else tween(450),
+    label = "dynamic_glass_layer_alpha"
+  )
+  val (c1, c2) = artColors
+
+  Box(modifier = modifier) {
+    if (layerAlpha > 0.01f && song != null) {
+      Box(modifier = Modifier.matchParentSize().alpha(layerAlpha)) {
+        val model = resolveArtworkModel(song.artworkUrl, song.source)
+        if (model != null && Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
+          AsyncImage(
+            model = model,
+            contentDescription = null,
+            contentScale = ContentScale.Crop,
+            modifier = Modifier
+              .matchParentSize()
+              .scale(1.18f)
+              .alpha(artAlpha)
+              .blur(blurRadius)
+          )
+        }
+        Box(
+          modifier = Modifier
+            .matchParentSize()
+            .background(
+              Brush.linearGradient(
+                colors = listOf(
+                  c1.copy(alpha = if (darkTheme) 0.34f else 0.22f),
+                  c2.copy(alpha = if (darkTheme) 0.22f else 0.16f),
+                  Color.Transparent
+                )
+              )
+            )
+        )
+        Box(
+          modifier = Modifier
+            .matchParentSize()
+            .background(
+              Brush.radialGradient(
+                colors = listOf(
+                  c2.copy(alpha = if (darkTheme) 0.28f else 0.16f),
+                  Color.Transparent
+                ),
+                center = Offset(720f, 360f),
+                radius = 780f
+              )
+            )
+        )
+      }
+    }
+    Box(
+      modifier = Modifier
+        .matchParentSize()
+        .background(
+          if (darkTheme) Color(0xFF0C1222).copy(alpha = scrimAlpha)
+          else Color.White.copy(alpha = scrimAlpha)
+        )
+    )
+  }
+}
+
+@Composable
+fun OpenCloseGlassPill(
+  isOpen: Boolean,
+  onToggle: () -> Unit,
+  darkTheme: Boolean,
+  reducedMotion: Boolean = false,
+  testTag: String,
+  openLabel: String = stringResource(id = R.string.action_open),
+  closeLabel: String = stringResource(id = R.string.action_close),
+  contentDescription: String,
+  accentColor: Color = AurixTealAccent,
+  modifier: Modifier = Modifier
+) {
+  val interactionSource = remember { MutableInteractionSource() }
+  val isPressed by interactionSource.collectIsPressedAsState()
+  val scale by animateFloatAsState(
+    targetValue = if (isPressed) 0.92f else 1f,
+    animationSpec = if (reducedMotion) snap() else spring(
+      dampingRatio = 0.68f,
+      stiffness = Spring.StiffnessMedium
+    ),
+    label = "open_close_pill_scale"
+  )
+  val bgColor = when {
+    !isOpen -> accentColor.copy(alpha = if (darkTheme) 0.20f else 0.14f)
+    darkTheme -> Color.White.copy(alpha = 0.08f)
+    else -> Color.White.copy(alpha = 0.80f)
+  }
+  val borderColor = when {
+    !isOpen -> accentColor.copy(alpha = 0.55f)
+    darkTheme -> Color.White.copy(alpha = 0.16f)
+    else -> Color.White
+  }
+  val contentColor = if (!isOpen) accentColor else MaterialTheme.colorScheme.onSurfaceVariant
+
+  Box(
+    modifier = modifier
+      .minimumInteractiveComponentSize()
+      .graphicsLayer {
+        scaleX = scale
+        scaleY = scale
+      }
+      .clip(CircleShape)
+      .background(bgColor)
+      .border(1.dp, borderColor, CircleShape)
+      .clickable(
+        interactionSource = interactionSource,
+        indication = LocalIndication.current
+      ) { onToggle() }
+      .testTag(testTag),
+    contentAlignment = Alignment.Center
+  ) {
+    Row(
+      modifier = Modifier.padding(horizontal = 10.dp, vertical = 6.dp),
+      verticalAlignment = Alignment.CenterVertically,
+      horizontalArrangement = Arrangement.spacedBy(4.dp)
+    ) {
+      Icon(
+        imageVector = if (isOpen) Icons.Rounded.Close else Icons.Rounded.KeyboardArrowDown,
+        contentDescription = contentDescription,
+        tint = contentColor,
+        modifier = Modifier.size(14.dp)
+      )
+      Text(
+        text = if (isOpen) closeLabel else openLabel,
+        style = MaterialTheme.typography.labelSmall.copy(
+          fontWeight = FontWeight.Bold,
+          fontSize = 11.sp
+        ),
+        color = contentColor,
+        maxLines = 1
+      )
+    }
+  }
+}
+
+@Composable
 fun SongRow(
   song: Song,
   isPlaying: Boolean = false,
@@ -997,6 +1151,8 @@ fun SongDownloadRow(
   hasLyrics: Boolean = false,
   downloadProgress: Float? = null,
   isDownloaded: Boolean = false,
+  ambientPrimaryColor: Color? = null,
+  ambientSecondaryColor: Color? = null,
   onCheckLyrics: ((Song) -> Unit)? = null,
   onSongClick: () -> Unit,
   onFavoriteClick: () -> Unit,
@@ -1092,11 +1248,28 @@ fun SongDownloadRow(
 
   val rowShape = RoundedCornerShape(22.dp)
   val accentColor = MaterialTheme.colorScheme.primary
+  val rimTint = ambientPrimaryColor ?: accentColor
+  val secondaryTint = ambientSecondaryColor ?: rimTint
   val glassBrush = when {
     isCurrent -> Brush.linearGradient(
       colors = listOf(
-        accentColor.copy(alpha = if (darkTheme) 0.28f else 0.18f),
-        if (darkTheme) Color(0xFF19243C).copy(alpha = 0.84f) else Color.White.copy(alpha = 0.88f)
+        rimTint.copy(alpha = if (darkTheme) 0.30f else 0.18f),
+        secondaryTint.copy(alpha = if (darkTheme) 0.18f else 0.10f),
+        if (darkTheme) Color(0xFF162036).copy(alpha = 0.78f) else Color.White.copy(alpha = 0.86f)
+      )
+    )
+    ambientPrimaryColor != null && darkTheme -> Brush.linearGradient(
+      colors = listOf(
+        ambientPrimaryColor.copy(alpha = 0.16f + 0.06f * glassLuminance),
+        secondaryTint.copy(alpha = 0.10f + 0.05f * glassLuminance),
+        Color(0xFF131B2E).copy(alpha = 0.64f + 0.08f * glassLuminance)
+      )
+    )
+    ambientPrimaryColor != null && !darkTheme -> Brush.linearGradient(
+      colors = listOf(
+        Color.White.copy(alpha = (0.82f + 0.08f * glassLuminance).coerceAtMost(1f)),
+        ambientPrimaryColor.copy(alpha = 0.09f + 0.04f * glassLuminance),
+        Color(0xFFF2F6FF).copy(alpha = (0.74f + 0.10f * glassLuminance).coerceAtMost(1f))
       )
     )
     darkTheme -> Brush.linearGradient(
@@ -1115,18 +1288,18 @@ fun SongDownloadRow(
   val borderBrush = Brush.verticalGradient(
     colors = if (isCurrent) {
       listOf(
-        accentColor.copy(alpha = 0.55f + 0.20f * glassLuminance),
-        Color.White.copy(alpha = 0.14f + 0.12f * glassLuminance)
+        rimTint.copy(alpha = 0.60f + 0.20f * glassLuminance),
+        secondaryTint.copy(alpha = 0.22f + 0.12f * glassLuminance)
       )
     } else if (darkTheme) {
       listOf(
-        Color.White.copy(alpha = 0.24f + 0.18f * glassLuminance),
-        Color.White.copy(alpha = 0.06f + 0.10f * glassLuminance)
+        (ambientPrimaryColor ?: Color.White).copy(alpha = 0.28f + 0.16f * glassLuminance),
+        Color.White.copy(alpha = 0.08f + 0.10f * glassLuminance)
       )
     } else {
       listOf(
         Color.White,
-        Color.White.copy(alpha = 0.55f + 0.25f * glassLuminance)
+        (ambientPrimaryColor ?: Color.White).copy(alpha = 0.45f + 0.25f * glassLuminance)
       )
     }
   )

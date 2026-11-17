@@ -14,6 +14,7 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.rounded.PlaylistAdd
 import androidx.compose.material.icons.automirrored.rounded.PlaylistPlay
 import androidx.compose.material.icons.rounded.Block
+import androidx.compose.material.icons.rounded.Close
 import androidx.compose.material.icons.rounded.DeleteOutline
 import androidx.compose.material.icons.rounded.Favorite
 import androidx.compose.material.icons.rounded.FavoriteBorder
@@ -197,6 +198,19 @@ fun SongDetailsSheet(
               color = MaterialTheme.colorScheme.onSurfaceVariant,
               maxLines = 1,
               overflow = TextOverflow.Ellipsis
+            )
+          }
+
+          IconButton(
+            onClick = onDismiss,
+            modifier = Modifier
+              .minimumInteractiveComponentSize()
+              .testTag("song_details_close_button")
+          ) {
+            Icon(
+              imageVector = Icons.Rounded.Close,
+              contentDescription = stringResource(id = R.string.cd_close_sheet),
+              tint = MaterialTheme.colorScheme.onSurfaceVariant
             )
           }
         }

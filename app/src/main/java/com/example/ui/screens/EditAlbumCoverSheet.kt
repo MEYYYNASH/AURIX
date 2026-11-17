@@ -55,6 +55,7 @@ import androidx.compose.material.icons.rounded.PhotoLibrary
 import androidx.compose.material.icons.rounded.Refresh
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.Icon
+import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.ModalBottomSheet
 import androidx.compose.material3.Slider
@@ -62,6 +63,7 @@ import androidx.compose.material3.SliderDefaults
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
+import androidx.compose.material3.minimumInteractiveComponentSize
 import androidx.compose.material3.rememberModalBottomSheetState
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
@@ -269,29 +271,47 @@ internal fun EditAlbumCoverSheetContent(
           fontSize = 20.sp,
           fontWeight = FontWeight.Bold
         ),
-        color = AlbumDesignTokens.Text
+        color = AlbumDesignTokens.Text,
+        modifier = Modifier.weight(1f)
       )
-      if (albumInfo.customCoverMode != null) {
-        TextButton(
-          onClick = {
-            onResetCover()
-            onDismiss()
-          },
-          modifier = Modifier.testTag("edit_cover_reset_button")
+      Row(
+        verticalAlignment = Alignment.CenterVertically,
+        horizontalArrangement = Arrangement.spacedBy(4.dp)
+      ) {
+        if (albumInfo.customCoverMode != null) {
+          TextButton(
+            onClick = {
+              onResetCover()
+              onDismiss()
+            },
+            modifier = Modifier.testTag("edit_cover_reset_button")
+          ) {
+            Icon(
+              imageVector = Icons.Rounded.Refresh,
+              contentDescription = null,
+              tint = AlbumDesignTokens.Accent,
+              modifier = Modifier.size(16.dp)
+            )
+            Spacer(modifier = Modifier.width(4.dp))
+            Text(
+              text = stringResource(id = R.string.album_reset_cover),
+              fontFamily = AlbumDesignTokens.OutfitFontFamily,
+              color = AlbumDesignTokens.Accent,
+              fontSize = 13.sp,
+              fontWeight = FontWeight.SemiBold
+            )
+          }
+        }
+        IconButton(
+          onClick = onDismiss,
+          modifier = Modifier
+            .minimumInteractiveComponentSize()
+            .testTag("edit_cover_close_button")
         ) {
           Icon(
-            imageVector = Icons.Rounded.Refresh,
-            contentDescription = null,
-            tint = AlbumDesignTokens.Accent,
-            modifier = Modifier.size(16.dp)
-          )
-          Spacer(modifier = Modifier.width(4.dp))
-          Text(
-            text = stringResource(id = R.string.album_reset_cover),
-            fontFamily = AlbumDesignTokens.OutfitFontFamily,
-            color = AlbumDesignTokens.Accent,
-            fontSize = 13.sp,
-            fontWeight = FontWeight.SemiBold
+            imageVector = Icons.Rounded.Close,
+            contentDescription = stringResource(id = R.string.cd_close_sheet),
+            tint = AlbumDesignTokens.DimText
           )
         }
       }

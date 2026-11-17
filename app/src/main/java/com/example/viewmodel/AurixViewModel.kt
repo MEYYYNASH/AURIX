@@ -98,6 +98,8 @@ class AurixViewModel(application: Application) : AndroidViewModel(application) {
   val githubRepo = prefsManager.githubRepo.stateIn(viewModelScope, SharingStarted.Lazily, "AURIX")
   val moodFlowEnabled: StateFlow<Boolean> = prefsManager.moodFlowEnabled
     .stateIn(viewModelScope, SharingStarted.Eagerly, true)
+  val navStyle: StateFlow<String> = prefsManager.navStyle
+    .stateIn(viewModelScope, SharingStarted.Eagerly, "classic")
 
   // Search-Only Mode & YouTube Analyze/Download States
   private val _searchMode = MutableStateFlow("youtube_search") // "youtube_search" | "youtube"
@@ -3986,6 +3988,7 @@ class AurixViewModel(application: Application) : AndroidViewModel(application) {
   }
   fun setDynamicBg(enabled: Boolean) { viewModelScope.launch { prefsManager.setDynamicBg(enabled) } }
   fun setReducedMotion(enabled: Boolean) { viewModelScope.launch { prefsManager.setReducedMotion(enabled) } }
+  fun setNavStyle(style: String) { viewModelScope.launch { prefsManager.setNavStyle(style) } }
   fun setOnboardingCompleted(completed: Boolean) { viewModelScope.launch { prefsManager.setOnboardingCompleted(completed) } }
   fun setGithubOwner(owner: String) { viewModelScope.launch { prefsManager.setGithubOwner(owner) } }
   fun setGithubRepo(repo: String) { viewModelScope.launch { prefsManager.setGithubRepo(repo) } }

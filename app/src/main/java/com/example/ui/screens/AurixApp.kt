@@ -217,6 +217,8 @@ private fun AurixMainShell(
   val isAlbumDownloaded by viewModel.isAlbumDownloaded.collectAsStateWithLifecycle()
   var albumDetailSong by remember { mutableStateOf<com.example.model.Song?>(null) }
   var songForAlbumPicker by remember { mutableStateOf<com.example.model.Song?>(null) }
+  var showNavPreviewSheet by remember { mutableStateOf(false) }
+  val navStyle by viewModel.navStyle.collectAsStateWithLifecycle()
   val smartRecommendations by viewModel.smartRecommendations.collectAsStateWithLifecycle()
   val moodFlowEnabled by viewModel.moodFlowEnabled.collectAsStateWithLifecycle()
   val moodFlowCurrentPick by viewModel.moodFlowCurrentPick.collectAsStateWithLifecycle()
@@ -714,7 +716,9 @@ private fun AurixMainShell(
               blockedArtistsCount = blockedArtists.size,
               onClearHiddenAndBlocked = { viewModel.clearHiddenAndBlocked() },
               logoState = logoState,
-              onStartUpdateLogoIntro = { viewModel.startUpdateLogoIntro() }
+              onStartUpdateLogoIntro = { viewModel.startUpdateLogoIntro() },
+              navStyle = navStyle,
+              onOpenNavPreview = { showNavPreviewSheet = true }
             )
           }
         }
@@ -793,12 +797,25 @@ private fun AurixMainShell(
             }
           }
 
-          LiquidGlassTabBar(
-            tabs = navTabs,
-            selectedIndex = selectedIndex,
-            onSelect = { index -> currentScreen = screens[index] },
-            reducedMotion = reducedMotion
-          )
+          val songArtColors = currentSong?.let { rememberArtworkColors(it.artworkUrl, it.title) }
+          val tabBarAmbient = if (dynamicBg && !amoledTheme) songArtColors else null
+          if (AurixNavStyle.fromId(navStyle) == AurixNavStyle.BLUR) {
+            LiquidBlurSplitTabBar(
+              tabs = navTabs,
+              selectedIndex = selectedIndex,
+              onSelect = { index -> currentScreen = screens[index] },
+              reducedMotion = reducedMotion,
+              ambientColors = tabBarAmbient
+            )
+          } else {
+            LiquidGlassTabBar(
+              tabs = navTabs,
+              selectedIndex = selectedIndex,
+              onSelect = { index -> currentScreen = screens[index] },
+              reducedMotion = reducedMotion,
+              ambientColors = tabBarAmbient
+            )
+          }
         }
       }
 
@@ -973,7 +990,19 @@ private fun AurixMainShell(
         WhatsNewBottomSheet(
           reducedMotion = reducedMotion,
           onOpenUpdatesTab = { currentScreen = Screen.Settings },
+          onPreviewNavigation = { showNavPreviewSheet = true },
           onDismiss = { viewModel.dismissWhatsNewSheet() }
+        )
+      }
+
+      if (showNavPreviewSheet) {
+        NavigationPreviewBottomSheet(
+          currentNavStyle = navStyle,
+          currentSong = currentSong,
+          darkTheme = darkTheme,
+          reducedMotion = reducedMotion,
+          onApplyNavStyle = { viewModel.setNavStyle(it) },
+          onDismiss = { showNavPreviewSheet = false }
         )
       }
 

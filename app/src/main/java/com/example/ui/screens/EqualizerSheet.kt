@@ -17,6 +17,7 @@ import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.rounded.Close
 import androidx.compose.material.icons.rounded.Equalizer
 import androidx.compose.material.icons.rounded.GraphicEq
 import androidx.compose.material.icons.rounded.RestartAlt
@@ -204,6 +205,18 @@ fun EqualizerSheet(
               onCheckedChange = onToggleEnabled,
               modifier = Modifier.testTag("eq_enable_switch")
             )
+            IconButton(
+              onClick = onDismiss,
+              modifier = Modifier
+                .minimumInteractiveComponentSize()
+                .testTag("eq_close_button")
+            ) {
+              Icon(
+                imageVector = Icons.Rounded.Close,
+                contentDescription = stringResource(id = R.string.cd_close_sheet),
+                tint = MaterialTheme.colorScheme.onSurfaceVariant
+              )
+            }
           }
         }
 

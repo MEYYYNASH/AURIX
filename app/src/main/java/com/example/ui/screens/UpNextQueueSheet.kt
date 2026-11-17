@@ -175,17 +175,34 @@ fun UpNextQueueSheet(
             }
           }
 
-          if (upcomingEntries.isNotEmpty()) {
-            TextButton(
-              onClick = onClearUpcoming,
+          Row(
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.spacedBy(2.dp)
+          ) {
+            if (upcomingEntries.isNotEmpty()) {
+              TextButton(
+                onClick = onClearUpcoming,
+                modifier = Modifier
+                  .minimumInteractiveComponentSize()
+                  .testTag("queue_clear_button")
+              ) {
+                Text(
+                  text = stringResource(id = R.string.queue_clear_upcoming),
+                  style = MaterialTheme.typography.labelLarge.copy(fontWeight = FontWeight.SemiBold),
+                  color = accent
+                )
+              }
+            }
+            IconButton(
+              onClick = onDismiss,
               modifier = Modifier
                 .minimumInteractiveComponentSize()
-                .testTag("queue_clear_button")
+                .testTag("queue_close_button")
             ) {
-              Text(
-                text = stringResource(id = R.string.queue_clear_upcoming),
-                style = MaterialTheme.typography.labelLarge.copy(fontWeight = FontWeight.SemiBold),
-                color = accent
+              Icon(
+                imageVector = Icons.Rounded.Close,
+                contentDescription = stringResource(id = R.string.cd_close_sheet),
+                tint = MaterialTheme.colorScheme.onSurfaceVariant
               )
             }
           }

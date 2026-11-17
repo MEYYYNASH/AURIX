@@ -45,13 +45,13 @@ import kotlin.coroutines.coroutineContext
  * Editable release manifest endpoint for AURIX OTA updates.
  * Expected JSON format:
  * {
- *   "versionName": "1.8.0",
- *   "versionCode": 10800,
+ *   "versionName": "1.8.1",
+ *   "versionCode": 10801,
  *   "releaseDate": "2026-11-17",
- *   "apkUrl": "https://github.com/MEYYYNASH/AURIX/releases/download/v1.8.0/AURIX-v1.8.0.apk",
+ *   "apkUrl": "https://github.com/MEYYYNASH/AURIX/releases/download/v1.8.1/AURIX-v1.8.1.apk",
  *   "sha256": "...",
  *   "notes": ["..."],
- *   "releasePageUrl": "https://github.com/MEYYYNASH/AURIX/releases/tag/v1.8.0"
+ *   "releasePageUrl": "https://github.com/MEYYYNASH/AURIX/releases/tag/v1.8.1"
  * }
  */
 const val VERSION_JSON_URL = "https://raw.githubusercontent.com/MEYYYNASH/AURIX/main/version.json"
@@ -162,9 +162,9 @@ class UpdateManager(
     private const val META_FILE_NAME = "aurix_update.apk.meta.json"
 
     val CURRENT_RELEASE_NOTES = listOf(
-      "Liquid Glass Now Playing 2.0: Ambient artwork aura, unified frosted glass dock, and swipe-to-skip MiniPlayer gestures",
-      "Up Next Queue Studio: Live queue drawer to jump, reorder, remove, Play Next, or Add to Queue from any track",
-      "3D Surround & Sleep Fade Studio: Hardware 3D Surround Virtualizer, Lo-Fi & Acoustic EQ presets, and smooth 8s sleep fade-out"
+      "Liquid Blur Split Navigation: Frosted blur capsule with a detached circular Search orb and live Bottom Sheet preview",
+      "Dynamic Album-Art Glass Blur: Search results, player controls, MiniPlayer, and tab bars adapt to your track's album colors",
+      "Open / Close Controls Everywhere: Collapsible feature cards and explicit Close (X) buttons on every sheet for zero clutter"
     )
 
     fun parseVersionJson(rawJson: String): RemoteVersionInfo {
