@@ -226,15 +226,29 @@ private fun AurixMainShell(
   val risingArtists by viewModel.risingArtists.collectAsStateWithLifecycle()
 
   val isNowPlayingOpen = showNowPlaying && currentSong != null
+  val pendingNotificationNav by viewModel.pendingNotificationNav.collectAsStateWithLifecycle()
 
-  // Request runtime notification permission once when playback starts on Android 13+
+  LaunchedEffect(pendingNotificationNav) {
+    val nav = pendingNotificationNav ?: return@LaunchedEffect
+    when (nav.screenRoute) {
+      com.example.data.AppNotificationHelper.SCREEN_SETTINGS -> currentScreen = Screen.Settings
+      com.example.data.AppNotificationHelper.SCREEN_LIBRARY -> {
+        libraryTab = nav.libraryTab
+        currentScreen = Screen.Library
+      }
+    }
+    showNowPlaying = false
+    viewModel.consumeNotificationNav()
+  }
+
+  // Request runtime notification permission once on Android 13+ so update alerts & background downloads show notifications
   var askedNotificationPermission by remember { mutableStateOf(false) }
   val notificationPermissionLauncher = rememberLauncherForActivityResult(
     contract = ActivityResultContracts.RequestPermission()
   ) { }
-  LaunchedEffect(currentSong != null) {
+  LaunchedEffect(launchSplashDismissed, currentSong != null, songDownloadProgress.isNotEmpty()) {
     if (
-      currentSong != null &&
+      (launchSplashDismissed || currentSong != null || songDownloadProgress.isNotEmpty()) &&
       !askedNotificationPermission &&
       Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU
     ) {

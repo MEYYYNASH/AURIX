@@ -7,7 +7,10 @@ import android.widget.Toast
 import androidx.compose.animation.AnimatedContent
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.animateColorAsState
+import androidx.compose.animation.core.Spring
+import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.animation.core.snap
+import androidx.compose.animation.core.spring
 import androidx.compose.animation.core.tween
 import androidx.compose.animation.expandVertically
 import androidx.compose.animation.fadeIn
@@ -16,10 +19,15 @@ import androidx.compose.animation.shrinkVertically
 import androidx.compose.animation.slideInVertically
 import androidx.compose.animation.togetherWith
 import androidx.compose.foundation.BorderStroke
+import androidx.compose.foundation.LocalIndication
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.horizontalScroll
+import androidx.compose.foundation.hoverable
+import androidx.compose.foundation.interaction.MutableInteractionSource
+import androidx.compose.foundation.interaction.collectIsHoveredAsState
+import androidx.compose.foundation.interaction.collectIsPressedAsState
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -96,6 +104,7 @@ import androidx.compose.ui.geometry.Size
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.drawscope.Stroke
+import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalInspectionMode
@@ -342,6 +351,7 @@ fun SearchScreen(
                     GlassQuickTagChip(
                       label = tag,
                       darkTheme = darkTheme,
+                      reducedMotion = reducedMotion,
                       onClick = {
                         keyboardController?.hide()
                         onImmediateSearch(tag)
@@ -538,8 +548,35 @@ private fun LiquidGlassSearchBar(
 private fun GlassQuickTagChip(
   label: String,
   darkTheme: Boolean,
+  reducedMotion: Boolean = false,
   onClick: () -> Unit
 ) {
+  val interactionSource = remember { MutableInteractionSource() }
+  val isPressed by interactionSource.collectIsPressedAsState()
+  val isHovered by interactionSource.collectIsHoveredAsState()
+
+  val chipScale by animateFloatAsState(
+    targetValue = when {
+      isPressed -> 0.945f
+      isHovered -> 1.03f
+      else -> 1f
+    },
+    animationSpec = if (reducedMotion) snap() else spring(
+      dampingRatio = 0.68f,
+      stiffness = Spring.StiffnessMedium
+    ),
+    label = "quick_tag_spring_scale"
+  )
+  val borderColor by animateColorAsState(
+    targetValue = when {
+      isPressed || isHovered -> MaterialTheme.colorScheme.primary.copy(alpha = 0.58f)
+      darkTheme -> Color.White.copy(alpha = 0.22f)
+      else -> Color.White
+    },
+    animationSpec = if (reducedMotion) snap() else spring(stiffness = Spring.StiffnessMediumLow),
+    label = "quick_tag_border"
+  )
+
   val chipBrush = if (darkTheme) {
     Brush.linearGradient(
       colors = listOf(Color(0xFF222F4A).copy(alpha = 0.72f), Color(0xFF151E33).copy(alpha = 0.62f))
@@ -549,15 +586,22 @@ private fun GlassQuickTagChip(
       colors = listOf(Color.White.copy(alpha = 0.92f), Color(0xFFF3F6FF).copy(alpha = 0.78f))
     )
   }
-  val chipBorder = if (darkTheme) Color.White.copy(alpha = 0.22f) else Color.White
 
   Box(
     modifier = Modifier
       .defaultMinSize(minHeight = 40.dp)
+      .graphicsLayer {
+        scaleX = chipScale
+        scaleY = chipScale
+      }
       .clip(CircleShape)
       .background(chipBrush)
-      .border(1.dp, chipBorder, CircleShape)
-      .clickable { onClick() }
+      .border(1.dp, borderColor, CircleShape)
+      .hoverable(interactionSource)
+      .clickable(
+        interactionSource = interactionSource,
+        indication = LocalIndication.current
+      ) { onClick() }
       .padding(horizontal = 15.dp, vertical = 9.dp),
     contentAlignment = Alignment.Center
   ) {
@@ -945,10 +989,11 @@ fun SearchResultsArea(
       if (isStill) {
         fadeIn(snap()) togetherWith fadeOut(snap())
       } else if (targetState is SearchUiState.Results) {
-        (fadeIn(tween(300)) + slideInVertically(tween(300)) { it / 18 }) togetherWith
-          fadeOut(tween(180))
+        (fadeIn(spring(stiffness = Spring.StiffnessMediumLow)) +
+          slideInVertically(spring(dampingRatio = 0.84f, stiffness = Spring.StiffnessMediumLow)) { it / 16 }) togetherWith
+          fadeOut(tween(150))
       } else {
-        fadeIn(tween(280)) togetherWith fadeOut(tween(180))
+        fadeIn(tween(240)) togetherWith fadeOut(tween(160))
       }
     },
     label = "search_results_area"
@@ -1023,6 +1068,7 @@ fun SearchResultsArea(
                   GlassQuickTagChip(
                     label = term,
                     darkTheme = darkTheme,
+                    reducedMotion = reducedMotion,
                     onClick = { onQuickSuggestionClick(term) }
                   )
                 }
@@ -1086,6 +1132,13 @@ fun SearchResultsArea(
           contentPadding = PaddingValues(bottom = listBottomPadding)
         ) {
           item {
+            val clearInteractionSource = remember { MutableInteractionSource() }
+            val isClearPressed by clearInteractionSource.collectIsPressedAsState()
+            val clearScale by animateFloatAsState(
+              targetValue = if (isClearPressed) 0.93f else 1f,
+              animationSpec = if (isStill) snap() else spring(dampingRatio = 0.68f, stiffness = Spring.StiffnessMedium),
+              label = "clear_pill_spring"
+            )
             Row(
               modifier = Modifier
                 .fillMaxWidth()
@@ -1106,8 +1159,15 @@ fun SearchResultsArea(
                   if (darkTheme) Color.White.copy(alpha = 0.16f) else Color.White
                 ),
                 modifier = Modifier
+                  .graphicsLayer {
+                    scaleX = clearScale
+                    scaleY = clearScale
+                  }
                   .clip(CircleShape)
-                  .clickable { onClearSearch() }
+                  .clickable(
+                    interactionSource = clearInteractionSource,
+                    indication = LocalIndication.current
+                  ) { onClearSearch() }
               ) {
                 Text(
                   text = stringResource(id = R.string.search_quick_clear),
@@ -1125,7 +1185,7 @@ fun SearchResultsArea(
               isPlaying = isPlaying,
               isCurrent = currentSong?.id == song.id,
               isResolving = resolvingSongId == song.id,
-              reducedMotion = reducedMotion,
+              reducedMotion = isStill,
               darkTheme = darkTheme,
               hasLyrics = song.id in verifiedLyricsIds,
               downloadProgress = songDownloadProgress[song.id],
@@ -1133,7 +1193,15 @@ fun SearchResultsArea(
               onCheckLyrics = onCheckLyrics,
               onSongClick = { onSongClick(song, state.items) },
               onFavoriteClick = { onFavoriteClick(song) },
-              onDownloadClick = { onDownloadClick(song) }
+              onDownloadClick = { onDownloadClick(song) },
+              modifier = Modifier.animateItem(
+                fadeInSpec = if (isStill) null else spring(stiffness = Spring.StiffnessMediumLow),
+                placementSpec = if (isStill) null else spring(
+                  dampingRatio = 0.82f,
+                  stiffness = Spring.StiffnessMediumLow
+                ),
+                fadeOutSpec = if (isStill) null else spring(stiffness = Spring.StiffnessMedium)
+              )
             )
           }
         }

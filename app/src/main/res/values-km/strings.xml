@@ -264,4 +264,25 @@
     <string name="home_tiktok_newpipe_badge">តារាង · YT</string>
     <string name="home_tiktok_viral_loading">កំពុងផ្ទុកតារាងបទពេញនិយម TikTok…</string>
     <string name="home_tiktok_viral_empty">មិនអាចផ្ទុកបទពេញនិយម TikTok បានទេនៅពេលនេះ។</string>
+    <string name="notif_channel_updates_name">ការជូនដំណឹងអាប់ដេតកម្មវិធី</string>
+    <string name="notif_channel_updates_desc">ជូនដំណឹងអ្នកនៅពេលមានកំណែ AURIX ថ្មីចេញផ្សាយ</string>
+    <string name="notif_channel_downloads_name">ការទាញយកផ្ទៃខាងក្រោយ</string>
+    <string name="notif_channel_downloads_desc">បង្ហាញវឌ្ឍនភាពពេល AURIX កំពុងទាញយកអាប់ដេត ឬបទចម្រៀង</string>
+    <string name="notif_update_available_title">មាន AURIX %1$s ថ្មីហើយ</string>
+    <string name="notif_update_available_body">ចុចដើម្បីមើលព័ត៌មានថ្មី និងទាញយកការអាប់ដេត។</string>
+    <string name="notif_update_download_action">ទាញយក</string>
+    <string name="notif_update_ready_title">AURIX %1$s រួចរាល់សម្រាប់ដំឡើង</string>
+    <string name="notif_update_ready_body">បានផ្ទៀងផ្ទាត់រួចរាល់។ ចុចដើម្បីដំឡើងកំណែថ្មី។</string>
+    <string name="notif_update_failed_title">ការទាញយកអាប់ដេតបានបរាជ័យ</string>
+    <string name="notif_downloading_update_title">កំពុងទាញយក AURIX %1$s</string>
+    <string name="notif_verifying_update_title">កំពុងផ្ទៀងផ្ទាត់ AURIX %1$s</string>
+    <string name="notif_verifying_update_body">កំពុងពិនិត្យ SHA-256 និងហត្ថលេខា APK…</string>
+    <string name="notif_download_paused_title">បានផ្អាកការទាញយក (%1$s)</string>
+    <string name="notif_download_song_title">កំពុងទាញយក %1$s</string>
+    <string name="notif_download_songs_multi_title">កំពុងទាញយក %1$d បទ</string>
+    <string name="notif_download_song_complete_title">បានរក្សាទុកក្នុងបទចម្រៀងខ្ញុំ</string>
+    <string name="notif_download_song_failed_title">ការទាញយកបទចម្រៀងបានបរាជ័យ</string>
+    <string name="notif_action_pause">ផ្អាក</string>
+    <string name="notif_action_resume">បន្ត</string>
+    <string name="notif_action_cancel">បោះបង់</string>
 </resources>

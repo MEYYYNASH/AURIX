@@ -5,8 +5,10 @@ import android.net.ConnectivityManager
 import android.net.NetworkCapabilities
 import android.os.Environment
 import androidx.test.core.app.ApplicationProvider
+import com.example.data.AppNotificationHelper
 import com.example.data.InstalledAppInfo
 import com.example.data.RemoteVersionInfo
+import com.example.data.TrackDownloadNotificationInfo
 import com.example.data.UpdateMainAction
 import com.example.data.UpdateManager
 import com.example.data.UpdateStage
@@ -222,5 +224,76 @@ class UpdateManagerTest {
       scope.cancel()
       server.stop(0)
     }
+  }
+
+  @Test
+  fun `notifyUpdateAvailableIfNeeded deduplicates same version and notifies on newer version`() {
+    val context = ApplicationProvider.getApplicationContext<Context>()
+    val shadowApp = Shadows.shadowOf(context as android.app.Application)
+    shadowApp.grantPermissions(android.Manifest.permission.POST_NOTIFICATIONS)
+    AppNotificationHelper.clearLastNotifiedVersionCode(context)
+
+    val release172 = RemoteVersionInfo(
+      versionName = "1.7.2",
+      versionCode = 10702L,
+      releaseDate = "2026-11-17",
+      apkUrl = "https://example.com/AURIX-v1.7.2.apk",
+      sha256 = "",
+      notes = listOf("Background downloads & spring search"),
+      releasePageUrl = "https://github.com/MEYYYNASH/AURIX/releases/tag/v1.7.2"
+    )
+    val release173 = release172.copy(versionName = "1.7.3", versionCode = 10703L)
+
+    assertTrue(AppNotificationHelper.notifyUpdateAvailableIfNeeded(context, release172))
+    assertEquals(10702L, AppNotificationHelper.getLastNotifiedVersionCode(context))
+    assertFalse(AppNotificationHelper.notifyUpdateAvailableIfNeeded(context, release172))
+    assertTrue(AppNotificationHelper.notifyUpdateAvailableIfNeeded(context, release173))
+    assertEquals(10703L, AppNotificationHelper.getLastNotifiedVersionCode(context))
+  }
+
+  @Test
+  fun `buildBackgroundDownloadNotification renders update and track download metadata`() {
+    val context = ApplicationProvider.getApplicationContext<Context>()
+    val installed = InstalledAppInfo("com.aurix.music", "1.7.2", 10702L, emptySet())
+    val release = RemoteVersionInfo(
+      versionName = "1.7.3",
+      versionCode = 10703L,
+      releaseDate = "2026-11-18",
+      apkUrl = "https://example.com/AURIX-v1.7.3.apk",
+      sha256 = "",
+      notes = emptyList(),
+      releasePageUrl = "https://example.com"
+    )
+
+    val updateNotif = AppNotificationHelper.buildBackgroundDownloadNotification(
+      context = context,
+      updateState = UpdateUiState(
+        stage = UpdateStage.Downloading,
+        installed = installed,
+        latestRelease = release,
+        progress = 0.45f,
+        downloadedBytes = 12L * 1024L * 1024L,
+        totalBytes = 25L * 1024L * 1024L,
+        speedBytesPerSec = 2L * 1024L * 1024L
+      ),
+      activeTracks = emptyMap()
+    )
+    assertTrue(updateNotif.extras.getCharSequence(android.app.Notification.EXTRA_TITLE).toString().contains("v1.7.3"))
+
+    val songNotif = AppNotificationHelper.buildBackgroundDownloadNotification(
+      context = context,
+      updateState = UpdateUiState(stage = UpdateStage.Idle, installed = installed),
+      activeTracks = mapOf(
+        "yt_1" to TrackDownloadNotificationInfo("yt_1", "Time To Rise", "VannDa", 0.6f)
+      )
+    )
+    assertTrue(songNotif.extras.getCharSequence(android.app.Notification.EXTRA_TITLE).toString().contains("Time To Rise"))
+  }
+
+  @Test
+  fun `app release metadata targets 1_7_2`() {
+    assertEquals("1.7.2", BuildConfig.VERSION_NAME)
+    assertEquals(10702, BuildConfig.VERSION_CODE)
+    assertTrue(UpdateManager.CURRENT_RELEASE_NOTES.isNotEmpty())
   }
 }

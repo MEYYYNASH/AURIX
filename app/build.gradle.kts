@@ -16,9 +16,9 @@ android {
     applicationId = "com.aurix.music"
     minSdk = 24
     targetSdk = 36
-    versionCode = 10701
-    versionName = "1.7.1"
-    buildConfigField("String", "RELEASE_DATE", "\"2026-11-16\"")
+    versionCode = 10702
+    versionName = "1.7.2"
+    buildConfigField("String", "RELEASE_DATE", "\"2026-11-17\"")
 
     testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
   }
@@ -108,6 +108,7 @@ dependencies {
   implementation(libs.androidx.navigation.compose)
   implementation(libs.androidx.palette.ktx)
   implementation(libs.androidx.recyclerview)
+  implementation(libs.androidx.work.runtime.ktx)
   implementation(libs.androidx.room.ktx)
   implementation(libs.androidx.room.runtime)
   implementation(libs.coil.compose)

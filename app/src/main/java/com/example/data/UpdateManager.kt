@@ -45,13 +45,13 @@ import kotlin.coroutines.coroutineContext
  * Editable release manifest endpoint for AURIX OTA updates.
  * Expected JSON format:
  * {
- *   "versionName": "1.7.1",
- *   "versionCode": 10701,
- *   "releaseDate": "2026-11-16",
- *   "apkUrl": "https://github.com/MEYYYNASH/AURIX/releases/download/v1.7.1/AURIX-v1.7.1.apk",
+ *   "versionName": "1.7.2",
+ *   "versionCode": 10702,
+ *   "releaseDate": "2026-11-17",
+ *   "apkUrl": "https://github.com/MEYYYNASH/AURIX/releases/download/v1.7.2/AURIX-v1.7.2.apk",
  *   "sha256": "...",
  *   "notes": ["..."],
- *   "releasePageUrl": "https://github.com/MEYYYNASH/AURIX/releases/tag/v1.7.1"
+ *   "releasePageUrl": "https://github.com/MEYYYNASH/AURIX/releases/tag/v1.7.2"
  * }
  */
 const val VERSION_JSON_URL = "https://raw.githubusercontent.com/MEYYYNASH/AURIX/main/version.json"
@@ -162,9 +162,9 @@ class UpdateManager(
     private const val META_FILE_NAME = "aurix_update.apk.meta.json"
 
     val CURRENT_RELEASE_NOTES = listOf(
-      "Clean Liquid Glass Search v1.7.1: Simplified, uncluttered glass search bar, mode pills, quick discovery tags, and smooth playback controls",
-      "Home Feed Cleanup: Removed duplicate TikTok Viral section so YouTube Charts and Today's Hits stay distinct and easy to browse",
-      "Crisp Vector Iconography: Consistent vector icons and AURIX brand logo styling across Home and Search without emoji clutter"
+      "Spring Glassmorphism Search v1.7.2: Subtle spring physics animations across search results, quick discovery chips, and glass rows",
+      "Update Release Notifications: Automatic background checks notify you right away when a new AURIX release is published",
+      "Background Downloads: Keep downloading AURIX updates and music tracks uninterrupted in the background with live progress & pause/cancel controls"
     )
 
     fun parseVersionJson(rawJson: String): RemoteVersionInfo {
@@ -274,6 +274,81 @@ class UpdateManager(
       val totalStr = header.substring(slashIdx + 1).trim()
       if (totalStr == "*") return null
       return totalStr.toLongOrNull()
+    }
+
+    private val sharedApiClient = OkHttpClient.Builder()
+      .connectTimeout(15, TimeUnit.SECONDS)
+      .readTimeout(25, TimeUnit.SECONDS)
+      .followRedirects(true)
+      .build()
+
+    suspend fun fetchLatestReleaseDirect(
+      context: Context,
+      installed: InstalledAppInfo,
+      owner: String,
+      repo: String,
+      versionJsonUrl: String = VERSION_JSON_URL
+    ): Result<RemoteVersionInfo> = withContext(Dispatchers.IO) {
+      try {
+        val req = Request.Builder()
+          .url(versionJsonUrl)
+          .header("User-Agent", "AURIX-Android-Updater")
+          .header("Cache-Control", "no-cache")
+          .build()
+
+        sharedApiClient.newCall(req).execute().use { response ->
+          if (response.isSuccessful) {
+            val body = response.body?.string().orEmpty()
+            if (body.isNotBlank()) {
+              return@withContext Result.success(parseVersionJson(body))
+            }
+          }
+          if (response.code == 404) {
+            return@withContext fallbackToGitHubReleasesDirect(context, owner, repo)
+          }
+          Result.failure(IOException("Update server returned HTTP ${response.code}"))
+        }
+      } catch (e: Exception) {
+        if (e is UnknownHostException || e is SocketTimeoutException || e is ConnectException || e is SSLHandshakeException) {
+          Result.failure(e)
+        } else {
+          fallbackToGitHubReleasesDirect(context, owner, repo)
+        }
+      }
+    }
+
+    private suspend fun fallbackToGitHubReleasesDirect(
+      context: Context,
+      owner: String,
+      repo: String
+    ): Result<RemoteVersionInfo> {
+      return when (val gh = GitHubUpdater.checkForUpdates(context, owner, repo)) {
+        is UpdateCheckStatus.UpdateAvailable -> Result.success(gh.release.toRemoteVersionInfoDirect(owner, repo))
+        is UpdateCheckStatus.UpToDate -> Result.success(gh.release.toRemoteVersionInfoDirect(owner, repo))
+        is UpdateCheckStatus.DowngradeBlocked -> Result.success(gh.release.toRemoteVersionInfoDirect(owner, repo))
+        is UpdateCheckStatus.Error -> Result.failure(IOException(gh.message))
+        else -> Result.failure(IOException("Unable to fetch release metadata"))
+      }
+    }
+
+    private fun GitHubRelease.toRemoteVersionInfoDirect(owner: String, repo: String): RemoteVersionInfo {
+      val parsedNotes = body.lines()
+        .map { it.trim().removePrefix("- ").removePrefix("* ").removePrefix("• ").trim() }
+        .filter {
+          it.isNotBlank() &&
+            !it.startsWith("versionCode:", ignoreCase = true) &&
+            !it.startsWith("mandatory:", ignoreCase = true)
+        }
+      return RemoteVersionInfo(
+        versionName = tagName.removePrefix("v").removePrefix("V"),
+        versionCode = if (versionCode > 0L) versionCode else GitHubUpdater.deriveVersionCodeFromTag(tagName),
+        releaseDate = releaseDate.ifBlank { APP_RELEASE_DATE },
+        apkUrl = apkUrl,
+        sha256 = "",
+        notes = parsedNotes,
+        releasePageUrl = "https://github.com/$owner/$repo/releases/tag/$tagName",
+        isMandatory = isMandatory
+      )
     }
   }
 
@@ -555,6 +630,7 @@ class UpdateManager(
                 lastFailedOperation = FailedOperation.None
               )
             }
+            AppNotificationHelper.notifyUpdateAvailableIfNeeded(context, remote, force = false)
           }
 
           is VersionComparisonOutcome.UpToDate -> {
@@ -629,66 +705,12 @@ class UpdateManager(
     owner: String,
     repo: String
   ): Result<RemoteVersionInfo> {
-    return try {
-      val req = Request.Builder()
-        .url(versionJsonUrl)
-        .header("User-Agent", "AURIX-Android-Updater")
-        .header("Cache-Control", "no-cache")
-        .build()
-
-      apiClient.newCall(req).execute().use { response ->
-        if (response.isSuccessful) {
-          val body = response.body?.string().orEmpty()
-          if (body.isNotBlank()) {
-            return Result.success(parseVersionJson(body))
-          }
-        }
-        // Only fall back to GitHub Releases API if version.json is not yet hosted (HTTP 404)
-        if (response.code == 404) {
-          return fallbackToGitHubReleases(installed, owner, repo)
-        }
-        Result.failure(IOException("Update server returned HTTP ${response.code}"))
-      }
-    } catch (e: Exception) {
-      if (e is UnknownHostException || e is SocketTimeoutException || e is ConnectException || e is SSLHandshakeException) {
-        Result.failure(e)
-      } else {
-        fallbackToGitHubReleases(installed, owner, repo)
-      }
-    }
-  }
-
-  private suspend fun fallbackToGitHubReleases(
-    installed: InstalledAppInfo,
-    owner: String,
-    repo: String
-  ): Result<RemoteVersionInfo> {
-    return when (val gh = GitHubUpdater.checkForUpdates(context, owner, repo)) {
-      is UpdateCheckStatus.UpdateAvailable -> Result.success(gh.release.toRemoteVersionInfo(owner, repo))
-      is UpdateCheckStatus.UpToDate -> Result.success(gh.release.toRemoteVersionInfo(owner, repo))
-      is UpdateCheckStatus.DowngradeBlocked -> Result.success(gh.release.toRemoteVersionInfo(owner, repo))
-      is UpdateCheckStatus.Error -> Result.failure(IOException(gh.message))
-      else -> Result.failure(IOException("Unable to fetch release metadata"))
-    }
-  }
-
-  private fun GitHubRelease.toRemoteVersionInfo(owner: String, repo: String): RemoteVersionInfo {
-    val parsedNotes = body.lines()
-      .map { it.trim().removePrefix("- ").removePrefix("* ").removePrefix("• ").trim() }
-      .filter {
-        it.isNotBlank() &&
-          !it.startsWith("versionCode:", ignoreCase = true) &&
-          !it.startsWith("mandatory:", ignoreCase = true)
-      }
-    return RemoteVersionInfo(
-      versionName = tagName.removePrefix("v").removePrefix("V"),
-      versionCode = if (versionCode > 0L) versionCode else GitHubUpdater.deriveVersionCodeFromTag(tagName),
-      releaseDate = releaseDate.ifBlank { APP_RELEASE_DATE },
-      apkUrl = apkUrl,
-      sha256 = "",
-      notes = parsedNotes,
-      releasePageUrl = "https://github.com/$owner/$repo/releases/tag/$tagName",
-      isMandatory = isMandatory
+    return fetchLatestReleaseDirect(
+      context = context,
+      installed = installed,
+      owner = owner,
+      repo = repo,
+      versionJsonUrl = versionJsonUrl
     )
   }
 
@@ -746,6 +768,7 @@ class UpdateManager(
     pauseRequested = false
     cancelRequested = false
 
+    BackgroundDownloadService.startSync(context)
     downloadJob = scope.launch {
       downloadAndVerifyInternal(release)
     }
@@ -1032,22 +1055,27 @@ class UpdateManager(
           isValidatedReady = true,
           validatedApkPath = finalFile.absolutePath,
           progress = 1f,
-          subtitleMessage = "Verified! Launching Android installer…",
+          subtitleMessage = "Verified! Ready to install ${release.tagName}",
           statusMessage = "Verified ${release.tagName}",
           errorMessage = null
         )
       }
-      launchSystemInstaller()
+      AppNotificationHelper.notifyUpdateReadyToInstall(context, release)
+      if (isAppInForeground()) {
+        launchSystemInstaller()
+      }
     } catch (ce: CancellationException) {
       activeCall = null
       if (!pauseRequested && !cancelRequested) throw ce
     } catch (e: LowStorageException) {
       activeCall = null
+      val msg = e.message ?: "Low storage space"
+      AppNotificationHelper.notifyUpdateDownloadFailed(context, release, msg)
       _uiState.update {
         it.copy(
           stage = UpdateStage.Error,
           subtitleMessage = "Not enough free storage space",
-          statusMessage = e.message ?: "Low storage space",
+          statusMessage = msg,
           speedBytesPerSec = 0L,
           errorMessage = e.message,
           lastFailedOperation = FailedOperation.Download
@@ -1058,6 +1086,7 @@ class UpdateManager(
       if (pauseRequested || cancelRequested) return
       val hasPartial = partFile.exists() && partFile.length() > 0L
       val msg = mapErrorMessage(e)
+      AppNotificationHelper.notifyUpdateDownloadFailed(context, release, msg)
       _uiState.update {
         it.copy(
           stage = UpdateStage.Error,
@@ -1305,6 +1334,17 @@ class UpdateManager(
     }
   }
 
+  private fun isAppInForeground(): Boolean {
+    return runCatching {
+      val am = context.getSystemService(Context.ACTIVITY_SERVICE) as? android.app.ActivityManager
+        ?: return true
+      val appProcess = am.runningAppProcesses?.firstOrNull { it.processName == context.packageName }
+        ?: return true
+      appProcess.importance == android.app.ActivityManager.RunningAppProcessInfo.IMPORTANCE_FOREGROUND ||
+        appProcess.importance == android.app.ActivityManager.RunningAppProcessInfo.IMPORTANCE_VISIBLE
+    }.getOrDefault(true)
+  }
+
   private fun mapErrorMessage(e: Throwable): String {
     val raw = e.localizedMessage.orEmpty()
     return when {
@@ -1320,4 +1360,20 @@ class UpdateManager(
   }
 
   private class LowStorageException(message: String) : IOException(message)
+}
+
+object UpdateManagerHolder {
+  private val appScope = CoroutineScope(kotlinx.coroutines.SupervisorJob() + Dispatchers.Main.immediate)
+
+  @Volatile
+  private var instance: UpdateManager? = null
+
+  fun getInstance(context: Context): UpdateManager {
+    return instance ?: synchronized(this) {
+      instance ?: UpdateManager(
+        context = context.applicationContext,
+        scope = appScope
+      ).also { instance = it }
+    }
+  }
 }

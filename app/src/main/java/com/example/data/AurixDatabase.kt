@@ -750,4 +750,31 @@ val AURIX_MIGRATION_8_9 = object : Migration(8, 9) {
 )
 abstract class AurixDatabase : RoomDatabase() {
   abstract fun aurixDao(): AurixDao
+
+  companion object {
+    @Volatile
+    private var INSTANCE: AurixDatabase? = null
+
+    fun getInstance(context: android.content.Context): AurixDatabase {
+      return INSTANCE ?: synchronized(this) {
+        INSTANCE ?: androidx.room.Room.databaseBuilder(
+          context.applicationContext,
+          AurixDatabase::class.java,
+          "aurix_db"
+        )
+          .addMigrations(
+            AURIX_MIGRATION_1_2,
+            AURIX_MIGRATION_2_3,
+            AURIX_MIGRATION_3_4,
+            AURIX_MIGRATION_4_5,
+            AURIX_MIGRATION_5_6,
+            AURIX_MIGRATION_6_7,
+            AURIX_MIGRATION_7_8,
+            AURIX_MIGRATION_8_9
+          )
+          .build()
+          .also { INSTANCE = it }
+      }
+    }
+  }
 }

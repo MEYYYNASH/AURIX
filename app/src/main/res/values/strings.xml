@@ -367,4 +367,25 @@
     <string name="home_tiktok_newpipe_badge">Charts · YT</string>
     <string name="home_tiktok_viral_loading">Loading TikTok viral music charts…</string>
     <string name="home_tiktok_viral_empty">Unable to load TikTok viral chart tracks right now.</string>
+    <string name="notif_channel_updates_name">App Update Releases</string>
+    <string name="notif_channel_updates_desc">Notifies you whenever a new AURIX release is available</string>
+    <string name="notif_channel_downloads_name">Background Downloads</string>
+    <string name="notif_channel_downloads_desc">Shows live progress while AURIX downloads updates and tracks</string>
+    <string name="notif_update_available_title">AURIX %1$s is available</string>
+    <string name="notif_update_available_body">Tap to view release notes and update AURIX.</string>
+    <string name="notif_update_download_action">Download</string>
+    <string name="notif_update_ready_title">AURIX %1$s ready to install</string>
+    <string name="notif_update_ready_body">Download verified. Tap to install the update.</string>
+    <string name="notif_update_failed_title">Update download failed</string>
+    <string name="notif_downloading_update_title">Downloading AURIX %1$s</string>
+    <string name="notif_verifying_update_title">Verifying AURIX %1$s</string>
+    <string name="notif_verifying_update_body">Checking SHA-256 &amp; APK signature…</string>
+    <string name="notif_download_paused_title">Update download paused (%1$s)</string>
+    <string name="notif_download_song_title">Downloading %1$s</string>
+    <string name="notif_download_songs_multi_title">Downloading %1$d tracks</string>
+    <string name="notif_download_song_complete_title">Saved to My songs</string>
+    <string name="notif_download_song_failed_title">Track download failed</string>
+    <string name="notif_action_pause">Pause</string>
+    <string name="notif_action_resume">Resume</string>
+    <string name="notif_action_cancel">Cancel</string>
 </resources>

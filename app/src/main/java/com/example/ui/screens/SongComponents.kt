@@ -8,9 +8,14 @@ import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
 import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.Image
+import androidx.compose.foundation.LocalIndication
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.hoverable
+import androidx.compose.foundation.interaction.MutableInteractionSource
+import androidx.compose.foundation.interaction.collectIsHoveredAsState
+import androidx.compose.foundation.interaction.collectIsPressedAsState
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
@@ -33,6 +38,7 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.StrokeCap
 import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.graphics.drawscope.rotate
+import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.testTag
@@ -994,11 +1000,96 @@ fun SongDownloadRow(
   onCheckLyrics: ((Song) -> Unit)? = null,
   onSongClick: () -> Unit,
   onFavoriteClick: () -> Unit,
-  onDownloadClick: () -> Unit = {}
+  onDownloadClick: () -> Unit = {},
+  modifier: Modifier = Modifier
 ) {
   LaunchedEffect(song.id) {
     onCheckLyrics?.invoke(song)
   }
+
+  val rowInteractionSource = remember { MutableInteractionSource() }
+  val isRowPressed by rowInteractionSource.collectIsPressedAsState()
+  val isRowHovered by rowInteractionSource.collectIsHoveredAsState()
+
+  val dlInteractionSource = remember { MutableInteractionSource() }
+  val isDlPressed by dlInteractionSource.collectIsPressedAsState()
+
+  val favInteractionSource = remember { MutableInteractionSource() }
+  val isFavPressed by favInteractionSource.collectIsPressedAsState()
+
+  val playInteractionSource = remember { MutableInteractionSource() }
+  val isPlayPressed by playInteractionSource.collectIsPressedAsState()
+
+  val rowScale by animateFloatAsState(
+    targetValue = when {
+      isRowPressed -> 0.978f
+      isRowHovered -> 1.008f
+      else -> 1f
+    },
+    animationSpec = if (reducedMotion) snap() else spring(
+      dampingRatio = 0.72f,
+      stiffness = Spring.StiffnessMediumLow
+    ),
+    label = "song_download_row_scale"
+  )
+  val glassLuminance by animateFloatAsState(
+    targetValue = when {
+      isRowPressed -> 1f
+      isCurrent -> 0.85f
+      isRowHovered -> 0.50f
+      else -> 0f
+    },
+    animationSpec = if (reducedMotion) snap() else spring(
+      dampingRatio = 0.86f,
+      stiffness = Spring.StiffnessMediumLow
+    ),
+    label = "song_download_row_luminance"
+  )
+  val artScale by animateFloatAsState(
+    targetValue = if (isRowPressed || isCurrent) 1.045f else 1f,
+    animationSpec = if (reducedMotion) snap() else spring(
+      dampingRatio = 0.68f,
+      stiffness = Spring.StiffnessMedium
+    ),
+    label = "song_download_art_scale"
+  )
+  val dlScale by animateFloatAsState(
+    targetValue = when {
+      isDlPressed -> 0.86f
+      isDownloaded -> 1.08f
+      else -> 1f
+    },
+    animationSpec = if (reducedMotion) snap() else spring(
+      dampingRatio = Spring.DampingRatioMediumBouncy,
+      stiffness = Spring.StiffnessMedium
+    ),
+    label = "song_download_btn_scale"
+  )
+  val favScale by animateFloatAsState(
+    targetValue = when {
+      isFavPressed -> 0.84f
+      song.isFavorite -> 1.16f
+      else -> 1f
+    },
+    animationSpec = if (reducedMotion) snap() else spring(
+      dampingRatio = Spring.DampingRatioMediumBouncy,
+      stiffness = Spring.StiffnessMedium
+    ),
+    label = "song_download_fav_scale"
+  )
+  val playScale by animateFloatAsState(
+    targetValue = when {
+      isPlayPressed -> 0.88f
+      isCurrent && isPlaying -> 1.05f
+      else -> 1f
+    },
+    animationSpec = if (reducedMotion) snap() else spring(
+      dampingRatio = 0.62f,
+      stiffness = Spring.StiffnessMedium
+    ),
+    label = "song_download_play_scale"
+  )
+
   val rowShape = RoundedCornerShape(22.dp)
   val accentColor = MaterialTheme.colorScheme.primary
   val glassBrush = when {
@@ -1010,33 +1101,47 @@ fun SongDownloadRow(
     )
     darkTheme -> Brush.linearGradient(
       colors = listOf(
-        Color(0xFF1D2840).copy(alpha = 0.76f),
-        Color(0xFF131B2E).copy(alpha = 0.68f)
+        Color(0xFF1D2840).copy(alpha = 0.76f + 0.08f * glassLuminance),
+        Color(0xFF131B2E).copy(alpha = 0.68f + 0.08f * glassLuminance)
       )
     )
     else -> Brush.linearGradient(
       colors = listOf(
-        Color.White.copy(alpha = 0.88f),
-        Color(0xFFF2F6FF).copy(alpha = 0.78f)
+        Color.White.copy(alpha = (0.88f + 0.08f * glassLuminance).coerceAtMost(1f)),
+        Color(0xFFF2F6FF).copy(alpha = (0.78f + 0.10f * glassLuminance).coerceAtMost(1f))
       )
     )
   }
   val borderBrush = Brush.verticalGradient(
     colors = if (isCurrent) {
-      listOf(accentColor.copy(alpha = 0.55f), Color.White.copy(alpha = 0.14f))
+      listOf(
+        accentColor.copy(alpha = 0.55f + 0.20f * glassLuminance),
+        Color.White.copy(alpha = 0.14f + 0.12f * glassLuminance)
+      )
     } else if (darkTheme) {
-      listOf(Color.White.copy(alpha = 0.24f), Color.White.copy(alpha = 0.06f))
+      listOf(
+        Color.White.copy(alpha = 0.24f + 0.18f * glassLuminance),
+        Color.White.copy(alpha = 0.06f + 0.10f * glassLuminance)
+      )
     } else {
-      listOf(Color.White, Color.White.copy(alpha = 0.55f))
+      listOf(
+        Color.White,
+        Color.White.copy(alpha = 0.55f + 0.25f * glassLuminance)
+      )
     }
   )
 
   Box(
-    modifier = Modifier
+    modifier = modifier
       .fillMaxWidth()
       .padding(vertical = 3.dp)
+      .graphicsLayer {
+        scaleX = rowScale
+        scaleY = rowScale
+      }
       .clip(rowShape)
       .background(glassBrush)
+      .background(Color.White.copy(alpha = (if (darkTheme) 0.06f else 0.16f) * glassLuminance))
       .border(1.dp, borderBrush, rowShape)
       .drawBehind {
         val stroke = 1.2.dp.toPx()
@@ -1045,7 +1150,9 @@ fun SongDownloadRow(
         drawRoundRect(
           brush = Brush.verticalGradient(
             colors = listOf(
-              Color.White.copy(alpha = if (darkTheme) 0.28f else 0.92f),
+              Color.White.copy(
+                alpha = (if (darkTheme) 0.28f else 0.92f) + (if (darkTheme) 0.16f else 0.08f) * glassLuminance
+              ),
               Color.Transparent
             ),
             startY = 0f,
@@ -1057,7 +1164,11 @@ fun SongDownloadRow(
           style = Stroke(width = stroke)
         )
       }
-      .clickable { onSongClick() }
+      .hoverable(rowInteractionSource)
+      .clickable(
+        interactionSource = rowInteractionSource,
+        indication = LocalIndication.current
+      ) { onSongClick() }
       .testTag("song_row_${song.id}")
   ) {
     Row(
@@ -1085,6 +1196,10 @@ fun SongDownloadRow(
       Box(
         modifier = Modifier
           .size(50.dp)
+          .graphicsLayer {
+            scaleX = artScale
+            scaleY = artScale
+          }
           .clip(RoundedCornerShape(13.dp))
           .border(1.dp, Color.White.copy(alpha = if (darkTheme) 0.24f else 0.8f), RoundedCornerShape(13.dp))
       ) {
@@ -1157,6 +1272,7 @@ fun SongDownloadRow(
 
       IconButton(
         onClick = onDownloadClick,
+        interactionSource = dlInteractionSource,
         modifier = Modifier
           .minimumInteractiveComponentSize()
           .testTag("song_download_button_${song.id}")
@@ -1172,25 +1288,38 @@ fun SongDownloadRow(
           Icon(
             imageVector = if (isDownloaded) Icons.Rounded.DownloadDone else Icons.Rounded.Download,
             contentDescription = if (song.source == "YouTube") "Install / Select format" else "Download Preview",
-            tint = if (isDownloaded) Color(0xFF10B981) else MaterialTheme.colorScheme.onSurfaceVariant
+            tint = if (isDownloaded) Color(0xFF10B981) else MaterialTheme.colorScheme.onSurfaceVariant,
+            modifier = Modifier.graphicsLayer {
+              scaleX = dlScale
+              scaleY = dlScale
+            }
           )
         }
       }
 
       IconButton(
         onClick = onFavoriteClick,
+        interactionSource = favInteractionSource,
         modifier = Modifier.minimumInteractiveComponentSize()
       ) {
         Icon(
           imageVector = if (song.isFavorite) Icons.Rounded.Favorite else Icons.Rounded.FavoriteBorder,
           contentDescription = "Favorite",
-          tint = if (song.isFavorite) MaterialTheme.colorScheme.error else MaterialTheme.colorScheme.onSurfaceVariant
+          tint = if (song.isFavorite) MaterialTheme.colorScheme.error else MaterialTheme.colorScheme.onSurfaceVariant,
+          modifier = Modifier.graphicsLayer {
+            scaleX = favScale
+            scaleY = favScale
+          }
         )
       }
 
       Box(
         modifier = Modifier
           .size(40.dp)
+          .graphicsLayer {
+            scaleX = playScale
+            scaleY = playScale
+          }
           .clip(CircleShape)
           .background(
             if (isCurrent) accentColor
@@ -1202,7 +1331,10 @@ fun SongDownloadRow(
             Color.White.copy(alpha = if (isCurrent) 0.45f else if (darkTheme) 0.18f else 0.7f),
             CircleShape
           )
-          .clickable { onSongClick() }
+          .clickable(
+            interactionSource = playInteractionSource,
+            indication = LocalIndication.current
+          ) { onSongClick() }
           .testTag("song_play_button_${song.id}"),
         contentAlignment = Alignment.Center
       ) {

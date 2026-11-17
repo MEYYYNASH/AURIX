@@ -1,6 +1,7 @@
 package com.example
 
 import android.content.Context
+import android.content.Intent
 import android.os.Bundle
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
@@ -33,9 +34,17 @@ class MainActivity : ComponentActivity() {
       viewModel.markLaunchSplashShown()
     }
 
+    viewModel.handleNotificationIntent(intent)
+
     enableEdgeToEdge()
     setContent {
       AurixApp(viewModel = viewModel)
     }
+  }
+
+  override fun onNewIntent(intent: Intent) {
+    super.onNewIntent(intent)
+    setIntent(intent)
+    viewModel.handleNotificationIntent(intent)
   }
 }

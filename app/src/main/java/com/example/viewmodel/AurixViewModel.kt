@@ -67,24 +67,14 @@ enum class DailyFeedCategory(
   KHMER_ASIA("khmer", "Khmer & Asia", "Regional Hits", "Popular Khmer & Asian hits from iTunes & YouTube")
 }
 
+data class NotificationNavTarget(
+  val screenRoute: String,
+  val libraryTab: Int = 0
+)
+
 class AurixViewModel(application: Application) : AndroidViewModel(application) {
   private val prefsManager = PreferencesManager(application)
-  private val database = Room.databaseBuilder(
-    application,
-    AurixDatabase::class.java,
-    "aurix_db"
-  )
-    .addMigrations(
-      AURIX_MIGRATION_1_2,
-      AURIX_MIGRATION_2_3,
-      AURIX_MIGRATION_3_4,
-      AURIX_MIGRATION_4_5,
-      AURIX_MIGRATION_5_6,
-      AURIX_MIGRATION_6_7,
-      AURIX_MIGRATION_7_8,
-      AURIX_MIGRATION_8_9
-    )
-    .build()
+  private val database = AurixDatabase.getInstance(application)
   private val dao = database.aurixDao()
   private val analyticsRepository = ListeningAnalyticsRepository(dao)
   private val playSessionTracker = PlaySessionTracker()
@@ -145,9 +135,12 @@ class AurixViewModel(application: Application) : AndroidViewModel(application) {
   private var playResolveJob: Job? = null
   private var formatSheetJob: Job? = null
 
-  // OTA Update Engine (separated from UI in UpdateManager)
-  private val updateManager = UpdateManager(application, viewModelScope)
+  // OTA Update Engine (shared app-wide instance so BackgroundDownloadService stays synced)
+  private val updateManager = UpdateManagerHolder.getInstance(application)
   val updateUiState: StateFlow<UpdateUiState> = updateManager.uiState
+
+  private val _pendingNotificationNav = MutableStateFlow<NotificationNavTarget?>(null)
+  val pendingNotificationNav: StateFlow<NotificationNavTarget?> = _pendingNotificationNav.asStateFlow()
 
   private val _logoIntroActive = MutableStateFlow(false)
   private var logoIntroPlayed = false
@@ -171,12 +164,16 @@ class AurixViewModel(application: Application) : AndroidViewModel(application) {
   private val _showWhatsNewSheet = MutableStateFlow(false)
   val showWhatsNewSheet: StateFlow<Boolean> = _showWhatsNewSheet.asStateFlow()
 
-  // Song Download States
-  private val _songDownloadProgress = MutableStateFlow<Map<String, Float>>(emptyMap())
-  val songDownloadProgress: StateFlow<Map<String, Float>> = _songDownloadProgress
+  // Song Download States (mirrored from BackgroundDownloadRegistry so background transfers stay live)
+  val songDownloadProgress: StateFlow<Map<String, Float>> = BackgroundDownloadRegistry.songDownloadProgress
 
-  private val _downloadedSongIds = MutableStateFlow<Set<String>>(emptySet())
-  val downloadedSongIds: StateFlow<Set<String>> = _downloadedSongIds
+  private val _localDeletedOrAddedIds = MutableStateFlow<Set<String>>(emptySet())
+  val downloadedSongIds: StateFlow<Set<String>> = combine(
+    BackgroundDownloadRegistry.downloadedSongIds,
+    _localDeletedOrAddedIds
+  ) { registryIds, extraIds ->
+    registryIds + extraIds
+  }.stateIn(viewModelScope, SharingStarted.Eagerly, emptySet())
 
   // Daily Chart & Viral Recommendations (auto-updates daily, TikTok Viral powered by iTunes)
   private val _selectedDailyFeed = MutableStateFlow(DailyFeedCategory.TIKTOK_VIRAL)
@@ -968,14 +965,75 @@ class AurixViewModel(application: Application) : AndroidViewModel(application) {
     observeSearchRequests()
     observeDiscoverWeeklyUpdates()
     observeCatalogMetadataSync()
+    observeBackgroundDownloads()
     connectPlaybackController(application)
     loadDailyRecommendations(DailyFeedCategory.TIKTOK_VIRAL)
     loadPopularYoutubeSongs()
     loadTiktokViralNewPipeSongs()
     startPositionTicker()
+    AppNotificationHelper.ensureChannels(application)
+    UpdateCheckScheduler.schedulePeriodicChecks(application)
     if (updateManager.uiState.value.stage == UpdateStage.Idle) {
       checkForUpdates(application, silent = true)
     }
+  }
+
+  private fun observeBackgroundDownloads() {
+    viewModelScope.launch {
+      BackgroundDownloadRegistry.videoDownloadStates.collect { videoMap ->
+        val currentAnalysisId = _youtubeAnalysis.value?.videoId
+        if (currentAnalysisId != null) {
+          val stateForPane = videoMap[currentAnalysisId]
+          if (stateForPane != null) {
+            _youtubeDownloadState.value = stateForPane
+          }
+        }
+        val currentSheet = _formatSheetState.value
+        if (currentSheet is YoutubeFormatSheetState.Ready) {
+          val stateForSheet = videoMap[currentSheet.analysis.videoId]
+          if (stateForSheet != null && currentSheet.downloadState != stateForSheet) {
+            _formatSheetState.value = currentSheet.copy(downloadState = stateForSheet)
+          }
+        }
+      }
+    }
+    viewModelScope.launch {
+      BackgroundDownloadRegistry.feedbackEvents.collect { event ->
+        Toast.makeText(getApplication(), event.message, Toast.LENGTH_LONG).show()
+      }
+    }
+  }
+
+  fun handleNotificationIntent(intent: Intent?) {
+    if (intent == null) return
+    val openScreen = intent.getStringExtra(AppNotificationHelper.EXTRA_OPEN_SCREEN)
+    val updateAction = intent.getStringExtra(AppNotificationHelper.EXTRA_UPDATE_ACTION)
+    val libraryTab = intent.getIntExtra(AppNotificationHelper.EXTRA_OPEN_LIBRARY_TAB, 0)
+
+    if (!openScreen.isNullOrBlank()) {
+      _pendingNotificationNav.value = NotificationNavTarget(
+        screenRoute = openScreen,
+        libraryTab = libraryTab
+      )
+      intent.removeExtra(AppNotificationHelper.EXTRA_OPEN_SCREEN)
+    }
+    if (!updateAction.isNullOrBlank()) {
+      intent.removeExtra(AppNotificationHelper.EXTRA_UPDATE_ACTION)
+      when (updateAction) {
+        AppNotificationHelper.ACTION_DOWNLOAD_UPDATE -> updateManager.startOrResumeDownload()
+        AppNotificationHelper.ACTION_INSTALL_UPDATE -> updateManager.launchSystemInstaller()
+        AppNotificationHelper.ACTION_RETRY_UPDATE -> updateManager.retryFailedAction()
+        AppNotificationHelper.ACTION_VIEW_UPDATE -> {
+          if (updateManager.uiState.value.stage == UpdateStage.Idle) {
+            checkForUpdates(getApplication(), silent = false)
+          }
+        }
+      }
+    }
+  }
+
+  fun consumeNotificationNav() {
+    _pendingNotificationNav.value = null
   }
 
   private fun observeCatalogMetadataSync() {
@@ -1590,119 +1648,13 @@ class AurixViewModel(application: Application) : AndroidViewModel(application) {
       ?: analysis.formats.firstOrNull()
       ?: return
 
-    viewModelScope.launch {
-      var activeFormat = format
-      var formatLabel = "${activeFormat.formatLabel} (${activeFormat.qualityLabel})"
-
-      fun updateDlState(dlState: YoutubeDownloadState) {
-        val latest = _formatSheetState.value
-        if (latest is YoutubeFormatSheetState.Ready && latest.analysis.videoId == analysis.videoId) {
-          _formatSheetState.value = latest.copy(downloadState = dlState)
-        }
-      }
-
-      updateDlState(YoutubeDownloadState.Downloading(0.02f, 0L, activeFormat.contentLengthBytes, formatLabel))
-
-      var downloadRes = SongDownloader.downloadFormatToApp(
-        context = context,
-        title = analysis.matchedTrackTitle,
-        artist = analysis.matchedArtist,
-        format = activeFormat
-      ) { progressInfo ->
-        updateDlState(
-          YoutubeDownloadState.Downloading(
-            progress = progressInfo.fraction,
-            downloadedBytes = progressInfo.downloadedBytes,
-            totalBytes = progressInfo.totalBytes,
-            formatLabel = formatLabel
-          )
-        )
-      }
-
-      if (downloadRes.isFailure) {
-        updateDlState(
-          YoutubeDownloadState.Downloading(
-            progress = 0.04f,
-            downloadedBytes = 0L,
-            totalBytes = activeFormat.contentLengthBytes,
-            formatLabel = "Switching stream mirror..."
-          )
-        )
-        val refreshed = YoutubeExtractor.extractFreshWorkingFormat(
-          videoId = analysis.videoId,
-          preferredExtension = activeFormat.extension,
-          failedFormatId = activeFormat.id
-        )
-        if (refreshed != null) {
-          activeFormat = refreshed
-          formatLabel = "${activeFormat.formatLabel} (${activeFormat.qualityLabel})"
-          downloadRes = SongDownloader.downloadFormatToApp(
-            context = context,
-            title = analysis.matchedTrackTitle,
-            artist = analysis.matchedArtist,
-            format = activeFormat
-          ) { progressInfo ->
-            updateDlState(
-              YoutubeDownloadState.Downloading(
-                progress = progressInfo.fraction,
-                downloadedBytes = progressInfo.downloadedBytes,
-                totalBytes = progressInfo.totalBytes,
-                formatLabel = formatLabel
-              )
-            )
-          }
-        }
-      }
-
-      downloadRes.onSuccess { savedAudio ->
-        _downloadedSongIds.value = _downloadedSongIds.value + current.song.id
-        val cachedCover = SongDownloader.cacheRemoteArtwork(
-          context = context,
-          songId = savedAudio.uri.toString(),
-          imageUrl = analysis.thumbnailUrl
-        )
-        val artwork = cachedCover ?: analysis.thumbnailUrl.ifBlank { APP_ICON_ARTWORK }
-        val finalDuration = savedAudio.durationSeconds
-          .takeIf { it > 0L }
-          ?: analysis.durationSeconds.takeIf { it > 0L }
-          ?: activeFormat.durationSeconds
-
-        val entity = LocalSongEntity(
-          id = savedAudio.uri.toString(),
-          title = analysis.matchedTrackTitle,
-          artist = analysis.matchedArtist,
-          artworkUrl = artwork,
-          durationSeconds = finalDuration,
-          streamUrl = savedAudio.uri.toString(),
-          source = "Downloaded"
-        )
-        dao.insertLocalSong(entity)
-
-        val savedSong = TrackMetadataClassifier.enrich(
-          Song(
-            id = entity.id,
-            title = entity.title,
-            artist = entity.artist,
-            artworkUrl = entity.artworkUrl,
-            durationSeconds = entity.durationSeconds,
-            streamUrl = entity.streamUrl,
-            source = entity.source,
-            isFavorite = entity.id in favoriteIds.value,
-            fullDurationSeconds = entity.durationSeconds
-          )
-        )
-        updateDlState(YoutubeDownloadState.Saved(savedSong))
-        Toast.makeText(
-          context,
-          "Saved full song (${YoutubeExtractor.formatDurationShort(finalDuration)}): ${savedSong.title}",
-          Toast.LENGTH_LONG
-        ).show()
-      }.onFailure { err ->
-        val msg = err.localizedMessage ?: "Download failed"
-        updateDlState(YoutubeDownloadState.Error(msg))
-        Toast.makeText(context, msg, Toast.LENGTH_LONG).show()
-      }
-    }
+    BackgroundDownloadRegistry.enqueueFormatDownload(
+      context = context,
+      songIdForBadge = current.song.id,
+      analysis = analysis,
+      initialFormat = format,
+      isFavoriteProvider = { id -> id in favoriteIds.value }
+    )
   }
 
   fun downloadAnalyzedTrack(context: Context) {
@@ -1711,101 +1663,13 @@ class AurixViewModel(application: Application) : AndroidViewModel(application) {
     val format = analysis.formats.firstOrNull { it.id == selectedId } ?: analysis.formats.firstOrNull() ?: return
     if (_youtubeDownloadState.value is YoutubeDownloadState.Downloading) return
 
-    viewModelScope.launch {
-      var activeFormat = format
-      var formatLabel = "${activeFormat.formatLabel} (${activeFormat.qualityLabel})"
-      _youtubeDownloadState.value = YoutubeDownloadState.Downloading(0.02f, 0L, activeFormat.contentLengthBytes, formatLabel)
-
-      var downloadRes = SongDownloader.downloadFormatToApp(
-        context = context,
-        title = analysis.matchedTrackTitle,
-        artist = analysis.matchedArtist,
-        format = activeFormat
-      ) { progressInfo ->
-        _youtubeDownloadState.value = YoutubeDownloadState.Downloading(
-          progress = progressInfo.fraction,
-          downloadedBytes = progressInfo.downloadedBytes,
-          totalBytes = progressInfo.totalBytes,
-          formatLabel = formatLabel
-        )
-      }
-
-      if (downloadRes.isFailure) {
-        _youtubeDownloadState.value = YoutubeDownloadState.Downloading(
-          progress = 0.04f,
-          downloadedBytes = 0L,
-          totalBytes = activeFormat.contentLengthBytes,
-          formatLabel = "Switching stream mirror..."
-        )
-        val refreshed = YoutubeExtractor.extractFreshWorkingFormat(
-          videoId = analysis.videoId,
-          preferredExtension = activeFormat.extension,
-          failedFormatId = activeFormat.id
-        )
-        if (refreshed != null) {
-          activeFormat = refreshed
-          formatLabel = "${activeFormat.formatLabel} (${activeFormat.qualityLabel})"
-          downloadRes = SongDownloader.downloadFormatToApp(
-            context = context,
-            title = analysis.matchedTrackTitle,
-            artist = analysis.matchedArtist,
-            format = activeFormat
-          ) { progressInfo ->
-            _youtubeDownloadState.value = YoutubeDownloadState.Downloading(
-              progress = progressInfo.fraction,
-              downloadedBytes = progressInfo.downloadedBytes,
-              totalBytes = progressInfo.totalBytes,
-              formatLabel = formatLabel
-            )
-          }
-        }
-      }
-
-      downloadRes.onSuccess { savedAudio ->
-        _downloadedSongIds.value = _downloadedSongIds.value + "yt_${analysis.videoId}"
-        val cachedCover = SongDownloader.cacheRemoteArtwork(
-          context = context,
-          songId = savedAudio.uri.toString(),
-          imageUrl = analysis.thumbnailUrl
-        )
-        val artwork = cachedCover ?: analysis.thumbnailUrl.ifBlank { APP_ICON_ARTWORK }
-        val finalDuration = savedAudio.durationSeconds
-          .takeIf { it > 0L }
-          ?: analysis.durationSeconds.takeIf { it > 0L }
-          ?: activeFormat.durationSeconds
-
-        val entity = LocalSongEntity(
-          id = savedAudio.uri.toString(),
-          title = analysis.matchedTrackTitle,
-          artist = analysis.matchedArtist,
-          artworkUrl = artwork,
-          durationSeconds = finalDuration,
-          streamUrl = savedAudio.uri.toString(),
-          source = "Downloaded"
-        )
-        dao.insertLocalSong(entity)
-
-        val savedSong = TrackMetadataClassifier.enrich(
-          Song(
-            id = entity.id,
-            title = entity.title,
-            artist = entity.artist,
-            artworkUrl = entity.artworkUrl,
-            durationSeconds = entity.durationSeconds,
-            streamUrl = entity.streamUrl,
-            source = entity.source,
-            isFavorite = entity.id in favoriteIds.value,
-            fullDurationSeconds = entity.durationSeconds
-          )
-        )
-        _youtubeDownloadState.value = YoutubeDownloadState.Saved(savedSong)
-        Toast.makeText(context, "Saved full song (${YoutubeExtractor.formatDurationShort(finalDuration)}): ${savedSong.title}", Toast.LENGTH_LONG).show()
-      }.onFailure { err ->
-        val msg = err.localizedMessage ?: "Download failed"
-        _youtubeDownloadState.value = YoutubeDownloadState.Error(msg)
-        Toast.makeText(context, msg, Toast.LENGTH_LONG).show()
-      }
-    }
+    BackgroundDownloadRegistry.enqueueFormatDownload(
+      context = context,
+      songIdForBadge = "yt_${analysis.videoId}",
+      analysis = analysis,
+      initialFormat = format,
+      isFavoriteProvider = { id -> id in favoriteIds.value }
+    )
   }
 
   fun startUpdateLogoIntro() {
@@ -1871,34 +1735,7 @@ class AurixViewModel(application: Application) : AndroidViewModel(application) {
   }
 
   fun downloadSong(context: Context, song: Song) {
-    if (_songDownloadProgress.value.containsKey(song.id)) return
-    viewModelScope.launch {
-      _songDownloadProgress.value = _songDownloadProgress.value + (song.id to 0.05f)
-      Toast.makeText(context, "Saving to app: ${song.title}...", Toast.LENGTH_SHORT).show()
-
-      val result = SongDownloader.downloadSongToDevice(context, song) { progress ->
-        _songDownloadProgress.value = _songDownloadProgress.value + (song.id to progress)
-      }
-
-      _songDownloadProgress.value = _songDownloadProgress.value - song.id
-      result.onSuccess { savedAudio ->
-        _downloadedSongIds.value = _downloadedSongIds.value + song.id
-        val cachedCover = SongDownloader.cacheRemoteArtwork(context, savedAudio.uri.toString(), song.artworkUrl)
-        val entity = LocalSongEntity(
-          id = savedAudio.uri.toString(),
-          title = song.title,
-          artist = song.artist,
-          artworkUrl = cachedCover ?: song.artworkUrl.ifBlank { APP_ICON_ARTWORK },
-          durationSeconds = savedAudio.durationSeconds.takeIf { it > 0L } ?: song.durationSeconds,
-          streamUrl = savedAudio.uri.toString(),
-          source = "Downloaded"
-        )
-        dao.insertLocalSong(entity)
-        Toast.makeText(context, "Saved to My songs & Music/AURIX: ${song.title}", Toast.LENGTH_LONG).show()
-      }.onFailure { err ->
-        Toast.makeText(context, err.localizedMessage ?: "Download failed", Toast.LENGTH_LONG).show()
-      }
-    }
+    BackgroundDownloadRegistry.enqueueSongDownload(context, song)
   }
 
   private fun todayDateKey(): String {
@@ -3262,8 +3099,8 @@ class AurixViewModel(application: Application) : AndroidViewModel(application) {
   fun downloadAlbum(context: Context, tracks: List<Song>) {
     val pending = tracks.filter {
       it.streamUrl.isNotBlank() &&
-        it.id !in _downloadedSongIds.value &&
-        !_songDownloadProgress.value.containsKey(it.id)
+        it.id !in downloadedSongIds.value &&
+        !songDownloadProgress.value.containsKey(it.id)
     }
     if (pending.isEmpty()) {
       val msg = if (tracks.any { it.streamUrl.isNotBlank() }) {
@@ -3488,10 +3325,11 @@ class AurixViewModel(application: Application) : AndroidViewModel(application) {
         dao.deleteLyricOffset(song.id)
       }
 
-      _downloadedSongIds.value = _downloadedSongIds.value - song.id
+      _localDeletedOrAddedIds.value = _localDeletedOrAddedIds.value - song.id
       val dlState = _youtubeDownloadState.value
       if (dlState is YoutubeDownloadState.Saved && dlState.song.id == song.id) {
         _youtubeDownloadState.value = YoutubeDownloadState.Idle
+        BackgroundDownloadRegistry.clearVideoDownloadState(song.id)
       }
 
       val currentQueue = _queue.value
