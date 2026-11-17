@@ -812,6 +812,12 @@ class AurixViewModel(application: Application) : AndroidViewModel(application) {
   private val _sleepMinutes = MutableStateFlow(0)
   val sleepMinutes: StateFlow<Int> = _sleepMinutes
 
+  private val _sleepRemainingSeconds = MutableStateFlow(0L)
+  val sleepRemainingSeconds: StateFlow<Long> = _sleepRemainingSeconds
+
+  private val _sleepEndOfTrack = MutableStateFlow(false)
+  val sleepEndOfTrack: StateFlow<Boolean> = _sleepEndOfTrack
+
   private val _lyrics = MutableStateFlow<LyricsResult?>(null)
   val lyrics: StateFlow<LyricsResult?> = _lyrics
 
@@ -862,6 +868,15 @@ class AurixViewModel(application: Application) : AndroidViewModel(application) {
     override fun onMediaItemTransition(mediaItem: MediaItem?, reason: Int) {
       val id = mediaItem?.mediaId ?: return
       val transitionedSong = _queue.value.firstOrNull { it.id == id } ?: return
+      if (_sleepEndOfTrack.value && reason == Player.MEDIA_ITEM_TRANSITION_REASON_AUTO) {
+        _sleepEndOfTrack.value = false
+        mediaController?.let { ctrl ->
+          ctrl.pause()
+          ctrl.volume = 1f
+        }
+        _isPlaying.value = false
+        return
+      }
       if (_rawCurrentSong.value?.id != transitionedSong.id) {
         onTrackActivated(transitionedSong)
       }
@@ -888,6 +903,11 @@ class AurixViewModel(application: Application) : AndroidViewModel(application) {
             }
           }
         }
+      } else if (playbackState == Player.STATE_ENDED && _sleepEndOfTrack.value) {
+        _sleepEndOfTrack.value = false
+        controller.pause()
+        controller.volume = 1f
+        _isPlaying.value = false
       } else if (
         playbackState == Player.STATE_ENDED &&
         controller.mediaItemCount <= 1 &&
@@ -939,11 +959,13 @@ class AurixViewModel(application: Application) : AndroidViewModel(application) {
         val eqPreset = prefsManager.eqPreset.first()
         val eqBands = prefsManager.eqBands.first()
         val eqBass = prefsManager.eqBassBoost.first()
+        val eqVirtualizer = prefsManager.eqVirtualizer.first()
         AudioEqualizerController.restoreSettings(
           enabled = eqEnabled,
           presetId = eqPreset,
           bandLevelsMb = eqBands,
-          bassBoostStrength = eqBass
+          bassBoostStrength = eqBass,
+          virtualizerStrength = eqVirtualizer
         )
         val crossfadeSec = prefsManager.crossfadeSeconds.first()
         val crossfadeManualSkip = prefsManager.crossfadeManualSkip.first()
@@ -1294,6 +1316,7 @@ class AurixViewModel(application: Application) : AndroidViewModel(application) {
     val mediaItems = orderedQueue.map { buildMediaItem(it) }
 
     controller.stop()
+    controller.volume = 1f
     controller.setMediaItems(mediaItems, startIndex, 0L)
     controller.playbackParameters = PlaybackParameters(_playbackSpeed.value)
     // When MoodFlow is enabled, Aurix orders and selects transitions instead of raw uniform ExoPlayer shuffle
@@ -2569,6 +2592,13 @@ class AurixViewModel(application: Application) : AndroidViewModel(application) {
       }
     }
 
+    val curIdx = q.indexOfFirst { it.id == current?.id }.coerceAtLeast(0)
+    val nextQueueSong = q.getOrNull(curIdx + 1)
+    if (nextQueueSong != null && isUnresolvedYoutubeWatchUrl(nextQueueSong)) {
+      playSong(nextQueueSong, q)
+      return
+    }
+
     val controller = mediaController
     if (controller != null && controller.hasNextMediaItem()) {
       controller.seekToNextMediaItem()
@@ -2579,7 +2609,6 @@ class AurixViewModel(application: Application) : AndroidViewModel(application) {
       return
     }
     if (q.isEmpty()) return
-    val curIdx = q.indexOfFirst { it.id == current?.id }.coerceAtLeast(0)
     val nextIdx = if (_shuffleEnabled.value && q.size > 1) {
       q.indices.filter { it != curIdx }.random()
     } else {
@@ -2650,31 +2679,224 @@ class AurixViewModel(application: Application) : AndroidViewModel(application) {
     mediaController?.repeatMode = if (next) Player.REPEAT_MODE_ONE else Player.REPEAT_MODE_ALL
   }
 
+  fun setPlaybackSpeed(speed: Float) {
+    val clamped = speed.coerceIn(0.5f, 2.0f)
+    _playbackSpeed.value = clamped
+    mediaController?.playbackParameters = PlaybackParameters(clamped)
+  }
+
   fun cyclePlaybackSpeed() {
-    val nextSpeed = when (_playbackSpeed.value) {
-      1.0f -> 1.25f
-      1.25f -> 1.5f
-      1.5f -> 0.75f
-      else -> 1.0f
+    val nextSpeed = when {
+      _playbackSpeed.value < 0.85f -> 0.9f
+      _playbackSpeed.value < 0.95f -> 1.0f
+      _playbackSpeed.value < 1.1f -> 1.15f
+      _playbackSpeed.value < 1.2f -> 1.25f
+      _playbackSpeed.value < 1.4f -> 1.5f
+      else -> 0.75f
     }
-    _playbackSpeed.value = nextSpeed
-    mediaController?.playbackParameters = PlaybackParameters(nextSpeed)
+    setPlaybackSpeed(nextSpeed)
   }
 
   fun cycleSleepTimer() {
-    val nextMin = when (_sleepMinutes.value) {
-      0 -> 15
-      15 -> 30
-      30 -> 60
+    val nextMin = when {
+      _sleepEndOfTrack.value -> 0
+      _sleepMinutes.value == 0 -> 15
+      _sleepMinutes.value == 15 -> 30
+      _sleepMinutes.value == 30 -> 45
+      _sleepMinutes.value == 45 -> 60
       else -> 0
     }
-    _sleepMinutes.value = nextMin
+    setSleepTimerMinutes(nextMin)
+  }
+
+  fun setSleepTimerMinutes(minutes: Int) {
     sleepTimerJob?.cancel()
-    if (nextMin > 0) {
-      sleepTimerJob = viewModelScope.launch {
-        delay(nextMin * 60_000L)
-        mediaController?.pause()
-        _sleepMinutes.value = 0
+    _sleepEndOfTrack.value = false
+    if (minutes <= 0) {
+      _sleepMinutes.value = 0
+      _sleepRemainingSeconds.value = 0L
+      mediaController?.volume = 1f
+      return
+    }
+    _sleepMinutes.value = minutes
+    val totalSeconds = minutes * 60L
+    _sleepRemainingSeconds.value = totalSeconds
+    mediaController?.volume = 1f
+    sleepTimerJob = viewModelScope.launch {
+      var remaining = totalSeconds
+      while (remaining > 0L) {
+        delay(1_000L)
+        remaining -= 1L
+        _sleepRemainingSeconds.value = remaining
+        if (remaining in 1L..8L) {
+          val fadeVol = (remaining / 8f).coerceIn(0.05f, 1f)
+          mediaController?.volume = fadeVol
+        }
+      }
+      mediaController?.let { controller ->
+        controller.pause()
+        controller.volume = 1f
+      }
+      _sleepMinutes.value = 0
+      _sleepRemainingSeconds.value = 0L
+    }
+  }
+
+  fun setSleepEndOfTrack() {
+    sleepTimerJob?.cancel()
+    _sleepMinutes.value = 0
+    _sleepRemainingSeconds.value = 0L
+    _sleepEndOfTrack.value = true
+    mediaController?.volume = 1f
+  }
+
+  fun cancelSleepTimer() {
+    sleepTimerJob?.cancel()
+    _sleepMinutes.value = 0
+    _sleepRemainingSeconds.value = 0L
+    _sleepEndOfTrack.value = false
+    mediaController?.volume = 1f
+  }
+
+  fun playNext(song: Song) {
+    if (song.streamUrl.isBlank()) {
+      Toast.makeText(getApplication(), "No playable stream URL for this track.", Toast.LENGTH_SHORT).show()
+      return
+    }
+    val active = _rawCurrentSong.value
+    val currentQueue = _queue.value
+    if (active == null || currentQueue.isEmpty()) {
+      playSong(song, listOf(song))
+      return
+    }
+    if (active.id == song.id) {
+      val appCtx = localizedAppContext()
+      Toast.makeText(appCtx, appCtx.getString(R.string.queue_added_next_toast, song.title), Toast.LENGTH_SHORT).show()
+      return
+    }
+    val cleaned = currentQueue.filterNot { it.id == song.id }
+    val activeIdx = cleaned.indexOfFirst { it.id == active.id }.coerceAtLeast(0)
+    val insertIdx = (activeIdx + 1).coerceAtMost(cleaned.size)
+    val updated = cleaned.toMutableList().apply { add(insertIdx, song) }
+    _queue.value = updated
+
+    if (!isUnresolvedYoutubeWatchUrl(song)) {
+      mediaController?.let { controller ->
+        for (i in controller.mediaItemCount - 1 downTo 0) {
+          if (controller.getMediaItemAt(i).mediaId == song.id && i != controller.currentMediaItemIndex) {
+            controller.removeMediaItem(i)
+          }
+        }
+        val targetControllerIdx = (controller.currentMediaItemIndex + 1).coerceIn(0, controller.mediaItemCount)
+        controller.addMediaItem(targetControllerIdx, buildMediaItem(song))
+      }
+    }
+    val appCtx = localizedAppContext()
+    Toast.makeText(appCtx, appCtx.getString(R.string.queue_added_next_toast, song.title), Toast.LENGTH_SHORT).show()
+  }
+
+  fun addToQueue(song: Song) {
+    if (song.streamUrl.isBlank()) {
+      Toast.makeText(getApplication(), "No playable stream URL for this track.", Toast.LENGTH_SHORT).show()
+      return
+    }
+    val active = _rawCurrentSong.value
+    val currentQueue = _queue.value
+    if (active == null || currentQueue.isEmpty()) {
+      playSong(song, listOf(song))
+      return
+    }
+    val cleaned = if (active.id == song.id) currentQueue else currentQueue.filterNot { it.id == song.id }
+    val updated = if (active.id == song.id) cleaned else cleaned + song
+    _queue.value = updated
+
+    if (active.id != song.id && !isUnresolvedYoutubeWatchUrl(song)) {
+      mediaController?.let { controller ->
+        for (i in controller.mediaItemCount - 1 downTo 0) {
+          if (controller.getMediaItemAt(i).mediaId == song.id && i != controller.currentMediaItemIndex) {
+            controller.removeMediaItem(i)
+          }
+        }
+        controller.addMediaItem(buildMediaItem(song))
+      }
+    }
+    val appCtx = localizedAppContext()
+    Toast.makeText(appCtx, appCtx.getString(R.string.queue_added_end_toast, song.title), Toast.LENGTH_SHORT).show()
+  }
+
+  fun jumpToQueueIndex(index: Int) {
+    val currentQueue = _queue.value
+    val target = currentQueue.getOrNull(index) ?: return
+    val controller = mediaController
+    if (controller != null && !isUnresolvedYoutubeWatchUrl(target)) {
+      var controllerIdx = -1
+      for (i in 0 until controller.mediaItemCount) {
+        if (controller.getMediaItemAt(i).mediaId == target.id) {
+          controllerIdx = i
+          break
+        }
+      }
+      if (controllerIdx >= 0) {
+        controller.volume = 1f
+        controller.seekTo(controllerIdx, 0L)
+        if (controller.playbackState == Player.STATE_IDLE) {
+          controller.prepare()
+        }
+        controller.play()
+        return
+      }
+    }
+    playSong(target, currentQueue)
+  }
+
+  fun moveQueueItem(fromIndex: Int, toIndex: Int) {
+    val currentQueue = _queue.value.toMutableList()
+    if (fromIndex !in currentQueue.indices || toIndex !in currentQueue.indices || fromIndex == toIndex) return
+    val fromSong = currentQueue[fromIndex]
+    val toSong = currentQueue[toIndex]
+    val item = currentQueue.removeAt(fromIndex)
+    currentQueue.add(toIndex, item)
+    _queue.value = currentQueue
+
+    mediaController?.let { controller ->
+      var cFrom = -1
+      var cTo = -1
+      for (i in 0 until controller.mediaItemCount) {
+        val mid = controller.getMediaItemAt(i).mediaId
+        if (mid == fromSong.id) cFrom = i
+        if (mid == toSong.id) cTo = i
+      }
+      if (cFrom >= 0 && cTo >= 0 && cFrom != cTo) {
+        controller.moveMediaItem(cFrom, cTo)
+      }
+    }
+  }
+
+  fun removeQueueItem(index: Int) {
+    val currentQueue = _queue.value
+    val target = currentQueue.getOrNull(index) ?: return
+    if (target.id == _rawCurrentSong.value?.id) return
+    val updated = currentQueue.toMutableList().apply { removeAt(index) }
+    _queue.value = updated
+    mediaController?.let { controller ->
+      for (i in controller.mediaItemCount - 1 downTo 0) {
+        if (controller.getMediaItemAt(i).mediaId == target.id) {
+          controller.removeMediaItem(i)
+        }
+      }
+    }
+  }
+
+  fun clearUpcomingQueue() {
+    val currentQueue = _queue.value
+    val active = _rawCurrentSong.value ?: return
+    val activeIdx = currentQueue.indexOfFirst { it.id == active.id }.coerceAtLeast(0)
+    val updated = currentQueue.take(activeIdx + 1)
+    _queue.value = updated
+    mediaController?.let { controller ->
+      val currentControllerIdx = controller.currentMediaItemIndex
+      for (i in controller.mediaItemCount - 1 downTo (currentControllerIdx + 1).coerceAtLeast(0)) {
+        controller.removeMediaItem(i)
       }
     }
   }
@@ -2684,6 +2906,9 @@ class AurixViewModel(application: Application) : AndroidViewModel(application) {
     if (controller.isPlaying) {
       controller.pause()
     } else {
+      if (_sleepRemainingSeconds.value == 0L || _sleepRemainingSeconds.value > 8L) {
+        controller.volume = 1f
+      }
       if (controller.playbackState == Player.STATE_IDLE && controller.mediaItemCount > 0) {
         controller.prepare()
       } else if (controller.playbackState == Player.STATE_ENDED) {
@@ -3711,6 +3936,11 @@ class AurixViewModel(application: Application) : AndroidViewModel(application) {
     persistEqualizerState(updated)
   }
 
+  fun setVirtualizerStrength(strength: Int) {
+    val updated = AudioEqualizerController.setVirtualizerStrength(strength)
+    persistEqualizerState(updated)
+  }
+
   fun resetEqualizer() {
     val updated = AudioEqualizerController.reset()
     persistEqualizerState(updated)
@@ -3722,7 +3952,8 @@ class AurixViewModel(application: Application) : AndroidViewModel(application) {
         enabled = eqState.enabled,
         presetId = eqState.presetId,
         bandsMb = eqState.bandLevelsMb,
-        bassBoostStrength = eqState.bassBoostStrength
+        bassBoostStrength = eqState.bassBoostStrength,
+        virtualizerStrength = eqState.virtualizerStrength
       )
     }
   }

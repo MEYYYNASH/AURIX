@@ -1,6 +1,7 @@
 package com.example.ui.screens
 
 import android.os.Build
+import androidx.compose.animation.core.Animatable
 import androidx.compose.animation.core.Spring
 import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.animation.core.snap
@@ -9,6 +10,7 @@ import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.gestures.detectHorizontalDragGestures
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.material.icons.Icons
@@ -16,10 +18,13 @@ import androidx.compose.material.icons.rounded.Favorite
 import androidx.compose.material.icons.rounded.FavoriteBorder
 import androidx.compose.material.icons.rounded.Pause
 import androidx.compose.material.icons.rounded.PlayArrow
+import androidx.compose.material.icons.rounded.SkipNext
+import androidx.compose.material.icons.rounded.SkipPrevious
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.alpha
 import androidx.compose.ui.draw.blur
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.draw.drawBehind
@@ -31,12 +36,20 @@ import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.StrokeCap
 import androidx.compose.ui.graphics.drawscope.Stroke
+import androidx.compose.ui.hapticfeedback.HapticFeedbackType
+import androidx.compose.ui.input.pointer.pointerInput
+import androidx.compose.ui.platform.LocalDensity
+import androidx.compose.ui.platform.LocalHapticFeedback
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
+import androidx.compose.ui.unit.IntOffset
 import androidx.compose.ui.unit.dp
 import com.example.model.Song
 import com.example.ui.theme.HeartRed
+import kotlinx.coroutines.launch
+import kotlin.math.abs
+import kotlin.math.roundToInt
 
 @Composable
 fun MiniPlayer(
@@ -50,6 +63,8 @@ fun MiniPlayer(
   onCheckLyrics: ((Song) -> Unit)? = null,
   onPlayPauseClick: () -> Unit,
   onFavoriteClick: () -> Unit,
+  onSwipeNext: () -> Unit = {},
+  onSwipePrevious: () -> Unit = {},
   onClick: () -> Unit
 ) {
   if (song == null) return
@@ -78,6 +93,16 @@ fun MiniPlayer(
     label = "mini_heart"
   )
 
+  val scope = rememberCoroutineScope()
+  val dragOffsetX = remember { Animatable(0f) }
+  val swipeThresholdPx = with(LocalDensity.current) { 72.dp.toPx() }
+  val haptic = LocalHapticFeedback.current
+  var thresholdCrossed by remember { mutableStateOf(false) }
+
+  val swipeFraction = (dragOffsetX.value / swipeThresholdPx).coerceIn(-1.2f, 1.2f)
+  val prevCueAlpha = (swipeFraction).coerceIn(0f, 1f)
+  val nextCueAlpha = (-swipeFraction).coerceIn(0f, 1f)
+
   Box(
     modifier = Modifier
       .padding(horizontal = 22.dp)
@@ -86,10 +111,41 @@ fun MiniPlayer(
       .height(64.dp),
     contentAlignment = Alignment.Center
   ) {
+    // Directional swipe-to-skip cues revealed beneath the pill while dragging
+    if (abs(dragOffsetX.value) > 4f) {
+      Row(
+        modifier = Modifier
+          .fillMaxWidth()
+          .padding(horizontal = 18.dp),
+        horizontalArrangement = Arrangement.SpaceBetween,
+        verticalAlignment = Alignment.CenterVertically
+      ) {
+        Icon(
+          imageVector = Icons.Rounded.SkipPrevious,
+          contentDescription = null,
+          tint = accentColor,
+          modifier = Modifier
+            .size(24.dp)
+            .alpha(prevCueAlpha)
+            .scale(0.85f + 0.25f * prevCueAlpha)
+        )
+        Icon(
+          imageVector = Icons.Rounded.SkipNext,
+          contentDescription = null,
+          tint = accentColor,
+          modifier = Modifier
+            .size(24.dp)
+            .alpha(nextCueAlpha)
+            .scale(0.85f + 0.25f * nextCueAlpha)
+        )
+      }
+    }
+
     // Soft ambient pill shadow
     Box(
       modifier = Modifier
         .matchParentSize()
+        .offset { IntOffset(dragOffsetX.value.roundToInt(), 0) }
         .drawBehind {
           val r = size.height * 0.5f
           drawRoundRect(
@@ -110,7 +166,50 @@ fun MiniPlayer(
     Box(
       modifier = Modifier
         .matchParentSize()
+        .offset { IntOffset(dragOffsetX.value.roundToInt(), 0) }
         .clip(CircleShape)
+        .pointerInput(song.id, reducedMotion) {
+          detectHorizontalDragGestures(
+            onDragStart = { thresholdCrossed = false },
+            onHorizontalDrag = { change, dragAmount ->
+              change.consume()
+              val nextOffset = (dragOffsetX.value + dragAmount).coerceIn(-swipeThresholdPx * 1.35f, swipeThresholdPx * 1.35f)
+              scope.launch { dragOffsetX.snapTo(nextOffset) }
+              val crossed = abs(nextOffset) >= swipeThresholdPx
+              if (crossed && !thresholdCrossed) {
+                thresholdCrossed = true
+                haptic.performHapticFeedback(HapticFeedbackType.TextHandleMove)
+              } else if (!crossed) {
+                thresholdCrossed = false
+              }
+            },
+            onDragEnd = {
+              val releasedOffset = dragOffsetX.value
+              scope.launch {
+                dragOffsetX.animateTo(
+                  targetValue = 0f,
+                  animationSpec = if (reducedMotion) snap() else spring(
+                    dampingRatio = Spring.DampingRatioMediumBouncy,
+                    stiffness = Spring.StiffnessMedium
+                  )
+                )
+              }
+              if (releasedOffset <= -swipeThresholdPx) {
+                onSwipeNext()
+              } else if (releasedOffset >= swipeThresholdPx) {
+                onSwipePrevious()
+              }
+            },
+            onDragCancel = {
+              scope.launch {
+                dragOffsetX.animateTo(
+                  targetValue = 0f,
+                  animationSpec = if (reducedMotion) snap() else spring(dampingRatio = Spring.DampingRatioMediumBouncy)
+                )
+              }
+            }
+          )
+        }
         .clickable { onClick() }
         .testTag("mini_player_card")
     ) {

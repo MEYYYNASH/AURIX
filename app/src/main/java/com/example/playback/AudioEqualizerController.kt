@@ -2,6 +2,7 @@ package com.example.playback
 
 import android.media.audiofx.BassBoost
 import android.media.audiofx.Equalizer
+import android.media.audiofx.Virtualizer
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
@@ -11,18 +12,21 @@ import kotlin.math.roundToInt
 enum class EqPreset(
   val id: String,
   val normalizedBandsMb: List<Int>,
-  val bassBoostStrength: Int
+  val bassBoostStrength: Int,
+  val virtualizerStrength: Int = 0
 ) {
-  FLAT("flat", listOf(0, 0, 0, 0, 0), 0),
-  BASS_BOOST("bass_boost", listOf(520, 300, 20, -60, 140), 650),
-  VOCAL("vocal", listOf(-180, 120, 420, 280, 100), 120),
-  POP("pop", listOf(-100, 220, 340, 200, -80), 220),
-  ROCK("rock", listOf(420, 200, -140, 260, 460), 360),
-  CLUB("club", listOf(560, 360, 80, 300, 480), 780),
-  CUSTOM("custom", listOf(0, 0, 0, 0, 0), 0);
+  FLAT("flat", listOf(0, 0, 0, 0, 0), 0, 0),
+  BASS_BOOST("bass_boost", listOf(520, 300, 20, -60, 140), 650, 180),
+  VOCAL("vocal", listOf(-180, 120, 420, 280, 100), 120, 240),
+  POP("pop", listOf(-100, 220, 340, 200, -80), 220, 280),
+  ROCK("rock", listOf(420, 200, -140, 260, 460), 360, 320),
+  CLUB("club", listOf(560, 360, 80, 300, 480), 780, 460),
+  LOFI("lofi", listOf(280, 180, -140, -320, -480), 340, 260),
+  ACOUSTIC("acoustic", listOf(180, 60, 220, 340, 260), 160, 380),
+  CUSTOM("custom", listOf(0, 0, 0, 0, 0), 0, 0);
 
   companion object {
-    val selectablePresets = listOf(FLAT, BASS_BOOST, VOCAL, POP, ROCK, CLUB)
+    val selectablePresets = listOf(FLAT, BASS_BOOST, VOCAL, POP, ROCK, CLUB, LOFI, ACOUSTIC)
 
     fun fromId(id: String?): EqPreset {
       return entries.firstOrNull { it.id == id } ?: FLAT
@@ -38,6 +42,7 @@ data class EqualizerUiState(
   val minLevelMb: Int = -1500,
   val maxLevelMb: Int = 1500,
   val bassBoostStrength: Int = 0,
+  val virtualizerStrength: Int = 0,
   val audioSessionId: Int = 0,
   val hardwareSupported: Boolean = true
 )
@@ -46,6 +51,7 @@ object AudioEqualizerController {
   private val lock = Any()
   private var equalizer: Equalizer? = null
   private var bassBoost: BassBoost? = null
+  private var virtualizer: Virtualizer? = null
   private var currentSessionId: Int = 0
 
   private val _state = MutableStateFlow(EqualizerUiState())
@@ -55,7 +61,8 @@ object AudioEqualizerController {
     enabled: Boolean,
     presetId: String,
     bandLevelsMb: List<Int>,
-    bassBoostStrength: Int
+    bassBoostStrength: Int,
+    virtualizerStrength: Int = 0
   ) {
     synchronized(lock) {
       val current = _state.value
@@ -70,7 +77,8 @@ object AudioEqualizerController {
         enabled = enabled,
         presetId = EqPreset.fromId(presetId).id,
         bandLevelsMb = sanitizedLevels,
-        bassBoostStrength = bassBoostStrength.coerceIn(0, 1000)
+        bassBoostStrength = bassBoostStrength.coerceIn(0, 1000),
+        virtualizerStrength = virtualizerStrength.coerceIn(0, 1000)
       )
       applyToHardwareLocked()
     }
@@ -106,6 +114,11 @@ object AudioEqualizerController {
 
       runCatching {
         bassBoost = BassBoost(0, sessionId)
+      }
+
+      runCatching {
+        @Suppress("DEPRECATION")
+        virtualizer = Virtualizer(0, sessionId)
       }
 
       val prev = _state.value
@@ -154,7 +167,8 @@ object AudioEqualizerController {
           enabled = if (preset != EqPreset.FLAT) true else it.enabled,
           presetId = preset.id,
           bandLevelsMb = targetLevels,
-          bassBoostStrength = preset.bassBoostStrength.coerceIn(0, 1000)
+          bassBoostStrength = preset.bassBoostStrength.coerceIn(0, 1000),
+          virtualizerStrength = preset.virtualizerStrength.coerceIn(0, 1000)
         )
       }
       applyToHardwareLocked()
@@ -197,6 +211,21 @@ object AudioEqualizerController {
     }
   }
 
+  fun setVirtualizerStrength(strength: Int): EqualizerUiState {
+    synchronized(lock) {
+      val clamped = strength.coerceIn(0, 1000)
+      _state.update {
+        it.copy(
+          enabled = if (clamped > 0) true else it.enabled,
+          presetId = EqPreset.CUSTOM.id,
+          virtualizerStrength = clamped
+        )
+      }
+      applyToHardwareLocked()
+      return _state.value
+    }
+  }
+
   fun reset(): EqualizerUiState {
     synchronized(lock) {
       val current = _state.value
@@ -205,7 +234,8 @@ object AudioEqualizerController {
           enabled = false,
           presetId = EqPreset.FLAT.id,
           bandLevelsMb = List(current.bandFrequenciesHz.size) { 0 },
-          bassBoostStrength = 0
+          bassBoostStrength = 0,
+          virtualizerStrength = 0
         )
       }
       applyToHardwareLocked()
@@ -233,6 +263,15 @@ object AudioEqualizerController {
         bb.enabled = st.enabled && st.bassBoostStrength > 0
       }
     }
+    runCatching {
+      @Suppress("DEPRECATION")
+      virtualizer?.let { virt ->
+        if (virt.strengthSupported) {
+          virt.setStrength(st.virtualizerStrength.coerceIn(0, 1000).toShort())
+        }
+        virt.enabled = st.enabled && st.virtualizerStrength > 0
+      }
+    }
   }
 
   private fun releaseHardwareLocked() {
@@ -240,6 +279,11 @@ object AudioEqualizerController {
     equalizer = null
     runCatching { bassBoost?.release() }
     bassBoost = null
+    runCatching {
+      @Suppress("DEPRECATION")
+      virtualizer?.release()
+    }
+    virtualizer = null
   }
 
   private fun resampleLevels(

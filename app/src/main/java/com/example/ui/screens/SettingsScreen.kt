@@ -96,6 +96,7 @@ fun SettingsScreen(
   onSelectEqPreset: (EqPreset) -> Unit = {},
   onEqBandLevelChanged: (Int, Int) -> Unit = { _, _ -> },
   onEqBassBoostChanged: (Int) -> Unit = {},
+  onEqVirtualizerChanged: (Int) -> Unit = {},
   onResetEq: () -> Unit = {},
   crossfadeSettings: CrossfadeSettings = CrossfadeSettings(),
   onCrossfadeSecondsChanged: (Int) -> Unit = {},
@@ -550,6 +551,7 @@ fun SettingsScreen(
       onSelectPreset = onSelectEqPreset,
       onBandLevelChanged = onEqBandLevelChanged,
       onBassBoostChanged = onEqBassBoostChanged,
+      onVirtualizerChanged = onEqVirtualizerChanged,
       onReset = onResetEq,
       onDismiss = { showEqualizerSheet = false }
     )

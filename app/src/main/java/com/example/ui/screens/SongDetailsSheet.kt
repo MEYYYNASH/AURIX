@@ -11,12 +11,14 @@ import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.automirrored.rounded.PlaylistAdd
+import androidx.compose.material.icons.automirrored.rounded.PlaylistPlay
 import androidx.compose.material.icons.rounded.Block
 import androidx.compose.material.icons.rounded.DeleteOutline
 import androidx.compose.material.icons.rounded.Favorite
 import androidx.compose.material.icons.rounded.FavoriteBorder
+import androidx.compose.material.icons.rounded.LibraryAdd
 import androidx.compose.material.icons.rounded.PlayArrow
-import androidx.compose.material.icons.rounded.PlaylistAdd
 import androidx.compose.material.icons.rounded.Share
 import androidx.compose.material.icons.rounded.VisibilityOff
 import androidx.compose.material3.*
@@ -59,6 +61,8 @@ fun SongDetailsSheet(
   onHideSong: () -> Unit,
   onBlockArtist: () -> Unit,
   onAddToAlbum: (() -> Unit)? = null,
+  onPlayNext: (() -> Unit)? = null,
+  onAddToQueue: (() -> Unit)? = null,
   onDelete: (() -> Unit)? = null
 ) {
   val enrichedSong = remember(song) { TrackMetadataClassifier.enrich(song) }
@@ -199,77 +203,128 @@ fun SongDetailsSheet(
 
         Spacer(modifier = Modifier.height(18.dp))
 
-        // Actions: one equal row of 5 round 48dp buttons with small labels, no outer card
-        Row(
-          modifier = Modifier.fillMaxWidth(),
-          horizontalArrangement = Arrangement.spacedBy(4.dp),
-          verticalAlignment = Alignment.Top
-        ) {
-          SheetActionCircleButton(
-            icon = Icons.Rounded.PlayArrow,
-            label = stringResource(id = R.string.action_play),
-            isDark = isDark,
-            active = false,
-            testTag = "details_play_button",
-            modifier = Modifier.weight(1f),
-            onClick = onPlay
-          )
-          SheetActionCircleButton(
-            icon = if (song.isFavorite) Icons.Rounded.Favorite else Icons.Rounded.FavoriteBorder,
-            label = stringResource(id = if (song.isFavorite) R.string.action_liked else R.string.action_like),
-            isDark = isDark,
-            active = song.isFavorite,
-            testTag = "details_like_button",
-            modifier = Modifier.weight(1f),
-            onClick = onFavorite
-          )
-          SheetActionCircleButton(
-            icon = Icons.Rounded.Share,
-            label = stringResource(id = R.string.action_share),
-            isDark = isDark,
-            active = false,
-            testTag = "details_share_lyrics_button",
-            modifier = Modifier.weight(1f),
-            onClick = onShare
-          )
-          if (onAddToAlbum != null) {
-            SheetActionCircleButton(
-              icon = Icons.Rounded.PlaylistAdd,
-              label = stringResource(id = R.string.details_add_to_album),
-              isDark = isDark,
+        // Actions: balanced 4-column glass circle action grid
+        val actions = buildList {
+          add(
+            SheetActionSpec(
+              icon = Icons.Rounded.PlayArrow,
+              label = stringResource(id = R.string.action_play),
               active = false,
-              testTag = "details_add_to_album_button",
-              modifier = Modifier.weight(1f),
-              onClick = {
-                onDismiss()
-                onAddToAlbum()
-              }
+              testTag = "details_play_button",
+              onClick = onPlay
+            )
+          )
+          if (onPlayNext != null) {
+            add(
+              SheetActionSpec(
+                icon = Icons.AutoMirrored.Rounded.PlaylistPlay,
+                label = stringResource(id = R.string.queue_play_next),
+                active = false,
+                testTag = "details_play_next_button",
+                onClick = {
+                  onDismiss()
+                  onPlayNext()
+                }
+              )
             )
           }
-          SheetActionCircleButton(
-            icon = Icons.Rounded.VisibilityOff,
-            label = stringResource(id = R.string.action_hide_song),
-            isDark = isDark,
-            active = false,
-            testTag = "details_hide_song_button",
-            modifier = Modifier.weight(1f),
-            onClick = {
-              onDismiss()
-              onHideSong()
-            }
+          if (onAddToQueue != null) {
+            add(
+              SheetActionSpec(
+                icon = Icons.AutoMirrored.Rounded.PlaylistAdd,
+                label = stringResource(id = R.string.queue_add_to_queue),
+                active = false,
+                testTag = "details_add_to_queue_button",
+                onClick = {
+                  onDismiss()
+                  onAddToQueue()
+                }
+              )
+            )
+          }
+          add(
+            SheetActionSpec(
+              icon = if (song.isFavorite) Icons.Rounded.Favorite else Icons.Rounded.FavoriteBorder,
+              label = stringResource(id = if (song.isFavorite) R.string.action_liked else R.string.action_like),
+              active = song.isFavorite,
+              testTag = "details_like_button",
+              onClick = onFavorite
+            )
           )
-          SheetActionCircleButton(
-            icon = Icons.Rounded.Block,
-            label = stringResource(id = R.string.action_block_artist),
-            isDark = isDark,
-            active = false,
-            testTag = "details_block_artist_button",
-            modifier = Modifier.weight(1f),
-            onClick = {
-              onDismiss()
-              onBlockArtist()
-            }
+          add(
+            SheetActionSpec(
+              icon = Icons.Rounded.Share,
+              label = stringResource(id = R.string.action_share),
+              active = false,
+              testTag = "details_share_lyrics_button",
+              onClick = onShare
+            )
           )
+          if (onAddToAlbum != null) {
+            add(
+              SheetActionSpec(
+                icon = Icons.Rounded.LibraryAdd,
+                label = stringResource(id = R.string.details_add_to_album),
+                active = false,
+                testTag = "details_add_to_album_button",
+                onClick = {
+                  onDismiss()
+                  onAddToAlbum()
+                }
+              )
+            )
+          }
+          add(
+            SheetActionSpec(
+              icon = Icons.Rounded.VisibilityOff,
+              label = stringResource(id = R.string.action_hide_song),
+              active = false,
+              testTag = "details_hide_song_button",
+              onClick = {
+                onDismiss()
+                onHideSong()
+              }
+            )
+          )
+          add(
+            SheetActionSpec(
+              icon = Icons.Rounded.Block,
+              label = stringResource(id = R.string.action_block_artist),
+              active = false,
+              testTag = "details_block_artist_button",
+              onClick = {
+                onDismiss()
+                onBlockArtist()
+              }
+            )
+          )
+        }
+        Column(
+          modifier = Modifier.fillMaxWidth(),
+          verticalArrangement = Arrangement.spacedBy(10.dp)
+        ) {
+          actions.chunked(4).forEach { rowItems ->
+            Row(
+              modifier = Modifier.fillMaxWidth(),
+              horizontalArrangement = Arrangement.spacedBy(6.dp),
+              verticalAlignment = Alignment.Top
+            ) {
+              rowItems.forEach { spec ->
+                SheetActionCircleButton(
+                  icon = spec.icon,
+                  label = spec.label,
+                  isDark = isDark,
+                  active = spec.active,
+                  testTag = spec.testTag,
+                  modifier = Modifier.weight(1f),
+                  onClick = spec.onClick
+                )
+              }
+              repeat((4 - rowItems.size).coerceAtLeast(0)) {
+                Spacer(modifier = Modifier.weight(1f))
+              }
+            }
+          }
         }
 
         Spacer(modifier = Modifier.height(14.dp))
@@ -455,6 +510,14 @@ fun SongDetailsSheet(
     )
   }
 }
+
+private data class SheetActionSpec(
+  val icon: ImageVector,
+  val label: String,
+  val active: Boolean,
+  val testTag: String,
+  val onClick: () -> Unit
+)
 
 @Composable
 private fun SheetActionCircleButton(

@@ -1,6 +1,5 @@
 package com.example.ui.screens
 
-import android.content.Intent
 import androidx.activity.compose.BackHandler
 import androidx.compose.animation.AnimatedContent
 import androidx.compose.animation.core.FastOutSlowInEasing
@@ -16,14 +15,19 @@ import androidx.compose.animation.core.tween
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
 import androidx.compose.animation.togetherWith
+import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.interaction.MutableInteractionSource
+import androidx.compose.foundation.isSystemInDarkTheme
 import androidx.compose.foundation.layout.*
+import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.automirrored.rounded.QueueMusic
 import androidx.compose.material.icons.rounded.*
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
@@ -36,12 +40,13 @@ import androidx.compose.ui.draw.scale
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.luminance
+import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.layout.ContentScale
-import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
-import androidx.compose.ui.text.style.TextDecoration
+import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
@@ -54,6 +59,7 @@ import com.example.playback.EqualizerUiState
 import com.example.recommendation.MoodFlowPick
 import com.example.recommendation.SimilarTrack
 import com.example.ui.theme.HeartRed
+import kotlin.math.abs
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -71,13 +77,19 @@ fun NowPlayingSheet(
   repeatEnabled: Boolean,
   playbackSpeed: Float,
   sleepMinutes: Int,
+  sleepRemainingSeconds: Long = 0L,
+  sleepEndOfTrack: Boolean = false,
   onPlayPause: () -> Unit,
   onNext: () -> Unit,
   onPrevious: () -> Unit,
   onToggleShuffle: () -> Unit,
   onToggleRepeat: () -> Unit,
   onCycleSpeed: () -> Unit,
+  onSetPlaybackSpeed: (Float) -> Unit = {},
   onCycleSleep: () -> Unit,
+  onSetSleepMinutes: (Int) -> Unit = {},
+  onSetSleepEndOfTrack: () -> Unit = {},
+  onCancelSleep: () -> Unit = {},
   onSeek: (Long) -> Unit,
   onFavorite: () -> Unit,
   onClose: () -> Unit,
@@ -92,7 +104,15 @@ fun NowPlayingSheet(
   onSelectEqPreset: (EqPreset) -> Unit = {},
   onEqBandLevelChanged: (Int, Int) -> Unit = { _, _ -> },
   onEqBassBoostChanged: (Int) -> Unit = {},
+  onEqVirtualizerChanged: (Int) -> Unit = {},
   onResetEq: () -> Unit = {},
+  queue: List<Song> = emptyList(),
+  onJumpToQueueIndex: (Int) -> Unit = {},
+  onMoveQueueItem: (Int, Int) -> Unit = { _, _ -> },
+  onRemoveQueueItem: (Int) -> Unit = {},
+  onClearUpcomingQueue: () -> Unit = {},
+  onPlayNextSong: ((Song) -> Unit)? = null,
+  onAddToQueueSong: ((Song) -> Unit)? = null,
   onHideSong: () -> Unit = {},
   onBlockArtist: () -> Unit = {},
   onCheckLyrics: ((Song) -> Unit)? = null,
@@ -113,6 +133,8 @@ fun NowPlayingSheet(
   var showDetails by remember { mutableStateOf(false) }
   var showShareLyrics by remember { mutableStateOf(false) }
   var showEqualizer by remember { mutableStateOf(false) }
+  var showQueue by remember { mutableStateOf(false) }
+  var showSleepSpeed by remember { mutableStateOf(false) }
 
   val (c1, c2) = rememberArtworkColors(song.artworkUrl, song.title)
   val bgAlpha by animateFloatAsState(
@@ -328,21 +350,57 @@ fun NowPlayingSheet(
               animationSpec = if (reducedMotion) snap() else spring(dampingRatio = Spring.DampingRatioLowBouncy),
               label = "art_scale"
             )
+            val auraPulse by infiniteTransition.animateFloat(
+              initialValue = 0.96f,
+              targetValue = 1.08f,
+              animationSpec = infiniteRepeatable(
+                animation = tween(durationMillis = 2800, easing = FastOutSlowInEasing),
+                repeatMode = RepeatMode.Reverse
+              ),
+              label = "art_aura_pulse"
+            )
+            val artSize = if (activeLyricLine != null) 246.dp else 274.dp
 
-            Surface(
-              modifier = Modifier
-                .size(if (activeLyricLine != null) 252.dp else 280.dp)
-                .scale(artScale),
-              shape = RoundedCornerShape(28.dp),
-              shadowElevation = 24.dp,
-              color = Color.Transparent
-            ) {
-              SongArtwork(
-                song = song,
-                modifier = Modifier.fillMaxSize(),
-                cornerRadius = 28.dp,
-                iconSize = 84.dp
+            Box(contentAlignment = Alignment.Center) {
+              // Ambient Artwork Aura behind the cover art while actively playing
+              Box(
+                modifier = Modifier
+                  .size(artSize + 36.dp)
+                  .scale(
+                    when {
+                      !isPlaying -> 0.88f
+                      reducedMotion -> 1.0f
+                      else -> auraPulse
+                    }
+                  )
+                  .alpha(if (isPlaying) 0.72f else 0.25f)
+                  .background(
+                    Brush.radialGradient(
+                      colors = listOf(
+                        c1.copy(alpha = 0.50f),
+                        c2.copy(alpha = 0.24f),
+                        Color.Transparent
+                      )
+                    ),
+                    shape = CircleShape
+                  )
               )
+
+              Surface(
+                modifier = Modifier
+                  .size(artSize)
+                  .scale(artScale),
+                shape = RoundedCornerShape(28.dp),
+                shadowElevation = 24.dp,
+                color = Color.Transparent
+              ) {
+                SongArtwork(
+                  song = song,
+                  modifier = Modifier.fillMaxSize(),
+                  cornerRadius = 28.dp,
+                  iconSize = 84.dp
+                )
+              }
             }
 
             Spacer(modifier = Modifier.height(22.dp))
@@ -591,74 +649,77 @@ fun NowPlayingSheet(
 
       Spacer(modifier = Modifier.height(6.dp))
 
-      // Sleep timer, Equalizer & speed toggles
-      Row(
-        modifier = Modifier.fillMaxWidth(),
-        horizontalArrangement = Arrangement.SpaceBetween,
-        verticalAlignment = Alignment.CenterVertically
+      // Unified Liquid Glass Control Dock: Sleep, EQ, Queue, Speed
+      val activeQueueIdx = remember(queue, song.id) { queue.indexOfFirst { it.id == song.id } }
+      val upcomingCount = remember(queue, activeQueueIdx) {
+        if (queue.isEmpty()) 0
+        else if (activeQueueIdx >= 0) (queue.size - activeQueueIdx - 1).coerceAtLeast(0)
+        else queue.size
+      }
+      val sleepActive = sleepEndOfTrack || sleepRemainingSeconds > 0L || sleepMinutes > 0
+      val sleepChipText = when {
+        sleepEndOfTrack -> stringResource(id = R.string.np_sleep_end_short)
+        sleepRemainingSeconds > 0L -> "${sleepRemainingSeconds / 60}:${String.format("%02d", sleepRemainingSeconds % 60)}"
+        sleepMinutes > 0 -> "${sleepMinutes}m"
+        else -> stringResource(id = R.string.np_sleep_chip_off)
+      }
+      val eqActive = equalizerState.enabled
+      val eqPresetName = presetDisplayName(EqPreset.fromId(equalizerState.presetId))
+      val speedActive = abs(playbackSpeed - 1.0f) > 0.01f
+      val speedText = formatPlaybackSpeed(playbackSpeed)
+
+      Surface(
+        shape = RoundedCornerShape(26.dp),
+        color = Color.White.copy(alpha = 0.10f),
+        border = BorderStroke(1.dp, Color.White.copy(alpha = 0.18f)),
+        modifier = Modifier.fillMaxWidth()
       ) {
-        TextButton(onClick = onCycleSleep) {
-          val label = if (sleepMinutes == 0) {
-            stringResource(id = R.string.np_sleep_off)
-          } else {
-            stringResource(id = R.string.np_sleep_min, sleepMinutes)
-          }
-          Text(
-            text = label,
-            color = if (sleepMinutes > 0) Color.White else Color.White.copy(alpha = 0.70f),
-            textDecoration = if (sleepMinutes > 0) TextDecoration.Underline else TextDecoration.None
-          )
-        }
-
-        val eqActive = equalizerState.enabled
-        val eqPresetName = presetDisplayName(EqPreset.fromId(equalizerState.presetId))
-        Surface(
-          onClick = { showEqualizer = true },
-          shape = CircleShape,
-          color = if (eqActive) c1.copy(alpha = 0.24f) else Color.White.copy(alpha = 0.12f),
-          border = androidx.compose.foundation.BorderStroke(
-            1.dp,
-            if (eqActive) c1.copy(alpha = 0.72f) else Color.White.copy(alpha = 0.20f)
-          ),
+        Row(
           modifier = Modifier
-            .minimumInteractiveComponentSize()
-            .testTag("np_equalizer_button")
+            .fillMaxWidth()
+            .padding(4.dp),
+          horizontalArrangement = Arrangement.spacedBy(5.dp),
+          verticalAlignment = Alignment.CenterVertically
         ) {
-          Row(
-            modifier = Modifier.padding(horizontal = 12.dp, vertical = 6.dp),
-            verticalAlignment = Alignment.CenterVertically,
-            horizontalArrangement = Arrangement.spacedBy(5.dp)
-          ) {
-            Icon(
-              imageVector = Icons.Rounded.Equalizer,
-              contentDescription = stringResource(id = R.string.eq_title),
-              tint = if (eqActive) Color.White else Color.White.copy(alpha = 0.80f),
-              modifier = Modifier.size(16.dp)
-            )
-            Text(
-              text = if (eqActive) "${stringResource(id = R.string.eq_button_short)} · $eqPresetName" else stringResource(id = R.string.eq_button_short),
-              style = MaterialTheme.typography.labelMedium.copy(
-                fontWeight = FontWeight.SemiBold,
-                lineHeight = 16.sp
-              ),
-              color = if (eqActive) Color.White else Color.White.copy(alpha = 0.80f),
-              maxLines = 1,
-              overflow = TextOverflow.Ellipsis
-            )
-          }
-        }
-
-        TextButton(onClick = onCycleSpeed) {
-          val speedLabel = when (playbackSpeed) {
-            1.25f -> "1.25x"
-            1.5f -> "1.5x"
-            0.75f -> "0.75x"
-            else -> "1x"
-          }
-          Text(
-            text = stringResource(id = R.string.np_speed_label, speedLabel),
-            color = if (playbackSpeed != 1.0f) Color.White else Color.White.copy(alpha = 0.70f),
-            textDecoration = if (playbackSpeed != 1.0f) TextDecoration.Underline else TextDecoration.None
+          DockControlPill(
+            icon = Icons.Rounded.Bedtime,
+            label = sleepChipText,
+            active = sleepActive,
+            accent = c1,
+            contentDescription = stringResource(id = R.string.sleep_sheet_title),
+            testTag = "np_sleep_button",
+            modifier = Modifier.weight(1f),
+            onClick = { showSleepSpeed = true }
+          )
+          DockControlPill(
+            icon = Icons.Rounded.Equalizer,
+            label = if (eqActive) eqPresetName else stringResource(id = R.string.eq_button_short),
+            active = eqActive,
+            accent = c1,
+            contentDescription = stringResource(id = R.string.eq_title),
+            testTag = "np_equalizer_button",
+            modifier = Modifier.weight(1f),
+            onClick = { showEqualizer = true }
+          )
+          DockControlPill(
+            icon = Icons.AutoMirrored.Rounded.QueueMusic,
+            label = if (upcomingCount > 0) "${stringResource(id = R.string.np_queue_button)} · $upcomingCount" else stringResource(id = R.string.np_queue_button),
+            active = upcomingCount > 0,
+            accent = c1,
+            contentDescription = stringResource(id = R.string.queue_title),
+            testTag = "np_queue_button",
+            modifier = Modifier.weight(1f),
+            onClick = { showQueue = true }
+          )
+          DockControlPill(
+            icon = Icons.Rounded.Speed,
+            label = speedText,
+            active = speedActive,
+            accent = c1,
+            contentDescription = stringResource(id = R.string.speed_sheet_title),
+            testTag = "np_speed_button",
+            modifier = Modifier.weight(1f),
+            onClick = { showSleepSpeed = true }
           )
         }
       }
@@ -695,6 +756,8 @@ fun NowPlayingSheet(
           onBlockArtist()
         },
         onAddToAlbum = onAddToAlbum?.let { cb -> { cb(song) } },
+        onPlayNext = onPlayNextSong?.let { cb -> { cb(song) } },
+        onAddToQueue = onAddToQueueSong?.let { cb -> { cb(song) } },
         onDelete = onDeleteSong
       )
     }
@@ -706,8 +769,39 @@ fun NowPlayingSheet(
         onSelectPreset = onSelectEqPreset,
         onBandLevelChanged = onEqBandLevelChanged,
         onBassBoostChanged = onEqBassBoostChanged,
+        onVirtualizerChanged = onEqVirtualizerChanged,
         onReset = onResetEq,
         onDismiss = { showEqualizer = false }
+      )
+    }
+
+    if (showQueue) {
+      UpNextQueueSheet(
+        currentSong = song,
+        queue = queue,
+        isPlaying = isPlaying,
+        reducedMotion = reducedMotion,
+        onJumpToIndex = { idx ->
+          onJumpToQueueIndex(idx)
+        },
+        onMoveItem = onMoveQueueItem,
+        onRemoveItem = onRemoveQueueItem,
+        onClearUpcoming = onClearUpcomingQueue,
+        onDismiss = { showQueue = false }
+      )
+    }
+
+    if (showSleepSpeed) {
+      SleepAndSpeedStudioSheet(
+        sleepMinutes = sleepMinutes,
+        sleepRemainingSeconds = sleepRemainingSeconds,
+        sleepEndOfTrack = sleepEndOfTrack,
+        playbackSpeed = playbackSpeed,
+        onSetSleepMinutes = onSetSleepMinutes,
+        onSetSleepEndOfTrack = onSetSleepEndOfTrack,
+        onCancelSleep = onCancelSleep,
+        onSetPlaybackSpeed = onSetPlaybackSpeed,
+        onDismiss = { showSleepSpeed = false }
       )
     }
 
@@ -721,6 +815,328 @@ fun NowPlayingSheet(
         onDismiss = { showShareLyrics = false }
       )
     }
+  }
+}
+
+@Composable
+private fun DockControlPill(
+  icon: ImageVector,
+  label: String,
+  active: Boolean,
+  accent: Color,
+  contentDescription: String,
+  testTag: String,
+  modifier: Modifier = Modifier,
+  onClick: () -> Unit
+) {
+  Surface(
+    onClick = onClick,
+    shape = RoundedCornerShape(20.dp),
+    color = if (active) accent.copy(alpha = 0.28f) else Color.White.copy(alpha = 0.06f),
+    border = BorderStroke(
+      1.dp,
+      if (active) accent.copy(alpha = 0.78f) else Color.White.copy(alpha = 0.10f)
+    ),
+    modifier = modifier
+      .defaultMinSize(minHeight = 48.dp)
+      .testTag(testTag)
+  ) {
+    Row(
+      modifier = Modifier
+        .fillMaxWidth()
+        .padding(horizontal = 6.dp, vertical = 10.dp),
+      horizontalArrangement = Arrangement.Center,
+      verticalAlignment = Alignment.CenterVertically
+    ) {
+      Icon(
+        imageVector = icon,
+        contentDescription = contentDescription,
+        tint = if (active) Color.White else Color.White.copy(alpha = 0.78f),
+        modifier = Modifier.size(15.dp)
+      )
+      Spacer(modifier = Modifier.width(4.dp))
+      Text(
+        text = label,
+        style = MaterialTheme.typography.labelSmall.copy(
+          fontSize = 11.5.sp,
+          fontWeight = if (active) FontWeight.Bold else FontWeight.SemiBold,
+          lineHeight = 14.sp
+        ),
+        color = if (active) Color.White else Color.White.copy(alpha = 0.84f),
+        maxLines = 1,
+        overflow = TextOverflow.Ellipsis
+      )
+    }
+  }
+}
+
+@OptIn(ExperimentalMaterial3Api::class)
+@Composable
+private fun SleepAndSpeedStudioSheet(
+  sleepMinutes: Int,
+  sleepRemainingSeconds: Long,
+  sleepEndOfTrack: Boolean,
+  playbackSpeed: Float,
+  onSetSleepMinutes: (Int) -> Unit,
+  onSetSleepEndOfTrack: () -> Unit,
+  onCancelSleep: () -> Unit,
+  onSetPlaybackSpeed: (Float) -> Unit,
+  onDismiss: () -> Unit
+) {
+  val surfaceColor = MaterialTheme.colorScheme.surface
+  val bgColor = MaterialTheme.colorScheme.background
+  val isDark = surfaceColor.luminance() < 0.5f || isSystemInDarkTheme()
+  val isAmoled = isDark && bgColor == Color.Black
+  val accent = MaterialTheme.colorScheme.primary
+
+  val sheetFill = when {
+    isAmoled -> Color(0xFF0A0E17).copy(alpha = 0.96f)
+    isDark -> surfaceColor.copy(alpha = 0.94f)
+    else -> surfaceColor.copy(alpha = 0.97f)
+  }
+  val topBorderBrush = Brush.verticalGradient(
+    colors = if (isDark) {
+      listOf(Color.White.copy(alpha = 0.24f), Color.White.copy(alpha = 0.04f))
+    } else {
+      listOf(Color.White.copy(alpha = 0.95f), Color.Black.copy(alpha = 0.06f))
+    }
+  )
+  val sheetShape = RoundedCornerShape(topStart = 28.dp, topEnd = 28.dp)
+
+  ModalBottomSheet(
+    onDismissRequest = onDismiss,
+    sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true),
+    shape = sheetShape,
+    containerColor = Color.Transparent,
+    contentColor = MaterialTheme.colorScheme.onSurface,
+    scrimColor = Color.Black.copy(alpha = 0.54f),
+    tonalElevation = 0.dp,
+    dragHandle = null
+  ) {
+    Box(
+      modifier = Modifier
+        .fillMaxWidth()
+        .clip(sheetShape)
+        .background(sheetFill)
+        .background(
+          Brush.radialGradient(
+            colors = listOf(
+              accent.copy(alpha = if (isDark) 0.16f else 0.09f),
+              Color.Transparent
+            ),
+            center = Offset(240f, 100f),
+            radius = 650f
+          )
+        )
+        .border(1.dp, topBorderBrush, sheetShape)
+    ) {
+      Column(
+        modifier = Modifier
+          .fillMaxWidth()
+          .verticalScroll(rememberScrollState())
+          .navigationBarsPadding()
+          .padding(horizontal = 20.dp)
+          .padding(top = 10.dp, bottom = 20.dp)
+      ) {
+        Box(
+          modifier = Modifier
+            .align(Alignment.CenterHorizontally)
+            .padding(bottom = 14.dp)
+            .width(38.dp)
+            .height(4.dp)
+            .clip(CircleShape)
+            .background(MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.38f))
+        )
+
+        Row(
+          modifier = Modifier.fillMaxWidth(),
+          verticalAlignment = Alignment.CenterVertically,
+          horizontalArrangement = Arrangement.SpaceBetween
+        ) {
+          Column(modifier = Modifier.weight(1f)) {
+            Text(
+              text = stringResource(id = R.string.sleep_sheet_title),
+              style = MaterialTheme.typography.titleMedium.copy(
+                fontSize = 18.sp,
+                fontWeight = FontWeight.Bold
+              ),
+              color = MaterialTheme.colorScheme.onSurface
+            )
+            Text(
+              text = stringResource(id = R.string.sleep_sheet_subtitle),
+              style = MaterialTheme.typography.bodySmall,
+              color = MaterialTheme.colorScheme.onSurfaceVariant
+            )
+          }
+          if (sleepEndOfTrack || sleepRemainingSeconds > 0L) {
+            Surface(
+              shape = CircleShape,
+              color = accent.copy(alpha = 0.18f),
+              border = BorderStroke(1.dp, accent.copy(alpha = 0.55f))
+            ) {
+              val badgeText = if (sleepEndOfTrack) {
+                stringResource(id = R.string.sleep_end_of_track)
+              } else {
+                "${sleepRemainingSeconds / 60}:${String.format("%02d", sleepRemainingSeconds % 60)}"
+              }
+              Text(
+                text = badgeText,
+                style = MaterialTheme.typography.labelMedium.copy(fontWeight = FontWeight.Bold),
+                color = accent,
+                modifier = Modifier.padding(horizontal = 10.dp, vertical = 5.dp)
+              )
+            }
+          }
+        }
+
+        Spacer(modifier = Modifier.height(14.dp))
+
+        val sleepOptions = listOf(
+          0 to stringResource(id = R.string.sleep_off),
+          15 to stringResource(id = R.string.sleep_minutes_option, 15),
+          30 to stringResource(id = R.string.sleep_minutes_option, 30),
+          45 to stringResource(id = R.string.sleep_minutes_option, 45),
+          60 to stringResource(id = R.string.sleep_minutes_option, 60),
+          -1 to stringResource(id = R.string.sleep_end_of_track)
+        )
+
+        Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+          sleepOptions.chunked(3).forEach { rowItems ->
+            Row(
+              modifier = Modifier.fillMaxWidth(),
+              horizontalArrangement = Arrangement.spacedBy(8.dp)
+            ) {
+              rowItems.forEach { (code, label) ->
+                val selected = when (code) {
+                  0 -> !sleepEndOfTrack && sleepMinutes == 0 && sleepRemainingSeconds == 0L
+                  -1 -> sleepEndOfTrack
+                  else -> !sleepEndOfTrack && sleepMinutes == code
+                }
+                StudioOptionChip(
+                  label = label,
+                  selected = selected,
+                  accent = accent,
+                  isDark = isDark,
+                  testTag = "sleep_option_$code",
+                  modifier = Modifier.weight(1f),
+                  onClick = {
+                    when (code) {
+                      0 -> onCancelSleep()
+                      -1 -> onSetSleepEndOfTrack()
+                      else -> onSetSleepMinutes(code)
+                    }
+                  }
+                )
+              }
+            }
+          }
+        }
+
+        Spacer(modifier = Modifier.height(20.dp))
+
+        Row(
+          modifier = Modifier.fillMaxWidth(),
+          verticalAlignment = Alignment.CenterVertically,
+          horizontalArrangement = Arrangement.SpaceBetween
+        ) {
+          Text(
+            text = stringResource(id = R.string.speed_sheet_title),
+            style = MaterialTheme.typography.titleSmall.copy(
+              fontSize = 15.sp,
+              fontWeight = FontWeight.Bold
+            ),
+            color = MaterialTheme.colorScheme.onSurface
+          )
+          Text(
+            text = formatPlaybackSpeed(playbackSpeed),
+            style = MaterialTheme.typography.labelLarge.copy(fontWeight = FontWeight.Bold),
+            color = accent
+          )
+        }
+
+        Spacer(modifier = Modifier.height(10.dp))
+
+        val speeds = listOf(0.75f, 0.9f, 1.0f, 1.15f, 1.25f, 1.5f)
+        Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+          speeds.chunked(3).forEach { rowItems ->
+            Row(
+              modifier = Modifier.fillMaxWidth(),
+              horizontalArrangement = Arrangement.spacedBy(8.dp)
+            ) {
+              rowItems.forEach { speed ->
+                val selected = abs(playbackSpeed - speed) < 0.02f
+                StudioOptionChip(
+                  label = formatPlaybackSpeed(speed),
+                  selected = selected,
+                  accent = accent,
+                  isDark = isDark,
+                  testTag = "speed_option_$speed",
+                  modifier = Modifier.weight(1f),
+                  onClick = { onSetPlaybackSpeed(speed) }
+                )
+              }
+            }
+          }
+        }
+      }
+    }
+  }
+}
+
+@Composable
+private fun StudioOptionChip(
+  label: String,
+  selected: Boolean,
+  accent: Color,
+  isDark: Boolean,
+  testTag: String,
+  modifier: Modifier = Modifier,
+  onClick: () -> Unit
+) {
+  Surface(
+    onClick = onClick,
+    shape = RoundedCornerShape(16.dp),
+    color = when {
+      selected -> accent.copy(alpha = if (isDark) 0.24f else 0.14f)
+      isDark -> Color.White.copy(alpha = 0.06f)
+      else -> MaterialTheme.colorScheme.onSurface.copy(alpha = 0.05f)
+    },
+    border = BorderStroke(
+      1.dp,
+      if (selected) accent.copy(alpha = 0.78f) else MaterialTheme.colorScheme.onSurface.copy(alpha = 0.10f)
+    ),
+    modifier = modifier
+      .defaultMinSize(minHeight = 48.dp)
+      .testTag(testTag)
+  ) {
+    Box(
+      contentAlignment = Alignment.Center,
+      modifier = Modifier.padding(horizontal = 8.dp, vertical = 10.dp)
+    ) {
+      Text(
+        text = label,
+        style = MaterialTheme.typography.bodySmall.copy(
+          fontSize = 13.sp,
+          fontWeight = if (selected) FontWeight.Bold else FontWeight.Medium
+        ),
+        color = if (selected) accent else MaterialTheme.colorScheme.onSurface,
+        textAlign = TextAlign.Center,
+        maxLines = 1,
+        overflow = TextOverflow.Ellipsis
+      )
+    }
+  }
+}
+
+private fun formatPlaybackSpeed(speed: Float): String {
+  return when {
+    abs(speed - 1.0f) < 0.02f -> "1x"
+    abs(speed - 0.75f) < 0.02f -> "0.75x"
+    abs(speed - 0.9f) < 0.02f -> "0.9x"
+    abs(speed - 1.15f) < 0.02f -> "1.15x"
+    abs(speed - 1.25f) < 0.02f -> "1.25x"
+    abs(speed - 1.5f) < 0.02f -> "1.5x"
+    else -> String.format("%.2fx", speed)
   }
 }
 

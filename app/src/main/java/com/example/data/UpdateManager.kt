@@ -45,13 +45,13 @@ import kotlin.coroutines.coroutineContext
  * Editable release manifest endpoint for AURIX OTA updates.
  * Expected JSON format:
  * {
- *   "versionName": "1.7.2",
- *   "versionCode": 10702,
+ *   "versionName": "1.8.0",
+ *   "versionCode": 10800,
  *   "releaseDate": "2026-11-17",
- *   "apkUrl": "https://github.com/MEYYYNASH/AURIX/releases/download/v1.7.2/AURIX-v1.7.2.apk",
+ *   "apkUrl": "https://github.com/MEYYYNASH/AURIX/releases/download/v1.8.0/AURIX-v1.8.0.apk",
  *   "sha256": "...",
  *   "notes": ["..."],
- *   "releasePageUrl": "https://github.com/MEYYYNASH/AURIX/releases/tag/v1.7.2"
+ *   "releasePageUrl": "https://github.com/MEYYYNASH/AURIX/releases/tag/v1.8.0"
  * }
  */
 const val VERSION_JSON_URL = "https://raw.githubusercontent.com/MEYYYNASH/AURIX/main/version.json"
@@ -162,9 +162,9 @@ class UpdateManager(
     private const val META_FILE_NAME = "aurix_update.apk.meta.json"
 
     val CURRENT_RELEASE_NOTES = listOf(
-      "Spring Glassmorphism Search v1.7.2: Subtle spring physics animations across search results, quick discovery chips, and glass rows",
-      "Update Release Notifications: Automatic background checks notify you right away when a new AURIX release is published",
-      "Background Downloads: Keep downloading AURIX updates and music tracks uninterrupted in the background with live progress & pause/cancel controls"
+      "Liquid Glass Now Playing 2.0: Ambient artwork aura, unified frosted glass dock, and swipe-to-skip MiniPlayer gestures",
+      "Up Next Queue Studio: Live queue drawer to jump, reorder, remove, Play Next, or Add to Queue from any track",
+      "3D Surround & Sleep Fade Studio: Hardware 3D Surround Virtualizer, Lo-Fi & Acoustic EQ presets, and smooth 8s sleep fade-out"
     )
 
     fun parseVersionJson(rawJson: String): RemoteVersionInfo {
@@ -351,12 +351,6 @@ class UpdateManager(
       )
     }
   }
-
-  private val apiClient = OkHttpClient.Builder()
-    .connectTimeout(15, TimeUnit.SECONDS)
-    .readTimeout(25, TimeUnit.SECONDS)
-    .followRedirects(true)
-    .build()
 
   private val downloadClient = OkHttpClient.Builder()
     .connectTimeout(20, TimeUnit.SECONDS)

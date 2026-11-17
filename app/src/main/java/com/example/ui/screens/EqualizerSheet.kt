@@ -20,6 +20,7 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.rounded.Equalizer
 import androidx.compose.material.icons.rounded.GraphicEq
 import androidx.compose.material.icons.rounded.RestartAlt
+import androidx.compose.material.icons.rounded.SurroundSound
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
@@ -54,6 +55,7 @@ fun EqualizerSheet(
   onSelectPreset: (EqPreset) -> Unit,
   onBandLevelChanged: (Int, Int) -> Unit,
   onBassBoostChanged: (Int) -> Unit,
+  onVirtualizerChanged: (Int) -> Unit = {},
   onReset: () -> Unit,
   onDismiss: () -> Unit
 ) {
@@ -468,6 +470,59 @@ fun EqualizerSheet(
             .testTag("eq_bass_boost_slider")
         )
 
+        Spacer(modifier = Modifier.height(8.dp))
+
+        // 3D Surround (Virtualizer) Slider row
+        Row(
+          modifier = Modifier.fillMaxWidth(),
+          verticalAlignment = Alignment.CenterVertically,
+          horizontalArrangement = Arrangement.SpaceBetween
+        ) {
+          Row(
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.spacedBy(8.dp)
+          ) {
+            Icon(
+              imageVector = Icons.Rounded.SurroundSound,
+              contentDescription = null,
+              tint = if (state.enabled && state.virtualizerStrength > 0) accent else MaterialTheme.colorScheme.onSurfaceVariant,
+              modifier = Modifier.size(18.dp)
+            )
+            Text(
+              text = stringResource(id = R.string.eq_virtualizer),
+              style = MaterialTheme.typography.bodyMedium.copy(
+                fontSize = 14.sp,
+                lineHeight = 20.sp,
+                fontWeight = FontWeight.SemiBold
+              ),
+              color = MaterialTheme.colorScheme.onSurface
+            )
+          }
+          Text(
+            text = "${(state.virtualizerStrength / 10f).roundToInt()}%",
+            style = MaterialTheme.typography.bodySmall.copy(
+              fontSize = 13.sp,
+              lineHeight = 18.sp,
+              fontWeight = FontWeight.Bold
+            ),
+            color = if (state.enabled && state.virtualizerStrength > 0) accent else MaterialTheme.colorScheme.onSurfaceVariant
+          )
+        }
+
+        Slider(
+          value = state.virtualizerStrength.toFloat(),
+          onValueChange = { onVirtualizerChanged(it.roundToInt()) },
+          valueRange = 0f..1000f,
+          colors = SliderDefaults.colors(
+            thumbColor = if (state.enabled) accent else MaterialTheme.colorScheme.onSurfaceVariant,
+            activeTrackColor = if (state.enabled) accent else MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.4f),
+            inactiveTrackColor = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.12f)
+          ),
+          modifier = Modifier
+            .fillMaxWidth()
+            .testTag("eq_virtualizer_slider")
+        )
+
         if (!state.hardwareSupported && state.audioSessionId > 0) {
           Text(
             text = stringResource(id = R.string.eq_hardware_note),
@@ -589,6 +644,8 @@ fun presetDisplayName(preset: EqPreset): String {
     EqPreset.POP -> R.string.eq_preset_pop
     EqPreset.ROCK -> R.string.eq_preset_rock
     EqPreset.CLUB -> R.string.eq_preset_club
+    EqPreset.LOFI -> R.string.eq_preset_lofi
+    EqPreset.ACOUSTIC -> R.string.eq_preset_acoustic
     EqPreset.CUSTOM -> R.string.eq_preset_custom
   }
   return stringResource(id = resId)

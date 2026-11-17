@@ -29,6 +29,7 @@ class PreferencesManager(private val context: Context) {
     val EQ_PRESET = stringPreferencesKey("eq_preset")
     val EQ_BANDS = stringPreferencesKey("eq_bands")
     val EQ_BASS_BOOST = intPreferencesKey("eq_bass_boost")
+    val EQ_VIRTUALIZER = intPreferencesKey("eq_virtualizer")
     val CROSSFADE_SECONDS = intPreferencesKey("crossfade_seconds")
     val CROSSFADE_MANUAL_SKIP = booleanPreferencesKey("crossfade_manual_skip")
     val LAST_SEEN_VERSION_CODE = longPreferencesKey("last_seen_version_code")
@@ -52,6 +53,7 @@ class PreferencesManager(private val context: Context) {
     prefs[EQ_BANDS]?.split(",")?.mapNotNull { it.trim().toIntOrNull() } ?: emptyList()
   }
   val eqBassBoost: Flow<Int> = context.dataStore.data.map { prefs -> prefs[EQ_BASS_BOOST] ?: 0 }
+  val eqVirtualizer: Flow<Int> = context.dataStore.data.map { prefs -> prefs[EQ_VIRTUALIZER] ?: 0 }
   val crossfadeSeconds: Flow<Int> = context.dataStore.data.map { prefs -> prefs[CROSSFADE_SECONDS] ?: 0 }
   val crossfadeManualSkip: Flow<Boolean> = context.dataStore.data.map { prefs -> prefs[CROSSFADE_MANUAL_SKIP] ?: true }
   val lastSeenVersionCode: Flow<Long> = context.dataStore.data.map { prefs -> prefs[LAST_SEEN_VERSION_CODE] ?: 0L }
@@ -93,13 +95,15 @@ class PreferencesManager(private val context: Context) {
     enabled: Boolean,
     presetId: String,
     bandsMb: List<Int>,
-    bassBoostStrength: Int
+    bassBoostStrength: Int,
+    virtualizerStrength: Int = 0
   ) {
     context.dataStore.edit { prefs ->
       prefs[EQ_ENABLED] = enabled
       prefs[EQ_PRESET] = presetId
       prefs[EQ_BANDS] = bandsMb.joinToString(",")
       prefs[EQ_BASS_BOOST] = bassBoostStrength
+      prefs[EQ_VIRTUALIZER] = virtualizerStrength
     }
   }
 

@@ -198,6 +198,9 @@ private fun AurixMainShell(
   val repeatEnabled by viewModel.repeatEnabled.collectAsStateWithLifecycle()
   val playbackSpeed by viewModel.playbackSpeed.collectAsStateWithLifecycle()
   val sleepMinutes by viewModel.sleepMinutes.collectAsStateWithLifecycle()
+  val sleepRemainingSeconds by viewModel.sleepRemainingSeconds.collectAsStateWithLifecycle()
+  val sleepEndOfTrack by viewModel.sleepEndOfTrack.collectAsStateWithLifecycle()
+  val queue by viewModel.queue.collectAsStateWithLifecycle()
 
   val themeMode by viewModel.themeMode.collectAsStateWithLifecycle()
   val accentHex by viewModel.accentColorHex.collectAsStateWithLifecycle()
@@ -702,6 +705,7 @@ private fun AurixMainShell(
               onSelectEqPreset = { viewModel.selectEqualizerPreset(it) },
               onEqBandLevelChanged = { idx, level -> viewModel.setEqualizerBandLevel(idx, level) },
               onEqBassBoostChanged = { viewModel.setBassBoostStrength(it) },
+              onEqVirtualizerChanged = { viewModel.setVirtualizerStrength(it) },
               onResetEq = { viewModel.resetEqualizer() },
               crossfadeSettings = crossfadeSettings,
               onCrossfadeSecondsChanged = { viewModel.setCrossfadeSeconds(it) },
@@ -781,6 +785,8 @@ private fun AurixMainShell(
                 onCheckLyrics = { viewModel.ensureLyricsVerified(it) },
                 onPlayPauseClick = { viewModel.togglePlayPause() },
                 onFavoriteClick = { currentSong?.let { viewModel.toggleFavorite(it) } },
+                onSwipeNext = { viewModel.nextTrack() },
+                onSwipePrevious = { viewModel.previousTrack() },
                 onClick = { showNowPlaying = true }
               )
               Spacer(modifier = Modifier.height(10.dp))
@@ -817,13 +823,19 @@ private fun AurixMainShell(
             repeatEnabled = repeatEnabled,
             playbackSpeed = playbackSpeed,
             sleepMinutes = sleepMinutes,
+            sleepRemainingSeconds = sleepRemainingSeconds,
+            sleepEndOfTrack = sleepEndOfTrack,
             onPlayPause = { viewModel.togglePlayPause() },
             onNext = { viewModel.nextTrack() },
             onPrevious = { viewModel.previousTrack() },
             onToggleShuffle = { viewModel.toggleShuffle() },
             onToggleRepeat = { viewModel.toggleRepeat() },
             onCycleSpeed = { viewModel.cyclePlaybackSpeed() },
+            onSetPlaybackSpeed = { viewModel.setPlaybackSpeed(it) },
             onCycleSleep = { viewModel.cycleSleepTimer() },
+            onSetSleepMinutes = { viewModel.setSleepTimerMinutes(it) },
+            onSetSleepEndOfTrack = { viewModel.setSleepEndOfTrack() },
+            onCancelSleep = { viewModel.cancelSleepTimer() },
             onSeek = { viewModel.seekTo(it) },
             onFavorite = { viewModel.toggleFavorite(song) },
             onClose = { showNowPlaying = false },
@@ -838,7 +850,15 @@ private fun AurixMainShell(
             onSelectEqPreset = { viewModel.selectEqualizerPreset(it) },
             onEqBandLevelChanged = { idx, level -> viewModel.setEqualizerBandLevel(idx, level) },
             onEqBassBoostChanged = { viewModel.setBassBoostStrength(it) },
+            onEqVirtualizerChanged = { viewModel.setVirtualizerStrength(it) },
             onResetEq = { viewModel.resetEqualizer() },
+            queue = queue,
+            onJumpToQueueIndex = { viewModel.jumpToQueueIndex(it) },
+            onMoveQueueItem = { from, to -> viewModel.moveQueueItem(from, to) },
+            onRemoveQueueItem = { viewModel.removeQueueItem(it) },
+            onClearUpcomingQueue = { viewModel.clearUpcomingQueue() },
+            onPlayNextSong = { viewModel.playNext(it) },
+            onAddToQueueSong = { viewModel.addToQueue(it) },
             onHideSong = { viewModel.hideSong(song) },
             onBlockArtist = { viewModel.blockArtist(song.artist) },
             onCheckLyrics = { viewModel.ensureLyricsVerified(it) },
@@ -906,7 +926,9 @@ private fun AurixMainShell(
           onAddToAlbum = {
             albumDetailSong = null
             songForAlbumPicker = detailTarget
-          }
+          },
+          onPlayNext = { viewModel.playNext(detailTarget) },
+          onAddToQueue = { viewModel.addToQueue(detailTarget) }
         )
       }
 
