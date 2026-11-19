@@ -45,13 +45,13 @@ import kotlin.coroutines.coroutineContext
  * Editable release manifest endpoint for AURIX OTA updates.
  * Expected JSON format:
  * {
- *   "versionName": "1.8.1",
- *   "versionCode": 10801,
- *   "releaseDate": "2026-11-17",
- *   "apkUrl": "https://github.com/MEYYYNASH/AURIX/releases/download/v1.8.1/AURIX-v1.8.1.apk",
+ *   "versionName": "1.8.2",
+ *   "versionCode": 10802,
+ *   "releaseDate": "2026-11-18",
+ *   "apkUrl": "https://github.com/MEYYYNASH/AURIX/releases/download/v1.8.2/AURIX-v1.8.2.apk",
  *   "sha256": "...",
  *   "notes": ["..."],
- *   "releasePageUrl": "https://github.com/MEYYYNASH/AURIX/releases/tag/v1.8.1"
+ *   "releasePageUrl": "https://github.com/MEYYYNASH/AURIX/releases/tag/v1.8.2"
  * }
  */
 const val VERSION_JSON_URL = "https://raw.githubusercontent.com/MEYYYNASH/AURIX/main/version.json"
@@ -162,9 +162,9 @@ class UpdateManager(
     private const val META_FILE_NAME = "aurix_update.apk.meta.json"
 
     val CURRENT_RELEASE_NOTES = listOf(
-      "Liquid Blur Split Navigation: Frosted blur capsule with a detached circular Search orb and live Bottom Sheet preview",
-      "Dynamic Album-Art Glass Blur: Search results, player controls, MiniPlayer, and tab bars adapt to your track's album colors",
-      "Open / Close Controls Everywhere: Collapsible feature cards and explicit Close (X) buttons on every sheet for zero clutter"
+      "Personalized Home Discovery: Dedicated Artist Mixes for You, daily-refreshed My Mix 1–4, Daily Discovery, and Favorites Mix",
+      "New for You & Continue Listening: Filter fresh releases by All, Songs, Albums, or Artists and resume tracks instantly",
+      "10 Mood Mixes & Uncluttered Home: Chill, Focus, Sleep, Happy, Sad, Romantic, Workout, Party, Night Drive, and Rainy Day in one clean layout"
     )
 
     fun parseVersionJson(rawJson: String): RemoteVersionInfo {

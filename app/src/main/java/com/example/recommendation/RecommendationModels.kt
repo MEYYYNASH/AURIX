@@ -1,5 +1,6 @@
 package com.example.recommendation
 
+import com.example.model.FeaturedAlbumItem
 import com.example.model.Song
 
 enum class MostPlayedFilter(val label: String, val windowMs: Long?) {
@@ -22,6 +23,41 @@ enum class MoodCategory(
     targetMoods = setOf("Chill", "Dreamy", "Warm", "Acoustic"),
     description = "Laid-back grooves and mellow rhythms"
   ),
+  FOCUS(
+    id = "focus",
+    displayName = "Focus",
+    bpmRange = 64..112,
+    targetMoods = setOf("Focus", "Lo-fi", "Calm", "Chill"),
+    description = "Steady tempos to keep you locked in"
+  ),
+  SLEEP(
+    id = "sleep",
+    displayName = "Sleep",
+    bpmRange = 54..90,
+    targetMoods = setOf("Calm", "Dreamy", "Sleep", "Ambient", "Lo-fi"),
+    description = "Soft, slow ambient tracks for winding down"
+  ),
+  HAPPY(
+    id = "happy",
+    displayName = "Happy",
+    bpmRange = 104..138,
+    targetMoods = setOf("Happy", "Upbeat", "Bright", "Feel-good", "Pop"),
+    description = "Bright, uplifting hooks and sunny energy"
+  ),
+  SAD(
+    id = "sad",
+    displayName = "Sad",
+    bpmRange = 60..98,
+    targetMoods = setOf("Sad", "Emotional", "Melancholic", "Heartbreak", "Acoustic"),
+    description = "Emotional ballads and reflective vocals"
+  ),
+  ROMANTIC(
+    id = "romantic",
+    displayName = "Romantic",
+    bpmRange = 68..106,
+    targetMoods = setOf("Romantic", "Warm", "Love", "R&B", "Smooth"),
+    description = "Warm slow jams and intimate melodies"
+  ),
   WORKOUT(
     id = "workout",
     displayName = "Workout",
@@ -29,19 +65,26 @@ enum class MoodCategory(
     targetMoods = setOf("Energetic", "Hype", "Workout", "Driven"),
     description = "High-energy tracks built for momentum"
   ),
+  PARTY(
+    id = "party",
+    displayName = "Party",
+    bpmRange = 115..148,
+    targetMoods = setOf("Party", "Dance", "Club", "Energetic", "Hype"),
+    description = "Club rhythms and upbeat crowd favorites"
+  ),
   NIGHT(
     id = "night",
-    displayName = "Night",
+    displayName = "Night Drive",
     bpmRange = 74..118,
     targetMoods = setOf("Night", "Moody", "Atmospheric", "Dreamy"),
     description = "Late-night atmospheric and moody cuts"
   ),
-  FOCUS(
-    id = "focus",
-    displayName = "Focus",
-    bpmRange = 64..112,
-    targetMoods = setOf("Focus", "Lo-fi", "Calm", "Chill"),
-    description = "Steady tempos to keep you locked in"
+  RAINY_DAY(
+    id = "rainy_day",
+    displayName = "Rainy Day",
+    bpmRange = 62..102,
+    targetMoods = setOf("Acoustic", "Calm", "Sad", "Chill", "Indigo"),
+    description = "Cozy acoustics and gentle rainy-day textures"
   )
 }
 
@@ -137,4 +180,55 @@ data class RisingArtist(
   val previousPlays: Int,
   val growthPercentage: Int,
   val artworkUrl: String
+)
+
+data class ArtistMix(
+  val id: String,
+  val artistName: String,
+  val artworkUrl: String,
+  val subtitle: String,
+  val genreTag: String,
+  val similarArtists: List<String>,
+  val tracks: List<Song>,
+  val isPersonalized: Boolean
+)
+
+data class PersonalMix(
+  val id: String,
+  val mixNumber: Int,
+  val title: String,
+  val subtitle: String,
+  val badgeLabel: String,
+  val accentHex: String,
+  val artworkUrl: String,
+  val tracks: List<Song>,
+  val dominantMood: String,
+  val isPersonalized: Boolean
+)
+
+enum class NewForYouFilter {
+  ALL,
+  SONGS,
+  ALBUMS,
+  ARTIST_RELEASES
+}
+
+data class NewForYouItem(
+  val id: String,
+  val title: String,
+  val artist: String,
+  val artworkUrl: String,
+  val releaseDateLabel: String,
+  val badgeLabel: String,
+  val filterType: NewForYouFilter,
+  val isFromFavoriteArtist: Boolean,
+  val song: Song? = null,
+  val album: FeaturedAlbumItem? = null
+)
+
+data class RecentPlayEntry(
+  val song: Song,
+  val playedAtMs: Long,
+  val timeAgoLabel: String,
+  val completedPercent: Float
 )

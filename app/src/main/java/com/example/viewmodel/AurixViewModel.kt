@@ -518,6 +518,92 @@ class AurixViewModel(application: Application) : AndroidViewModel(application) {
     RecommendationEngine.risingArtists(logs, limit = 10)
   }.stateIn(viewModelScope, SharingStarted.Lazily, emptyList())
 
+  private val songFeedback: StateFlow<Map<String, Boolean>> = analyticsRepository.observeSongFeedback()
+    .stateIn(viewModelScope, SharingStarted.Eagerly, emptyMap())
+
+  private val _mixRefreshSalt = MutableStateFlow(0)
+
+  val artistMixes: StateFlow<List<ArtistMix>> = combine(
+    qualifiedPlayLogs,
+    richPlayHistory,
+    favorites,
+    songFeedback,
+    catalogTracks
+  ) { logs, rich, favs, fb, catalog ->
+    RecommendationEngine.buildArtistMixes(
+      playLogs = logs,
+      richHistory = rich,
+      favorites = favs,
+      feedback = fb,
+      catalog = catalog,
+      limit = 6
+    )
+  }.stateIn(viewModelScope, SharingStarted.Lazily, emptyList())
+
+  val myMixes: StateFlow<List<PersonalMix>> = combine(
+    qualifiedPlayLogs,
+    richPlayHistory,
+    favorites,
+    songFeedback,
+    combine(catalogTracks, _mixRefreshSalt) { catalog, salt -> catalog to salt }
+  ) { logs, rich, favs, fb, (catalog, salt) ->
+    RecommendationEngine.buildMyMixes(
+      playLogs = logs,
+      richHistory = rich,
+      favorites = favs,
+      feedback = fb,
+      catalog = catalog,
+      refreshSalt = salt,
+      maxMixes = 4
+    )
+  }.stateIn(viewModelScope, SharingStarted.Lazily, emptyList())
+
+  val dailyDiscovery: StateFlow<PersonalMix?> = combine(
+    qualifiedPlayLogs,
+    richPlayHistory,
+    favorites,
+    songFeedback,
+    combine(catalogTracks, _mixRefreshSalt) { catalog, salt -> catalog to salt }
+  ) { logs, rich, favs, fb, (catalog, salt) ->
+    RecommendationEngine.buildDailyDiscovery(
+      playLogs = logs,
+      richHistory = rich,
+      favorites = favs,
+      feedback = fb,
+      catalog = catalog,
+      refreshSalt = salt,
+      limit = 20
+    )
+  }.stateIn(viewModelScope, SharingStarted.Lazily, null)
+
+  val favoritesMix: StateFlow<PersonalMix?> = combine(
+    favorites,
+    catalogTracks,
+    songFeedback
+  ) { favs, catalog, fb ->
+    RecommendationEngine.buildFavoritesMix(
+      favorites = favs,
+      catalog = catalog,
+      feedback = fb,
+      limit = 24
+    )
+  }.stateIn(viewModelScope, SharingStarted.Lazily, null)
+
+  val recentPlayEntries: StateFlow<List<RecentPlayEntry>> = combine(
+    qualifiedPlayLogs,
+    richPlayHistory
+  ) { logs, rich ->
+    RecommendationEngine.buildRecentPlayEntries(
+      playLogs = logs,
+      richHistory = rich,
+      limit = 12
+    )
+  }.stateIn(viewModelScope, SharingStarted.Lazily, emptyList())
+
+  val recentlyAddedSongs: StateFlow<List<Song>> = localSongs.map { list ->
+    list.take(16)
+  }.stateIn(viewModelScope, SharingStarted.Lazily, emptyList())
+
   private fun buildDefaultExampleAlbum(
     featured: List<Song>,
     favs: Set<String>,
@@ -720,6 +806,21 @@ class AurixViewModel(application: Application) : AndroidViewModel(application) {
       }
     }
   }.stateIn(viewModelScope, SharingStarted.Eagerly, emptyList())
+
+  val newForYouItems: StateFlow<List<NewForYouItem>> = combine(
+    qualifiedPlayLogs,
+    favorites,
+    catalogTracks,
+    newAlbums
+  ) { logs, favs, catalog, albums ->
+    RecommendationEngine.buildNewForYou(
+      playLogs = logs,
+      favorites = favs,
+      catalog = catalog,
+      newAlbums = albums,
+      limit = 18
+    )
+  }.stateIn(viewModelScope, SharingStarted.Lazily, emptyList())
 
   val activeAlbumInfo: StateFlow<AlbumInfo> = combine(
     libraryAlbums,
@@ -3367,6 +3468,86 @@ class AurixViewModel(application: Application) : AndroidViewModel(application) {
   fun playPlaylist(tracks: List<Song>, startIndex: Int = 0) {
     val target = tracks.getOrNull(startIndex) ?: tracks.firstOrNull() ?: return
     playSong(target, tracks)
+  }
+
+  fun refreshPersonalMixes() {
+    _mixRefreshSalt.value++
+    val appContext = getApplication<Application>()
+    Toast.makeText(appContext, appContext.getString(R.string.mix_refreshed_toast), Toast.LENGTH_SHORT).show()
+  }
+
+  fun saveMixAsPlaylist(title: String, tracks: List<Song>) {
+    val cleanTitle = title.trim()
+    if (cleanTitle.isBlank() || tracks.isEmpty()) return
+    val appContext = getApplication<Application>()
+    val albumId = computeAlbumId(cleanTitle, "AURIX Mix")
+    viewModelScope.launch {
+      withContext(Dispatchers.IO) {
+        dao.unmarkAlbumDeleted(albumId)
+        dao.upsertCustomAlbum(
+          CustomAlbumEntity(
+            albumId = albumId,
+            title = cleanTitle,
+            artist = tracks.map { it.artist }.filter { it.isNotBlank() }.distinct().take(2)
+              .joinToString(", ").ifBlank { "AURIX Mix" },
+            year = ""
+          )
+        )
+        val baseTime = System.currentTimeMillis()
+        val entries = tracks.mapIndexed { idx, song ->
+          AlbumTrackEntity(
+            albumId = albumId,
+            songId = song.id,
+            title = song.title,
+            artist = song.artist.ifBlank { "Unknown Artist" },
+            artworkUrl = song.artworkUrl,
+            durationSeconds = song.fullDurationSeconds.takeIf { it > 0L } ?: song.durationSeconds,
+            streamUrl = song.streamUrl,
+            source = song.source,
+            genre = song.genre,
+            bpm = song.bpm,
+            mood = song.mood,
+            albumName = cleanTitle,
+            trackNumber = idx + 1,
+            year = song.year,
+            addedAt = baseTime + idx
+          )
+        }
+        dao.insertAlbumTracks(entries)
+      }
+      Toast.makeText(
+        appContext,
+        appContext.getString(R.string.mix_saved_toast, cleanTitle),
+        Toast.LENGTH_SHORT
+      ).show()
+    }
+  }
+
+  fun shareMix(context: Context, title: String, subtitle: String, tracks: List<Song>) {
+    if (tracks.isEmpty()) return
+    val preview = tracks.take(8).mapIndexed { idx, s ->
+      "${idx + 1}. ${s.title} — ${s.artist}"
+    }.joinToString("\n")
+    val shareBody = buildString {
+      appendLine(title)
+      if (subtitle.isNotBlank()) appendLine(subtitle)
+      appendLine()
+      append(preview)
+      if (tracks.size > 8) {
+        append("\n+${tracks.size - 8} more on AURIX")
+      }
+    }
+    val sendIntent = Intent(Intent.ACTION_SEND).apply {
+      type = "text/plain"
+      putExtra(Intent.EXTRA_SUBJECT, title)
+      putExtra(Intent.EXTRA_TEXT, shareBody)
+    }
+    val chooser = Intent.createChooser(sendIntent, title).apply {
+      if (context !is android.app.Activity) {
+        addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+      }
+    }
+    runCatching { context.startActivity(chooser) }
   }
 
   fun getLivePlaybackPositionMs(): Long {

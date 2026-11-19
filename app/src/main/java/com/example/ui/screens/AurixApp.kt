@@ -229,6 +229,13 @@ private fun AurixMainShell(
   val mostPlayed by viewModel.mostPlayed.collectAsStateWithLifecycle()
   val trendingTracks by viewModel.trendingTracks.collectAsStateWithLifecycle()
   val risingArtists by viewModel.risingArtists.collectAsStateWithLifecycle()
+  val artistMixes by viewModel.artistMixes.collectAsStateWithLifecycle()
+  val myMixes by viewModel.myMixes.collectAsStateWithLifecycle()
+  val dailyDiscovery by viewModel.dailyDiscovery.collectAsStateWithLifecycle()
+  val favoritesMix by viewModel.favoritesMix.collectAsStateWithLifecycle()
+  val newForYouItems by viewModel.newForYouItems.collectAsStateWithLifecycle()
+  val recentPlayEntries by viewModel.recentPlayEntries.collectAsStateWithLifecycle()
+  val recentlyAddedSongs by viewModel.recentlyAddedSongs.collectAsStateWithLifecycle()
 
   val isNowPlayingOpen = showNowPlaying && currentSong != null
   val pendingNotificationNav by viewModel.pendingNotificationNav.collectAsStateWithLifecycle()
@@ -423,9 +430,38 @@ private fun AurixMainShell(
               discoverWeekly = discoverWeekly,
               moodPlaylists = moodPlaylists,
               musicDna = musicDna,
+              artistMixes = artistMixes,
+              myMixes = myMixes,
+              dailyDiscovery = dailyDiscovery,
+              favoritesMix = favoritesMix,
+              newForYouItems = newForYouItems,
+              recentPlayEntries = recentPlayEntries,
+              recentlyAddedCount = recentlyAddedSongs.size,
               onOpenInsights = { currentScreen = Screen.Insights },
               onOpenDiscoverWeekly = { currentScreen = Screen.PlaylistDetail("discover_weekly") },
               onOpenMoodPlaylist = { mood -> currentScreen = Screen.PlaylistDetail("mood_${mood.id}") },
+              onOpenArtistMix = { mix -> currentScreen = Screen.PlaylistDetail(mix.id) },
+              onOpenPersonalMix = { mix -> currentScreen = Screen.PlaylistDetail(mix.id) },
+              onPlayTracks = { tracks -> viewModel.playPlaylist(tracks) },
+              onShuffleTracks = { tracks -> viewModel.shuffleAlbum(tracks) },
+              onSaveMix = { title, tracks -> viewModel.saveMixAsPlaylist(title, tracks) },
+              onShareMix = { title, subtitle, tracks -> viewModel.shareMix(context, title, subtitle, tracks) },
+              onRefreshMixes = { viewModel.refreshPersonalMixes() },
+              onOpenNewForYouItem = { item ->
+                val itemAlbum = item.album
+                val itemSong = item.song
+                if (itemAlbum != null) {
+                  viewModel.openFeaturedAlbum(itemAlbum)
+                  currentScreen = Screen.Album
+                } else if (itemSong != null) {
+                  val queue = newForYouItems.mapNotNull { it.song }.ifEmpty { listOf(itemSong) }
+                  viewModel.playSong(itemSong, queue)
+                }
+              },
+              onRemoveRecentSong = { viewModel.removeFromHistory(it) },
+              onOpenDailyDiscovery = { currentScreen = Screen.PlaylistDetail("daily_discovery") },
+              onOpenFavoritesMix = { currentScreen = Screen.PlaylistDetail("favorites_mix") },
+              onOpenRecentlyAdded = { currentScreen = Screen.PlaylistDetail("recently_added") },
               onSongClick = { song, queue -> viewModel.playSong(song, queue) },
               onFavoriteClick = { viewModel.toggleFavorite(it) }
             )
@@ -447,88 +483,252 @@ private fun AurixMainShell(
               onFavoriteClick = { viewModel.toggleFavorite(it) }
             )
             is Screen.PlaylistDetail -> {
-              if (screen.key == "tiktok_viral_charts") {
-                PlaylistDetailScreen(
-                  title = stringResource(id = R.string.home_tiktok_viral_charts_title),
-                  subtitle = stringResource(id = R.string.home_tiktok_viral_charts_sub),
-                  badgeLabel = stringResource(id = R.string.home_tiktok_newpipe_badge),
-                  tracks = tiktokViralNewPipeSongs,
-                  emptyMessage = stringResource(id = R.string.home_tiktok_viral_empty),
-                  showRefreshButton = true,
-                  currentSong = currentSong,
-                  isPlaying = isPlaying,
-                  darkTheme = darkTheme,
-                  reducedMotion = reducedMotion,
-                  verifiedLyricsIds = verifiedLyricsIds,
-                  resolvingSongId = resolvingSongId,
-                  downloadedSongIds = downloadedSongIds,
-                  songDownloadProgress = songDownloadProgress,
-                  onBack = { currentScreen = Screen.Home },
-                  onRefresh = { viewModel.loadTiktokViralNewPipeSongs(forceRefresh = true) },
-                  onPlayAll = { viewModel.playPlaylist(tiktokViralNewPipeSongs) },
-                  onShuffleAll = { viewModel.shuffleAlbum(tiktokViralNewPipeSongs) },
-                  onCheckLyrics = { viewModel.ensureLyricsVerified(it) },
-                  onSongClick = { song, queue -> viewModel.playSong(song, queue) },
-                  onFavoriteClick = { viewModel.toggleFavorite(it) },
-                  onYoutubeSongDownloadClick = { viewModel.openYoutubeFormatSheet(it) }
-                )
-              } else if (screen.key == "discover_weekly") {
-                val dw = discoverWeekly
-                val dwTracks = dw?.tracks.orEmpty()
-                val dwSubtitle = if (dw != null && dwTracks.isNotEmpty()) {
-                  stringResource(
-                    id = R.string.home_discover_weekly_ready,
-                    dwTracks.size,
-                    dw.matchCount,
-                    dw.discoveryCount
+              when {
+                screen.key == "tiktok_viral_charts" -> {
+                  PlaylistDetailScreen(
+                    title = stringResource(id = R.string.home_tiktok_viral_charts_title),
+                    subtitle = stringResource(id = R.string.home_tiktok_viral_charts_sub),
+                    badgeLabel = stringResource(id = R.string.home_tiktok_newpipe_badge),
+                    tracks = tiktokViralNewPipeSongs,
+                    emptyMessage = stringResource(id = R.string.home_tiktok_viral_empty),
+                    showRefreshButton = true,
+                    currentSong = currentSong,
+                    isPlaying = isPlaying,
+                    darkTheme = darkTheme,
+                    reducedMotion = reducedMotion,
+                    verifiedLyricsIds = verifiedLyricsIds,
+                    resolvingSongId = resolvingSongId,
+                    downloadedSongIds = downloadedSongIds,
+                    songDownloadProgress = songDownloadProgress,
+                    onBack = { currentScreen = Screen.Home },
+                    onRefresh = { viewModel.loadTiktokViralNewPipeSongs(forceRefresh = true) },
+                    onPlayAll = { viewModel.playPlaylist(tiktokViralNewPipeSongs) },
+                    onShuffleAll = { viewModel.shuffleAlbum(tiktokViralNewPipeSongs) },
+                    onCheckLyrics = { viewModel.ensureLyricsVerified(it) },
+                    onSongClick = { song, queue -> viewModel.playSong(song, queue) },
+                    onFavoriteClick = { viewModel.toggleFavorite(it) },
+                    onYoutubeSongDownloadClick = { viewModel.openYoutubeFormatSheet(it) }
                   )
-                } else {
-                  stringResource(id = R.string.home_discover_weekly_empty)
                 }
-                PlaylistDetailScreen(
-                  title = stringResource(id = R.string.home_discover_weekly_title),
-                  subtitle = dwSubtitle,
-                  badgeLabel = dw?.weekKey ?: "WEEKLY MIX",
-                  tracks = dwTracks,
-                  emptyMessage = stringResource(id = R.string.home_discover_weekly_empty),
-                  showRefreshButton = dwTracks.isNotEmpty(),
-                  currentSong = currentSong,
-                  isPlaying = isPlaying,
-                  darkTheme = darkTheme,
-                  reducedMotion = reducedMotion,
-                  verifiedLyricsIds = verifiedLyricsIds,
-                  onBack = { currentScreen = Screen.Home },
-                  onRefresh = { viewModel.refreshDiscoverWeekly() },
-                  onPlayAll = { viewModel.playPlaylist(dwTracks) },
-                  onShuffleAll = { viewModel.shuffleAlbum(dwTracks) },
-                  onCheckLyrics = { viewModel.ensureLyricsVerified(it) },
-                  onSongClick = { song, queue -> viewModel.playSong(song, queue) },
-                  onFavoriteClick = { viewModel.toggleFavorite(it) }
-                )
-              } else {
-                val moodId = screen.key.removePrefix("mood_")
-                val matchedMood = MoodCategory.entries.firstOrNull { it.id == moodId } ?: MoodCategory.CHILL
-                val moodPlaylist = moodPlaylists.firstOrNull { it.mood == matchedMood }
-                val moodTracks = moodPlaylist?.tracks.orEmpty()
-                PlaylistDetailScreen(
-                  title = "${matchedMood.displayName} Mix",
-                  subtitle = "${matchedMood.description} · ${matchedMood.bpmRange.first}–${matchedMood.bpmRange.last} BPM",
-                  badgeLabel = stringResource(id = R.string.home_moods_title),
-                  tracks = moodTracks,
-                  emptyMessage = stringResource(id = R.string.playlist_mood_empty),
-                  showRefreshButton = false,
-                  currentSong = currentSong,
-                  isPlaying = isPlaying,
-                  darkTheme = darkTheme,
-                  reducedMotion = reducedMotion,
-                  verifiedLyricsIds = verifiedLyricsIds,
-                  onBack = { currentScreen = Screen.Home },
-                  onPlayAll = { viewModel.playPlaylist(moodTracks) },
-                  onShuffleAll = { viewModel.shuffleAlbum(moodTracks) },
-                  onCheckLyrics = { viewModel.ensureLyricsVerified(it) },
-                  onSongClick = { song, queue -> viewModel.playSong(song, queue) },
-                  onFavoriteClick = { viewModel.toggleFavorite(it) }
-                )
+                screen.key == "discover_weekly" -> {
+                  val dw = discoverWeekly
+                  val dwTracks = dw?.tracks.orEmpty()
+                  val dwSubtitle = if (dw != null && dwTracks.isNotEmpty()) {
+                    stringResource(
+                      id = R.string.home_discover_weekly_ready,
+                      dwTracks.size,
+                      dw.matchCount,
+                      dw.discoveryCount
+                    )
+                  } else {
+                    stringResource(id = R.string.home_discover_weekly_empty)
+                  }
+                  PlaylistDetailScreen(
+                    title = stringResource(id = R.string.home_discover_weekly_title),
+                    subtitle = dwSubtitle,
+                    badgeLabel = dw?.weekKey ?: "WEEKLY MIX",
+                    tracks = dwTracks,
+                    emptyMessage = stringResource(id = R.string.home_discover_weekly_empty),
+                    showRefreshButton = dwTracks.isNotEmpty(),
+                    currentSong = currentSong,
+                    isPlaying = isPlaying,
+                    darkTheme = darkTheme,
+                    reducedMotion = reducedMotion,
+                    verifiedLyricsIds = verifiedLyricsIds,
+                    onBack = { currentScreen = Screen.Home },
+                    onRefresh = { viewModel.refreshDiscoverWeekly() },
+                    onPlayAll = { viewModel.playPlaylist(dwTracks) },
+                    onShuffleAll = { viewModel.shuffleAlbum(dwTracks) },
+                    onCheckLyrics = { viewModel.ensureLyricsVerified(it) },
+                    onSongClick = { song, queue -> viewModel.playSong(song, queue) },
+                    onFavoriteClick = { viewModel.toggleFavorite(it) },
+                    onSaveMix = if (dwTracks.isNotEmpty()) {
+                      { viewModel.saveMixAsPlaylist("Discover Weekly", dwTracks) }
+                    } else null,
+                    onShareMix = if (dwTracks.isNotEmpty()) {
+                      { viewModel.shareMix(context, "Discover Weekly", dwSubtitle, dwTracks) }
+                    } else null
+                  )
+                }
+                screen.key.startsWith("artist_mix_") -> {
+                  val matchedMix = artistMixes.firstOrNull { it.id == screen.key }
+                  val mixTitle = matchedMix?.artistName ?: stringResource(id = R.string.home_artist_mixes_title)
+                  val mixSub = matchedMix?.subtitle ?: stringResource(id = R.string.mix_empty_loading)
+                  val mixTracks = matchedMix?.tracks.orEmpty()
+                  PlaylistDetailScreen(
+                    title = mixTitle,
+                    subtitle = mixSub,
+                    badgeLabel = matchedMix?.genreTag?.ifBlank { "ARTIST MIX" } ?: "ARTIST MIX",
+                    tracks = mixTracks,
+                    emptyMessage = stringResource(id = R.string.mix_empty_loading),
+                    showRefreshButton = false,
+                    currentSong = currentSong,
+                    isPlaying = isPlaying,
+                    darkTheme = darkTheme,
+                    reducedMotion = reducedMotion,
+                    verifiedLyricsIds = verifiedLyricsIds,
+                    onBack = { currentScreen = Screen.Home },
+                    onPlayAll = { viewModel.playPlaylist(mixTracks) },
+                    onShuffleAll = { viewModel.shuffleAlbum(mixTracks) },
+                    onCheckLyrics = { viewModel.ensureLyricsVerified(it) },
+                    onSongClick = { song, queue -> viewModel.playSong(song, queue) },
+                    onFavoriteClick = { viewModel.toggleFavorite(it) },
+                    onSaveMix = if (mixTracks.isNotEmpty()) {
+                      { viewModel.saveMixAsPlaylist("$mixTitle Mix", mixTracks) }
+                    } else null,
+                    onShareMix = if (mixTracks.isNotEmpty()) {
+                      { viewModel.shareMix(context, "$mixTitle Mix", mixSub, mixTracks) }
+                    } else null
+                  )
+                }
+                screen.key.startsWith("my_mix_") -> {
+                  val matchedMix = myMixes.firstOrNull { it.id == screen.key }
+                  val mixTitle = matchedMix?.title ?: stringResource(id = R.string.home_my_mix_title)
+                  val mixSub = matchedMix?.subtitle ?: stringResource(id = R.string.mix_empty_loading)
+                  val mixTracks = matchedMix?.tracks.orEmpty()
+                  PlaylistDetailScreen(
+                    title = mixTitle,
+                    subtitle = mixSub,
+                    badgeLabel = matchedMix?.badgeLabel ?: "MY MIX",
+                    tracks = mixTracks,
+                    emptyMessage = stringResource(id = R.string.mix_empty_loading),
+                    showRefreshButton = true,
+                    currentSong = currentSong,
+                    isPlaying = isPlaying,
+                    darkTheme = darkTheme,
+                    reducedMotion = reducedMotion,
+                    verifiedLyricsIds = verifiedLyricsIds,
+                    onBack = { currentScreen = Screen.Home },
+                    onRefresh = { viewModel.refreshPersonalMixes() },
+                    onPlayAll = { viewModel.playPlaylist(mixTracks) },
+                    onShuffleAll = { viewModel.shuffleAlbum(mixTracks) },
+                    onCheckLyrics = { viewModel.ensureLyricsVerified(it) },
+                    onSongClick = { song, queue -> viewModel.playSong(song, queue) },
+                    onFavoriteClick = { viewModel.toggleFavorite(it) },
+                    onSaveMix = if (mixTracks.isNotEmpty()) {
+                      { viewModel.saveMixAsPlaylist(mixTitle, mixTracks) }
+                    } else null,
+                    onShareMix = if (mixTracks.isNotEmpty()) {
+                      { viewModel.shareMix(context, mixTitle, mixSub, mixTracks) }
+                    } else null
+                  )
+                }
+                screen.key == "daily_discovery" -> {
+                  val mix = dailyDiscovery
+                  val mixTracks = mix?.tracks.orEmpty()
+                  val mixSub = mix?.subtitle ?: stringResource(id = R.string.mix_empty_loading)
+                  PlaylistDetailScreen(
+                    title = stringResource(id = R.string.home_daily_discovery_title),
+                    subtitle = mixSub,
+                    badgeLabel = mix?.badgeLabel ?: "DISCOVERY",
+                    tracks = mixTracks,
+                    emptyMessage = stringResource(id = R.string.mix_empty_loading),
+                    showRefreshButton = true,
+                    currentSong = currentSong,
+                    isPlaying = isPlaying,
+                    darkTheme = darkTheme,
+                    reducedMotion = reducedMotion,
+                    verifiedLyricsIds = verifiedLyricsIds,
+                    onBack = { currentScreen = Screen.Home },
+                    onRefresh = { viewModel.refreshPersonalMixes() },
+                    onPlayAll = { viewModel.playPlaylist(mixTracks) },
+                    onShuffleAll = { viewModel.shuffleAlbum(mixTracks) },
+                    onCheckLyrics = { viewModel.ensureLyricsVerified(it) },
+                    onSongClick = { song, queue -> viewModel.playSong(song, queue) },
+                    onFavoriteClick = { viewModel.toggleFavorite(it) },
+                    onSaveMix = if (mixTracks.isNotEmpty()) {
+                      { viewModel.saveMixAsPlaylist("Daily Discovery", mixTracks) }
+                    } else null,
+                    onShareMix = if (mixTracks.isNotEmpty()) {
+                      { viewModel.shareMix(context, "Daily Discovery", mixSub, mixTracks) }
+                    } else null
+                  )
+                }
+                screen.key == "favorites_mix" -> {
+                  val mix = favoritesMix
+                  val mixTracks = mix?.tracks.orEmpty()
+                  val mixSub = mix?.subtitle ?: stringResource(id = R.string.home_favorites)
+                  PlaylistDetailScreen(
+                    title = stringResource(id = R.string.home_favorites_mix_title),
+                    subtitle = mixSub,
+                    badgeLabel = mix?.badgeLabel ?: "FAVORITES MIX",
+                    tracks = mixTracks,
+                    emptyMessage = stringResource(id = R.string.mix_empty_loading),
+                    showRefreshButton = false,
+                    currentSong = currentSong,
+                    isPlaying = isPlaying,
+                    darkTheme = darkTheme,
+                    reducedMotion = reducedMotion,
+                    verifiedLyricsIds = verifiedLyricsIds,
+                    onBack = { currentScreen = Screen.Home },
+                    onPlayAll = { viewModel.playPlaylist(mixTracks) },
+                    onShuffleAll = { viewModel.shuffleAlbum(mixTracks) },
+                    onCheckLyrics = { viewModel.ensureLyricsVerified(it) },
+                    onSongClick = { song, queue -> viewModel.playSong(song, queue) },
+                    onFavoriteClick = { viewModel.toggleFavorite(it) },
+                    onSaveMix = if (mixTracks.isNotEmpty()) {
+                      { viewModel.saveMixAsPlaylist("Favorites Mix", mixTracks) }
+                    } else null,
+                    onShareMix = if (mixTracks.isNotEmpty()) {
+                      { viewModel.shareMix(context, "Favorites Mix", mixSub, mixTracks) }
+                    } else null
+                  )
+                }
+                screen.key == "recently_added" -> {
+                  val recentTracks = recentlyAddedSongs
+                  val sub = stringResource(id = R.string.home_recently_added_sub, recentTracks.size)
+                  PlaylistDetailScreen(
+                    title = stringResource(id = R.string.home_recently_added_title),
+                    subtitle = sub,
+                    badgeLabel = "LIBRARY",
+                    tracks = recentTracks,
+                    emptyMessage = stringResource(id = R.string.mix_empty_loading),
+                    showRefreshButton = false,
+                    currentSong = currentSong,
+                    isPlaying = isPlaying,
+                    darkTheme = darkTheme,
+                    reducedMotion = reducedMotion,
+                    verifiedLyricsIds = verifiedLyricsIds,
+                    onBack = { currentScreen = Screen.Home },
+                    onPlayAll = { viewModel.playPlaylist(recentTracks) },
+                    onShuffleAll = { viewModel.shuffleAlbum(recentTracks) },
+                    onCheckLyrics = { viewModel.ensureLyricsVerified(it) },
+                    onSongClick = { song, queue -> viewModel.playSong(song, queue) },
+                    onFavoriteClick = { viewModel.toggleFavorite(it) }
+                  )
+                }
+                else -> {
+                  val moodId = screen.key.removePrefix("mood_")
+                  val matchedMood = MoodCategory.entries.firstOrNull { it.id == moodId } ?: MoodCategory.CHILL
+                  val moodPlaylist = moodPlaylists.firstOrNull { it.mood == matchedMood }
+                  val moodTracks = moodPlaylist?.tracks.orEmpty()
+                  val moodSub = "${matchedMood.description} · ${matchedMood.bpmRange.first}–${matchedMood.bpmRange.last} BPM"
+                  PlaylistDetailScreen(
+                    title = "${matchedMood.displayName} Mix",
+                    subtitle = moodSub,
+                    badgeLabel = stringResource(id = R.string.home_mood_mix_title),
+                    tracks = moodTracks,
+                    emptyMessage = stringResource(id = R.string.playlist_mood_empty),
+                    showRefreshButton = false,
+                    currentSong = currentSong,
+                    isPlaying = isPlaying,
+                    darkTheme = darkTheme,
+                    reducedMotion = reducedMotion,
+                    verifiedLyricsIds = verifiedLyricsIds,
+                    onBack = { currentScreen = Screen.Home },
+                    onPlayAll = { viewModel.playPlaylist(moodTracks) },
+                    onShuffleAll = { viewModel.shuffleAlbum(moodTracks) },
+                    onCheckLyrics = { viewModel.ensureLyricsVerified(it) },
+                    onSongClick = { song, queue -> viewModel.playSong(song, queue) },
+                    onFavoriteClick = { viewModel.toggleFavorite(it) },
+                    onSaveMix = if (moodTracks.isNotEmpty()) {
+                      { viewModel.saveMixAsPlaylist("${matchedMood.displayName} Mix", moodTracks) }
+                    } else null,
+                    onShareMix = if (moodTracks.isNotEmpty()) {
+                      { viewModel.shareMix(context, "${matchedMood.displayName} Mix", moodSub, moodTracks) }
+                    } else null
+                  )
+                }
               }
             }
             is Screen.Album -> AlbumTrackListSection(

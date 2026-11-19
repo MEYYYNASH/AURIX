@@ -1,10 +1,10 @@
 # AURIX — ONE APP. ALL YOUR MUSIC.
 
-AURIX (`v1.8.1`, release date `2026-11-17`) is a modern Android music player and sound finder app built with Kotlin, Jetpack Compose, and Material 3.
+AURIX (`v1.8.2`, release date `2026-11-18`) is a modern Android music player and sound finder app built with Kotlin, Jetpack Compose, and Material 3.
 
 ## Features
 
-- **Home Discovery**: Featured Hero Spotlight banner, **New Albums** grid, **Popular YouTube Song List** with format & quality downloads, and **Today's Hits** & Daily Top charts powered by iTunes & Apple Charts.
+- **Personalized Home Discovery**: **Artist Mixes for You**, daily-refreshed **My Mix 1–4**, **New for You** (`All | Songs | Albums | Artists`), **Recent Play** + **Continue Listening**, **Daily Discovery**, **Favorites Mix**, **10 Mood Mixes**, and unified **Trending Music** (`Today's Hits`, `Daily Top`, `Phonk`, `Khmer & Asia`).
 - **Liquid Glass Player & Up Next Queue**: Ambient artwork aura in Now Playing, swipe-to-skip MiniPlayer, interactive **Up Next** queue drawer (reorder, jump, Play Next, Add to Queue), and Sleep Timer with gentle fade-out.
 - **Audio Studio (EQ + 3D Surround)**: 5-band Bezier spectrum equalizer with `Bass Boost`, hardware `3D Surround Virtualizer`, `Lo-Fi` and `Acoustic` presets, playback speed studio, and equal-power crossfade.
 - **Because You Listened & MoodFlow**: 30-day vocal sad & chill recommendations plus 5-dimensional mood-aware shuffle with live `Match %` badges.

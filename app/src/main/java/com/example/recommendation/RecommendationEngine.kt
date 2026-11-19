@@ -1,5 +1,6 @@
 package com.example.recommendation
 
+import com.example.model.FeaturedAlbumItem
 import com.example.model.Song
 import java.text.SimpleDateFormat
 import java.util.Calendar
@@ -7,6 +8,7 @@ import java.util.Date
 import java.util.Locale
 import kotlin.math.abs
 import kotlin.math.roundToInt
+import kotlin.random.Random
 
 /**
  * Pure recommendation and listening-analytics engine kept decoupled from UI & Android framework.
@@ -554,6 +556,419 @@ object RecommendationEngine {
           .thenByDescending { it.recentPlays }
       )
       .take(limit)
+  }
+
+  /**
+   * 10. Artist Mixes for You:
+   * Dedicated personalized mixes anchored on frequently played & favorited artists,
+   * blended with similar artists & genres. Falls back honestly to popular catalog artists.
+   */
+  fun buildArtistMixes(
+    playLogs: List<PlayLogRecord>,
+    richHistory: List<RichPlayRecord>,
+    favorites: List<Song>,
+    feedback: Map<String, Boolean>,
+    catalog: List<Song>,
+    limit: Int = 6
+  ): List<ArtistMix> {
+    val distinctCatalog = catalog
+      .asSequence()
+      .map { TrackMetadataClassifier.enrich(it) }
+      .filter { feedback[it.id] != false }
+      .distinctBy { it.id }
+      .toList()
+    if (distinctCatalog.isEmpty()) return emptyList()
+
+    val skippedCounts = richHistory
+      .filter { it.skipped }
+      .groupingBy { it.song.id }
+      .eachCount()
+
+    val artistWeights = linkedMapOf<String, Double>()
+    val artistDisplayNames = linkedMapOf<String, String>()
+    val artistArtwork = linkedMapOf<String, String>()
+
+    fun recordArtistSignal(song: Song, weight: Double) {
+      val norm = normalizeArtist(song.artist)
+      if (norm.isBlank() || norm == "unknown artist") return
+      artistWeights[norm] = (artistWeights[norm] ?: 0.0) + weight
+      artistDisplayNames.putIfAbsent(norm, song.artist.trim())
+      if (artistArtwork[norm].isNullOrBlank() && song.artworkUrl.isNotBlank()) {
+        artistArtwork[norm] = song.artworkUrl
+      }
+    }
+
+    playLogs.forEach { recordArtistSignal(it.song, 3.0) }
+    favorites.forEach { recordArtistSignal(it, 4.0) }
+
+    val isPersonalized = artistWeights.isNotEmpty()
+    val seedArtists: List<String> = if (isPersonalized) {
+      artistWeights.entries
+        .sortedByDescending { it.value }
+        .map { it.key }
+        .take(limit)
+    } else {
+      distinctCatalog
+        .groupBy { normalizeArtist(it.artist) }
+        .filter { it.key.isNotBlank() && it.key != "unknown artist" }
+        .entries
+        .sortedByDescending { it.value.size }
+        .map { entry ->
+          val rep = entry.value.first()
+          artistDisplayNames.putIfAbsent(entry.key, rep.artist)
+          if (artistArtwork[entry.key].isNullOrBlank() && rep.artworkUrl.isNotBlank()) {
+            artistArtwork[entry.key] = rep.artworkUrl
+          }
+          entry.key
+        }
+        .take(limit)
+    }
+
+    return seedArtists.mapNotNull { normArtist ->
+      val displayArtist = artistDisplayNames[normArtist] ?: return@mapNotNull null
+      val artistSongs = distinctCatalog.filter { normalizeArtist(it.artist) == normArtist }
+      val anchorSong = artistSongs.firstOrNull()
+        ?: playLogs.firstOrNull { normalizeArtist(it.song.artist) == normArtist }?.song
+        ?: favorites.firstOrNull { normalizeArtist(it.artist) == normArtist }
+        ?: return@mapNotNull null
+
+      val similar = similarSongs(
+        target = anchorSong,
+        catalog = distinctCatalog,
+        limit = 14
+      )
+        .filter { (skippedCounts[it.song.id] ?: 0) < 2 }
+        .map { it.song }
+
+      val mixTracks = (artistSongs + similar)
+        .distinctBy { it.id }
+        .sortedBy { skippedCounts[it.id] ?: 0 }
+        .take(16)
+
+      if (mixTracks.isEmpty()) return@mapNotNull null
+
+      val similarArtistNames = mixTracks
+        .map { it.artist }
+        .filter { normalizeArtist(it) != normArtist && it.isNotBlank() }
+        .distinct()
+        .take(2)
+
+      val coverUrl = artistArtwork[normArtist]
+        ?: mixTracks.firstOrNull { it.artworkUrl.isNotBlank() }?.artworkUrl
+        ?: ""
+      val genreTag = anchorSong.genre.ifBlank { "Mix" }
+      val subtitle = if (similarArtistNames.isNotEmpty()) {
+        "With ${similarArtistNames.joinToString(", ")}"
+      } else if (isPersonalized) {
+        "$genreTag · ${mixTracks.size} tracks for you"
+      } else {
+        "$genreTag · Popular artist mix"
+      }
+
+      ArtistMix(
+        id = "artist_mix_${normArtist.replace(" ", "_")}",
+        artistName = displayArtist,
+        artworkUrl = coverUrl,
+        subtitle = subtitle,
+        genreTag = genreTag,
+        similarArtists = similarArtistNames,
+        tracks = mixTracks,
+        isPersonalized = isPersonalized
+      )
+    }
+  }
+
+  /**
+   * 11. My Mix 1..4:
+   * Daily-refreshed mixes clustering distinct moods/genres from listening history & favorites,
+   * filtering out disliked and frequently skipped tracks.
+   */
+  fun buildMyMixes(
+    playLogs: List<PlayLogRecord>,
+    richHistory: List<RichPlayRecord>,
+    favorites: List<Song>,
+    feedback: Map<String, Boolean>,
+    catalog: List<Song>,
+    nowMs: Long = System.currentTimeMillis(),
+    refreshSalt: Int = 0,
+    maxMixes: Int = 4
+  ): List<PersonalMix> {
+    val distinctCatalog = catalog
+      .asSequence()
+      .map { TrackMetadataClassifier.enrich(it) }
+      .filter { feedback[it.id] != false }
+      .distinctBy { it.id }
+      .toList()
+    if (distinctCatalog.isEmpty()) return emptyList()
+
+    val daySeed = (nowMs / DAY_MS).toInt() + refreshSalt
+    val skippedCounts = richHistory
+      .filter { it.skipped }
+      .groupingBy { it.song.id }
+      .eachCount()
+    val favoriteIds = favorites.map { it.id }.toSet()
+    val hasHistory = playLogs.isNotEmpty() || favorites.isNotEmpty()
+
+    val accentPalette = listOf("#14B8A6", "#3B82F6", "#A855F7", "#F59E0B")
+
+    // Derive up to 4 distinct genre+mood clusters from user taste (or catalog fallback)
+    val tastePool = (favorites + playLogs.map { TrackMetadataClassifier.enrich(it.song) })
+      .ifEmpty { distinctCatalog }
+    val clusterSeeds = tastePool
+      .groupBy { song ->
+        val genre = song.genre.ifBlank { "Pop" }
+        val mood = song.mood.ifBlank { "Chill" }
+        genre to mood
+      }
+      .entries
+      .sortedByDescending { it.value.size }
+      .map { it.key }
+      .distinct()
+      .take(maxMixes)
+      .ifEmpty { listOf("Pop" to "Chill", "Khmer" to "Warm", "Lo-fi" to "Focus", "Dance" to "Energetic") }
+
+    val paddedSeeds = clusterSeeds.toMutableList()
+    val defaultClusters = listOf("Pop" to "Chill", "R&B" to "Romantic", "Lo-fi" to "Focus", "Hip-Hop" to "Energetic")
+    for (fallback in defaultClusters) {
+      if (paddedSeeds.size >= maxMixes) break
+      if (paddedSeeds.none { it.first.equals(fallback.first, ignoreCase = true) }) {
+        paddedSeeds.add(fallback)
+      }
+    }
+
+    return paddedSeeds.take(maxMixes).mapIndexedNotNull { idx, (seedGenre, seedMood) ->
+      val mixNum = idx + 1
+      val rng = Random(daySeed * 31 + mixNum * 97)
+      val ranked = distinctCatalog
+        .map { track ->
+          var score = 0.0
+          if (track.genre.equals(seedGenre, ignoreCase = true)) score += 45.0
+          if (track.mood.equals(seedMood, ignoreCase = true)) score += 32.0
+          if (track.id in favoriteIds) score += 22.0
+          if (feedback[track.id] == true) score += 18.0
+          val skips = skippedCounts[track.id] ?: 0
+          score -= skips * 24.0
+          score += rng.nextDouble(0.0, 12.0)
+          track to score
+        }
+        .sortedByDescending { it.second }
+        .map { it.first }
+        .take(18)
+
+      if (ranked.isEmpty()) return@mapIndexedNotNull null
+      val topArtists = ranked.map { it.artist }.filter { it.isNotBlank() }.distinct().take(3)
+      val title = if (hasHistory) "My Mix $mixNum" else "Starter Mix $mixNum"
+      val subtitle = if (topArtists.isNotEmpty()) {
+        "$seedGenre · ${topArtists.joinToString(", ")}"
+      } else {
+        "$seedGenre · $seedMood vibe"
+      }
+
+      PersonalMix(
+        id = "my_mix_$mixNum",
+        mixNumber = mixNum,
+        title = title,
+        subtitle = subtitle,
+        badgeLabel = if (hasHistory) "MY MIX $mixNum" else "DAILY MIX $mixNum",
+        accentHex = accentPalette[idx % accentPalette.size],
+        artworkUrl = ranked.firstOrNull { it.artworkUrl.isNotBlank() }?.artworkUrl.orEmpty(),
+        tracks = ranked,
+        dominantMood = "$seedGenre · $seedMood",
+        isPersonalized = hasHistory
+      )
+    }
+  }
+
+  /**
+   * 12. Daily Discovery:
+   * Recommends unheard songs the user has not listened to yet, rotating daily
+   * and avoiding disliked/skipped tracks.
+   */
+  fun buildDailyDiscovery(
+    playLogs: List<PlayLogRecord>,
+    richHistory: List<RichPlayRecord>,
+    favorites: List<Song>,
+    feedback: Map<String, Boolean>,
+    catalog: List<Song>,
+    nowMs: Long = System.currentTimeMillis(),
+    refreshSalt: Int = 0,
+    limit: Int = 20
+  ): PersonalMix? {
+    val playedIds = (playLogs.map { it.song.id } + richHistory.map { it.song.id }).toSet()
+    val unheard = catalog
+      .asSequence()
+      .map { TrackMetadataClassifier.enrich(it) }
+      .filter { it.id !in playedIds && feedback[it.id] != false }
+      .distinctBy { it.id }
+      .toList()
+
+    if (unheard.isEmpty()) return null
+
+    val daySeed = (nowMs / DAY_MS).toInt() + refreshSalt
+    val rng = Random(daySeed * 53 + 17)
+    val preferredGenres = (playLogs.map { TrackMetadataClassifier.enrich(it.song).genre } +
+      favorites.map { TrackMetadataClassifier.enrich(it).genre })
+      .groupingBy { it }
+      .eachCount()
+
+    val selected = unheard
+      .sortedByDescending { track ->
+        val genreBoost = (preferredGenres[track.genre] ?: 0) * 14.0
+        genreBoost + rng.nextDouble(0.0, 20.0)
+      }
+      .take(limit)
+
+    return PersonalMix(
+      id = "daily_discovery",
+      mixNumber = 0,
+      title = "Daily Discovery",
+      subtitle = if (playLogs.isNotEmpty()) {
+        "${selected.size} fresh tracks you haven't played yet"
+      } else {
+        "Fresh tracks curated from today's catalog"
+      },
+      badgeLabel = "DISCOVERY",
+      accentHex = "#10B981",
+      artworkUrl = selected.firstOrNull { it.artworkUrl.isNotBlank() }?.artworkUrl.orEmpty(),
+      tracks = selected,
+      dominantMood = "Discovery",
+      isPersonalized = playLogs.isNotEmpty()
+    )
+  }
+
+  /**
+   * 13. Favorites Mix:
+   * Blends user favorites with similar-sounding recommendations for seamless playback.
+   */
+  fun buildFavoritesMix(
+    favorites: List<Song>,
+    catalog: List<Song>,
+    feedback: Map<String, Boolean>,
+    limit: Int = 24
+  ): PersonalMix? {
+    if (favorites.isEmpty()) return null
+    val enrichedFavs = favorites.map { TrackMetadataClassifier.enrich(it) }.distinctBy { it.id }
+    val favIds = enrichedFavs.map { it.id }.toSet()
+    val similarPool = enrichedFavs
+      .take(5)
+      .flatMap { fav -> similarSongs(fav, catalog, limit = 6).map { it.song } }
+      .filter { it.id !in favIds && feedback[it.id] != false }
+      .distinctBy { it.id }
+
+    // Interleave favorites and similar tracks smoothly
+    val combined = mutableListOf<Song>()
+    val maxLen = maxOf(enrichedFavs.size, similarPool.size)
+    for (i in 0 until maxLen) {
+      if (i < enrichedFavs.size) combined.add(enrichedFavs[i])
+      if (i < similarPool.size) combined.add(similarPool[i])
+    }
+    val finalTracks = combined.distinctBy { it.id }.take(limit)
+    return PersonalMix(
+      id = "favorites_mix",
+      mixNumber = 0,
+      title = "Favorites Mix",
+      subtitle = "Your liked songs blended with ${similarPool.size} similar picks",
+      badgeLabel = "FAVORITES MIX",
+      accentHex = "#EC4899",
+      artworkUrl = finalTracks.firstOrNull { it.artworkUrl.isNotBlank() }?.artworkUrl.orEmpty(),
+      tracks = finalTracks,
+      dominantMood = "Favorites",
+      isPersonalized = true
+    )
+  }
+
+  /**
+   * 14. New for You:
+   * Organizes new releases (albums & fresh tracks), surfacing releases from favorite artists first.
+   */
+  fun buildNewForYou(
+    playLogs: List<PlayLogRecord>,
+    favorites: List<Song>,
+    catalog: List<Song>,
+    newAlbums: List<FeaturedAlbumItem>,
+    limit: Int = 18
+  ): List<NewForYouItem> {
+    val favArtists = (favorites.map { normalizeArtist(it.artist) } +
+      playLogs.groupingBy { normalizeArtist(it.song.artist) }.eachCount()
+        .entries.sortedByDescending { it.value }.take(8).map { it.key })
+      .filter { it.isNotBlank() && it != "unknown artist" }
+      .toSet()
+
+    val items = mutableListOf<NewForYouItem>()
+
+    newAlbums.forEach { album ->
+      val isFavArtist = normalizeArtist(album.artist) in favArtists
+      items.add(
+        NewForYouItem(
+          id = "nfy_alb_${album.id}",
+          title = album.title,
+          artist = album.artist,
+          artworkUrl = album.artworkUrl,
+          releaseDateLabel = album.year.ifBlank { "New Album" },
+          badgeLabel = if (isFavArtist) "Favorite Artist" else "New Album",
+          filterType = if (isFavArtist) NewForYouFilter.ARTIST_RELEASES else NewForYouFilter.ALBUMS,
+          isFromFavoriteArtist = isFavArtist,
+          album = album
+        )
+      )
+    }
+
+    catalog
+      .asSequence()
+      .map { TrackMetadataClassifier.enrich(it) }
+      .distinctBy { it.id }
+      .sortedByDescending { normalizeArtist(it.artist) in favArtists }
+      .take(limit)
+      .forEach { song ->
+        val isFavArtist = normalizeArtist(song.artist) in favArtists
+        items.add(
+          NewForYouItem(
+            id = "nfy_song_${song.id}",
+            title = song.title,
+            artist = song.artist,
+            artworkUrl = song.artworkUrl,
+            releaseDateLabel = song.year.ifBlank { song.source },
+            badgeLabel = if (isFavArtist) "Artist Release" else "New Track",
+            filterType = if (isFavArtist) NewForYouFilter.ARTIST_RELEASES else NewForYouFilter.SONGS,
+            isFromFavoriteArtist = isFavArtist,
+            song = song
+          )
+        )
+      }
+
+    return items
+      .sortedByDescending { it.isFromFavoriteArtist }
+      .distinctBy { it.id }
+      .take(limit)
+  }
+
+  /**
+   * 15. Recent Play Entries with timestamps & completion progress for instant resume.
+   */
+  fun buildRecentPlayEntries(
+    playLogs: List<PlayLogRecord>,
+    richHistory: List<RichPlayRecord>,
+    nowMs: Long = System.currentTimeMillis(),
+    limit: Int = 12
+  ): List<RecentPlayEntry> {
+    val pctBySongId = richHistory
+      .sortedByDescending { it.playedAtMs }
+      .distinctBy { it.song.id }
+      .associate { it.song.id to it.completedPercent }
+
+    return playLogs
+      .sortedByDescending { it.playedAtMs }
+      .distinctBy { it.song.id }
+      .take(limit)
+      .map { record ->
+        val song = TrackMetadataClassifier.enrich(record.song)
+        RecentPlayEntry(
+          song = song,
+          playedAtMs = record.playedAtMs,
+          timeAgoLabel = formatRelativeTimestamp(record.playedAtMs, nowMs),
+          completedPercent = pctBySongId[song.id] ?: 0f
+        )
+      }
   }
 
   fun formatRelativeTimestamp(timestampMs: Long, nowMs: Long = System.currentTimeMillis()): String {

@@ -235,4 +235,115 @@ class RecommendationEngineTest {
     assertEquals("Rising Star", risingArtists.first().artist)
     assertEquals(200, risingArtists.first().growthPercentage) // 1 -> 3 plays = +200%
   }
+
+  @Test
+  fun v182_artistMixes_myMixes_dailyDiscovery_favoritesMix_and_newForYou_workAsExpected() {
+    val now = 300L * 24L * 60L * 60L * 1000L
+    val favSong = track("f1", "Midnight Walk", artist = "VannDa", genre = "Khmer", bpm = 96, mood = "Chill")
+    val dislikedSong = track("bad1", "Skip Song", artist = "VannDa", genre = "Khmer", bpm = 96, mood = "Chill")
+    val artistNeighbor = track("v2", "Time To Rise", artist = "VannDa", genre = "Khmer", bpm = 98, mood = "Energetic")
+    val similarIndie = track("s2", "Mellow Sun", artist = "Suly Pheng", genre = "Khmer", bpm = 94, mood = "Chill")
+    val lofiTrack = track("l1", "Rain Desk", artist = "Loft", genre = "Lo-fi", bpm = 82, mood = "Focus")
+    val danceTrack = track("d1", "Club Lights", artist = "Nova", genre = "Dance", bpm = 128, mood = "Party")
+    val sleepTrack = track("sl1", "Dream Drift", artist = "Haze", genre = "Ambient", bpm = 68, mood = "Calm")
+
+    val catalog = listOf(favSong, dislikedSong, artistNeighbor, similarIndie, lofiTrack, danceTrack, sleepTrack)
+    val playLogs = listOf(
+      PlayLogRecord(1L, favSong, playedAtMs = now - 30 * 60_000L, listenedDurationMs = 95_000L),
+      PlayLogRecord(2L, lofiTrack, playedAtMs = now - 3 * 3_600_000L, listenedDurationMs = 120_000L)
+    )
+    val richHistory = listOf(
+      RichPlayRecord(favSong, playedAtMs = now - 30 * 60_000L, completedPercent = 0.85f, skipped = false),
+      RichPlayRecord(danceTrack, playedAtMs = now - 2 * 3_600_000L, completedPercent = 0.15f, skipped = true),
+      RichPlayRecord(danceTrack, playedAtMs = now - 1 * 3_600_000L, completedPercent = 0.10f, skipped = true)
+    )
+    val feedback = mapOf("bad1" to false, "s2" to true)
+
+    val artistMixes = RecommendationEngine.buildArtistMixes(
+      playLogs = playLogs,
+      richHistory = richHistory,
+      favorites = listOf(favSong),
+      feedback = feedback,
+      catalog = catalog
+    )
+    assertTrue(artistMixes.isNotEmpty())
+    assertEquals("VannDa", artistMixes.first().artistName)
+    assertTrue(artistMixes.first().isPersonalized)
+    assertTrue(artistMixes.first().tracks.none { it.id == "bad1" })
+
+    val myMixes = RecommendationEngine.buildMyMixes(
+      playLogs = playLogs,
+      richHistory = richHistory,
+      favorites = listOf(favSong),
+      feedback = feedback,
+      catalog = catalog,
+      nowMs = now
+    )
+    assertEquals(4, myMixes.size)
+    assertTrue(myMixes.all { it.isPersonalized })
+    assertTrue(myMixes.all { mix -> mix.tracks.none { it.id == "bad1" } })
+
+    val discovery = RecommendationEngine.buildDailyDiscovery(
+      playLogs = playLogs,
+      richHistory = richHistory,
+      favorites = listOf(favSong),
+      feedback = feedback,
+      catalog = catalog,
+      nowMs = now
+    )
+    assertNotNull(discovery)
+    val discoveredIds = discovery!!.tracks.map { it.id }.toSet()
+    assertFalse("f1" in discoveredIds)
+    assertFalse("l1" in discoveredIds)
+    assertFalse("bad1" in discoveredIds)
+
+    val favMix = RecommendationEngine.buildFavoritesMix(
+      favorites = listOf(favSong),
+      catalog = catalog,
+      feedback = feedback
+    )
+    assertNotNull(favMix)
+    assertTrue(favMix!!.tracks.any { it.id == "f1" })
+    assertTrue(favMix.tracks.none { it.id == "bad1" })
+    assertNull(RecommendationEngine.buildFavoritesMix(emptyList(), catalog, feedback))
+
+    val newAlbums = listOf(
+      com.example.model.FeaturedAlbumItem(
+        id = "alb1",
+        title = "Khmer Gold",
+        artist = "VannDa",
+        artworkUrl = "",
+        year = "2026"
+      ),
+      com.example.model.FeaturedAlbumItem(
+        id = "alb2",
+        title = "Night Neon",
+        artist = "Other Artist",
+        artworkUrl = "",
+        year = "2026"
+      )
+    )
+    val newForYou = RecommendationEngine.buildNewForYou(
+      playLogs = playLogs,
+      favorites = listOf(favSong),
+      catalog = catalog,
+      newAlbums = newAlbums
+    )
+    assertTrue(newForYou.first().isFromFavoriteArtist)
+    assertTrue(newForYou.any { it.filterType == NewForYouFilter.ARTIST_RELEASES })
+    assertTrue(newForYou.any { it.filterType == NewForYouFilter.ALBUMS })
+    assertTrue(newForYou.any { it.filterType == NewForYouFilter.SONGS })
+
+    val recentEntries = RecommendationEngine.buildRecentPlayEntries(
+      playLogs = playLogs,
+      richHistory = richHistory,
+      nowMs = now
+    )
+    assertEquals("f1", recentEntries.first().song.id)
+    assertEquals("30m ago", recentEntries.first().timeAgoLabel)
+    assertEquals(0.85f, recentEntries.first().completedPercent, 0.001f)
+
+    val allMoods = RecommendationEngine.buildMoodPlaylists(catalog)
+    assertEquals(10, allMoods.size)
+  }
 }

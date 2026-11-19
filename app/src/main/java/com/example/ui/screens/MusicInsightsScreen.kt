@@ -898,7 +898,9 @@ fun PlaylistDetailScreen(
   onCheckLyrics: (Song) -> Unit,
   onSongClick: (Song, List<Song>) -> Unit,
   onFavoriteClick: (Song) -> Unit,
-  onYoutubeSongDownloadClick: ((Song) -> Unit)? = null
+  onYoutubeSongDownloadClick: ((Song) -> Unit)? = null,
+  onSaveMix: (() -> Unit)? = null,
+  onShareMix: (() -> Unit)? = null
 ) {
   LazyColumn(
     modifier = Modifier
@@ -985,37 +987,75 @@ fun PlaylistDetailScreen(
 
     if (tracks.isNotEmpty()) {
       item {
-        Row(
-          modifier = Modifier.fillMaxWidth(),
-          horizontalArrangement = Arrangement.spacedBy(10.dp)
-        ) {
-          Button(
-            onClick = onPlayAll,
-            shape = CircleShape,
-            colors = ButtonDefaults.buttonColors(
-              containerColor = AurixTealAccent,
-              contentColor = Color(0xFF06201C)
-            ),
-            modifier = Modifier
-              .weight(1f)
-              .defaultMinSize(minHeight = 48.dp)
-              .testTag("playlist_play_all_button")
+        Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
+          Row(
+            modifier = Modifier.fillMaxWidth(),
+            horizontalArrangement = Arrangement.spacedBy(10.dp)
           ) {
-            Icon(Icons.Rounded.PlayArrow, contentDescription = null, modifier = Modifier.size(18.dp))
-            Spacer(modifier = Modifier.width(6.dp))
-            Text(stringResource(id = R.string.album_action_play), fontWeight = FontWeight.Bold)
+            Button(
+              onClick = onPlayAll,
+              shape = CircleShape,
+              colors = ButtonDefaults.buttonColors(
+                containerColor = AurixTealAccent,
+                contentColor = Color(0xFF06201C)
+              ),
+              modifier = Modifier
+                .weight(1f)
+                .defaultMinSize(minHeight = 48.dp)
+                .testTag("playlist_play_all_button")
+            ) {
+              Icon(Icons.Rounded.PlayArrow, contentDescription = null, modifier = Modifier.size(18.dp))
+              Spacer(modifier = Modifier.width(6.dp))
+              Text(stringResource(id = R.string.album_action_play), fontWeight = FontWeight.Bold)
+            }
+            OutlinedButton(
+              onClick = onShuffleAll,
+              shape = CircleShape,
+              modifier = Modifier
+                .weight(1f)
+                .defaultMinSize(minHeight = 48.dp)
+                .testTag("playlist_shuffle_button")
+            ) {
+              Icon(Icons.Rounded.Shuffle, contentDescription = null, modifier = Modifier.size(18.dp))
+              Spacer(modifier = Modifier.width(6.dp))
+              Text(stringResource(id = R.string.album_action_shuffle), fontWeight = FontWeight.Bold)
+            }
           }
-          OutlinedButton(
-            onClick = onShuffleAll,
-            shape = CircleShape,
-            modifier = Modifier
-              .weight(1f)
-              .defaultMinSize(minHeight = 48.dp)
-              .testTag("playlist_shuffle_button")
-          ) {
-            Icon(Icons.Rounded.Shuffle, contentDescription = null, modifier = Modifier.size(18.dp))
-            Spacer(modifier = Modifier.width(6.dp))
-            Text(stringResource(id = R.string.album_action_shuffle), fontWeight = FontWeight.Bold)
+
+          if (onSaveMix != null || onShareMix != null) {
+            Row(
+              modifier = Modifier.fillMaxWidth(),
+              horizontalArrangement = Arrangement.spacedBy(10.dp)
+            ) {
+              if (onSaveMix != null) {
+                OutlinedButton(
+                  onClick = onSaveMix,
+                  shape = CircleShape,
+                  modifier = Modifier
+                    .weight(1f)
+                    .defaultMinSize(minHeight = 48.dp)
+                    .testTag("playlist_save_mix_button")
+                ) {
+                  Icon(Icons.Rounded.BookmarkAdd, contentDescription = null, modifier = Modifier.size(18.dp))
+                  Spacer(modifier = Modifier.width(6.dp))
+                  Text(stringResource(id = R.string.mix_save_to_library), fontWeight = FontWeight.SemiBold)
+                }
+              }
+              if (onShareMix != null) {
+                OutlinedButton(
+                  onClick = onShareMix,
+                  shape = CircleShape,
+                  modifier = Modifier
+                    .weight(1f)
+                    .defaultMinSize(minHeight = 48.dp)
+                    .testTag("playlist_share_mix_button")
+                ) {
+                  Icon(Icons.Rounded.Share, contentDescription = null, modifier = Modifier.size(18.dp))
+                  Spacer(modifier = Modifier.width(6.dp))
+                  Text(stringResource(id = R.string.mix_share), fontWeight = FontWeight.SemiBold)
+                }
+              }
+            }
           }
         }
       }
