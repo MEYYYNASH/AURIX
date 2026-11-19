@@ -294,6 +294,7 @@ fun AurixLaunchOverlay(
         contentAlignment = Alignment.Center
       ) {
         Canvas(modifier = Modifier.fillMaxSize()) {
+          if (size.minDimension <= 0f) return@Canvas
           val cx = size.width / 2f
           val cy = size.height / 2f
           val planetRadius = size.minDimension * 0.255f
@@ -302,7 +303,7 @@ fun AurixLaunchOverlay(
           val ringStroke = size.minDimension * 0.044f
 
           // 1. Soft pulsing glow behind planet
-          val glowRadius = planetRadius * (1.75f + 0.16f * glowPulse)
+          val glowRadius = (planetRadius * (1.75f + 0.16f * glowPulse)).coerceAtLeast(1f)
           val glowAlpha = if (darkTheme) {
             0.14f + 0.08f * glowPulse
           } else {

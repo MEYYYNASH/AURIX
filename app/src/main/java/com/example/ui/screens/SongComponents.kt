@@ -551,14 +551,19 @@ fun AurixBrandLogo(
         .matchParentSize()
         .scale(activeScale * 1.06f)
         .clip(RoundedCornerShape(cornerRadius + 4.dp))
-        .background(
-          Brush.radialGradient(
-            colors = listOf(
-              Color(0xFF9EA3B8).copy(alpha = activeGlow),
-              Color.Transparent
+        .drawBehind {
+          if (this.size.minDimension <= 0f) return@drawBehind
+          drawRect(
+            brush = Brush.radialGradient(
+              colors = listOf(
+                Color(0xFF9EA3B8).copy(alpha = activeGlow),
+                Color.Transparent
+              ),
+              center = Offset(this.size.width * 0.5f, this.size.height * 0.5f),
+              radius = (this.size.maxDimension * 0.55f).coerceAtLeast(1f)
             )
           )
-        )
+        }
     )
     Box(
       modifier = Modifier
@@ -579,6 +584,7 @@ fun AurixBrandLogo(
         )
     ) {
       Canvas(modifier = Modifier.fillMaxSize()) {
+        if (this.size.minDimension <= 0f) return@Canvas
         val cx = this.size.width / 2f
         val cy = this.size.height / 2f
         val planetRadius = this.size.minDimension * 0.285f

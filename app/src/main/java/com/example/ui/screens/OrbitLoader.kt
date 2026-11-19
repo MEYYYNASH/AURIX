@@ -133,6 +133,7 @@ fun OrbitLoader(
       .size(size)
       .graphicsLayer(compositingStrategy = CompositingStrategy.Offscreen)
   ) {
+    if (this.size.minDimension <= 0f) return@Canvas
     val scale = this.size.minDimension / 208f
     val cx = this.size.width / 2f
     val cy = this.size.height / 2f

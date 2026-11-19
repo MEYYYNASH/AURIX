@@ -256,16 +256,20 @@ class AurixViewModel(application: Application) : AndroidViewModel(application) {
 
   private val albumCoverEntities: StateFlow<Map<String, AlbumCoverEntity>> = dao.observeAlbumCovers()
     .map { list -> list.associateBy { it.albumId } }
+    .catch { emit(emptyMap()) }
     .stateIn(viewModelScope, SharingStarted.Eagerly, emptyMap())
 
   private val customAlbumEntities: StateFlow<List<CustomAlbumEntity>> = dao.observeCustomAlbums()
+    .catch { emit(emptyList()) }
     .stateIn(viewModelScope, SharingStarted.Eagerly, emptyList())
 
   private val customAlbumTrackEntities: StateFlow<List<AlbumTrackEntity>> = dao.observeAllAlbumTracks()
+    .catch { emit(emptyList()) }
     .stateIn(viewModelScope, SharingStarted.Eagerly, emptyList())
 
   private val deletedAlbumIds: StateFlow<Set<String>> = dao.observeDeletedAlbumIds()
     .map { it.toSet() }
+    .catch { emit(emptySet()) }
     .stateIn(viewModelScope, SharingStarted.Eagerly, emptySet())
 
   private val _selectedAlbumId = MutableStateFlow<String?>(null)
@@ -289,7 +293,7 @@ class AurixViewModel(application: Application) : AndroidViewModel(application) {
   }
 
   private val rawFavorites: StateFlow<List<Song>> = combine(
-    dao.getFavorites(),
+    dao.getFavorites().catch { emit(emptyList()) },
     albumCoverEntities
   ) { list, covers ->
     list.map {
@@ -358,7 +362,7 @@ class AurixViewModel(application: Application) : AndroidViewModel(application) {
   }.stateIn(viewModelScope, SharingStarted.Eagerly, SearchUiState.Idle)
 
   private val rawLocalSongs: StateFlow<List<Song>> = combine(
-    dao.getLocalSongs(),
+    dao.getLocalSongs().catch { emit(emptyList()) },
     favoriteIds,
     hiddenSongIds,
     blockedArtists
@@ -391,7 +395,7 @@ class AurixViewModel(application: Application) : AndroidViewModel(application) {
 
   // Qualified play logs (only plays >= 30 seconds of active playback) filtered by visibility
   val qualifiedPlayLogs: StateFlow<List<PlayLogRecord>> = combine(
-    analyticsRepository.observeQualifiedPlayLogs(),
+    analyticsRepository.observeQualifiedPlayLogs().catch { emit(emptyList()) },
     favoriteIds,
     hiddenSongIds,
     blockedArtists,
@@ -414,6 +418,7 @@ class AurixViewModel(application: Application) : AndroidViewModel(application) {
 
   private val rawDiscoverWeekly: StateFlow<DiscoverWeeklyPlaylist?> =
     analyticsRepository.observeDiscoverWeekly()
+      .catch { emit(null) }
       .stateIn(viewModelScope, SharingStarted.Eagerly, null)
 
   val discoverWeekly: StateFlow<DiscoverWeeklyPlaylist?> = combine(
@@ -453,10 +458,11 @@ class AurixViewModel(application: Application) : AndroidViewModel(application) {
   }.stateIn(viewModelScope, SharingStarted.Lazily, emptyList())
 
   private val storedCatalogSongs: StateFlow<List<Song>> = analyticsRepository.observeStoredCatalogSongs()
+    .catch { emit(emptyList()) }
     .stateIn(viewModelScope, SharingStarted.Lazily, emptyList())
 
   val richPlayHistory: StateFlow<List<RichPlayRecord>> = combine(
-    analyticsRepository.observeRichPlayHistory(),
+    analyticsRepository.observeRichPlayHistory().catch { emit(emptyList()) },
     favoriteIds,
     hiddenSongIds,
     blockedArtists
@@ -519,6 +525,7 @@ class AurixViewModel(application: Application) : AndroidViewModel(application) {
   }.stateIn(viewModelScope, SharingStarted.Lazily, emptyList())
 
   private val songFeedback: StateFlow<Map<String, Boolean>> = analyticsRepository.observeSongFeedback()
+    .catch { emit(emptyMap()) }
     .stateIn(viewModelScope, SharingStarted.Eagerly, emptyMap())
 
   private val _mixRefreshSalt = MutableStateFlow(0)
@@ -929,6 +936,7 @@ class AurixViewModel(application: Application) : AndroidViewModel(application) {
 
   val verifiedLyricsIds: StateFlow<Set<String>> = dao.observeVerifiedLyricsSongIds()
     .map { it.toSet() }
+    .catch { emit(emptySet()) }
     .stateIn(viewModelScope, SharingStarted.Eagerly, emptySet())
 
   val equalizerState: StateFlow<EqualizerUiState> = AudioEqualizerController.state
@@ -1056,33 +1064,39 @@ class AurixViewModel(application: Application) : AndroidViewModel(application) {
   init {
     viewModelScope.launch(Dispatchers.IO) {
       try {
-        dao.clearAllBadLyrics()
-        dao.clearReportedLyricsCache()
-        val eqEnabled = prefsManager.eqEnabled.first()
-        val eqPreset = prefsManager.eqPreset.first()
-        val eqBands = prefsManager.eqBands.first()
-        val eqBass = prefsManager.eqBassBoost.first()
-        val eqVirtualizer = prefsManager.eqVirtualizer.first()
-        AudioEqualizerController.restoreSettings(
-          enabled = eqEnabled,
-          presetId = eqPreset,
-          bandLevelsMb = eqBands,
-          bassBoostStrength = eqBass,
-          virtualizerStrength = eqVirtualizer
-        )
-        val crossfadeSec = prefsManager.crossfadeSeconds.first()
-        val crossfadeManualSkip = prefsManager.crossfadeManualSkip.first()
-        CrossfadeController.restoreSettings(
-          durationSeconds = crossfadeSec,
-          fadeOnManualSkip = crossfadeManualSkip
-        )
-        val savedLang = prefsManager.language.first()
-        LocaleHelper.saveLanguageSync(application, savedLang)
-        prefsManager.onboardingCompleted.first()
-        val lastSeenVersionCode = prefsManager.lastSeenVersionCode.first()
+        runCatching { dao.clearAllBadLyrics() }
+        runCatching { dao.clearReportedLyricsCache() }
+        val eqEnabled = runCatching { prefsManager.eqEnabled.first() }.getOrDefault(false)
+        val eqPreset = runCatching { prefsManager.eqPreset.first() }.getOrDefault("flat")
+        val eqBands = runCatching { prefsManager.eqBands.first() }.getOrDefault(emptyList())
+        val eqBass = runCatching { prefsManager.eqBassBoost.first() }.getOrDefault(0)
+        val eqVirtualizer = runCatching { prefsManager.eqVirtualizer.first() }.getOrDefault(0)
+        runCatching {
+          AudioEqualizerController.restoreSettings(
+            enabled = eqEnabled,
+            presetId = eqPreset,
+            bandLevelsMb = eqBands,
+            bassBoostStrength = eqBass,
+            virtualizerStrength = eqVirtualizer
+          )
+        }
+        val crossfadeSec = runCatching { prefsManager.crossfadeSeconds.first() }.getOrDefault(0)
+        val crossfadeManualSkip = runCatching { prefsManager.crossfadeManualSkip.first() }.getOrDefault(true)
+        runCatching {
+          CrossfadeController.restoreSettings(
+            durationSeconds = crossfadeSec,
+            fadeOnManualSkip = crossfadeManualSkip
+          )
+        }
+        val savedLang = runCatching { prefsManager.language.first() }.getOrDefault("en")
+        runCatching { LocaleHelper.saveLanguageSync(application, savedLang) }
+        runCatching { prefsManager.onboardingCompleted.first() }
+        val lastSeenVersionCode = runCatching { prefsManager.lastSeenVersionCode.first() }.getOrDefault(0L)
         if (lastSeenVersionCode < BuildConfig.VERSION_CODE.toLong()) {
           _showWhatsNewSheet.value = true
         }
+      } catch (_: Throwable) {
+        // Ensure startup continues even if legacy persisted data fails to read
       } finally {
         _isAppInitialized.value = true
       }
@@ -1096,7 +1110,7 @@ class AurixViewModel(application: Application) : AndroidViewModel(application) {
     loadPopularYoutubeSongs()
     loadTiktokViralNewPipeSongs()
     startPositionTicker()
-    AppNotificationHelper.ensureChannels(application)
+    runCatching { AppNotificationHelper.ensureChannels(application) }
     UpdateCheckScheduler.schedulePeriodicChecks(application)
     if (updateManager.uiState.value.stage == UpdateStage.Idle) {
       checkForUpdates(application, silent = true)
@@ -1173,9 +1187,10 @@ class AurixViewModel(application: Application) : AndroidViewModel(application) {
         (p + t + f + l + s).distinctBy { it.id }
       }
         .debounce(1_000L)
+        .catch { }
         .collectLatest { tracks ->
           if (tracks.isNotEmpty()) {
-            analyticsRepository.upsertCatalogMetadata(tracks.take(120))
+            runCatching { analyticsRepository.upsertCatalogMetadata(tracks.take(120)) }
           }
         }
     }
@@ -1184,41 +1199,46 @@ class AurixViewModel(application: Application) : AndroidViewModel(application) {
   private fun observeDiscoverWeeklyUpdates() {
     viewModelScope.launch {
       combine(qualifiedPlayLogs, catalogTracks) { logs, catalog -> logs to catalog }
+        .catch { }
         .collectLatest { (logs, catalog) ->
           if (logs.isNotEmpty() && catalog.isNotEmpty()) {
-            analyticsRepository.ensureDiscoverWeekly(
-              playLogs = logs,
-              catalog = catalog,
-              existingSnapshot = rawDiscoverWeekly.value,
-              forceRefresh = false
-            )
+            runCatching {
+              analyticsRepository.ensureDiscoverWeekly(
+                playLogs = logs,
+                catalog = catalog,
+                existingSnapshot = rawDiscoverWeekly.value,
+                forceRefresh = false
+              )
+            }
           }
         }
     }
   }
 
   private fun connectPlaybackController(application: Application) {
-    val sessionToken = SessionToken(application, ComponentName(application, PlaybackService::class.java))
-    val future = MediaController.Builder(application, sessionToken).buildAsync()
-    controllerFuture = future
-    future.addListener({
-      try {
-        val controller = future.get()
-        mediaController = controller
-        controller.addListener(playerListener)
-        _isPlaying.value = controller.isPlaying
-        controller.currentMediaItem?.mediaId?.let { activeId ->
-          _queue.value.firstOrNull { it.id == activeId }?.let { _rawCurrentSong.value = it }
+    runCatching {
+      val sessionToken = SessionToken(application, ComponentName(application, PlaybackService::class.java))
+      val future = MediaController.Builder(application, sessionToken).buildAsync()
+      controllerFuture = future
+      future.addListener({
+        try {
+          val controller = future.get()
+          mediaController = controller
+          controller.addListener(playerListener)
+          _isPlaying.value = controller.isPlaying
+          controller.currentMediaItem?.mediaId?.let { activeId ->
+            _queue.value.firstOrNull { it.id == activeId }?.let { _rawCurrentSong.value = it }
+          }
+          val pending = pendingPlayRequest
+          if (pending != null) {
+            pendingPlayRequest = null
+            startQueueOnController(controller, pending.first, pending.second)
+          }
+        } catch (_: Throwable) {
+          // Session service connection failed gracefully
         }
-        val pending = pendingPlayRequest
-        if (pending != null) {
-          pendingPlayRequest = null
-          startQueueOnController(controller, pending.first, pending.second)
-        }
-      } catch (_: Exception) {
-        // Session service connection failed gracefully
-      }
-    }, ContextCompat.getMainExecutor(application))
+      }, ContextCompat.getMainExecutor(application))
+    }
   }
 
   private fun startPositionTicker() {

@@ -45,13 +45,13 @@ import kotlin.coroutines.coroutineContext
  * Editable release manifest endpoint for AURIX OTA updates.
  * Expected JSON format:
  * {
- *   "versionName": "1.8.2",
- *   "versionCode": 10802,
+ *   "versionName": "1.8.3",
+ *   "versionCode": 10803,
  *   "releaseDate": "2026-11-18",
- *   "apkUrl": "https://github.com/MEYYYNASH/AURIX/releases/download/v1.8.2/AURIX-v1.8.2.apk",
+ *   "apkUrl": "https://github.com/MEYYYNASH/AURIX/releases/download/v1.8.3/AURIX-v1.8.3.apk",
  *   "sha256": "...",
  *   "notes": ["..."],
- *   "releasePageUrl": "https://github.com/MEYYYNASH/AURIX/releases/tag/v1.8.2"
+ *   "releasePageUrl": "https://github.com/MEYYYNASH/AURIX/releases/tag/v1.8.3"
  * }
  */
 const val VERSION_JSON_URL = "https://raw.githubusercontent.com/MEYYYNASH/AURIX/main/version.json"
@@ -162,9 +162,9 @@ class UpdateManager(
     private const val META_FILE_NAME = "aurix_update.apk.meta.json"
 
     val CURRENT_RELEASE_NOTES = listOf(
-      "Personalized Home Discovery: Dedicated Artist Mixes for You, daily-refreshed My Mix 1–4, Daily Discovery, and Favorites Mix",
-      "New for You & Continue Listening: Filter fresh releases by All, Songs, Albums, or Artists and resume tracks instantly",
-      "10 Mood Mixes & Uncluttered Home: Chill, Focus, Sleep, Happy, Sad, Romantic, Workout, Party, Night Drive, and Rainy Day in one clean layout"
+      "Launch & Upgrade Stability Fix (v1.8.3): Resolved cold-start crashes caused by unconfigured startup providers, zero-size radial gradient passes, and legacy preference/database upgrades",
+      "Smoother Startup & Storage Recovery: Moved APK update restoration off the main thread and added automatic DataStore & Room schema recovery",
+      "Includes v1.8.2 Personalized Home: Dedicated Artist Mixes for You, daily-refreshed My Mix 1–4, New for You, Daily Discovery, Favorites Mix, and 10 Mood Mixes"
     )
 
     fun parseVersionJson(rawJson: String): RemoteVersionInfo {
@@ -386,7 +386,9 @@ class UpdateManager(
   private var pendingTargetVersionCode: Long = 0L
 
   init {
-    restoreInterruptedOrValidatedState()
+    scope.launch(Dispatchers.IO) {
+      runCatching { restoreInterruptedOrValidatedState() }
+    }
   }
 
   private fun getUpdateDir(): File {

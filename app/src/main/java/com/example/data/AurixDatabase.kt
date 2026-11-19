@@ -772,6 +772,8 @@ abstract class AurixDatabase : RoomDatabase() {
             AURIX_MIGRATION_7_8,
             AURIX_MIGRATION_8_9
           )
+          .fallbackToDestructiveMigration(true)
+          .fallbackToDestructiveMigrationOnDowngrade(true)
           .build()
           .also { INSTANCE = it }
       }

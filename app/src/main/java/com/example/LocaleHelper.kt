@@ -25,17 +25,21 @@ object LocaleHelper {
   }
 
   fun getPersistedLanguage(context: Context): String {
-    val prefs = context.getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)
-    return normalizeLanguage(prefs.getString(KEY_LANGUAGE, LANG_EN))
+    return runCatching {
+      val prefs = context.getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)
+      normalizeLanguage(prefs.getString(KEY_LANGUAGE, LANG_EN))
+    }.getOrDefault(LANG_EN)
   }
 
   fun saveLanguageSync(context: Context, lang: String?) {
     val normalized = normalizeLanguage(lang)
-    context.getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)
-      .edit()
-      .putString(KEY_LANGUAGE, normalized)
-      .apply()
-    Locale.setDefault(localeFor(normalized))
+    runCatching {
+      context.getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)
+        .edit()
+        .putString(KEY_LANGUAGE, normalized)
+        .apply()
+      Locale.setDefault(localeFor(normalized))
+    }
   }
 
   fun localizedConfiguration(base: Configuration, lang: String?): Configuration {

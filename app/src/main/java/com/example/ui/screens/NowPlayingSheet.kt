@@ -41,6 +41,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.alpha
 import androidx.compose.ui.draw.blur
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.draw.drawBehind
 import androidx.compose.ui.draw.scale
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.Brush
@@ -381,16 +382,22 @@ fun NowPlayingSheet(
                     }
                   )
                   .alpha(if (isPlaying) 0.72f else 0.25f)
-                  .background(
-                    Brush.radialGradient(
-                      colors = listOf(
-                        c1.copy(alpha = 0.50f),
-                        c2.copy(alpha = 0.24f),
-                        Color.Transparent
-                      )
-                    ),
-                    shape = CircleShape
-                  )
+                  .drawBehind {
+                    if (size.minDimension <= 0f) return@drawBehind
+                    drawCircle(
+                      brush = Brush.radialGradient(
+                        colors = listOf(
+                          c1.copy(alpha = 0.50f),
+                          c2.copy(alpha = 0.24f),
+                          Color.Transparent
+                        ),
+                        center = Offset(size.width * 0.5f, size.height * 0.5f),
+                        radius = (size.maxDimension * 0.5f).coerceAtLeast(1f)
+                      ),
+                      radius = (size.minDimension * 0.5f).coerceAtLeast(1f),
+                      center = Offset(size.width * 0.5f, size.height * 0.5f)
+                    )
+                  }
               )
 
               Surface(

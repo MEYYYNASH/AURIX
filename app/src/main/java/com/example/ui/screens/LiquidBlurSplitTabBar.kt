@@ -344,13 +344,13 @@ fun LiquidBlurSplitTabBar(
           modifier = Modifier
             .matchParentSize()
             .drawBehind {
-              if (slotWidthPx <= 0f || pillOrbAlpha <= 0.01f) return@drawBehind
+              if (size.width <= 0f || size.height <= 0f || slotWidthPx <= 0f || pillOrbAlpha <= 0.01f) return@drawBehind
               val orbPad = 2.dp.toPx()
               val orbW = (slotWidthPx - orbPad * 2f).coerceAtLeast(size.height)
               val orbH = size.height
               val centerX = orbX.value + slotWidthPx * 0.5f
-              val scaledW = orbW * pressScale.value
-              val scaledH = orbH * (1f + (pressScale.value - 1f) * 0.5f)
+              val scaledW = (orbW * pressScale.value).coerceAtLeast(1f)
+              val scaledH = (orbH * (1f + (pressScale.value - 1f) * 0.5f)).coerceAtLeast(1f)
               val left = centerX - scaledW * 0.5f
               val top = (size.height - scaledH) * 0.5f
               val corner = CornerRadius(scaledH * 0.5f, scaledH * 0.5f)
@@ -364,7 +364,7 @@ fun LiquidBlurSplitTabBar(
                     Color.White.copy(alpha = (if (darkTheme) 0.10f else 0.42f) * pillOrbAlpha)
                   ),
                   center = Offset(centerX, size.height * 0.5f),
-                  radius = scaledW * 0.72f
+                  radius = (scaledW * 0.72f).coerceAtLeast(1f)
                 ),
                 topLeft = Offset(left, top),
                 size = Size(scaledW, scaledH),
@@ -458,7 +458,8 @@ fun LiquidBlurSplitTabBar(
             scaleY = searchScale
           }
           .drawBehind {
-            val r = size.height * 0.5f
+            if (size.minDimension <= 0f) return@drawBehind
+            val r = (size.height * 0.5f).coerceAtLeast(1f)
             drawCircle(
               brush = Brush.verticalGradient(
                 colors = listOf(
@@ -493,26 +494,33 @@ fun LiquidBlurSplitTabBar(
           modifier = Modifier
             .matchParentSize()
             .then(if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) Modifier.blur(26.dp) else Modifier)
-            .background(
-              Brush.radialGradient(
-                colors = if (isSearchSelected) {
-                  listOf(
-                    accentColor.copy(alpha = if (darkTheme) 0.42f else 0.30f),
-                    glowEnd.copy(alpha = if (darkTheme) 0.26f else 0.22f)
-                  )
-                } else if (darkTheme) {
-                  listOf(
-                    glowEnd.copy(alpha = 0.26f),
-                    Color(0xFF1F293D).copy(alpha = 0.55f)
-                  )
-                } else {
-                  listOf(
-                    glowStart.copy(alpha = 0.20f),
-                    Color(0xFFFFF4E3).copy(alpha = 0.65f)
-                  )
-                }
+            .drawBehind {
+              if (size.minDimension <= 0f) return@drawBehind
+              drawCircle(
+                brush = Brush.radialGradient(
+                  colors = if (isSearchSelected) {
+                    listOf(
+                      accentColor.copy(alpha = if (darkTheme) 0.42f else 0.30f),
+                      glowEnd.copy(alpha = if (darkTheme) 0.26f else 0.22f)
+                    )
+                  } else if (darkTheme) {
+                    listOf(
+                      glowEnd.copy(alpha = 0.26f),
+                      Color(0xFF1F293D).copy(alpha = 0.55f)
+                    )
+                  } else {
+                    listOf(
+                      glowStart.copy(alpha = 0.20f),
+                      Color(0xFFFFF4E3).copy(alpha = 0.65f)
+                    )
+                  },
+                  center = Offset(size.width * 0.5f, size.height * 0.5f),
+                  radius = (size.maxDimension * 0.55f).coerceAtLeast(1f)
+                ),
+                radius = (size.minDimension * 0.5f).coerceAtLeast(1f),
+                center = Offset(size.width * 0.5f, size.height * 0.5f)
               )
-            )
+            }
         )
 
         val orbBorder = if (isSearchSelected) {

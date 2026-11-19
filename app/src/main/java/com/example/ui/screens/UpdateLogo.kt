@@ -564,6 +564,7 @@ fun UpdateLogo(
 
   Box(modifier = modifier.size(size)) {
     Canvas(modifier = Modifier.matchParentSize()) {
+      if (this.size.minDimension <= 0f) return@Canvas
       val scaleFactor = this.size.minDimension / 208f
       withTransform({
         scale(scaleFactor, scaleFactor, pivot = Offset.Zero)

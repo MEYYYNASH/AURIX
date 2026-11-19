@@ -1,17 +1,29 @@
 package com.example.data
 
 import android.content.Context
+import androidx.datastore.core.handlers.ReplaceFileCorruptionHandler
+import androidx.datastore.preferences.core.Preferences
 import androidx.datastore.preferences.core.booleanPreferencesKey
 import androidx.datastore.preferences.core.edit
+import androidx.datastore.preferences.core.emptyPreferences
 import androidx.datastore.preferences.core.intPreferencesKey
 import androidx.datastore.preferences.core.longPreferencesKey
 import androidx.datastore.preferences.core.stringPreferencesKey
 import androidx.datastore.preferences.core.stringSetPreferencesKey
 import androidx.datastore.preferences.preferencesDataStore
 import kotlinx.coroutines.flow.Flow
+import kotlinx.coroutines.flow.catch
 import kotlinx.coroutines.flow.map
+import java.io.IOException
 
-val Context.dataStore by preferencesDataStore(name = "aurix_prefs")
+internal val AURIX_PREFS_CORRUPTION_HANDLER = ReplaceFileCorruptionHandler(
+  produceNewData = { emptyPreferences() }
+)
+
+val Context.dataStore by preferencesDataStore(
+  name = "aurix_prefs",
+  corruptionHandler = AURIX_PREFS_CORRUPTION_HANDLER
+)
 
 class PreferencesManager(private val context: Context) {
   companion object {
@@ -38,29 +50,37 @@ class PreferencesManager(private val context: Context) {
     val NAV_STYLE = stringPreferencesKey("nav_style")
   }
 
-  val themeMode: Flow<String> = context.dataStore.data.map { prefs -> prefs[THEME_MODE] ?: "system" }
-  val accentColor: Flow<String> = context.dataStore.data.map { prefs -> prefs[ACCENT_COLOR] ?: "#007AFF" }
-  val language: Flow<String> = context.dataStore.data.map { prefs -> prefs[LANGUAGE] ?: "en" }
-  val dynamicBg: Flow<Boolean> = context.dataStore.data.map { prefs -> prefs[DYNAMIC_BG] ?: true }
-  val reducedMotion: Flow<Boolean> = context.dataStore.data.map { prefs -> prefs[REDUCED_MOTION] ?: false }
-  val onboardingCompleted: Flow<Boolean> = context.dataStore.data.map { prefs -> prefs[ONBOARDING_COMPLETED] ?: false }
-  val githubOwner: Flow<String> = context.dataStore.data.map { prefs -> prefs[GITHUB_OWNER] ?: "MEYYYNASH" }
-  val githubRepo: Flow<String> = context.dataStore.data.map { prefs -> prefs[GITHUB_REPO] ?: "AURIX" }
-  val hiddenSongIds: Flow<Set<String>> = context.dataStore.data.map { prefs -> prefs[HIDDEN_SONG_IDS] ?: emptySet() }
-  val blockedArtists: Flow<Set<String>> = context.dataStore.data.map { prefs -> prefs[BLOCKED_ARTISTS] ?: emptySet() }
-  val eqEnabled: Flow<Boolean> = context.dataStore.data.map { prefs -> prefs[EQ_ENABLED] ?: false }
-  val eqPreset: Flow<String> = context.dataStore.data.map { prefs -> prefs[EQ_PRESET] ?: "flat" }
-  val eqBands: Flow<List<Int>> = context.dataStore.data.map { prefs ->
+  private val safeDataFlow: Flow<Preferences> = context.dataStore.data.catch { exception ->
+    if (exception is IOException) {
+      emit(emptyPreferences())
+    } else {
+      throw exception
+    }
+  }
+
+  val themeMode: Flow<String> = safeDataFlow.map { prefs -> prefs[THEME_MODE] ?: "system" }
+  val accentColor: Flow<String> = safeDataFlow.map { prefs -> prefs[ACCENT_COLOR] ?: "#007AFF" }
+  val language: Flow<String> = safeDataFlow.map { prefs -> prefs[LANGUAGE] ?: "en" }
+  val dynamicBg: Flow<Boolean> = safeDataFlow.map { prefs -> prefs[DYNAMIC_BG] ?: true }
+  val reducedMotion: Flow<Boolean> = safeDataFlow.map { prefs -> prefs[REDUCED_MOTION] ?: false }
+  val onboardingCompleted: Flow<Boolean> = safeDataFlow.map { prefs -> prefs[ONBOARDING_COMPLETED] ?: false }
+  val githubOwner: Flow<String> = safeDataFlow.map { prefs -> prefs[GITHUB_OWNER] ?: "MEYYYNASH" }
+  val githubRepo: Flow<String> = safeDataFlow.map { prefs -> prefs[GITHUB_REPO] ?: "AURIX" }
+  val hiddenSongIds: Flow<Set<String>> = safeDataFlow.map { prefs -> prefs[HIDDEN_SONG_IDS] ?: emptySet() }
+  val blockedArtists: Flow<Set<String>> = safeDataFlow.map { prefs -> prefs[BLOCKED_ARTISTS] ?: emptySet() }
+  val eqEnabled: Flow<Boolean> = safeDataFlow.map { prefs -> prefs[EQ_ENABLED] ?: false }
+  val eqPreset: Flow<String> = safeDataFlow.map { prefs -> prefs[EQ_PRESET] ?: "flat" }
+  val eqBands: Flow<List<Int>> = safeDataFlow.map { prefs ->
     prefs[EQ_BANDS]?.split(",")?.mapNotNull { it.trim().toIntOrNull() } ?: emptyList()
   }
-  val eqBassBoost: Flow<Int> = context.dataStore.data.map { prefs -> prefs[EQ_BASS_BOOST] ?: 0 }
-  val eqVirtualizer: Flow<Int> = context.dataStore.data.map { prefs -> prefs[EQ_VIRTUALIZER] ?: 0 }
-  val crossfadeSeconds: Flow<Int> = context.dataStore.data.map { prefs -> prefs[CROSSFADE_SECONDS] ?: 0 }
-  val crossfadeManualSkip: Flow<Boolean> = context.dataStore.data.map { prefs -> prefs[CROSSFADE_MANUAL_SKIP] ?: true }
-  val lastSeenVersionCode: Flow<Long> = context.dataStore.data.map { prefs -> prefs[LAST_SEEN_VERSION_CODE] ?: 0L }
-  val updateDownloadMeta: Flow<String> = context.dataStore.data.map { prefs -> prefs[UPDATE_DOWNLOAD_META] ?: "" }
-  val moodFlowEnabled: Flow<Boolean> = context.dataStore.data.map { prefs -> prefs[MOOD_FLOW_ENABLED] ?: true }
-  val navStyle: Flow<String> = context.dataStore.data.map { prefs -> prefs[NAV_STYLE] ?: "classic" }
+  val eqBassBoost: Flow<Int> = safeDataFlow.map { prefs -> prefs[EQ_BASS_BOOST] ?: 0 }
+  val eqVirtualizer: Flow<Int> = safeDataFlow.map { prefs -> prefs[EQ_VIRTUALIZER] ?: 0 }
+  val crossfadeSeconds: Flow<Int> = safeDataFlow.map { prefs -> prefs[CROSSFADE_SECONDS] ?: 0 }
+  val crossfadeManualSkip: Flow<Boolean> = safeDataFlow.map { prefs -> prefs[CROSSFADE_MANUAL_SKIP] ?: true }
+  val lastSeenVersionCode: Flow<Long> = safeDataFlow.map { prefs -> prefs[LAST_SEEN_VERSION_CODE] ?: 0L }
+  val updateDownloadMeta: Flow<String> = safeDataFlow.map { prefs -> prefs[UPDATE_DOWNLOAD_META] ?: "" }
+  val moodFlowEnabled: Flow<Boolean> = safeDataFlow.map { prefs -> prefs[MOOD_FLOW_ENABLED] ?: true }
+  val navStyle: Flow<String> = safeDataFlow.map { prefs -> prefs[NAV_STYLE] ?: "classic" }
 
   suspend fun setThemeMode(mode: String) { context.dataStore.edit { it[THEME_MODE] = mode } }
   suspend fun setAccentColor(color: String) { context.dataStore.edit { it[ACCENT_COLOR] = color } }
