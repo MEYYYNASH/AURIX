@@ -197,25 +197,50 @@ class SyncedLyricsAdapter(
     val oldIndex = activeIndex
     activeIndex = newIndex
 
+    val safeNotify: (Int, Int, Int) -> Unit = { start, count, payload ->
+      val rv = attachedRecyclerView
+      if (rv != null && rv.isComputingLayout) {
+        rv.post {
+          runCatching { notifyItemRangeChanged(start, count, payload) }
+        }
+      } else {
+        runCatching { notifyItemRangeChanged(start, count, payload) }
+      }
+    }
+
     // Rebind only the old and new neighborhoods whose distance-based dimming changed
     if (oldIndex >= 0 && lines.isNotEmpty()) {
       val start = (oldIndex - 4).coerceAtLeast(0)
       val end = (oldIndex + 4).coerceAtMost(lines.lastIndex)
       if (end >= start) {
-        notifyItemRangeChanged(start, end - start + 1, PAYLOAD_STATE_CHANGED)
+        safeNotify(start, end - start + 1, PAYLOAD_STATE_CHANGED)
       }
     }
     if (newIndex >= 0 && lines.isNotEmpty()) {
       val start = (newIndex - 4).coerceAtLeast(0)
       val end = (newIndex + 4).coerceAtMost(lines.lastIndex)
       if (end >= start) {
-        notifyItemRangeChanged(start, end - start + 1, PAYLOAD_STATE_CHANGED)
+        safeNotify(start, end - start + 1, PAYLOAD_STATE_CHANGED)
       }
     }
     if (oldIndex == -1 || newIndex == -1) {
       val count = minOf(5, lines.size)
-      if (count > 0) notifyItemRangeChanged(0, count, PAYLOAD_STATE_CHANGED)
+      if (count > 0) safeNotify(0, count, PAYLOAD_STATE_CHANGED)
     }
+  }
+
+  private var attachedRecyclerView: RecyclerView? = null
+
+  override fun onAttachedToRecyclerView(recyclerView: RecyclerView) {
+    super.onAttachedToRecyclerView(recyclerView)
+    attachedRecyclerView = recyclerView
+  }
+
+  override fun onDetachedFromRecyclerView(recyclerView: RecyclerView) {
+    if (attachedRecyclerView == recyclerView) {
+      attachedRecyclerView = null
+    }
+    super.onDetachedFromRecyclerView(recyclerView)
   }
 
   override fun getItemCount(): Int = lines.size

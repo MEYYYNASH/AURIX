@@ -348,11 +348,13 @@ class SyncedLyricsView @JvmOverloads constructor(
   private fun isSystemReducedMotion(): Boolean {
     val override = reducedMotionOverride
     if (override == true) return true
-    val scale = Settings.Global.getFloat(
-      context.contentResolver,
-      Settings.Global.ANIMATOR_DURATION_SCALE,
-      1.0f
-    )
+    val scale = runCatching {
+      Settings.Global.getFloat(
+        context.contentResolver,
+        Settings.Global.ANIMATOR_DURATION_SCALE,
+        1.0f
+      )
+    }.getOrDefault(1.0f)
     return scale == 0f
   }
 
@@ -492,47 +494,49 @@ class SyncedLyricsView @JvmOverloads constructor(
   }
 
   private fun scrollToActiveLine(targetIndex: Int, isJump: Boolean) {
-    val lines = document.lines
-    if (lines.isEmpty()) return
+    runCatching {
+      val lines = document.lines
+      if (lines.isEmpty() || !recyclerView.isAttachedToWindow) return@runCatching
 
-    val clampedTarget = if (targetIndex < 0) 0 else targetIndex.coerceIn(0, lines.lastIndex)
-    val rvHeight = recyclerView.height
-    val desiredTopPx = if (rvHeight > 0) (rvHeight * ACTIVE_TOP_FRACTION).toInt() else 0
+      val clampedTarget = if (targetIndex < 0) 0 else targetIndex.coerceIn(0, lines.lastIndex)
+      val rvHeight = recyclerView.height
+      val desiredTopPx = if (rvHeight > 0) (rvHeight * ACTIVE_TOP_FRACTION).toInt() else 0
 
-    if (isSystemReducedMotion()) {
-      layoutManager.scrollToPositionWithOffset(clampedTarget, if (targetIndex < 0) 0 else desiredTopPx)
-      return
-    }
-
-    if (targetIndex < 0) {
-      layoutManager.startSmoothScroll(createSmoothScroller(0))
-      return
-    }
-
-    // If the target view is already laid out on screen, use a silky-smooth cubic-bezier scroll
-    // directly to the exact 37% viewport anchor.
-    val targetView = layoutManager.findViewByPosition(clampedTarget)
-    if (targetView != null && rvHeight > 0) {
-      val desiredTop = (rvHeight * ACTIVE_TOP_FRACTION - targetView.height * 0.5f).toInt()
-      val dy = targetView.top - desiredTop
-      if (abs(dy) > 2) {
-        recyclerView.smoothScrollBy(0, dy, SCROLL_EASE, 420)
+      if (isSystemReducedMotion()) {
+        layoutManager.scrollToPositionWithOffset(clampedTarget, if (targetIndex < 0) 0 else desiredTopPx)
+        return@runCatching
       }
-      return
-    }
 
-    val firstVisible = layoutManager.findFirstVisibleItemPosition()
-    val distanceFromViewport = if (firstVisible == RecyclerView.NO_POSITION) 0 else abs(clampedTarget - firstVisible)
-
-    if (isJump && distanceFromViewport > BIG_JUMP_LINE_THRESHOLD) {
-      val nearIndex = if (clampedTarget > firstVisible) {
-        (clampedTarget - 3).coerceAtLeast(0)
-      } else {
-        (clampedTarget + 3).coerceAtMost(lines.lastIndex)
+      if (targetIndex < 0) {
+        layoutManager.startSmoothScroll(createSmoothScroller(0))
+        return@runCatching
       }
-      layoutManager.scrollToPositionWithOffset(nearIndex, desiredTopPx)
-    }
 
-    layoutManager.startSmoothScroll(createSmoothScroller(clampedTarget))
+      // If the target view is already laid out on screen, use a silky-smooth cubic-bezier scroll
+      // directly to the exact 37% viewport anchor.
+      val targetView = layoutManager.findViewByPosition(clampedTarget)
+      if (targetView != null && rvHeight > 0) {
+        val desiredTop = (rvHeight * ACTIVE_TOP_FRACTION - targetView.height * 0.5f).toInt()
+        val dy = targetView.top - desiredTop
+        if (abs(dy) > 2) {
+          recyclerView.smoothScrollBy(0, dy, SCROLL_EASE, 420)
+        }
+        return@runCatching
+      }
+
+      val firstVisible = layoutManager.findFirstVisibleItemPosition()
+      val distanceFromViewport = if (firstVisible == RecyclerView.NO_POSITION) 0 else abs(clampedTarget - firstVisible)
+
+      if (isJump && distanceFromViewport > BIG_JUMP_LINE_THRESHOLD) {
+        val nearIndex = if (clampedTarget > firstVisible) {
+          (clampedTarget - 3).coerceAtLeast(0)
+        } else {
+          (clampedTarget + 3).coerceAtMost(lines.lastIndex)
+        }
+        layoutManager.scrollToPositionWithOffset(nearIndex, desiredTopPx)
+      }
+
+      layoutManager.startSmoothScroll(createSmoothScroller(clampedTarget))
+    }
   }
 }

@@ -231,25 +231,27 @@ class PlaybackService : MediaSessionService() {
     monitorJob?.cancel()
     monitorJob = serviceScope.launch {
       while (isActive) {
-        val player = mainPlayer
-        val settings = CrossfadeController.state.value
-        if (
-          player != null &&
-          !isCrossfadingNow &&
-          settings.durationSeconds > 0 &&
-          player.isPlaying &&
-          player.playbackState == Player.STATE_READY &&
-          player.repeatMode != Player.REPEAT_MODE_ONE &&
-          player.hasNextMediaItem()
-        ) {
-          val duration = player.duration
-          val position = player.currentPosition
-          if (duration > 4000L && position >= 0L) {
-            val maxSafeFadeMs = (duration / 2L).coerceAtLeast(1000L)
-            val targetFadeMs = (settings.durationSeconds * 1000L).coerceAtMost(maxSafeFadeMs)
-            val remaining = duration - position
-            if (remaining in 180L..targetFadeMs) {
-              triggerCrossfade(player, remaining)
+        runCatching {
+          val player = mainPlayer
+          val settings = CrossfadeController.state.value
+          if (
+            player != null &&
+            !isCrossfadingNow &&
+            settings.durationSeconds > 0 &&
+            player.isPlaying &&
+            player.playbackState == Player.STATE_READY &&
+            player.repeatMode != Player.REPEAT_MODE_ONE &&
+            player.hasNextMediaItem()
+          ) {
+            val duration = player.duration
+            val position = player.currentPosition
+            if (duration > 4000L && position >= 0L) {
+              val maxSafeFadeMs = (duration / 2L).coerceAtLeast(1000L)
+              val targetFadeMs = (settings.durationSeconds * 1000L).coerceAtMost(maxSafeFadeMs)
+              val remaining = duration - position
+              if (remaining in 180L..targetFadeMs) {
+                triggerCrossfade(player, remaining)
+              }
             }
           }
         }
@@ -259,64 +261,71 @@ class PlaybackService : MediaSessionService() {
   }
 
   private fun triggerCrossfade(player: ExoPlayer, fadeDurationMs: Long) {
-    val outgoingItem = player.currentMediaItem ?: return
-    val outgoingPosition = player.currentPosition.coerceAtLeast(0L)
-    val startVolume = player.volume.coerceIn(0.1f, 1f)
+    runCatching {
+      val outgoingItem = player.currentMediaItem ?: return
+      val outgoingPosition = player.currentPosition.coerceAtLeast(0L)
+      val startVolume = player.volume.coerceIn(0.1f, 1f)
 
-    skipFadeJob?.cancel()
-    crossfadeJob?.cancel()
-    releaseCrossfadeOutPlayer()
-
-    val fadeOut = buildExoPlayer(handleAudioFocus = false)
-    crossfadeOutPlayer = fadeOut
-    isCrossfadingNow = true
-    CrossfadeController.setCrossfadingActive(true)
-
-    fadeOut.addListener(object : Player.Listener {
-      override fun onPlayerError(error: PlaybackException) {
-        crossfadeJob?.cancel()
-        player.volume = 1f
-        releaseCrossfadeOutPlayer()
-      }
-    })
-
-    try {
-      // Hand outgoing track to fadeOut player at exact timestamp
-      fadeOut.setMediaItem(outgoingItem, outgoingPosition)
-      fadeOut.playbackParameters = player.playbackParameters
-      fadeOut.volume = startVolume
-      fadeOut.prepare()
-      fadeOut.play()
-    } catch (_: Exception) {
-      player.volume = 1f
+      skipFadeJob?.cancel()
+      crossfadeJob?.cancel()
       releaseCrossfadeOutPlayer()
-      return
-    }
 
-    // Start incoming track on primary MediaSession player
-    player.volume = 0.02f
-    player.seekToNextMediaItem()
-    player.play()
+      val fadeOut = buildExoPlayer(handleAudioFocus = false)
+      crossfadeOutPlayer = fadeOut
+      isCrossfadingNow = true
+      CrossfadeController.setCrossfadingActive(true)
 
-    crossfadeJob = serviceScope.launch {
-      val stepMs = 33L
-      val totalDuration = fadeDurationMs.coerceAtLeast(400L)
-      var elapsed = 0L
-      try {
-        while (isActive && elapsed < totalDuration) {
-          if (player.isPlaying) {
-            val progress = (elapsed.toFloat() / totalDuration.toFloat()).coerceIn(0f, 1f)
-            val (outVol, inVol) = CrossfadeController.equalPowerGains(progress)
-            crossfadeOutPlayer?.volume = (outVol * startVolume).coerceIn(0f, 1f)
-            player.volume = inVol.coerceIn(0.02f, 1f)
-            elapsed += stepMs
-          }
-          delay(stepMs)
+      fadeOut.addListener(object : Player.Listener {
+        override fun onPlayerError(error: PlaybackException) {
+          crossfadeJob?.cancel()
+          runCatching { player.volume = 1f }
+          releaseCrossfadeOutPlayer()
         }
-      } finally {
-        player.volume = 1f
+      })
+
+      try {
+        // Hand outgoing track to fadeOut player at exact timestamp
+        fadeOut.setMediaItem(outgoingItem, outgoingPosition)
+        fadeOut.playbackParameters = player.playbackParameters
+        fadeOut.volume = startVolume
+        fadeOut.prepare()
+        fadeOut.play()
+      } catch (_: Exception) {
+        runCatching { player.volume = 1f }
         releaseCrossfadeOutPlayer()
+        return
       }
+
+      // Start incoming track on primary MediaSession player
+      player.volume = 0.02f
+      player.seekToNextMediaItem()
+      player.play()
+
+      crossfadeJob = serviceScope.launch {
+        val stepMs = 33L
+        val totalDuration = fadeDurationMs.coerceAtLeast(400L)
+        var elapsed = 0L
+        try {
+          while (isActive && elapsed < totalDuration) {
+            runCatching {
+              if (player.isPlaying) {
+                val progress = (elapsed.toFloat() / totalDuration.toFloat()).coerceIn(0f, 1f)
+                val (outVol, inVol) = CrossfadeController.equalPowerGains(progress)
+                crossfadeOutPlayer?.volume = (outVol * startVolume).coerceIn(0f, 1f)
+                player.volume = inVol.coerceIn(0.02f, 1f)
+              }
+            }
+            elapsed += stepMs
+            delay(stepMs)
+          }
+        } finally {
+          runCatching { player.volume = 1f }
+          releaseCrossfadeOutPlayer()
+        }
+      }
+    }.onFailure {
+      runCatching { player.volume = 1f }
+      releaseCrossfadeOutPlayer()
     }
   }
 

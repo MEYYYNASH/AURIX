@@ -59,6 +59,7 @@ import coil.request.SuccessResult
 import com.example.R
 import com.example.model.APP_ICON_ARTWORK
 import com.example.model.Song
+import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 
@@ -103,11 +104,19 @@ fun rememberArtworkColors(
           .size(64)
           .build()
         val result = context.imageLoader.execute(request)
-        val bitmap = (result as? SuccessResult)?.drawable?.toBitmap() ?: return@withContext null
-        withContext(Dispatchers.Default) {
-          extractVibrantPair(bitmap)
+        val drawable = (result as? SuccessResult)?.drawable ?: return@withContext null
+        val rawBitmap = runCatching { drawable.toBitmap() }.getOrNull() ?: return@withContext null
+        val bitmap = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O && rawBitmap.config == Bitmap.Config.HARDWARE) {
+          runCatching { rawBitmap.copy(Bitmap.Config.ARGB_8888, false) }.getOrNull() ?: rawBitmap
+        } else {
+          rawBitmap
         }
-      } catch (_: Exception) {
+        withContext(Dispatchers.Default) {
+          runCatching { extractVibrantPair(bitmap) }.getOrNull()
+        }
+      } catch (ce: CancellationException) {
+        throw ce
+      } catch (_: Throwable) {
         null
       }
     }
@@ -408,19 +417,21 @@ fun GlassCard(
       .border(1.dp, borderBrush, shape)
       .drawBehind {
         val stroke15 = 1.5.dp.toPx()
-        val inset = stroke15 * 0.5f
-        val r = (cornerRadius.toPx() - inset).coerceAtLeast(0f)
-        drawRoundRect(
-          brush = Brush.verticalGradient(
-            colors = listOf(topSpecular, topSpecular.copy(alpha = 0.14f), Color.Transparent),
-            startY = 0f,
-            endY = size.height * 0.36f
-          ),
-          topLeft = Offset(inset, inset),
-          size = Size(size.width - stroke15, size.height - stroke15),
-          cornerRadius = CornerRadius(r, r),
-          style = Stroke(width = stroke15)
-        )
+        if (size.width > stroke15 && size.height > stroke15) {
+          val inset = stroke15 * 0.5f
+          val r = (cornerRadius.toPx() - inset).coerceAtLeast(0f)
+          drawRoundRect(
+            brush = Brush.verticalGradient(
+              colors = listOf(topSpecular, topSpecular.copy(alpha = 0.14f), Color.Transparent),
+              startY = 0f,
+              endY = size.height * 0.36f
+            ),
+            topLeft = Offset(inset, inset),
+            size = Size(size.width - stroke15, size.height - stroke15),
+            cornerRadius = CornerRadius(r, r),
+            style = Stroke(width = stroke15)
+          )
+        }
       }
   ) {
     Column(content = content)

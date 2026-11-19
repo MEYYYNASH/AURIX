@@ -3859,54 +3859,66 @@ class AurixViewModel(application: Application) : AndroidViewModel(application) {
       try {
         val songKey = LyricsMatcher.songIdentityKey(song)
 
-        val cached = dao.getLyricsCache(song.id) ?: dao.getLyricsCacheByKey(songKey)?.also { keyHit ->
-          if (!keyHit.isReportedBad && keyHit.songId != song.id) {
-            dao.insertLyricsCache(keyHit.copy(songId = song.id))
+        val cached = runCatching { dao.getLyricsCache(song.id) }.getOrNull() 
+          ?: runCatching { dao.getLyricsCacheByKey(songKey) }.getOrNull()?.also { keyHit ->
+            if (!keyHit.isReportedBad && keyHit.songId != song.id) {
+              runCatching { dao.insertLyricsCache(keyHit.copy(songId = song.id)) }
+            }
           }
-        }
         if (cached != null && !cached.isReportedBad) {
           return@launch
         }
 
         lyricsCheckSemaphore.withPermit {
-          val latestCached = dao.getLyricsCache(song.id)
+          val latestCached = runCatching { dao.getLyricsCache(song.id) }.getOrNull()
           if (latestCached != null && !latestCached.isReportedBad) {
             return@withPermit
           }
-          val outcome = LyricsMatcher.matchWithOutcome(
-            song = song,
-            context = getApplication()
-          )
+          val outcome = runCatching {
+            LyricsMatcher.matchWithOutcome(
+              song = song,
+              context = getApplication()
+            )
+          }.getOrElse { LyricsMatchOutcome.NetworkError }
+
           when (outcome) {
             is LyricsMatchOutcome.Verified -> {
-              dao.insertLyricsCache(
-                LyricsCacheEntity(
-                  songId = song.id,
-                  songKey = songKey,
-                  hasLyrics = true,
-                  rawLrc = outcome.lyricsResult.rawLrc,
-                  plainLyrics = outcome.lyricsResult.plain,
-                  matchedTitle = outcome.lyricsResult.matchedTitle,
-                  matchedArtist = outcome.lyricsResult.matchedArtist,
-                  isReportedBad = false
+              runCatching {
+                dao.insertLyricsCache(
+                  LyricsCacheEntity(
+                    songId = song.id,
+                    songKey = songKey,
+                    hasLyrics = true,
+                    rawLrc = outcome.lyricsResult.rawLrc,
+                    plainLyrics = outcome.lyricsResult.plain,
+                    matchedTitle = outcome.lyricsResult.matchedTitle,
+                    matchedArtist = outcome.lyricsResult.matchedArtist,
+                    isReportedBad = false
+                  )
                 )
-              )
+              }
             }
             LyricsMatchOutcome.NoLyrics -> {
-              dao.insertLyricsCache(
-                LyricsCacheEntity(
-                  songId = song.id,
-                  songKey = songKey,
-                  hasLyrics = false,
-                  isReportedBad = false
+              runCatching {
+                dao.insertLyricsCache(
+                  LyricsCacheEntity(
+                    songId = song.id,
+                    songKey = songKey,
+                    hasLyrics = false,
+                    isReportedBad = false
+                  )
                 )
-              )
+              }
             }
             LyricsMatchOutcome.NetworkError -> {
               // Do NOT cache network errors so they retry later
             }
           }
         }
+      } catch (ce: CancellationException) {
+        throw ce
+      } catch (_: Throwable) {
+        // Suppress any background room/network error during verification
       } finally {
         inFlightLyricsChecks.remove(song.id)
       }
