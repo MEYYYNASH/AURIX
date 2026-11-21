@@ -1,7 +1,9 @@
 package com.example
 
 import android.app.Application
+import android.content.Intent
 import android.util.Log
+import com.google.firebase.crashlytics.FirebaseCrashlytics
 import java.io.File
 import java.io.FileWriter
 import java.io.PrintWriter
@@ -14,6 +16,10 @@ class AurixApplication : Application() {
 
     override fun onCreate() {
         super.onCreate()
+        runCatching {
+            FirebaseCrashlytics.getInstance().setCrashlyticsCollectionEnabled(true)
+            FirebaseCrashlytics.getInstance().log("AurixApplication initialized successfully")
+        }
         setupGlobalCrashHandler()
     }
 
@@ -21,6 +27,11 @@ class AurixApplication : Application() {
         val defaultHandler = Thread.getDefaultUncaughtExceptionHandler()
         Thread.setDefaultUncaughtExceptionHandler { thread, throwable ->
             try {
+                // Report to Firebase Crashlytics
+                runCatching {
+                    FirebaseCrashlytics.getInstance().recordException(throwable)
+                }
+
                 val logFile = File(filesDir, "aurix_crash_logs.txt")
                 val timestamp = SimpleDateFormat("yyyy-MM-dd HH:mm:ss", Locale.getDefault()).format(Date())
                 val sw = StringWriter()
@@ -35,11 +46,22 @@ class AurixApplication : Application() {
                     writer.append(stackTraceString)
                     writer.append("==============================\n")
                 }
-                Log.e("AurixCrashLogger", "Fatal crash caught and written to ${logFile.absolutePath}", throwable)
+                Log.e("AurixCrashLogger", "Intercepted fatal exception, logged to Crashlytics & disk", throwable)
             } catch (e: Exception) {
-                Log.e("AurixCrashLogger", "Failed to write crash log to disk", e)
+                Log.e("AurixCrashLogger", "Failed to write crash log", e)
             } finally {
-                defaultHandler?.uncaughtException(thread, throwable)
+                // Gracefully restart MainActivity instead of letting the app die silently or freeze
+                try {
+                    val intent = Intent(this, MainActivity::class.java).apply {
+                        addFlags(Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_CLEAR_TASK)
+                    }
+                    startActivity(intent)
+                } catch (_: Exception) {}
+
+                try {
+                    android.os.Process.killProcess(android.os.Process.myPid())
+                    System.exit(10)
+                } catch (_: Exception) {}
             }
         }
     }

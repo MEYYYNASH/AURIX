@@ -157,6 +157,10 @@ class PlaybackService : MediaSessionService() {
           }
         } else {
           abortCrossfadeAndRestoreVolume(player)
+          runCatching {
+            player.stop()
+            player.clearMediaItems()
+          }
         }
       }
     })
