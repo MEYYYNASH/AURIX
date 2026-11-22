@@ -450,30 +450,32 @@ object YoutubeExtractor {
     query: String,
     limit: Int = 25
   ): List<YoutubeSearchItem> = withContext(Dispatchers.IO) {
-    val trimmed = query.trim()
-    if (trimmed.isBlank()) return@withContext emptyList()
+    runCatching {
+      val trimmed = query.trim()
+      if (trimmed.isBlank()) return@runCatching emptyList()
 
-    // 1. Direct InnerTube Search (fast, lightweight JSON)
-    val innerTubeResults = runCatching { searchViaInnerTube(trimmed, limit) }.getOrNull().orEmpty()
-    if (innerTubeResults.isNotEmpty()) return@withContext innerTubeResults
+      // 1. Direct InnerTube Search (fast, lightweight JSON)
+      val innerTubeResults = runCatching { searchViaInnerTube(trimmed, limit) }.getOrNull().orEmpty()
+      if (innerTubeResults.isNotEmpty()) return@runCatching innerTubeResults
 
-    // 2. NewPipeExtractor YouTube Search
-    val newPipeResults = runCatching { searchViaNewPipe(trimmed, limit) }.getOrNull().orEmpty()
-    if (newPipeResults.isNotEmpty()) return@withContext newPipeResults
+      // 2. NewPipeExtractor YouTube Search
+      val newPipeResults = runCatching { searchViaNewPipe(trimmed, limit) }.getOrNull().orEmpty()
+      if (newPipeResults.isNotEmpty()) return@runCatching newPipeResults
 
-    // 3. Piped public mirrors
-    for (base in basePipedMirrors.take(4)) {
-      val pipedResults = runCatching { searchViaPiped(base, trimmed, limit) }.getOrNull().orEmpty()
-      if (pipedResults.isNotEmpty()) return@withContext pipedResults
-    }
+      // 3. Piped public mirrors
+      for (base in basePipedMirrors.take(4)) {
+        val pipedResults = runCatching { searchViaPiped(base, trimmed, limit) }.getOrNull().orEmpty()
+        if (pipedResults.isNotEmpty()) return@runCatching pipedResults
+      }
 
-    // 4. Invidious public mirrors
-    for (base in getInvidiousMirrors().take(4)) {
-      val invResults = runCatching { searchViaInvidious(base, trimmed, limit) }.getOrNull().orEmpty()
-      if (invResults.isNotEmpty()) return@withContext invResults
-    }
+      // 4. Invidious public mirrors
+      for (base in getInvidiousMirrors().take(4)) {
+        val invResults = runCatching { searchViaInvidious(base, trimmed, limit) }.getOrNull().orEmpty()
+        if (invResults.isNotEmpty()) return@runCatching invResults
+      }
 
-    emptyList()
+      emptyList<YoutubeSearchItem>()
+    }.getOrDefault(emptyList())
   }
 
   /**
