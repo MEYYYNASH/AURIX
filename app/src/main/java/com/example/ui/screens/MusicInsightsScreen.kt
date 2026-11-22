@@ -88,11 +88,12 @@ fun MusicInsightsScreen(
   LazyColumn(
     modifier = Modifier
       .fillMaxSize()
+      .windowInsetsPadding(WindowInsets.statusBars)
       .padding(horizontal = 20.dp)
       .testTag("music_insights_screen"),
     verticalArrangement = Arrangement.spacedBy(18.dp),
     contentPadding = PaddingValues(
-      top = WindowInsets.statusBars.asPaddingValues().calculateTopPadding() + 14.dp,
+      top = 14.dp,
       bottom = if (currentSong != null) 205.dp else 135.dp
     )
   ) {
@@ -907,11 +908,12 @@ fun PlaylistDetailScreen(
   LazyColumn(
     modifier = Modifier
       .fillMaxSize()
+      .windowInsetsPadding(WindowInsets.statusBars)
       .padding(horizontal = 20.dp)
       .testTag("playlist_detail_screen"),
-    verticalArrangement = Arrangement.spacedBy(14.dp),
+    verticalArrangement = Arrangement.spacedBy(12.dp),
     contentPadding = PaddingValues(
-      top = WindowInsets.statusBars.asPaddingValues().calculateTopPadding() + 14.dp,
+      top = 14.dp,
       bottom = if (currentSong != null) 205.dp else 135.dp
     )
   ) {
@@ -1062,62 +1064,40 @@ fun PlaylistDetailScreen(
         }
       }
 
-      item {
-        if (onYoutubeSongDownloadClick != null) {
-          Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
-            tracks.forEachIndexed { idx, track ->
-              SongDownloadRow(
-                song = track,
-                index = idx,
-                isPlaying = isPlaying,
-                isCurrent = currentSong?.id == track.id,
-                isResolving = resolvingSongId == track.id,
-                reducedMotion = reducedMotion,
-                darkTheme = darkTheme,
-                hasLyrics = track.id in verifiedLyricsIds,
-                downloadProgress = songDownloadProgress[track.id],
-                isDownloaded = track.id in downloadedSongIds,
-                onCheckLyrics = onCheckLyrics,
-                onSongClick = { onSongClick(track, tracks) },
-                onFavoriteClick = { onFavoriteClick(track) },
-                onDownloadClick = { onYoutubeSongDownloadClick(track) }
-              )
-            }
-          }
-        } else {
-          GlassCard(
+      if (onYoutubeSongDownloadClick != null) {
+        itemsIndexed(tracks, key = { idx, track -> "yt_${idx}_${track.id}" }) { idx, track ->
+          SongDownloadRow(
+            song = track,
+            index = idx + 1,
+            isPlaying = isPlaying,
+            isCurrent = currentSong?.id == track.id,
+            isResolving = resolvingSongId == track.id,
+            reducedMotion = reducedMotion,
             darkTheme = darkTheme,
-            cornerRadius = 24.dp,
-            modifier = Modifier.fillMaxWidth()
-          ) {
-            Column(
-              modifier = Modifier
-                .fillMaxWidth()
-                .padding(horizontal = 8.dp, vertical = 6.dp)
-            ) {
-              tracks.forEachIndexed { idx, track ->
-                SongRow(
-                  song = track,
-                  isPlaying = isPlaying,
-                  isCurrent = currentSong?.id == track.id,
-                  reducedMotion = reducedMotion,
-                  darkTheme = darkTheme,
-                  hasLyrics = track.id in verifiedLyricsIds,
-                  rank = idx + 1,
-                  showSourceBadge = false,
-                  onCheckLyrics = onCheckLyrics,
-                  onSongClick = { onSongClick(track, tracks) },
-                  onFavoriteClick = { onFavoriteClick(track) }
-                )
-                if (idx < tracks.lastIndex) {
-                  HorizontalDivider(
-                    modifier = Modifier.padding(horizontal = 14.dp),
-                    color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.06f)
-                  )
-                }
-              }
-            }
-          }
+            hasLyrics = track.id in verifiedLyricsIds,
+            downloadProgress = songDownloadProgress[track.id],
+            isDownloaded = track.id in downloadedSongIds,
+            onCheckLyrics = onCheckLyrics,
+            onSongClick = { onSongClick(track, tracks) },
+            onFavoriteClick = { onFavoriteClick(track) },
+            onDownloadClick = { onYoutubeSongDownloadClick(track) }
+          )
+        }
+      } else {
+        itemsIndexed(tracks, key = { idx, track -> "row_${idx}_${track.id}" }) { idx, track ->
+          SongRow(
+            song = track,
+            isPlaying = isPlaying,
+            isCurrent = currentSong?.id == track.id,
+            reducedMotion = reducedMotion,
+            darkTheme = darkTheme,
+            hasLyrics = track.id in verifiedLyricsIds,
+            rank = idx + 1,
+            showSourceBadge = false,
+            onCheckLyrics = onCheckLyrics,
+            onSongClick = { onSongClick(track, tracks) },
+            onFavoriteClick = { onFavoriteClick(track) }
+          )
         }
       }
     } else {
@@ -1246,11 +1226,12 @@ fun NewAlbumsDetailScreen(
   LazyColumn(
     modifier = Modifier
       .fillMaxSize()
+      .windowInsetsPadding(WindowInsets.statusBars)
       .padding(horizontal = 20.dp)
       .testTag("new_albums_detail_screen"),
     verticalArrangement = Arrangement.spacedBy(14.dp),
     contentPadding = PaddingValues(
-      top = WindowInsets.statusBars.asPaddingValues().calculateTopPadding() + 14.dp,
+      top = 14.dp,
       bottom = if (hasCurrentSong) 205.dp else 135.dp
     )
   ) {

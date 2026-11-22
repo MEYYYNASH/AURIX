@@ -1,0 +1,14 @@
+{
+  "versionName": "1.8.1",
+  "versionCode": 10801,
+  "releaseDate": "2026-11-22",
+  "apkUrl": "https://github.com/MEYYYNASH/AURIX/releases/download/v1.8.1/AURIX-v1.8.1.apk",
+  "sha256": "",
+  "mandatory": false,
+  "notes": [
+    "Release v1.8.1 — Search Stability & Clean Card UI: Fixed YouTube multi-query search crashes, cancellable extraction, off-main-thread mixes, and debounced lyrics verification",
+    "Clean Standalone Track Cards: 28dp rounded navy cards with silver rim, centered 60dp cover art, single Heart action button, long-press track menu, and status-bar safe padding",
+    "Full AURIX Experience: Personalized Home mixes, Khmer & English localization, animated planet brand & update logos, Equalizer, Crossfade, and OTA updates"
+  ],
+  "releasePageUrl": "https://github.com/MEYYYNASH/AURIX/releases/tag/v1.8.1"
+}

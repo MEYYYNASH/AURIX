@@ -123,8 +123,10 @@ import androidx.compose.ui.semantics.LiveRegionMode
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.liveRegion
 import androidx.compose.ui.semantics.semantics
+import androidx.compose.ui.text.TextRange
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.ImeAction
+import androidx.compose.ui.text.input.TextFieldValue
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.tooling.preview.Preview
@@ -218,20 +220,6 @@ fun SearchScreen(
     modifier = Modifier.fillMaxSize(),
     contentAlignment = Alignment.TopCenter
   ) {
-    if (dynamicBlurGlass && hasPlayingSong) {
-      DynamicArtGlassBackdropLayer(
-        song = currentSong,
-        artColors = artC1 to artC2,
-        enabled = true,
-        darkTheme = darkTheme,
-        reducedMotion = reducedMotion,
-        blurRadius = 46.dp,
-        artAlpha = if (darkTheme) 0.22f else 0.14f,
-        scrimAlpha = if (darkTheme) 0.28f else 0.22f,
-        modifier = Modifier.matchParentSize()
-      )
-    }
-
     Column(
       modifier = Modifier
         .fillMaxSize()
@@ -566,9 +554,23 @@ private fun LiquidGlassSearchBar(
         )
       }
   ) {
+    var textFieldValue by remember {
+      mutableStateOf(TextFieldValue(query, TextRange(query.length)))
+    }
+    LaunchedEffect(query) {
+      if (textFieldValue.text != query) {
+        textFieldValue = TextFieldValue(query, TextRange(query.length))
+      }
+    }
+
     TextField(
-      value = query,
-      onValueChange = onQueryChanged,
+      value = textFieldValue,
+      onValueChange = { updated ->
+        textFieldValue = updated
+        if (updated.text != query) {
+          onQueryChanged(updated.text)
+        }
+      },
       placeholder = {
         Text(
           text = placeholder,
@@ -1200,206 +1202,154 @@ fun SearchResultsArea(
         val fallbackArtPair = remember { artworkHueColors("") }
         val activeArtPair = artColors ?: fallbackArtPair
         val useDynamicArt = dynamicBlurGlass && currentSong != null
-        val panelShape = RoundedCornerShape(26.dp)
-        val panelBorderBrush = Brush.verticalGradient(
-          colors = if (useDynamicArt) {
-            listOf(
-              activeArtPair.first.copy(alpha = if (darkTheme) 0.56f else 0.72f),
-              activeArtPair.second.copy(alpha = if (darkTheme) 0.24f else 0.36f)
-            )
-          } else if (darkTheme) {
-            listOf(Color.White.copy(alpha = 0.22f), Color.White.copy(alpha = 0.06f))
-          } else {
-            listOf(Color.White, Color.White.copy(alpha = 0.55f))
-          }
-        )
 
-        Box(
+        Column(
           modifier = Modifier
             .fillMaxSize()
             .padding(bottom = if (showResultsList) 0.dp else centerBottomPadding)
+            .testTag("search_results_glass_panel")
         ) {
-          Box(
+          val clearInteractionSource = remember { MutableInteractionSource() }
+          val isClearPressed by clearInteractionSource.collectIsPressedAsState()
+          val clearScale by animateFloatAsState(
+            targetValue = if (isClearPressed) 0.93f else 1f,
+            animationSpec = if (isStill) snap() else spring(dampingRatio = 0.68f, stiffness = Spring.StiffnessMedium),
+            label = "clear_pill_spring"
+          )
+
+          Row(
             modifier = Modifier
               .fillMaxWidth()
-              .clip(panelShape)
-              .border(1.dp, panelBorderBrush, panelShape)
-              .testTag("search_results_glass_panel")
+              .padding(horizontal = 4.dp, vertical = 2.dp),
+            horizontalArrangement = Arrangement.SpaceBetween,
+            verticalAlignment = Alignment.CenterVertically
           ) {
-            DynamicArtGlassBackdropLayer(
-              song = currentSong,
-              artColors = activeArtPair,
-              enabled = useDynamicArt,
-              darkTheme = darkTheme,
-              reducedMotion = isStill,
-              blurRadius = 34.dp,
-              artAlpha = if (darkTheme) 0.34f else 0.22f,
-              scrimAlpha = if (darkTheme) 0.58f else 0.72f,
-              modifier = Modifier.matchParentSize()
+            Text(
+              text = stringResource(id = R.string.search_results_count, state.items.size),
+              style = MaterialTheme.typography.labelMedium.copy(fontWeight = FontWeight.Bold),
+              color = if (useDynamicArt) activeArtPair.first else AurixTealAccent,
+              modifier = Modifier.weight(1f)
             )
 
-            Column(
-              modifier = Modifier
-                .fillMaxWidth()
-                .padding(horizontal = 10.dp, vertical = 10.dp)
+            Row(
+              verticalAlignment = Alignment.CenterVertically,
+              horizontalArrangement = Arrangement.spacedBy(6.dp)
             ) {
-              val clearInteractionSource = remember { MutableInteractionSource() }
-              val isClearPressed by clearInteractionSource.collectIsPressedAsState()
-              val clearScale by animateFloatAsState(
-                targetValue = if (isClearPressed) 0.93f else 1f,
-                animationSpec = if (isStill) snap() else spring(dampingRatio = 0.68f, stiffness = Spring.StiffnessMedium),
-                label = "clear_pill_spring"
-              )
-
-              Row(
+              Surface(
+                onClick = onToggleDynamicBlur,
+                shape = CircleShape,
+                color = if (dynamicBlurGlass) {
+                  (if (useDynamicArt) activeArtPair.first else AurixTealAccent).copy(alpha = if (darkTheme) 0.22f else 0.14f)
+                } else if (darkTheme) {
+                  Color.White.copy(alpha = 0.08f)
+                } else {
+                  Color.White.copy(alpha = 0.78f)
+                },
+                border = BorderStroke(
+                  1.dp,
+                  if (dynamicBlurGlass) {
+                    (if (useDynamicArt) activeArtPair.first else AurixTealAccent).copy(alpha = 0.55f)
+                  } else if (darkTheme) {
+                    Color.White.copy(alpha = 0.16f)
+                  } else {
+                    Color.White
+                  }
+                ),
                 modifier = Modifier
-                  .fillMaxWidth()
-                  .padding(horizontal = 4.dp, vertical = 2.dp),
-                horizontalArrangement = Arrangement.SpaceBetween,
-                verticalAlignment = Alignment.CenterVertically
+                  .minimumInteractiveComponentSize()
+                  .testTag("search_blur_toggle_button")
               ) {
-                Text(
-                  text = stringResource(id = R.string.search_results_count, state.items.size),
-                  style = MaterialTheme.typography.labelMedium.copy(fontWeight = FontWeight.Bold),
-                  color = if (useDynamicArt) activeArtPair.first else AurixTealAccent,
-                  modifier = Modifier.weight(1f)
-                )
-
                 Row(
+                  modifier = Modifier.padding(horizontal = 9.dp, vertical = 6.dp),
                   verticalAlignment = Alignment.CenterVertically,
-                  horizontalArrangement = Arrangement.spacedBy(6.dp)
+                  horizontalArrangement = Arrangement.spacedBy(4.dp)
                 ) {
-                  // Dynamic Blur Glass Toggle Pill
-                  Surface(
-                    onClick = onToggleDynamicBlur,
-                    shape = CircleShape,
-                    color = if (dynamicBlurGlass) {
-                      (if (useDynamicArt) activeArtPair.first else AurixTealAccent).copy(alpha = if (darkTheme) 0.22f else 0.14f)
-                    } else if (darkTheme) {
-                      Color.White.copy(alpha = 0.08f)
-                    } else {
-                      Color.White.copy(alpha = 0.78f)
-                    },
-                    border = BorderStroke(
-                      1.dp,
-                      if (dynamicBlurGlass) {
-                        (if (useDynamicArt) activeArtPair.first else AurixTealAccent).copy(alpha = 0.55f)
-                      } else if (darkTheme) {
-                        Color.White.copy(alpha = 0.16f)
-                      } else {
-                        Color.White
-                      }
-                    ),
-                    modifier = Modifier
-                      .minimumInteractiveComponentSize()
-                      .testTag("search_blur_toggle_button")
-                  ) {
-                    Row(
-                      modifier = Modifier.padding(horizontal = 9.dp, vertical = 6.dp),
-                      verticalAlignment = Alignment.CenterVertically,
-                      horizontalArrangement = Arrangement.spacedBy(4.dp)
-                    ) {
-                      Icon(
-                        imageVector = if (dynamicBlurGlass) Icons.Rounded.BlurOn else Icons.Rounded.BlurOff,
-                        contentDescription = stringResource(
-                          id = if (dynamicBlurGlass) R.string.search_results_blur_on else R.string.search_results_blur_off
-                        ),
-                        tint = if (dynamicBlurGlass) {
-                          if (useDynamicArt) activeArtPair.first else AurixTealAccent
-                        } else {
-                          MaterialTheme.colorScheme.onSurfaceVariant
-                        },
-                        modifier = Modifier.size(14.dp)
-                      )
-                    }
-                  }
-
-                  // Open / Close Results Drawer Toggle
-                  OpenCloseGlassPill(
-                    isOpen = showResultsList,
-                    onToggle = onToggleResultsList,
-                    darkTheme = darkTheme,
-                    reducedMotion = isStill,
-                    testTag = "search_toggle_results_button",
-                    accentColor = if (useDynamicArt) activeArtPair.first else AurixTealAccent,
+                  Icon(
+                    imageVector = if (dynamicBlurGlass) Icons.Rounded.BlurOn else Icons.Rounded.BlurOff,
                     contentDescription = stringResource(
-                      id = if (showResultsList) R.string.section_close_cd else R.string.section_open_cd,
-                      stringResource(id = R.string.search_results_count, state.items.size)
-                    )
-                  )
-
-                  // Clear / Dismiss Search Results Pill
-                  Surface(
-                    shape = CircleShape,
-                    color = if (darkTheme) Color.White.copy(alpha = 0.08f) else Color.White.copy(alpha = 0.78f),
-                    border = BorderStroke(
-                      1.dp,
-                      if (darkTheme) Color.White.copy(alpha = 0.16f) else Color.White
+                      id = if (dynamicBlurGlass) R.string.search_results_blur_on else R.string.search_results_blur_off
                     ),
-                    modifier = Modifier
-                      .minimumInteractiveComponentSize()
-                      .graphicsLayer {
-                        scaleX = clearScale
-                        scaleY = clearScale
-                      }
-                      .clip(CircleShape)
-                      .clickable(
-                        interactionSource = clearInteractionSource,
-                        indication = LocalIndication.current
-                      ) { onClearSearch() }
-                      .testTag("search_close_results_button")
-                  ) {
-                    Text(
-                      text = stringResource(id = R.string.search_quick_clear),
-                      style = MaterialTheme.typography.labelSmall.copy(fontWeight = FontWeight.SemiBold),
-                      color = MaterialTheme.colorScheme.onSurfaceVariant,
-                      modifier = Modifier.padding(horizontal = 10.dp, vertical = 6.dp)
-                    )
-                  }
+                    tint = if (dynamicBlurGlass) {
+                      if (useDynamicArt) activeArtPair.first else AurixTealAccent
+                    } else {
+                      MaterialTheme.colorScheme.onSurfaceVariant
+                    },
+                    modifier = Modifier.size(14.dp)
+                  )
                 }
               }
 
-              AnimatedVisibility(
-                visible = showResultsList,
-                enter = if (isStill) fadeIn(snap()) else fadeIn(tween(180)) + expandVertically(),
-                exit = if (isStill) fadeOut(snap()) else fadeOut(tween(140)) + shrinkVertically()
-              ) {
-                LazyColumn(
-                  modifier = Modifier
-                    .fillMaxWidth()
-                    .padding(top = 6.dp),
-                  verticalArrangement = Arrangement.spacedBy(8.dp),
-                  contentPadding = PaddingValues(bottom = listBottomPadding)
-                ) {
-                  itemsIndexed(state.items, key = { index, song -> "${index}_${song.id}" }) { index, song ->
-                    SongDownloadRow(
-                      song = song,
-                      index = index + 1,
-                      isPlaying = isPlaying,
-                      isCurrent = currentSong?.id == song.id,
-                      isResolving = resolvingSongId == song.id,
-                      reducedMotion = isStill,
-                      darkTheme = darkTheme,
-                      hasLyrics = song.id in verifiedLyricsIds,
-                      downloadProgress = songDownloadProgress[song.id],
-                      isDownloaded = song.id in downloadedSongIds,
-                      ambientPrimaryColor = if (useDynamicArt) activeArtPair.first else null,
-                      ambientSecondaryColor = if (useDynamicArt) activeArtPair.second else null,
-                      onCheckLyrics = onCheckLyrics,
-                      onSongClick = { onSongClick(song, state.items) },
-                      onFavoriteClick = { onFavoriteClick(song) },
-                      onDownloadClick = { onDownloadClick(song) },
-                      modifier = Modifier.animateItem(
-                        fadeInSpec = if (isStill) null else spring(stiffness = Spring.StiffnessMediumLow),
-                        placementSpec = if (isStill) null else spring(
-                          dampingRatio = 0.82f,
-                          stiffness = Spring.StiffnessMediumLow
-                        ),
-                        fadeOutSpec = if (isStill) null else spring(stiffness = Spring.StiffnessMedium)
-                      )
-                    )
+              OpenCloseGlassPill(
+                isOpen = showResultsList,
+                onToggle = onToggleResultsList,
+                darkTheme = darkTheme,
+                reducedMotion = isStill,
+                testTag = "search_toggle_results_button",
+                accentColor = if (useDynamicArt) activeArtPair.first else AurixTealAccent,
+                contentDescription = stringResource(
+                  id = if (showResultsList) R.string.section_close_cd else R.string.section_open_cd,
+                  stringResource(id = R.string.search_results_count, state.items.size)
+                )
+              )
+
+              Surface(
+                shape = CircleShape,
+                color = if (darkTheme) Color.White.copy(alpha = 0.08f) else Color.White.copy(alpha = 0.78f),
+                border = BorderStroke(
+                  1.dp,
+                  if (darkTheme) Color.White.copy(alpha = 0.16f) else Color.White
+                ),
+                modifier = Modifier
+                  .minimumInteractiveComponentSize()
+                  .graphicsLayer {
+                    scaleX = clearScale
+                    scaleY = clearScale
                   }
-                }
+                  .clip(CircleShape)
+                  .clickable(
+                    interactionSource = clearInteractionSource,
+                    indication = LocalIndication.current
+                  ) { onClearSearch() }
+                  .testTag("search_close_results_button")
+              ) {
+                Text(
+                  text = stringResource(id = R.string.search_quick_clear),
+                  style = MaterialTheme.typography.labelSmall.copy(fontWeight = FontWeight.SemiBold),
+                  color = MaterialTheme.colorScheme.onSurfaceVariant,
+                  modifier = Modifier.padding(horizontal = 10.dp, vertical = 6.dp)
+                )
+              }
+            }
+          }
+
+          if (showResultsList) {
+            LazyColumn(
+              modifier = Modifier
+                .weight(1f)
+                .fillMaxWidth()
+                .padding(top = 8.dp),
+              verticalArrangement = Arrangement.spacedBy(12.dp),
+              contentPadding = PaddingValues(bottom = listBottomPadding)
+            ) {
+              itemsIndexed(state.items, key = { index, song -> "${index}_${song.id}" }) { index, song ->
+                SongDownloadRow(
+                  song = song,
+                  index = index + 1,
+                  isPlaying = isPlaying,
+                  isCurrent = currentSong?.id == song.id,
+                  isResolving = resolvingSongId == song.id,
+                  reducedMotion = isStill,
+                  darkTheme = darkTheme,
+                  hasLyrics = song.id in verifiedLyricsIds,
+                  downloadProgress = songDownloadProgress[song.id],
+                  isDownloaded = song.id in downloadedSongIds,
+                  ambientPrimaryColor = if (useDynamicArt) activeArtPair.first else null,
+                  ambientSecondaryColor = if (useDynamicArt) activeArtPair.second else null,
+                  onCheckLyrics = onCheckLyrics,
+                  onSongClick = { onSongClick(song, state.items) },
+                  onFavoriteClick = { onFavoriteClick(song) },
+                  onDownloadClick = { onDownloadClick(song) }
+                )
               }
             }
           }
@@ -1989,7 +1939,7 @@ private fun SearchSkeletonLoadingView(
 ) {
   val infiniteTransition = rememberInfiniteTransition(label = "search_skeleton")
   val alphaAnim by infiniteTransition.animateFloat(
-    initialValue = 0.3f,
+    initialValue = 0.35f,
     targetValue = 0.85f,
     animationSpec = infiniteRepeatable(
       animation = tween(durationMillis = 900, easing = LinearEasing),
@@ -1997,36 +1947,44 @@ private fun SearchSkeletonLoadingView(
     ),
     label = "skeleton_alpha"
   )
-  val currentAlpha = if (reducedMotion) 0.5f else alphaAnim
-  val basePlaceholderColor = if (darkTheme) Color.White.copy(alpha = 0.12f) else Color.Black.copy(alpha = 0.08f)
+  val currentAlpha = if (reducedMotion) 0.55f else alphaAnim
+  val placeholderBase = if (darkTheme) Color(0xFF33415C) else Color(0xFFCBD5E1)
+  val cardBg = if (darkTheme) {
+    Brush.horizontalGradient(listOf(Color(0xFF18233B), Color(0xFF111728)))
+  } else {
+    Brush.horizontalGradient(listOf(Color.White.copy(alpha = 0.96f), Color(0xFFF3F6FF)))
+  }
+  val silverTopEdge = if (darkTheme) Color(0xFFBEC8DC).copy(alpha = 0.55f) else Color.White
+  val faintBorder = if (darkTheme) Color.White.copy(alpha = 0.06f) else Color(0xFFCBD5E1).copy(alpha = 0.55f)
+  val hardShadowColor = if (darkTheme) Color(0xFF080C18).copy(alpha = 0.70f) else Color(0xFF64748B).copy(alpha = 0.16f)
 
   Column(
     modifier = Modifier
       .fillMaxSize()
-      .padding(horizontal = 4.dp, vertical = 8.dp),
+      .padding(vertical = 4.dp),
     verticalArrangement = Arrangement.spacedBy(12.dp)
   ) {
     GlassCard(
       darkTheme = darkTheme,
-      cornerRadius = 20.dp,
+      cornerRadius = 24.dp,
       modifier = Modifier.fillMaxWidth()
     ) {
       Row(
         modifier = Modifier
           .fillMaxWidth()
-          .padding(16.dp),
+          .padding(14.dp),
         verticalAlignment = Alignment.CenterVertically,
-        horizontalArrangement = Arrangement.spacedBy(16.dp)
+        horizontalArrangement = Arrangement.spacedBy(14.dp)
       ) {
         OrbitLoader(
-          size = 42.dp,
+          size = 40.dp,
           ringColor = OrbitRingDefault,
           planetColor = OrbitPlanetDefault,
           eyeColor = OrbitEyeDefault,
           cometColor = AurixTealAccent,
           reducedMotion = reducedMotion
         )
-        Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
+        Column(verticalArrangement = Arrangement.spacedBy(2.dp)) {
           Text(
             text = modeText,
             style = MaterialTheme.typography.bodyMedium.copy(fontWeight = FontWeight.SemiBold),
@@ -2041,52 +1999,91 @@ private fun SearchSkeletonLoadingView(
       }
     }
 
-    Spacer(modifier = Modifier.height(4.dp))
-
-    repeat(6) { index ->
-      GlassCard(
-        darkTheme = darkTheme,
-        cornerRadius = 18.dp,
-        modifier = Modifier.fillMaxWidth()
+    repeat(5) { index ->
+      Box(
+        modifier = Modifier
+          .fillMaxWidth()
+          .padding(bottom = 5.dp)
       ) {
-        Row(
+        Box(
           modifier = Modifier
             .fillMaxWidth()
-            .padding(12.dp),
-          verticalAlignment = Alignment.CenterVertically,
-          horizontalArrangement = Arrangement.spacedBy(14.dp)
+            .graphicsLayer { clip = false }
+            .drawBehind {
+              if (size.width <= 0f || size.height <= 0f) return@drawBehind
+              val r = 28.dp.toPx().coerceAtMost(minOf(size.width, size.height) / 2f)
+              drawRoundRect(
+                color = hardShadowColor,
+                topLeft = Offset(0f, 5.dp.toPx()),
+                size = size,
+                cornerRadius = CornerRadius(r, r)
+              )
+              drawRoundRect(
+                brush = cardBg,
+                topLeft = Offset.Zero,
+                size = size,
+                cornerRadius = CornerRadius(r, r)
+              )
+              drawRoundRect(
+                color = faintBorder,
+                topLeft = Offset.Zero,
+                size = size,
+                cornerRadius = CornerRadius(r, r),
+                style = Stroke(width = 1.dp.toPx())
+              )
+              val arcDiameter = (r * 2f).coerceAtMost(size.height)
+              if (arcDiameter > 0f && size.width > 0f) {
+                drawArc(
+                  color = silverTopEdge,
+                  startAngle = 180f,
+                  sweepAngle = 180f,
+                  useCenter = false,
+                  topLeft = Offset.Zero,
+                  size = Size(size.width, arcDiameter),
+                  style = Stroke(width = 2.dp.toPx())
+                )
+              }
+            }
+            .clip(RoundedCornerShape(28.dp))
+            .padding(14.dp)
         ) {
-          Box(
-            modifier = Modifier
-              .size(54.dp)
-              .clip(RoundedCornerShape(12.dp))
-              .background(basePlaceholderColor.copy(alpha = basePlaceholderColor.alpha * currentAlpha))
-          )
-          Column(
-            modifier = Modifier.weight(1f),
-            verticalArrangement = Arrangement.spacedBy(8.dp)
+          Row(
+            modifier = Modifier.fillMaxWidth(),
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.spacedBy(14.dp)
           ) {
             Box(
               modifier = Modifier
-                .fillMaxWidth(fraction = 0.75f - (index % 3) * 0.15f)
-                .height(14.dp)
-                .clip(RoundedCornerShape(4.dp))
-                .background(basePlaceholderColor.copy(alpha = basePlaceholderColor.alpha * currentAlpha))
+                .size(60.dp)
+                .clip(RoundedCornerShape(18.dp))
+                .background(placeholderBase.copy(alpha = 0.52f * currentAlpha))
             )
+            Column(
+              modifier = Modifier.weight(1f),
+              verticalArrangement = Arrangement.spacedBy(9.dp)
+            ) {
+              Box(
+                modifier = Modifier
+                  .fillMaxWidth(fraction = 0.78f - (index % 3) * 0.14f)
+                  .height(14.dp)
+                  .clip(RoundedCornerShape(7.dp))
+                  .background(placeholderBase.copy(alpha = 0.56f * currentAlpha))
+              )
+              Box(
+                modifier = Modifier
+                  .fillMaxWidth(fraction = 0.44f)
+                  .height(11.dp)
+                  .clip(RoundedCornerShape(6.dp))
+                  .background(placeholderBase.copy(alpha = 0.42f * currentAlpha))
+              )
+            }
             Box(
               modifier = Modifier
-                .fillMaxWidth(fraction = 0.45f)
-                .height(10.dp)
-                .clip(RoundedCornerShape(4.dp))
-                .background(basePlaceholderColor.copy(alpha = basePlaceholderColor.alpha * currentAlpha))
+                .size(44.dp)
+                .clip(CircleShape)
+                .background(placeholderBase.copy(alpha = 0.50f * currentAlpha))
             )
           }
-          Box(
-            modifier = Modifier
-              .size(32.dp)
-              .clip(CircleShape)
-              .background(basePlaceholderColor.copy(alpha = basePlaceholderColor.alpha * currentAlpha))
-          )
         }
       }
     }

@@ -162,8 +162,8 @@ class UpdateManager(
     private const val META_FILE_NAME = "aurix_update.apk.meta.json"
 
     val CURRENT_RELEASE_NOTES = listOf(
-      "Release v1.9.0 — Startup & Crash Stability: Eliminated infinite crash-relaunch loops, removed unconfigured startup provider initialization, and hardened Android 12+ foreground download services",
-      "Safe Compose Rendering & List Keys: Guarded custom Canvas/drawBehind shaders against zero/tiny layout bounds and added unique indexed LazyColumn keys across playlists, albums, search, and library",
+      "Release v1.8.1 — Search Stability & Clean Card UI: Fixed YouTube multi-query search crashes, cancellable extraction, off-main-thread mixes, and debounced lyrics verification",
+      "Clean Standalone Track Cards: 28dp rounded navy cards with silver rim, centered 60dp cover art, single Heart action button, long-press track menu, and status-bar safe padding",
       "Full AURIX Experience: Personalized Home mixes, Khmer & English localization, animated planet brand & update logos, Equalizer, Crossfade, and OTA updates"
     )
 

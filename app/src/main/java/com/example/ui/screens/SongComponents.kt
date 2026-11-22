@@ -9,11 +9,13 @@ import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.Canvas
+import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.LocalIndication
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.combinedClickable
 import androidx.compose.foundation.hoverable
 import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.interaction.collectIsHoveredAsState
@@ -61,6 +63,7 @@ import com.example.model.APP_ICON_ARTWORK
 import com.example.model.Song
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.withContext
 
 fun resolveArtworkModel(artworkUrl: String, source: String = ""): Any? {
@@ -243,6 +246,7 @@ fun SongArtwork(
   cornerRadius: Dp = 12.dp,
   iconSize: Dp = 22.dp
 ) {
+  val context = LocalContext.current
   val (c1, c2) = remember(song.title) { artworkHueColors(song.title) }
   val gradient = remember(c1, c2) {
     Brush.linearGradient(colors = listOf(c1, c2, Color(0xFF0B1020)))
@@ -263,41 +267,38 @@ fun SongArtwork(
       .background(placeholderGradient),
     contentAlignment = Alignment.Center
   ) {
-    androidx.compose.animation.Crossfade(
-      targetState = song.artworkUrl,
-      animationSpec = tween(durationMillis = 280),
-      label = "song_artwork_crossfade"
-    ) { targetArt ->
-      Box(
-        modifier = Modifier.fillMaxSize(),
-        contentAlignment = Alignment.Center
-      ) {
-        when {
-          targetArt == APP_ICON_ARTWORK -> {
-            Image(
-              painter = painterResource(id = R.drawable.ic_launcher_foreground),
-              contentDescription = song.title,
-              contentScale = ContentScale.Fit,
-              modifier = Modifier.fillMaxSize(0.86f)
-            )
-          }
-          targetArt.isNotBlank() -> {
-            AsyncImage(
-              model = targetArt,
-              contentDescription = song.title,
-              contentScale = ContentScale.Crop,
-              modifier = Modifier.fillMaxSize()
-            )
-          }
-          else -> {
-            Icon(
-              imageVector = Icons.Rounded.MusicNote,
-              contentDescription = null,
-              tint = Color.White.copy(alpha = 0.88f),
-              modifier = Modifier.size(iconSize)
-            )
-          }
+    when {
+      song.artworkUrl == APP_ICON_ARTWORK -> {
+        Image(
+          painter = painterResource(id = R.drawable.ic_launcher_foreground),
+          contentDescription = song.title,
+          contentScale = ContentScale.Fit,
+          modifier = Modifier.fillMaxSize(0.86f)
+        )
+      }
+      song.artworkUrl.isNotBlank() -> {
+        val imageRequest = remember(context, song.artworkUrl) {
+          ImageRequest.Builder(context)
+            .data(song.artworkUrl)
+            .size(240)
+            .crossfade(false)
+            .build()
         }
+        AsyncImage(
+          model = imageRequest,
+          contentDescription = song.title,
+          contentScale = ContentScale.Crop,
+          alignment = Alignment.Center,
+          modifier = Modifier.fillMaxSize()
+        )
+      }
+      else -> {
+        Icon(
+          imageVector = Icons.Rounded.MusicNote,
+          contentDescription = null,
+          tint = Color.White.copy(alpha = 0.88f),
+          modifier = Modifier.size(iconSize)
+        )
       }
     }
   }
@@ -811,20 +812,28 @@ fun DynamicArtGlassBackdropLayer(
   )
   val (c1, c2) = artColors
 
+  val context = LocalContext.current
   Box(modifier = modifier) {
     if (layerAlpha > 0.01f && song != null) {
       Box(modifier = Modifier.matchParentSize().alpha(layerAlpha)) {
         val model = resolveArtworkModel(song.artworkUrl, song.source)
         if (model != null && Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
+          val blurReq = remember(context, model) {
+            ImageRequest.Builder(context)
+              .data(model)
+              .size(96)
+              .crossfade(false)
+              .build()
+          }
           AsyncImage(
-            model = model,
+            model = blurReq,
             contentDescription = null,
             contentScale = ContentScale.Crop,
             modifier = Modifier
               .matchParentSize()
               .scale(1.18f)
               .alpha(artAlpha)
-              .blur(blurRadius)
+              .then(if (blurRadius > 0.dp) Modifier.blur(blurRadius) else Modifier)
           )
         }
         Box(
@@ -943,6 +952,7 @@ fun OpenCloseGlassPill(
   }
 }
 
+@OptIn(ExperimentalFoundationApi::class)
 @Composable
 fun SongRow(
   song: Song,
@@ -958,170 +968,27 @@ fun SongRow(
   onFavoriteClick: () -> Unit,
   onAddToAlbumClick: (() -> Unit)? = null,
   onEditPhotoClick: (() -> Unit)? = null,
-  onDeleteClick: (() -> Unit)? = null
+  onDeleteClick: (() -> Unit)? = null,
+  modifier: Modifier = Modifier
 ) {
-  LaunchedEffect(song.id) {
-    onCheckLyrics?.invoke(song)
-  }
-
-  val heartScale by animateFloatAsState(
-    targetValue = if (song.isFavorite) 1.15f else 1.0f,
-    animationSpec = if (reducedMotion) snap() else spring(dampingRatio = Spring.DampingRatioMediumBouncy),
-    label = "heart_pop"
+  StandaloneSongCard(
+    song = song,
+    isPlaying = isPlaying,
+    isCurrent = isCurrent,
+    isResolving = false,
+    reducedMotion = reducedMotion,
+    darkTheme = darkTheme,
+    downloadProgress = null,
+    isDownloaded = false,
+    onCheckLyrics = onCheckLyrics,
+    onSongClick = onSongClick,
+    onFavoriteClick = onFavoriteClick,
+    onDownloadClick = null,
+    onAddToAlbumClick = onAddToAlbumClick,
+    onEditPhotoClick = onEditPhotoClick,
+    onDeleteClick = onDeleteClick,
+    modifier = modifier
   )
-
-  val cardBg = Brush.horizontalGradient(listOf(Color(0xFF18233B), Color(0xFF111728)))
-  val silverTopEdge = Color(0xFFBEC8DC).copy(alpha = 0.55f)
-  val faintBorder = Color.White.copy(alpha = 0.06f)
-  val hardShadowColor = Color(0xFF080C18).copy(alpha = 0.7f)
-
-  Box(
-    modifier = Modifier
-      .fillMaxWidth()
-      .graphicsLayer { clip = false }
-      .drawBehind {
-        val cornerRadiusPx = 28.dp.toPx()
-        val shadowOffsetY = 5.dp.toPx()
-
-        // Hard solid shadow: 0 5px 0 rgba(8,12,24,0.7)
-        drawRoundRect(
-          color = hardShadowColor,
-          topLeft = Offset(0f, shadowOffsetY),
-          size = size,
-          cornerRadius = CornerRadius(cornerRadiusPx, cornerRadiusPx)
-        )
-
-        // Card background gradient
-        drawRoundRect(
-          brush = cardBg,
-          topLeft = Offset.Zero,
-          size = size,
-          cornerRadius = CornerRadius(cornerRadiusPx, cornerRadiusPx)
-        )
-
-        // 1px faint border on sides and bottom
-        drawRoundRect(
-          color = faintBorder,
-          topLeft = Offset.Zero,
-          size = size,
-          cornerRadius = CornerRadius(cornerRadiusPx, cornerRadiusPx),
-          style = Stroke(width = 1.dp.toPx())
-        )
-
-        // 2px light silver top edge following rounded corners
-        drawArc(
-          color = silverTopEdge,
-          startAngle = 180f,
-          sweepAngle = 180f,
-          useCenter = false,
-          topLeft = Offset.Zero,
-          size = Size(size.width, cornerRadiusPx * 2f),
-          style = Stroke(width = 2.dp.toPx())
-        )
-      }
-      .clip(RoundedCornerShape(28.dp))
-      .clickable { onSongClick() }
-      .padding(14.dp),
-    contentAlignment = Alignment.Center
-  ) {
-    Row(
-      modifier = Modifier.fillMaxWidth(),
-      verticalAlignment = Alignment.CenterVertically,
-      horizontalArrangement = Arrangement.spacedBy(14.dp)
-    ) {
-      if (rank != null) {
-        Box(
-          modifier = Modifier.width(28.dp),
-          contentAlignment = Alignment.Center
-        ) {
-          if (isCurrent) {
-            EqualizerBars(
-              isPlaying = isPlaying,
-              color = MaterialTheme.colorScheme.primary,
-              reducedMotion = reducedMotion,
-              maxHeight = 14.dp
-            )
-          } else {
-            Text(
-              text = String.format("%02d", rank),
-              style = MaterialTheme.typography.labelLarge.copy(fontWeight = FontWeight.Bold),
-              color = if (rank <= 3) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.78f)
-            )
-          }
-        }
-      }
-
-      // Cover art: rounded square, radius 18px, 60px
-      Box(
-        modifier = Modifier
-          .size(60.dp)
-          .clip(RoundedCornerShape(18.dp))
-          .border(1.dp, Color.White.copy(alpha = 0.18f), RoundedCornerShape(18.dp))
-      ) {
-        SongArtwork(song = song, modifier = Modifier.fillMaxSize(), cornerRadius = 18.dp)
-      }
-
-      // Title + "artist · duration" (two lines, ellipsis if too long)
-      Column(
-        modifier = Modifier.weight(1f),
-        verticalArrangement = Arrangement.spacedBy(4.dp)
-      ) {
-        Row(
-          verticalAlignment = Alignment.CenterVertically,
-          horizontalArrangement = Arrangement.spacedBy(6.dp)
-        ) {
-          if (isCurrent && rank == null) {
-            EqualizerBars(
-              isPlaying = isPlaying,
-              color = MaterialTheme.colorScheme.primary,
-              reducedMotion = reducedMotion,
-              maxHeight = 13.dp
-            )
-          }
-          Text(
-            text = song.title,
-            style = MaterialTheme.typography.bodyMedium.copy(fontWeight = FontWeight.Bold),
-            maxLines = 1,
-            overflow = TextOverflow.Ellipsis,
-            color = if (isCurrent) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onBackground,
-            modifier = Modifier.weight(1f, fill = false)
-          )
-        }
-
-        val durationStr = if (song.durationSeconds > 0) {
-          "${song.durationSeconds / 60}:${String.format("%02d", song.durationSeconds % 60)}"
-        } else ""
-        val subtitleText = if (durationStr.isNotBlank()) "${song.artist} · $durationStr" else song.artist
-
-        Text(
-          text = subtitleText,
-          style = MaterialTheme.typography.bodySmall,
-          maxLines = 1,
-          overflow = TextOverflow.Ellipsis,
-          color = MaterialTheme.colorScheme.onSurfaceVariant
-        )
-      }
-
-      // ONE round 44px action button on the right (heart/like only)
-      Surface(
-        shape = CircleShape,
-        color = MaterialTheme.colorScheme.surface.copy(alpha = 0.22f),
-        modifier = Modifier
-          .size(44.dp)
-          .clickable { onFavoriteClick() }
-          .testTag("song_favorite_button_${song.id}")
-      ) {
-        Box(contentAlignment = Alignment.Center) {
-          Icon(
-            imageVector = if (song.isFavorite) Icons.Rounded.Favorite else Icons.Rounded.FavoriteBorder,
-            contentDescription = "Favorite",
-            tint = if (song.isFavorite) MaterialTheme.colorScheme.error else Color.White.copy(alpha = 0.85f),
-            modifier = Modifier.scale(heartScale).size(22.dp)
-          )
-        }
-      }
-    }
-  }
 }
 
 @Composable
@@ -1144,372 +1011,359 @@ fun SongDownloadRow(
   onDownloadClick: () -> Unit = {},
   modifier: Modifier = Modifier
 ) {
+  StandaloneSongCard(
+    song = song,
+    isPlaying = isPlaying,
+    isCurrent = isCurrent,
+    isResolving = isResolving,
+    reducedMotion = reducedMotion,
+    darkTheme = darkTheme,
+    downloadProgress = downloadProgress,
+    isDownloaded = isDownloaded,
+    onCheckLyrics = onCheckLyrics,
+    onSongClick = onSongClick,
+    onFavoriteClick = onFavoriteClick,
+    onDownloadClick = onDownloadClick,
+    onAddToAlbumClick = null,
+    onEditPhotoClick = null,
+    onDeleteClick = null,
+    modifier = modifier
+  )
+}
+
+@OptIn(ExperimentalFoundationApi::class)
+@Composable
+private fun StandaloneSongCard(
+  song: Song,
+  isPlaying: Boolean,
+  isCurrent: Boolean,
+  isResolving: Boolean,
+  reducedMotion: Boolean,
+  darkTheme: Boolean,
+  downloadProgress: Float?,
+  isDownloaded: Boolean,
+  onCheckLyrics: ((Song) -> Unit)?,
+  onSongClick: () -> Unit,
+  onFavoriteClick: () -> Unit,
+  onDownloadClick: (() -> Unit)?,
+  onAddToAlbumClick: (() -> Unit)?,
+  onEditPhotoClick: (() -> Unit)?,
+  onDeleteClick: (() -> Unit)?,
+  modifier: Modifier = Modifier
+) {
   LaunchedEffect(song.id) {
-    onCheckLyrics?.invoke(song)
-  }
-
-  val rowInteractionSource = remember { MutableInteractionSource() }
-  val isRowPressed by rowInteractionSource.collectIsPressedAsState()
-  val isRowHovered by rowInteractionSource.collectIsHoveredAsState()
-
-  val dlInteractionSource = remember { MutableInteractionSource() }
-  val isDlPressed by dlInteractionSource.collectIsPressedAsState()
-
-  val favInteractionSource = remember { MutableInteractionSource() }
-  val isFavPressed by favInteractionSource.collectIsPressedAsState()
-
-  val playInteractionSource = remember { MutableInteractionSource() }
-  val isPlayPressed by playInteractionSource.collectIsPressedAsState()
-
-  val rowScale by animateFloatAsState(
-    targetValue = when {
-      isRowPressed -> 0.978f
-      isRowHovered -> 1.008f
-      else -> 1f
-    },
-    animationSpec = if (reducedMotion) snap() else spring(
-      dampingRatio = 0.72f,
-      stiffness = Spring.StiffnessMediumLow
-    ),
-    label = "song_download_row_scale"
-  )
-  val glassLuminance by animateFloatAsState(
-    targetValue = when {
-      isRowPressed -> 1f
-      isCurrent -> 0.85f
-      isRowHovered -> 0.50f
-      else -> 0f
-    },
-    animationSpec = if (reducedMotion) snap() else spring(
-      dampingRatio = 0.86f,
-      stiffness = Spring.StiffnessMediumLow
-    ),
-    label = "song_download_row_luminance"
-  )
-  val artScale by animateFloatAsState(
-    targetValue = if (isRowPressed || isCurrent) 1.045f else 1f,
-    animationSpec = if (reducedMotion) snap() else spring(
-      dampingRatio = 0.68f,
-      stiffness = Spring.StiffnessMedium
-    ),
-    label = "song_download_art_scale"
-  )
-  val dlScale by animateFloatAsState(
-    targetValue = when {
-      isDlPressed -> 0.86f
-      isDownloaded -> 1.08f
-      else -> 1f
-    },
-    animationSpec = if (reducedMotion) snap() else spring(
-      dampingRatio = Spring.DampingRatioMediumBouncy,
-      stiffness = Spring.StiffnessMedium
-    ),
-    label = "song_download_btn_scale"
-  )
-  val favScale by animateFloatAsState(
-    targetValue = when {
-      isFavPressed -> 0.84f
-      song.isFavorite -> 1.16f
-      else -> 1f
-    },
-    animationSpec = if (reducedMotion) snap() else spring(
-      dampingRatio = Spring.DampingRatioMediumBouncy,
-      stiffness = Spring.StiffnessMedium
-    ),
-    label = "song_download_fav_scale"
-  )
-  val playScale by animateFloatAsState(
-    targetValue = when {
-      isPlayPressed -> 0.88f
-      isCurrent && isPlaying -> 1.05f
-      else -> 1f
-    },
-    animationSpec = if (reducedMotion) snap() else spring(
-      dampingRatio = 0.62f,
-      stiffness = Spring.StiffnessMedium
-    ),
-    label = "song_download_play_scale"
-  )
-
-  val rowShape = RoundedCornerShape(22.dp)
-  val accentColor = MaterialTheme.colorScheme.primary
-  val rimTint = ambientPrimaryColor ?: accentColor
-  val secondaryTint = ambientSecondaryColor ?: rimTint
-  val glassBrush = when {
-    isCurrent -> Brush.linearGradient(
-      colors = listOf(
-        rimTint.copy(alpha = if (darkTheme) 0.30f else 0.18f),
-        secondaryTint.copy(alpha = if (darkTheme) 0.18f else 0.10f),
-        if (darkTheme) Color(0xFF162036).copy(alpha = 0.78f) else Color.White.copy(alpha = 0.86f)
-      )
-    )
-    ambientPrimaryColor != null && darkTheme -> Brush.linearGradient(
-      colors = listOf(
-        ambientPrimaryColor.copy(alpha = 0.16f + 0.06f * glassLuminance),
-        secondaryTint.copy(alpha = 0.10f + 0.05f * glassLuminance),
-        Color(0xFF131B2E).copy(alpha = 0.64f + 0.08f * glassLuminance)
-      )
-    )
-    ambientPrimaryColor != null && !darkTheme -> Brush.linearGradient(
-      colors = listOf(
-        Color.White.copy(alpha = (0.82f + 0.08f * glassLuminance).coerceAtMost(1f)),
-        ambientPrimaryColor.copy(alpha = 0.09f + 0.04f * glassLuminance),
-        Color(0xFFF2F6FF).copy(alpha = (0.74f + 0.10f * glassLuminance).coerceAtMost(1f))
-      )
-    )
-    darkTheme -> Brush.linearGradient(
-      colors = listOf(
-        Color(0xFF1D2840).copy(alpha = 0.76f + 0.08f * glassLuminance),
-        Color(0xFF131B2E).copy(alpha = 0.68f + 0.08f * glassLuminance)
-      )
-    )
-    else -> Brush.linearGradient(
-      colors = listOf(
-        Color.White.copy(alpha = (0.88f + 0.08f * glassLuminance).coerceAtMost(1f)),
-        Color(0xFFF2F6FF).copy(alpha = (0.78f + 0.10f * glassLuminance).coerceAtMost(1f))
-      )
-    )
-  }
-  val borderBrush = Brush.verticalGradient(
-    colors = if (isCurrent) {
-      listOf(
-        rimTint.copy(alpha = 0.60f + 0.20f * glassLuminance),
-        secondaryTint.copy(alpha = 0.22f + 0.12f * glassLuminance)
-      )
-    } else if (darkTheme) {
-      listOf(
-        (ambientPrimaryColor ?: Color.White).copy(alpha = 0.28f + 0.16f * glassLuminance),
-        Color.White.copy(alpha = 0.08f + 0.10f * glassLuminance)
-      )
-    } else {
-      listOf(
-        Color.White,
-        (ambientPrimaryColor ?: Color.White).copy(alpha = 0.45f + 0.25f * glassLuminance)
-      )
+    if (onCheckLyrics != null) {
+      delay(350L)
+      onCheckLyrics.invoke(song)
     }
+  }
+
+  var showContextMenu by remember(song.id) { mutableStateOf(false) }
+
+  val heartScale by animateFloatAsState(
+    targetValue = if (song.isFavorite) 1.15f else 1.0f,
+    animationSpec = if (reducedMotion) snap() else spring(dampingRatio = Spring.DampingRatioMediumBouncy),
+    label = "heart_pop"
   )
+
+  val cardBg = if (darkTheme) {
+    Brush.horizontalGradient(listOf(Color(0xFF18233B), Color(0xFF111728)))
+  } else {
+    Brush.horizontalGradient(listOf(Color.White.copy(alpha = 0.96f), Color(0xFFF3F6FF)))
+  }
+  val silverTopEdge = if (darkTheme) {
+    Color(0xFFBEC8DC).copy(alpha = 0.55f)
+  } else {
+    Color.White
+  }
+  val faintBorder = if (darkTheme) {
+    Color.White.copy(alpha = 0.06f)
+  } else {
+    Color(0xFFCBD5E1).copy(alpha = 0.55f)
+  }
+  val hardShadowColor = if (darkTheme) {
+    Color(0xFF080C18).copy(alpha = 0.70f)
+  } else {
+    Color(0xFF64748B).copy(alpha = 0.16f)
+  }
+  val accentColor = MaterialTheme.colorScheme.primary
+  val hasMenuActions = onDownloadClick != null ||
+    onAddToAlbumClick != null ||
+    onEditPhotoClick != null ||
+    onDeleteClick != null
 
   Box(
     modifier = modifier
       .fillMaxWidth()
-      .padding(vertical = 3.dp)
-      .graphicsLayer {
-        scaleX = rowScale
-        scaleY = rowScale
-      }
-      .clip(rowShape)
-      .background(glassBrush)
-      .background(Color.White.copy(alpha = (if (darkTheme) 0.06f else 0.16f) * glassLuminance))
-      .border(1.dp, borderBrush, rowShape)
-      .drawBehind {
-        val stroke = 1.2.dp.toPx()
-        if (size.width <= stroke || size.height <= stroke) return@drawBehind
-        val inset = stroke * 0.5f
-        val r = (22.dp.toPx() - inset).coerceAtLeast(0f)
-        drawRoundRect(
-          brush = Brush.verticalGradient(
-            colors = listOf(
-              Color.White.copy(
-                alpha = (if (darkTheme) 0.28f else 0.92f) + (if (darkTheme) 0.16f else 0.08f) * glassLuminance
-              ),
-              Color.Transparent
-            ),
-            startY = 0f,
-            endY = size.height * 0.42f
-          ),
-          topLeft = Offset(inset, inset),
-          size = Size(size.width - stroke, size.height - stroke),
-          cornerRadius = CornerRadius(r, r),
-          style = Stroke(width = stroke)
-        )
-      }
-      .hoverable(rowInteractionSource)
-      .clickable(
-        interactionSource = rowInteractionSource,
-        indication = LocalIndication.current
-      ) { onSongClick() }
-      .testTag("song_row_${song.id}")
+      .padding(bottom = 5.dp)
   ) {
-    Row(
+    Box(
       modifier = Modifier
         .fillMaxWidth()
-        .padding(horizontal = 12.dp, vertical = 10.dp),
-      verticalAlignment = Alignment.CenterVertically
+        .graphicsLayer { clip = false }
+        .drawBehind {
+          if (size.width <= 0f || size.height <= 0f) return@drawBehind
+          val cornerRadiusPx = 28.dp.toPx().coerceAtMost(minOf(size.width, size.height) / 2f)
+          val shadowOffsetY = 5.dp.toPx()
+
+          // Hard solid shadow: 0 5px 0 rgba(8,12,24,0.7)
+          drawRoundRect(
+            color = hardShadowColor,
+            topLeft = Offset(0f, shadowOffsetY),
+            size = size,
+            cornerRadius = CornerRadius(cornerRadiusPx, cornerRadiusPx)
+          )
+
+          // Card background gradient
+          drawRoundRect(
+            brush = cardBg,
+            topLeft = Offset.Zero,
+            size = size,
+            cornerRadius = CornerRadius(cornerRadiusPx, cornerRadiusPx)
+          )
+
+          // 1px faint border on other sides
+          drawRoundRect(
+            color = faintBorder,
+            topLeft = Offset.Zero,
+            size = size,
+            cornerRadius = CornerRadius(cornerRadiusPx, cornerRadiusPx),
+            style = Stroke(width = 1.dp.toPx())
+          )
+
+          // 2px light silver top edge following the rounded corners
+          if (isCurrent) {
+            drawRoundRect(
+              color = accentColor.copy(alpha = 0.72f),
+              topLeft = Offset.Zero,
+              size = size,
+              cornerRadius = CornerRadius(cornerRadiusPx, cornerRadiusPx),
+              style = Stroke(width = 1.5.dp.toPx())
+            )
+          }
+          val arcDiameter = (cornerRadiusPx * 2f).coerceAtMost(size.height)
+          if (arcDiameter > 0f && size.width > 0f) {
+            drawArc(
+              color = silverTopEdge,
+              startAngle = 180f,
+              sweepAngle = 180f,
+              useCenter = false,
+              topLeft = Offset.Zero,
+              size = Size(size.width, arcDiameter),
+              style = Stroke(width = 2.dp.toPx())
+            )
+          }
+        }
+        .clip(RoundedCornerShape(28.dp))
+        .combinedClickable(
+          onClick = onSongClick,
+          onLongClick = { if (hasMenuActions) showContextMenu = true }
+        )
+        .padding(14.dp)
+        .testTag("song_row_${song.id}"),
+      contentAlignment = Alignment.Center
     ) {
-      if (isCurrent) {
-        EqualizerBars(
-          isPlaying = isPlaying,
-          color = accentColor,
-          reducedMotion = reducedMotion,
-          modifier = Modifier.width(24.dp)
-        )
-      } else {
-        Text(
-          text = String.format("%02d", index),
-          style = MaterialTheme.typography.bodyMedium.copy(fontWeight = FontWeight.Bold),
-          color = MaterialTheme.colorScheme.onSurfaceVariant,
-          modifier = Modifier.width(24.dp)
-        )
-      }
-
-      Box(
-        modifier = Modifier
-          .size(50.dp)
-          .graphicsLayer {
-            scaleX = artScale
-            scaleY = artScale
-          }
-          .clip(RoundedCornerShape(13.dp))
-          .border(1.dp, Color.White.copy(alpha = if (darkTheme) 0.24f else 0.8f), RoundedCornerShape(13.dp))
-      ) {
-        SongArtwork(song = song, modifier = Modifier.fillMaxSize(), cornerRadius = 13.dp)
-      }
-
-      Spacer(modifier = Modifier.width(12.dp))
-      Column(modifier = Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(2.dp)) {
-        Row(verticalAlignment = Alignment.CenterVertically) {
-          Text(
-            text = song.title,
-            style = MaterialTheme.typography.bodyMedium.copy(fontWeight = FontWeight.Bold),
-            maxLines = 1,
-            overflow = TextOverflow.Ellipsis,
-            color = if (isCurrent) accentColor else MaterialTheme.colorScheme.onBackground,
-            modifier = Modifier.weight(1f, fill = false)
-          )
-          LyricsTag(
-            visible = hasLyrics,
-            size = LyricsTagSize.Standard,
-            darkTheme = darkTheme,
-            reducedMotion = reducedMotion,
-            modifier = Modifier.padding(start = 6.dp)
-          )
-        }
+      Column(modifier = Modifier.fillMaxWidth()) {
         Row(
+          modifier = Modifier.fillMaxWidth(),
           verticalAlignment = Alignment.CenterVertically,
-          horizontalArrangement = Arrangement.spacedBy(6.dp)
+          horizontalArrangement = Arrangement.spacedBy(14.dp)
         ) {
-          Text(
-            text = song.artist,
-            style = MaterialTheme.typography.bodySmall,
-            maxLines = 1,
-            overflow = TextOverflow.Ellipsis,
-            color = MaterialTheme.colorScheme.onSurfaceVariant,
-            modifier = Modifier.weight(1f, fill = false)
-          )
-          if (song.source == "YouTube") {
-            val durStr = if (song.durationSeconds > 0L) {
+          // Cover art: rounded square, radius 18dp, 60dp, object-fit cover centered
+          Box(
+            modifier = Modifier
+              .size(60.dp)
+              .clip(RoundedCornerShape(18.dp))
+              .border(
+                1.dp,
+                Color.White.copy(alpha = if (darkTheme) 0.16f else 0.75f),
+                RoundedCornerShape(18.dp)
+              ),
+            contentAlignment = Alignment.Center
+          ) {
+            SongArtwork(song = song, modifier = Modifier.fillMaxSize(), cornerRadius = 18.dp)
+            if (isResolving) {
+              Box(
+                modifier = Modifier
+                  .fillMaxSize()
+                  .background(Color.Black.copy(alpha = 0.52f)),
+                contentAlignment = Alignment.Center
+              ) {
+                CircularProgressIndicator(
+                  modifier = Modifier.size(20.dp),
+                  strokeWidth = 2.dp,
+                  color = accentColor
+                )
+              }
+            } else if (isCurrent) {
+              Box(
+                modifier = Modifier
+                  .fillMaxSize()
+                  .background(Color.Black.copy(alpha = 0.42f)),
+                contentAlignment = Alignment.Center
+              ) {
+                EqualizerBars(
+                  isPlaying = isPlaying,
+                  color = accentColor,
+                  reducedMotion = reducedMotion,
+                  barWidth = 3.dp,
+                  maxHeight = 14.dp
+                )
+              }
+            }
+          }
+
+          // Two lines: Title + "artist · duration" (ellipsis if too long)
+          Column(
+            modifier = Modifier.weight(1f),
+            verticalArrangement = Arrangement.spacedBy(4.dp)
+          ) {
+            Text(
+              text = song.title,
+              style = MaterialTheme.typography.bodyMedium.copy(fontWeight = FontWeight.Bold),
+              maxLines = 1,
+              overflow = TextOverflow.Ellipsis,
+              color = if (isCurrent) accentColor else MaterialTheme.colorScheme.onBackground
+            )
+
+            val durationStr = if (song.durationSeconds > 0L) {
               "${song.durationSeconds / 60}:${String.format("%02d", song.durationSeconds % 60)}"
+            } else ""
+            val baseMeta = if (durationStr.isNotBlank()) "${song.artist} · $durationStr" else song.artist
+            val subtitleText = when {
+              downloadProgress != null -> "${(downloadProgress * 100f).toInt().coerceIn(0, 100)}% · $baseMeta"
+              isDownloaded -> "$baseMeta · Saved"
+              else -> baseMeta
+            }
+
+            Text(
+              text = subtitleText,
+              style = MaterialTheme.typography.bodySmall,
+              maxLines = 1,
+              overflow = TextOverflow.Ellipsis,
+              color = if (downloadProgress != null) accentColor else MaterialTheme.colorScheme.onSurfaceVariant
+            )
+          }
+
+          // ONE round 44dp action button on the right (heart/like only)
+          Surface(
+            shape = CircleShape,
+            color = if (song.isFavorite) {
+              MaterialTheme.colorScheme.error.copy(alpha = 0.16f)
+            } else if (darkTheme) {
+              Color.White.copy(alpha = 0.08f)
             } else {
-              ""
-            }
-            Surface(
-              shape = RoundedCornerShape(6.dp),
-              color = Color(0xFFEF4444).copy(alpha = if (darkTheme) 0.20f else 0.14f)
-            ) {
-              Text(
-                text = if (durStr.isNotBlank()) "YT • $durStr" else "YT",
-                style = MaterialTheme.typography.labelSmall.copy(fontWeight = FontWeight.Bold, fontSize = 10.sp),
-                color = if (darkTheme) Color(0xFFFF8A8A) else Color(0xFFDC2626),
-                modifier = Modifier.padding(horizontal = 5.dp, vertical = 1.dp)
-              )
-            }
-          } else if (song.source == "iTunes 30s") {
-            Surface(
-              shape = RoundedCornerShape(6.dp),
-              color = accentColor.copy(alpha = 0.16f)
-            ) {
-              Text(
-                text = "30s",
-                style = MaterialTheme.typography.labelSmall.copy(fontWeight = FontWeight.Bold, fontSize = 10.sp),
-                color = accentColor,
-                modifier = Modifier.padding(horizontal = 5.dp, vertical = 1.dp)
+              Color.Black.copy(alpha = 0.05f)
+            },
+            modifier = Modifier
+              .size(44.dp)
+              .clip(CircleShape)
+              .clickable { onFavoriteClick() }
+              .testTag("song_favorite_button_${song.id}")
+          ) {
+            Box(contentAlignment = Alignment.Center) {
+              Icon(
+                imageVector = if (song.isFavorite) Icons.Rounded.Favorite else Icons.Rounded.FavoriteBorder,
+                contentDescription = "Favorite",
+                tint = if (song.isFavorite) {
+                  MaterialTheme.colorScheme.error
+                } else if (darkTheme) {
+                  Color.White.copy(alpha = 0.85f)
+                } else {
+                  MaterialTheme.colorScheme.onSurfaceVariant
+                },
+                modifier = Modifier
+                  .scale(heartScale)
+                  .size(21.dp)
               )
             }
           }
         }
-      }
 
-      IconButton(
-        onClick = onDownloadClick,
-        interactionSource = dlInteractionSource,
-        modifier = Modifier
-          .minimumInteractiveComponentSize()
-          .testTag("song_download_button_${song.id}")
-      ) {
         if (downloadProgress != null) {
-          CircularProgressIndicator(
-            progress = { downloadProgress.coerceIn(0f, 1f) },
-            modifier = Modifier.size(20.dp),
-            strokeWidth = 2.5.dp,
-            color = accentColor
-          )
-        } else {
-          Icon(
-            imageVector = if (isDownloaded) Icons.Rounded.DownloadDone else Icons.Rounded.Download,
-            contentDescription = if (song.source == "YouTube") "Install / Select format" else "Download Preview",
-            tint = if (isDownloaded) Color(0xFF10B981) else MaterialTheme.colorScheme.onSurfaceVariant,
-            modifier = Modifier.graphicsLayer {
-              scaleX = dlScale
-              scaleY = dlScale
-            }
+          Spacer(modifier = Modifier.height(8.dp))
+          LinearProgressIndicator(
+            progress = { downloadProgress.coerceIn(0.02f, 1f) },
+            modifier = Modifier
+              .fillMaxWidth()
+              .height(3.dp)
+              .clip(CircleShape),
+            color = accentColor,
+            trackColor = accentColor.copy(alpha = 0.18f)
           )
         }
       }
 
-      IconButton(
-        onClick = onFavoriteClick,
-        interactionSource = favInteractionSource,
-        modifier = Modifier.minimumInteractiveComponentSize()
-      ) {
-        Icon(
-          imageVector = if (song.isFavorite) Icons.Rounded.Favorite else Icons.Rounded.FavoriteBorder,
-          contentDescription = "Favorite",
-          tint = if (song.isFavorite) MaterialTheme.colorScheme.error else MaterialTheme.colorScheme.onSurfaceVariant,
-          modifier = Modifier.graphicsLayer {
-            scaleX = favScale
-            scaleY = favScale
+      if (hasMenuActions) {
+        DropdownMenu(
+          expanded = showContextMenu,
+          onDismissRequest = { showContextMenu = false }
+        ) {
+          if (onDownloadClick != null) {
+            DropdownMenuItem(
+              text = {
+                Text(
+                  text = if (isDownloaded) {
+                    stringResource(id = R.string.yt_download_another)
+                  } else {
+                    stringResource(id = R.string.yt_select_format_title)
+                  }
+                )
+              },
+              leadingIcon = {
+                Icon(
+                  imageVector = if (isDownloaded) Icons.Rounded.DownloadDone else Icons.Rounded.Download,
+                  contentDescription = null,
+                  tint = if (isDownloaded) accentColor else MaterialTheme.colorScheme.onSurface
+                )
+              },
+              modifier = Modifier.testTag("song_download_button_${song.id}"),
+              onClick = {
+                showContextMenu = false
+                onDownloadClick()
+              }
+            )
           }
-        )
-      }
-
-      Box(
-        modifier = Modifier
-          .size(40.dp)
-          .graphicsLayer {
-            scaleX = playScale
-            scaleY = playScale
+          if (onAddToAlbumClick != null) {
+            DropdownMenuItem(
+              text = { Text("Add to Album") },
+              leadingIcon = {
+                Icon(imageVector = Icons.Rounded.PlaylistAdd, contentDescription = null)
+              },
+              onClick = {
+                showContextMenu = false
+                onAddToAlbumClick()
+              }
+            )
           }
-          .clip(CircleShape)
-          .background(
-            if (isCurrent) accentColor
-            else if (darkTheme) Color.White.copy(alpha = 0.12f)
-            else Color.Black.copy(alpha = 0.06f)
-          )
-          .border(
-            1.dp,
-            Color.White.copy(alpha = if (isCurrent) 0.45f else if (darkTheme) 0.18f else 0.7f),
-            CircleShape
-          )
-          .clickable(
-            interactionSource = playInteractionSource,
-            indication = LocalIndication.current
-          ) { onSongClick() }
-          .testTag("song_play_button_${song.id}"),
-        contentAlignment = Alignment.Center
-      ) {
-        if (isResolving) {
-          CircularProgressIndicator(
-            modifier = Modifier.size(16.dp),
-            strokeWidth = 2.dp,
-            color = if (isCurrent) Color.White else accentColor
-          )
-        } else {
-          Icon(
-            imageVector = if (isCurrent && isPlaying) Icons.Rounded.Pause else Icons.Rounded.PlayArrow,
-            contentDescription = "Play",
-            tint = if (isCurrent) Color.White else MaterialTheme.colorScheme.onBackground,
-            modifier = Modifier.size(20.dp)
-          )
+          if (onEditPhotoClick != null) {
+            DropdownMenuItem(
+              text = { Text("Edit Cover") },
+              leadingIcon = {
+                Icon(imageVector = Icons.Rounded.AddPhotoAlternate, contentDescription = null)
+              },
+              onClick = {
+                showContextMenu = false
+                onEditPhotoClick()
+              }
+            )
+          }
+          if (onDeleteClick != null) {
+            DropdownMenuItem(
+              text = { Text("Remove", color = MaterialTheme.colorScheme.error) },
+              leadingIcon = {
+                Icon(
+                  imageVector = Icons.Rounded.DeleteOutline,
+                  contentDescription = null,
+                  tint = MaterialTheme.colorScheme.error
+                )
+              },
+              onClick = {
+                showContextMenu = false
+                onDeleteClick()
+              }
+            )
+          }
         }
       }
     }

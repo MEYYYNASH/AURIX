@@ -38,13 +38,16 @@ import com.example.recommendation.*
 import com.example.ui.screens.UpdateLogoState
 import com.google.common.util.concurrent.ListenableFuture
 import kotlinx.coroutines.CancellationException
+import kotlinx.coroutines.CoroutineStart
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.async
 import kotlinx.coroutines.awaitAll
 import kotlinx.coroutines.channels.BufferOverflow
 import kotlinx.coroutines.coroutineScope
+import kotlinx.coroutines.currentCoroutineContext
 import kotlinx.coroutines.delay
+import kotlinx.coroutines.ensureActive
 import kotlinx.coroutines.flow.*
 import kotlinx.coroutines.isActive
 import kotlinx.coroutines.launch
@@ -62,10 +65,10 @@ enum class DailyFeedCategory(
   val badgeText: String,
   val subtitle: String
 ) {
-  TIKTOK_VIRAL("tiktok", "Today's Hits", "Today's Hits", "Hot chart hits & previews from iTunes"),
-  DAILY_CHARTS("charts", "Daily Top", "Daily Chart", "Global top songs from iTunes & YouTube"),
+  TIKTOK_VIRAL("tiktok", "Today's Hits", "Today's Hits", "Trending hits & viral tracks today"),
+  DAILY_CHARTS("charts", "Daily Top", "Daily Chart", "Global top songs on YouTube"),
   PHONK_EDITS("phonk", "Phonk & Edits", "Viral Edits", "Phonk & montage tracks from YouTube"),
-  KHMER_ASIA("khmer", "Khmer & Asia", "Regional Hits", "Popular Khmer & Asian hits from iTunes & YouTube")
+  KHMER_ASIA("khmer", "Khmer & Asia", "Regional Hits", "Popular Khmer & Asian hits on YouTube")
 }
 
 data class NotificationNavTarget(
@@ -481,12 +484,14 @@ class AurixViewModel(application: Application) : AndroidViewModel(application) {
     popularYoutubeSongs,
     tiktokViralNewPipeSongs,
     localSongs,
-    combine(favorites, searchResults, storedCatalogSongs) { favs, search, stored -> favs + search + stored }
+    combine(favorites, storedCatalogSongs) { favs, stored -> favs + stored }
   ) { featured, popularYt, tiktokCharts, local, extra ->
     (popularYt + tiktokCharts + featured + local + extra)
       .distinctBy { it.id }
       .map { TrackMetadataClassifier.enrich(it) }
-  }.stateIn(viewModelScope, SharingStarted.Lazily, emptyList())
+  }
+    .flowOn(Dispatchers.Default)
+    .stateIn(viewModelScope, SharingStarted.Lazily, emptyList())
 
   private val _moodFlowCurrentPick = MutableStateFlow<MoodFlowPick?>(null)
   val moodFlowCurrentPick: StateFlow<MoodFlowPick?> = _moodFlowCurrentPick.asStateFlow()
@@ -496,7 +501,9 @@ class AurixViewModel(application: Application) : AndroidViewModel(application) {
     catalogTracks
   ) { logs, catalog ->
     RecommendationEngine.smartRecommendations(logs, catalog, limit = 12)
-  }.stateIn(viewModelScope, SharingStarted.Lazily, emptyList())
+  }
+    .flowOn(Dispatchers.Default)
+    .stateIn(viewModelScope, SharingStarted.Lazily, emptyList())
 
   private val _mostPlayedFilter = MutableStateFlow(MostPlayedFilter.WEEK)
   val mostPlayedFilter: StateFlow<MostPlayedFilter> = _mostPlayedFilter
@@ -506,27 +513,37 @@ class AurixViewModel(application: Application) : AndroidViewModel(application) {
     _mostPlayedFilter
   ) { logs, filter ->
     RecommendationEngine.mostPlayed(logs, filter, limit = 25)
-  }.stateIn(viewModelScope, SharingStarted.Lazily, emptyList())
+  }
+    .flowOn(Dispatchers.Default)
+    .stateIn(viewModelScope, SharingStarted.Lazily, emptyList())
 
   val moodPlaylists: StateFlow<List<MoodPlaylist>> = catalogTracks.map { catalog ->
     RecommendationEngine.buildMoodPlaylists(catalog)
-  }.stateIn(viewModelScope, SharingStarted.Lazily, emptyList())
+  }
+    .flowOn(Dispatchers.Default)
+    .stateIn(viewModelScope, SharingStarted.Lazily, emptyList())
 
   val musicDna: StateFlow<MusicDnaProfile> = qualifiedPlayLogs.map { logs ->
     RecommendationEngine.buildMusicDna(logs)
-  }.stateIn(
-    viewModelScope,
-    SharingStarted.Lazily,
-    RecommendationEngine.buildMusicDna(emptyList())
-  )
+  }
+    .flowOn(Dispatchers.Default)
+    .stateIn(
+      viewModelScope,
+      SharingStarted.Lazily,
+      RecommendationEngine.buildMusicDna(emptyList())
+    )
 
   val trendingTracks: StateFlow<List<RankedTrack>> = qualifiedPlayLogs.map { logs ->
     RecommendationEngine.trendingTracks(logs, limit = 15)
-  }.stateIn(viewModelScope, SharingStarted.Lazily, emptyList())
+  }
+    .flowOn(Dispatchers.Default)
+    .stateIn(viewModelScope, SharingStarted.Lazily, emptyList())
 
   val risingArtists: StateFlow<List<RisingArtist>> = qualifiedPlayLogs.map { logs ->
     RecommendationEngine.risingArtists(logs, limit = 10)
-  }.stateIn(viewModelScope, SharingStarted.Lazily, emptyList())
+  }
+    .flowOn(Dispatchers.Default)
+    .stateIn(viewModelScope, SharingStarted.Lazily, emptyList())
 
   private val songFeedback: StateFlow<Map<String, Boolean>> = analyticsRepository.observeSongFeedback()
     .catch { emit(emptyMap()) }
@@ -549,7 +566,9 @@ class AurixViewModel(application: Application) : AndroidViewModel(application) {
       catalog = catalog,
       limit = 6
     )
-  }.stateIn(viewModelScope, SharingStarted.Lazily, emptyList())
+  }
+    .flowOn(Dispatchers.Default)
+    .stateIn(viewModelScope, SharingStarted.Lazily, emptyList())
 
   val myMixes: StateFlow<List<PersonalMix>> = combine(
     qualifiedPlayLogs,
@@ -567,7 +586,9 @@ class AurixViewModel(application: Application) : AndroidViewModel(application) {
       refreshSalt = salt,
       maxMixes = 4
     )
-  }.stateIn(viewModelScope, SharingStarted.Lazily, emptyList())
+  }
+    .flowOn(Dispatchers.Default)
+    .stateIn(viewModelScope, SharingStarted.Lazily, emptyList())
 
   val dailyDiscovery: StateFlow<PersonalMix?> = combine(
     qualifiedPlayLogs,
@@ -585,7 +606,9 @@ class AurixViewModel(application: Application) : AndroidViewModel(application) {
       refreshSalt = salt,
       limit = 20
     )
-  }.stateIn(viewModelScope, SharingStarted.Lazily, null)
+  }
+    .flowOn(Dispatchers.Default)
+    .stateIn(viewModelScope, SharingStarted.Lazily, null)
 
   val favoritesMix: StateFlow<PersonalMix?> = combine(
     favorites,
@@ -598,7 +621,9 @@ class AurixViewModel(application: Application) : AndroidViewModel(application) {
       feedback = fb,
       limit = 24
     )
-  }.stateIn(viewModelScope, SharingStarted.Lazily, null)
+  }
+    .flowOn(Dispatchers.Default)
+    .stateIn(viewModelScope, SharingStarted.Lazily, null)
 
   val recentPlayEntries: StateFlow<List<RecentPlayEntry>> = combine(
     qualifiedPlayLogs,
@@ -609,7 +634,9 @@ class AurixViewModel(application: Application) : AndroidViewModel(application) {
       richHistory = rich,
       limit = 12
     )
-  }.stateIn(viewModelScope, SharingStarted.Lazily, emptyList())
+  }
+    .flowOn(Dispatchers.Default)
+    .stateIn(viewModelScope, SharingStarted.Lazily, emptyList())
 
   val recentlyAddedSongs: StateFlow<List<Song>> = localSongs.map { list ->
     list.take(16)
@@ -831,7 +858,9 @@ class AurixViewModel(application: Application) : AndroidViewModel(application) {
       newAlbums = albums,
       limit = 18
     )
-  }.stateIn(viewModelScope, SharingStarted.Lazily, emptyList())
+  }
+    .flowOn(Dispatchers.Default)
+    .stateIn(viewModelScope, SharingStarted.Lazily, emptyList())
 
   val activeAlbumInfo: StateFlow<AlbumInfo> = combine(
     libraryAlbums,
@@ -1201,16 +1230,18 @@ class AurixViewModel(application: Application) : AndroidViewModel(application) {
         featuredTracks,
         popularYoutubeSongs,
         tiktokViralNewPipeSongs,
-        localSongs,
-        searchResults
-      ) { f, p, t, l, s ->
-        (p + t + f + l + s).distinctBy { it.id }
+        localSongs
+      ) { f, p, t, l ->
+        (p + t + f + l).distinctBy { it.id }
       }
         .debounce(1_000L)
+        .flowOn(Dispatchers.Default)
         .catch { }
         .collectLatest { tracks ->
           if (tracks.isNotEmpty()) {
-            runCatching { analyticsRepository.upsertCatalogMetadata(tracks.take(120)) }
+            withContext(Dispatchers.IO) {
+              runCatching { analyticsRepository.upsertCatalogMetadata(tracks.take(120)) }
+            }
           }
         }
     }
@@ -1222,13 +1253,15 @@ class AurixViewModel(application: Application) : AndroidViewModel(application) {
         .catch { }
         .collectLatest { (logs, catalog) ->
           if (logs.isNotEmpty() && catalog.isNotEmpty()) {
-            runCatching {
-              analyticsRepository.ensureDiscoverWeekly(
-                playLogs = logs,
-                catalog = catalog,
-                existingSnapshot = rawDiscoverWeekly.value,
-                forceRefresh = false
-              )
+            withContext(Dispatchers.Default) {
+              runCatching {
+                analyticsRepository.ensureDiscoverWeekly(
+                  playLogs = logs,
+                  catalog = catalog,
+                  existingSnapshot = rawDiscoverWeekly.value,
+                  forceRefresh = false
+                )
+              }
             }
           }
         }
@@ -2509,6 +2542,7 @@ class AurixViewModel(application: Application) : AndroidViewModel(application) {
         if (dispatch.debounceMs > 0L) {
           delay(dispatch.debounceMs)
         }
+        currentCoroutineContext().ensureActive()
 
         _isSearching.value = true
         _searchError.value = null
@@ -2520,6 +2554,7 @@ class AurixViewModel(application: Application) : AndroidViewModel(application) {
               val pastedVideoId = if (isLink) YoutubeExtractor.extractVideoId(trimmed) else null
               val mapped = if (!pastedVideoId.isNullOrBlank()) {
                 val extracted = getOrExtractYoutubeData(pastedVideoId)
+                currentCoroutineContext().ensureActive()
                 val bestFmt = pickBestPlayableFormat(extracted?.audioFormats.orEmpty())
                 if (extracted != null && bestFmt != null) {
                   val (parsedTitle, parsedArtist) = parseYoutubeTitleAndArtist(extracted.title, extracted.author)
@@ -2542,10 +2577,15 @@ class AurixViewModel(application: Application) : AndroidViewModel(application) {
                   emptyList()
                 }
               } else {
-                YoutubeExtractor.searchSongs(query = trimmed, limit = 25).map { item ->
-                  mapYoutubeSearchItem(item = item, sourceTag = "YouTube")
+                val rawItems = YoutubeExtractor.searchSongs(query = trimmed, limit = 25)
+                currentCoroutineContext().ensureActive()
+                withContext(Dispatchers.Default) {
+                  rawItems.mapNotNull { item ->
+                    runCatching { mapYoutubeSearchItem(item = item, sourceTag = "YouTube") }.getOrNull()
+                  }
                 }
               }
+              currentCoroutineContext().ensureActive()
               _rawSearchResults.value = mapped
               val visible = mapped
                 .filter { isTrackVisible(it, hiddenSongIds.value, blockedArtists.value) }
@@ -3883,12 +3923,14 @@ class AurixViewModel(application: Application) : AndroidViewModel(application) {
     if (song.id in verifiedLyricsIds.value) return
     val existingJob = inFlightLyricsChecks[song.id]
     if (existingJob != null && existingJob.isActive) return
+    if (inFlightLyricsChecks.size >= 40) return
 
-    val job = viewModelScope.launch(Dispatchers.IO) {
+    val job = viewModelScope.launch(Dispatchers.IO, start = CoroutineStart.LAZY) {
       try {
+        currentCoroutineContext().ensureActive()
         val songKey = LyricsMatcher.songIdentityKey(song)
 
-        val cached = runCatching { dao.getLyricsCache(song.id) }.getOrNull() 
+        val cached = runCatching { dao.getLyricsCache(song.id) }.getOrNull()
           ?: runCatching { dao.getLyricsCacheByKey(songKey) }.getOrNull()?.also { keyHit ->
             if (!keyHit.isReportedBad && keyHit.songId != song.id) {
               runCatching { dao.insertLyricsCache(keyHit.copy(songId = song.id)) }
@@ -3899,16 +3941,21 @@ class AurixViewModel(application: Application) : AndroidViewModel(application) {
         }
 
         lyricsCheckSemaphore.withPermit {
+          currentCoroutineContext().ensureActive()
           val latestCached = runCatching { dao.getLyricsCache(song.id) }.getOrNull()
           if (latestCached != null && !latestCached.isReportedBad) {
             return@withPermit
           }
-          val outcome = runCatching {
+          val outcome = try {
             LyricsMatcher.matchWithOutcome(
               song = song,
               context = getApplication()
             )
-          }.getOrElse { LyricsMatchOutcome.NetworkError }
+          } catch (ce: CancellationException) {
+            throw ce
+          } catch (_: Throwable) {
+            LyricsMatchOutcome.NetworkError
+          }
 
           when (outcome) {
             is LyricsMatchOutcome.Verified -> {
@@ -3952,7 +3999,15 @@ class AurixViewModel(application: Application) : AndroidViewModel(application) {
         inFlightLyricsChecks.remove(song.id)
       }
     }
-    inFlightLyricsChecks[song.id] = job
+    val previous = inFlightLyricsChecks.putIfAbsent(song.id, job)
+    if (previous != null && previous.isActive) {
+      job.cancel()
+    } else {
+      if (previous != null) {
+        inFlightLyricsChecks[song.id] = job
+      }
+      job.start()
+    }
   }
 
   private fun cleanTrackTitle(raw: String): String {

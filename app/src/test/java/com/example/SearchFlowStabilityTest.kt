@@ -10,11 +10,13 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.test.hasTestTag
 import androidx.compose.ui.test.junit4.createComposeRule
+import androidx.compose.ui.test.longClick
 import androidx.compose.ui.test.onNodeWithTag
 import androidx.compose.ui.test.onNodeWithText
 import androidx.compose.ui.test.performClick
 import androidx.compose.ui.test.performImeAction
 import androidx.compose.ui.test.performTextInput
+import androidx.compose.ui.test.performTouchInput
 import androidx.test.core.app.ApplicationProvider
 import com.example.data.PreferencesManager
 import com.example.data.YoutubeExtractor
@@ -63,13 +65,13 @@ class SearchFlowStabilityTest {
   private fun sampleSongs(): List<Song> {
     return (1..15).map { idx ->
       Song(
-        id = if (idx <= 10) "yt_vid_$idx" else "itunes_${idx}",
+        id = "yt_vid_$idx",
         title = "Found Track #$idx",
         artist = "Artist $idx",
         artworkUrl = if (idx % 2 == 0) "https://i.ytimg.com/vi/vid_$idx/hqdefault.jpg" else "",
         durationSeconds = 195L + idx,
-        streamUrl = if (idx <= 10) "https://www.youtube.com/watch?v=vid_$idx" else "https://audio-ssl.itunes.apple.com/preview_$idx.m4a",
-        source = if (idx <= 10) "YouTube" else "iTunes 30s",
+        streamUrl = "https://www.youtube.com/watch?v=vid_$idx",
+        source = "YouTube",
         isFavorite = idx == 1,
         fullDurationSeconds = 195L + idx
       )
@@ -192,7 +194,13 @@ class SearchFlowStabilityTest {
     composeTestRule.mainClock.advanceTimeBy(350)
     composeTestRule.waitForIdle()
 
-    // Click download button -> opens YoutubeFormatPickerSheet Loading -> Ready -> Closed
+    // Click favorite button right on the standalone row
+    composeTestRule.onNodeWithTag("song_favorite_button_yt_vid_1").performClick()
+    composeTestRule.waitForIdle()
+
+    // Long-press row to open context menu, then click download -> opens YoutubeFormatPickerSheet
+    composeTestRule.onNodeWithTag("song_row_yt_vid_1").performTouchInput { longClick() }
+    composeTestRule.waitForIdle()
     composeTestRule.onNodeWithTag("song_download_button_yt_vid_1").performClick()
     composeTestRule.waitForIdle()
     assertEquals("yt_vid_1", downloadClickedSong?.id)
@@ -246,10 +254,7 @@ class SearchFlowStabilityTest {
     composeTestRule.mainClock.advanceTimeBy(400)
     composeTestRule.waitForIdle()
 
-    // Switch between YouTube, iTunes 30s, YT Link tabs
-    composeTestRule.onNodeWithTag("mode_itunes_button").performClick()
-    composeTestRule.mainClock.advanceTimeBy(300)
-    composeTestRule.waitForIdle()
+    // Switch between YouTube Search and YT Link tabs
     composeTestRule.onNodeWithTag("mode_youtube_button").performClick()
     composeTestRule.mainClock.advanceTimeBy(300)
     composeTestRule.waitForIdle()
@@ -263,6 +268,7 @@ class SearchFlowStabilityTest {
     val app = ApplicationProvider.getApplicationContext<Application>()
     val prefs = PreferencesManager(app)
     runBlocking {
+      prefs.setLanguage("en")
       prefs.setOnboardingCompleted(true)
       prefs.setLastSeenVersionCode(BuildConfig.VERSION_CODE.toLong())
     }
@@ -273,13 +279,16 @@ class SearchFlowStabilityTest {
         viewModel.isAppInitialized.first { it }
       }
     }
+    viewModel.setOnboardingCompleted(true)
     viewModel.markLaunchSplashShown()
 
     composeTestRule.setContent {
       AurixApp(viewModel = viewModel)
     }
 
-    composeTestRule.waitUntil(timeoutMillis = 5_000L) {
+    composeTestRule.waitUntil(timeoutMillis = 8_000L) {
+      Shadows.shadowOf(android.os.Looper.getMainLooper()).idle()
+      composeTestRule.mainClock.advanceTimeBy(100)
       composeTestRule.onAllNodes(hasTestTag("nav_tab_search")).fetchSemanticsNodes().isNotEmpty()
     }
 
@@ -296,11 +305,7 @@ class SearchFlowStabilityTest {
     composeTestRule.mainClock.advanceTimeBy(800)
     composeTestRule.waitForIdle()
 
-    // Switch to iTunes 30s while searching, then clear, then YT link
-    composeTestRule.onNodeWithTag("mode_itunes_button").performClick()
-    composeTestRule.mainClock.advanceTimeBy(500)
-    composeTestRule.waitForIdle()
-
+    // Clear search while searching, then switch to YT Link
     composeTestRule.onNodeWithTag("search_clear_button").performClick()
     composeTestRule.mainClock.advanceTimeBy(400)
     composeTestRule.waitForIdle()
@@ -311,6 +316,93 @@ class SearchFlowStabilityTest {
     composeTestRule.onNodeWithTag("youtube_url_input").performTextInput("https://youtu.be/dQw4w9WgXcQ")
     composeTestRule.onNodeWithTag("analyze_link_button").performClick()
     composeTestRule.mainClock.advanceTimeBy(500)
+    composeTestRule.waitForIdle()
+  }
+
+  @Test
+  fun searchScreen_typingSixSequentialQueriesAndStayingIdle_doesNotCrash() {
+    val songs = sampleSongs()
+    var query by mutableStateOf("")
+    var uiState by mutableStateOf<SearchUiState>(SearchUiState.Idle)
+    var currentSong by mutableStateOf<Song?>(songs.first())
+    var lyricsChecks = 0
+
+    composeTestRule.setContent {
+      AurixTheme(darkTheme = true) {
+        Box(modifier = Modifier.fillMaxSize()) {
+          SearchScreen(
+            searchMode = "youtube_search",
+            searchQuery = query,
+            searchResults = (uiState as? SearchUiState.Results)?.items.orEmpty(),
+            isSearching = uiState is SearchUiState.Loading,
+            searchError = null,
+            youtubeUrl = "",
+            youtubeAnalysis = null,
+            selectedYoutubeFormatId = null,
+            youtubeDownloadState = YoutubeDownloadState.Idle,
+            isAnalyzingYoutube = false,
+            youtubeError = null,
+            currentSong = currentSong,
+            isPlaying = true,
+            darkTheme = true,
+            reducedMotion = false,
+            songDownloadProgress = emptyMap(),
+            downloadedSongIds = emptySet(),
+            onSearchModeChanged = {},
+            onSearchQueryChanged = { query = it },
+            onYoutubeUrlChanged = {},
+            onAnalyzeYoutube = {},
+            onSelectYoutubeFormat = {},
+            onDownloadYoutube = {},
+            onOpenMySongs = {},
+            onSongClick = { song, _ -> currentSong = song },
+            onFavoriteClick = {},
+            onDownloadClick = {},
+            onCheckLyrics = { lyricsChecks++ },
+            searchUiState = uiState,
+            onClearSearch = {
+              query = ""
+              uiState = SearchUiState.Idle
+            },
+            onRetrySearch = {},
+            onImmediateSearch = { term ->
+              query = term
+              uiState = SearchUiState.Loading(SearchMode.YouTubeSearch, term)
+            }
+          )
+        }
+      }
+    }
+
+    composeTestRule.waitForIdle()
+
+    val multiWordQueries = listOf(
+      "vann",
+      "da",
+      " time",
+      " song",
+      " khmer",
+      " remix"
+    )
+
+    multiWordQueries.forEachIndexed { idx, chunk ->
+      composeTestRule.onNodeWithTag("search_input_field").performTextInput(chunk)
+      uiState = SearchUiState.Loading(SearchMode.YouTubeSearch, query)
+      composeTestRule.mainClock.advanceTimeBy(180)
+      composeTestRule.waitForIdle()
+
+      uiState = SearchUiState.Results(songs.drop(idx).take(10))
+      composeTestRule.mainClock.advanceTimeBy(250)
+      composeTestRule.waitForIdle()
+    }
+
+    // Stay idle on SearchScreen past debounced lyrics & metadata sync windows (>1.5s)
+    composeTestRule.mainClock.advanceTimeBy(1800)
+    composeTestRule.waitForIdle()
+
+    assertTrue(lyricsChecks > 0)
+    composeTestRule.onNodeWithTag("song_row_yt_vid_6").assertExists()
+    composeTestRule.onNodeWithTag("song_favorite_button_yt_vid_6").performClick()
     composeTestRule.waitForIdle()
   }
 
@@ -326,7 +418,7 @@ class SearchFlowStabilityTest {
     repeat(30) { idx ->
       viewModel.search("query_$idx", immediate = idx % 3 == 0)
     }
-    viewModel.setSearchMode("itunes")
+    viewModel.setSearchMode("youtube_link")
     viewModel.setSearchMode("youtube_search")
     viewModel.clearSearch()
     assertEquals(SearchUiState.Idle, viewModel.searchUiState.value)

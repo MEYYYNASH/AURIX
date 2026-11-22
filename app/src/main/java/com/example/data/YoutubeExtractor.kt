@@ -4,15 +4,26 @@ import android.net.Uri
 import com.example.model.AudioFormatOption
 import com.example.model.StreamCandidate
 import com.example.model.StreamDownloadMode
+import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.currentCoroutineContext
+import kotlinx.coroutines.ensureActive
+import kotlinx.coroutines.suspendCancellableCoroutine
 import kotlinx.coroutines.withContext
+import okhttp3.Call
+import okhttp3.Callback
 import okhttp3.MediaType.Companion.toMediaType
 import okhttp3.MediaType.Companion.toMediaTypeOrNull
 import okhttp3.OkHttpClient
 import okhttp3.Request
 import okhttp3.RequestBody.Companion.toRequestBody
+import okhttp3.Response
 import org.json.JSONArray
 import org.json.JSONObject
+import java.io.IOException
+import java.util.Collections
+import kotlin.coroutines.resume
+import kotlin.coroutines.resumeWithException
 import org.schabi.newpipe.extractor.MediaFormat
 import org.schabi.newpipe.extractor.NewPipe
 import org.schabi.newpipe.extractor.ServiceList
@@ -163,6 +174,58 @@ object YoutubeExtractor {
     .followRedirects(true)
     .followSslRedirects(true)
     .build()
+
+  private data class CachedSearchEntry(
+    val items: List<YoutubeSearchItem>,
+    val timestampMs: Long
+  )
+
+  private val searchCache = Collections.synchronizedMap(
+    object : LinkedHashMap<String, CachedSearchEntry>(32, 0.75f, true) {
+      override fun removeEldestEntry(eldest: MutableMap.MutableEntry<String, CachedSearchEntry>?): Boolean {
+        return size > 24
+      }
+    }
+  )
+
+  private suspend fun executeCancellable(
+    httpClient: OkHttpClient,
+    request: Request
+  ): Response = suspendCancellableCoroutine { cont ->
+    val call = httpClient.newCall(request)
+    cont.invokeOnCancellation {
+      runCatching { call.cancel() }
+    }
+    call.enqueue(object : Callback {
+      override fun onFailure(call: Call, e: IOException) {
+        if (cont.isActive) cont.resumeWithException(e)
+      }
+
+      override fun onResponse(call: Call, response: Response) {
+        if (cont.isActive) {
+          cont.resume(response)
+        } else {
+          runCatching { response.close() }
+        }
+      }
+    })
+  }
+
+  private fun readBoundedBody(resp: Response, maxChars: Int = 2_500_000): String {
+    val body = resp.body ?: return ""
+    val contentLength = body.contentLength()
+    if (contentLength > maxChars.toLong()) return ""
+    return body.charStream().use { reader ->
+      val buf = CharArray(8192)
+      val sb = StringBuilder()
+      while (sb.length < maxChars) {
+        val read = reader.read(buf, 0, minOf(buf.size, maxChars - sb.length))
+        if (read <= 0) break
+        sb.append(buf, 0, read)
+      }
+      sb.toString()
+    }
+  }
 
   @Volatile
   private var newPipeInitialized = false
@@ -450,32 +513,81 @@ object YoutubeExtractor {
     query: String,
     limit: Int = 25
   ): List<YoutubeSearchItem> = withContext(Dispatchers.IO) {
-    runCatching {
-      val trimmed = query.trim()
-      if (trimmed.isBlank()) return@runCatching emptyList()
+    val trimmed = query.trim()
+    if (trimmed.isBlank()) return@withContext emptyList()
 
-      // 1. Direct InnerTube Search (fast, lightweight JSON)
-      val innerTubeResults = runCatching { searchViaInnerTube(trimmed, limit) }.getOrNull().orEmpty()
-      if (innerTubeResults.isNotEmpty()) return@runCatching innerTubeResults
+    val cacheKey = "${trimmed.lowercase(Locale.US)}:$limit"
+    val now = System.currentTimeMillis()
+    searchCache[cacheKey]?.let { cached ->
+      if (now - cached.timestampMs <= 300_000L && cached.items.isNotEmpty()) {
+        return@withContext cached.items
+      }
+    }
+
+    suspend fun cacheAndReturn(results: List<YoutubeSearchItem>): List<YoutubeSearchItem> {
+      if (results.isNotEmpty()) {
+        searchCache[cacheKey] = CachedSearchEntry(results, System.currentTimeMillis())
+      }
+      return results
+    }
+
+    try {
+      currentCoroutineContext().ensureActive()
+
+      // 1. Direct InnerTube Search (fast, lightweight JSON, immediately cancellable)
+      val innerTubeResults = try {
+        searchViaInnerTube(trimmed, limit)
+      } catch (ce: CancellationException) {
+        throw ce
+      } catch (_: Throwable) {
+        emptyList()
+      }
+      if (innerTubeResults.isNotEmpty()) return@withContext cacheAndReturn(innerTubeResults)
+
+      currentCoroutineContext().ensureActive()
 
       // 2. NewPipeExtractor YouTube Search
-      val newPipeResults = runCatching { searchViaNewPipe(trimmed, limit) }.getOrNull().orEmpty()
-      if (newPipeResults.isNotEmpty()) return@runCatching newPipeResults
+      val newPipeResults = try {
+        searchViaNewPipe(trimmed, limit)
+      } catch (ce: CancellationException) {
+        throw ce
+      } catch (_: Throwable) {
+        emptyList()
+      }
+      if (newPipeResults.isNotEmpty()) return@withContext cacheAndReturn(newPipeResults)
 
       // 3. Piped public mirrors
       for (base in basePipedMirrors.take(4)) {
-        val pipedResults = runCatching { searchViaPiped(base, trimmed, limit) }.getOrNull().orEmpty()
-        if (pipedResults.isNotEmpty()) return@runCatching pipedResults
+        currentCoroutineContext().ensureActive()
+        val pipedResults = try {
+          searchViaPiped(base, trimmed, limit)
+        } catch (ce: CancellationException) {
+          throw ce
+        } catch (_: Throwable) {
+          emptyList()
+        }
+        if (pipedResults.isNotEmpty()) return@withContext cacheAndReturn(pipedResults)
       }
 
       // 4. Invidious public mirrors
       for (base in getInvidiousMirrors().take(4)) {
-        val invResults = runCatching { searchViaInvidious(base, trimmed, limit) }.getOrNull().orEmpty()
-        if (invResults.isNotEmpty()) return@runCatching invResults
+        currentCoroutineContext().ensureActive()
+        val invResults = try {
+          searchViaInvidious(base, trimmed, limit)
+        } catch (ce: CancellationException) {
+          throw ce
+        } catch (_: Throwable) {
+          emptyList()
+        }
+        if (invResults.isNotEmpty()) return@withContext cacheAndReturn(invResults)
       }
 
-      emptyList<YoutubeSearchItem>()
-    }.getOrDefault(emptyList())
+      emptyList()
+    } catch (ce: CancellationException) {
+      throw ce
+    } catch (_: Throwable) {
+      emptyList()
+    }
   }
 
   /**
@@ -548,7 +660,8 @@ object YoutubeExtractor {
     collected.values.take(limit)
   }
 
-  private fun searchViaInnerTube(query: String, limit: Int): List<YoutubeSearchItem> {
+  private suspend fun searchViaInnerTube(query: String, limit: Int): List<YoutubeSearchItem> {
+    currentCoroutineContext().ensureActive()
     val clientObj = JSONObject().apply {
       put("clientName", "WEB")
       put("clientVersion", "2.20250201.00.00")
@@ -566,13 +679,15 @@ object YoutubeExtractor {
       .header("Content-Type", "application/json")
       .build()
 
-    client.newCall(request).execute().use { resp ->
+    executeCancellable(client, request).use { resp ->
       if (!resp.isSuccessful) return emptyList()
-      val body = resp.body?.string().orEmpty()
+      val body = readBoundedBody(resp)
       if (body.isBlank()) return emptyList()
+      currentCoroutineContext().ensureActive()
       val root = JSONObject(body)
       val collected = mutableListOf<YoutubeSearchItem>()
-      collectVideoRenderers(root, collected, limit)
+      val visitedNodes = intArrayOf(0)
+      collectVideoRenderers(root, collected, limit, depth = 0, visitedNodes = visitedNodes)
       return collected.distinctBy { it.videoId }.take(limit)
     }
   }
@@ -581,9 +696,11 @@ object YoutubeExtractor {
     node: Any?,
     out: MutableList<YoutubeSearchItem>,
     limit: Int,
-    depth: Int = 0
+    depth: Int = 0,
+    visitedNodes: IntArray = intArrayOf(0)
   ) {
-    if (depth > 32 || out.size >= limit || node == null) return
+    if (depth > 28 || out.size >= limit || node == null || visitedNodes[0] > 6000) return
+    visitedNodes[0]++
     when (node) {
       is JSONObject -> {
         val vr = node.optJSONObject("videoRenderer")
@@ -591,17 +708,17 @@ object YoutubeExtractor {
           parseVideoRenderer(vr)?.let { out.add(it) }
         }
         val keys = node.keys()
-        while (keys.hasNext() && out.size < limit) {
+        while (keys.hasNext() && out.size < limit && visitedNodes[0] <= 6000) {
           val k = keys.next()
           if (k != "videoRenderer") {
-            collectVideoRenderers(node.opt(k), out, limit, depth + 1)
+            collectVideoRenderers(node.opt(k), out, limit, depth + 1, visitedNodes)
           }
         }
       }
       is JSONArray -> {
         for (i in 0 until node.length()) {
-          if (out.size >= limit) break
-          collectVideoRenderers(node.opt(i), out, limit, depth + 1)
+          if (out.size >= limit || visitedNodes[0] > 6000) break
+          collectVideoRenderers(node.opt(i), out, limit, depth + 1, visitedNodes)
         }
       }
     }
@@ -682,17 +799,18 @@ object YoutubeExtractor {
     )
   }
 
-  private fun searchViaPiped(base: String, query: String, limit: Int): List<YoutubeSearchItem> {
+  private suspend fun searchViaPiped(base: String, query: String, limit: Int): List<YoutubeSearchItem> {
     val encoded = URLEncoder.encode(query, "UTF-8")
     for (filter in listOf("music_songs", "videos")) {
+      currentCoroutineContext().ensureActive()
       val req = Request.Builder()
         .url("$base/search?q=$encoded&filter=$filter")
         .header("User-Agent", "AURIX-Android")
         .build()
-      val items = runCatching {
-        probeClient.newCall(req).execute().use { resp ->
+      val items = try {
+        executeCancellable(probeClient, req).use { resp ->
           if (!resp.isSuccessful) return@use emptyList<YoutubeSearchItem>()
-          val body = resp.body?.string().orEmpty()
+          val body = readBoundedBody(resp)
           if (body.isBlank()) return@use emptyList<YoutubeSearchItem>()
           val arr = JSONObject(body).optJSONArray("items") ?: return@use emptyList<YoutubeSearchItem>()
           val out = mutableListOf<YoutubeSearchItem>()
@@ -719,21 +837,26 @@ object YoutubeExtractor {
           }
           out
         }
-      }.getOrDefault(emptyList())
+      } catch (ce: CancellationException) {
+        throw ce
+      } catch (_: Throwable) {
+        emptyList()
+      }
       if (items.isNotEmpty()) return items.distinctBy { it.videoId }
     }
     return emptyList()
   }
 
-  private fun searchViaInvidious(base: String, query: String, limit: Int): List<YoutubeSearchItem> {
+  private suspend fun searchViaInvidious(base: String, query: String, limit: Int): List<YoutubeSearchItem> {
+    currentCoroutineContext().ensureActive()
     val encoded = URLEncoder.encode(query, "UTF-8")
     val req = Request.Builder()
       .url("$base/api/v1/search?q=$encoded&type=video")
       .header("User-Agent", "AURIX-Android")
       .build()
-    return probeClient.newCall(req).execute().use { resp ->
+    return executeCancellable(probeClient, req).use { resp ->
       if (!resp.isSuccessful) return emptyList()
-      val body = resp.body?.string().orEmpty()
+      val body = readBoundedBody(resp)
       if (body.isBlank()) return emptyList()
       val arr = JSONArray(body)
       val out = mutableListOf<YoutubeSearchItem>()

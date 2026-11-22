@@ -159,14 +159,18 @@ fun HomeScreen(
     }
   }
 
-  Box(modifier = Modifier.fillMaxSize()) {
+  Box(
+    modifier = Modifier
+      .fillMaxSize()
+      .windowInsetsPadding(WindowInsets.statusBars)
+  ) {
     LazyColumn(
       modifier = Modifier
         .fillMaxSize()
         .padding(horizontal = 20.dp),
       verticalArrangement = Arrangement.spacedBy(20.dp),
       contentPadding = PaddingValues(
-        top = WindowInsets.statusBars.asPaddingValues().calculateTopPadding() + 14.dp,
+        top = 14.dp,
         bottom = if (currentSong != null) 205.dp else 135.dp
       )
     ) {
@@ -829,49 +833,36 @@ fun HomeScreen(
               enter = sectionEnter,
               exit = sectionExit
             ) {
-              GlassCard(
-                darkTheme = darkTheme,
-                cornerRadius = 22.dp,
+              val recQueue = smartRecommendations.map { it.song }
+              val previewRecs = smartRecommendations.take(4)
+              Column(
                 modifier = Modifier
                   .fillMaxWidth()
-                  .testTag("home_smart_recommendations_card")
+                  .testTag("home_smart_recommendations_card"),
+                verticalArrangement = Arrangement.spacedBy(12.dp)
               ) {
-                val recQueue = smartRecommendations.map { it.song }
-                val previewRecs = smartRecommendations.take(4)
-                Column(
-                  modifier = Modifier
-                    .fillMaxWidth()
-                    .padding(horizontal = 8.dp, vertical = 6.dp)
-                ) {
-                  previewRecs.forEachIndexed { idx, rec ->
-                    Column {
-                      SongRow(
-                        song = rec.song,
-                        isPlaying = isPlaying,
-                        isCurrent = currentSong?.id == rec.song.id,
-                        reducedMotion = reducedMotion,
-                        darkTheme = darkTheme,
-                        hasLyrics = rec.song.id in verifiedLyricsIds,
-                        showSourceBadge = false,
-                        onCheckLyrics = onCheckLyrics,
-                        onSongClick = { onSongClick(rec.song, recQueue) },
-                        onFavoriteClick = { onFavoriteClick(rec.song) }
-                      )
-                      Text(
-                        text = rec.reason,
-                        style = MaterialTheme.typography.labelSmall.copy(fontWeight = FontWeight.SemiBold),
-                        color = AurixTealAccent,
-                        maxLines = 1,
-                        overflow = TextOverflow.Ellipsis,
-                        modifier = Modifier.padding(start = 70.dp, end = 12.dp, bottom = 6.dp)
-                      )
-                    }
-                    if (idx < previewRecs.lastIndex) {
-                      HorizontalDivider(
-                        modifier = Modifier.padding(horizontal = 14.dp),
-                        color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.06f)
-                      )
-                    }
+                previewRecs.forEach { rec ->
+                  Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
+                    SongRow(
+                      song = rec.song,
+                      isPlaying = isPlaying,
+                      isCurrent = currentSong?.id == rec.song.id,
+                      reducedMotion = reducedMotion,
+                      darkTheme = darkTheme,
+                      hasLyrics = rec.song.id in verifiedLyricsIds,
+                      showSourceBadge = false,
+                      onCheckLyrics = onCheckLyrics,
+                      onSongClick = { onSongClick(rec.song, recQueue) },
+                      onFavoriteClick = { onFavoriteClick(rec.song) }
+                    )
+                    Text(
+                      text = rec.reason,
+                      style = MaterialTheme.typography.labelSmall.copy(fontWeight = FontWeight.SemiBold),
+                      color = AurixTealAccent,
+                      maxLines = 1,
+                      overflow = TextOverflow.Ellipsis,
+                      modifier = Modifier.padding(horizontal = 14.dp)
+                    )
                   }
                 }
               }
@@ -992,13 +983,6 @@ fun HomeScreen(
               Box(
                 modifier = Modifier
                   .fillMaxWidth()
-                  .then(
-                    if (cardState == DailyCardState.LOADED) Modifier.heightIn(min = 200.dp)
-                    else Modifier.height(220.dp)
-                  )
-                  .clip(cardShape)
-                  .background(cardBgColor)
-                  .border(1.dp, cardBorderColor, cardShape)
                   .semantics { liveRegion = LiveRegionMode.Polite }
                   .testTag("home_daily_feed_card")
               ) {
@@ -1022,6 +1006,9 @@ fun HomeScreen(
                         modifier = Modifier
                           .fillMaxWidth()
                           .height(220.dp)
+                          .clip(cardShape)
+                          .background(cardBgColor)
+                          .border(1.dp, cardBorderColor, cardShape)
                           .padding(horizontal = 24.dp),
                         horizontalAlignment = Alignment.CenterHorizontally,
                         verticalArrangement = Arrangement.Center
@@ -1066,6 +1053,9 @@ fun HomeScreen(
                         modifier = Modifier
                           .fillMaxWidth()
                           .height(220.dp)
+                          .clip(cardShape)
+                          .background(cardBgColor)
+                          .border(1.dp, cardBorderColor, cardShape)
                           .padding(horizontal = 24.dp),
                         horizontalAlignment = Alignment.CenterHorizontally,
                         verticalArrangement = Arrangement.Center
@@ -1091,26 +1081,27 @@ fun HomeScreen(
                     DailyCardState.LOADED -> {
                       val displayTracks = trendingSongs.take(8)
                       Column(
-                        modifier = Modifier
-                          .fillMaxWidth()
-                          .padding(horizontal = 8.dp, vertical = 6.dp)
+                        modifier = Modifier.fillMaxWidth(),
+                        verticalArrangement = Arrangement.spacedBy(12.dp)
                       ) {
                         displayTracks.forEachIndexed { idx, song ->
                           if (song.id.startsWith("yt_")) {
-                            PopularYoutubeSongRow(
+                            SongDownloadRow(
                               song = song,
-                              isCurrent = currentSong?.id == song.id,
+                              index = idx + 1,
                               isPlaying = isPlaying,
+                              isCurrent = currentSong?.id == song.id,
                               isResolving = resolvingSongId == song.id,
-                              darkTheme = darkTheme,
                               reducedMotion = reducedMotion,
+                              darkTheme = darkTheme,
                               hasLyrics = song.id in verifiedLyricsIds,
                               downloadProgress = songDownloadProgress[song.id],
                               isDownloaded = song.id in downloadedSongIds,
                               onCheckLyrics = onCheckLyrics,
-                              onClick = { onSongClick(song, trendingSongs) },
+                              onSongClick = { onSongClick(song, trendingSongs) },
                               onFavoriteClick = { onFavoriteClick(song) },
-                              onDownloadClick = { onYoutubeSongDownloadClick(song) }
+                              onDownloadClick = { onYoutubeSongDownloadClick(song) },
+                              modifier = Modifier.testTag("home_yt_song_row_${song.id}")
                             )
                           } else {
                             SongRow(
@@ -1121,16 +1112,10 @@ fun HomeScreen(
                               darkTheme = darkTheme,
                               hasLyrics = song.id in verifiedLyricsIds,
                               rank = idx + 1,
-                              showSourceBadge = true,
+                              showSourceBadge = false,
                               onCheckLyrics = onCheckLyrics,
                               onSongClick = { onSongClick(song, trendingSongs) },
                               onFavoriteClick = { onFavoriteClick(song) }
-                            )
-                          }
-                          if (idx < displayTracks.lastIndex) {
-                            HorizontalDivider(
-                              modifier = Modifier.padding(horizontal = 14.dp),
-                              color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.06f)
                             )
                           }
                         }
@@ -1144,24 +1129,6 @@ fun HomeScreen(
         }
       }
     }
-
-    // Subtle status bar gradient scrim so scrolled cards never collide visually with clock & battery icons
-    val statusBg = if (darkTheme) Color(0xFF0A0E1A) else Color(0xFFEAF0FF)
-    Box(
-      modifier = Modifier
-        .align(Alignment.TopCenter)
-        .fillMaxWidth()
-        .height(WindowInsets.statusBars.asPaddingValues().calculateTopPadding() + 18.dp)
-        .background(
-          Brush.verticalGradient(
-            colors = listOf(
-              statusBg.copy(alpha = 0.85f),
-              statusBg.copy(alpha = 0.35f),
-              Color.Transparent
-            )
-          )
-        )
-    )
   }
 }
 
@@ -1268,162 +1235,7 @@ private fun EmptyMixPlaceholderCard(
   }
 }
 
-@Composable
-private fun PopularYoutubeSongRow(
-  song: Song,
-  isCurrent: Boolean,
-  isPlaying: Boolean,
-  isResolving: Boolean,
-  darkTheme: Boolean,
-  reducedMotion: Boolean,
-  hasLyrics: Boolean,
-  downloadProgress: Float?,
-  isDownloaded: Boolean,
-  onCheckLyrics: (Song) -> Unit,
-  onClick: () -> Unit,
-  onFavoriteClick: () -> Unit,
-  onDownloadClick: () -> Unit
-) {
-  LaunchedEffect(song.id) {
-    onCheckLyrics(song)
-  }
 
-  Row(
-    modifier = Modifier
-      .fillMaxWidth()
-      .clip(RoundedCornerShape(16.dp))
-      .then(
-        if (isCurrent) Modifier.background(MaterialTheme.colorScheme.primary.copy(alpha = 0.14f))
-        else Modifier
-      )
-      .clickable { onClick() }
-      .padding(horizontal = 8.dp, vertical = 8.dp)
-      .testTag("home_yt_song_row_${song.id}"),
-    verticalAlignment = Alignment.CenterVertically
-  ) {
-    Box(
-      modifier = Modifier
-        .size(52.dp)
-        .clip(RoundedCornerShape(14.dp))
-        .border(1.dp, Color.White.copy(alpha = 0.22f), RoundedCornerShape(14.dp))
-    ) {
-      SongArtwork(song = song, modifier = Modifier.fillMaxSize(), cornerRadius = 14.dp)
-      if (isResolving) {
-        Box(
-          modifier = Modifier
-            .fillMaxSize()
-            .background(Color.Black.copy(alpha = 0.55f)),
-          contentAlignment = Alignment.Center
-        ) {
-          CircularProgressIndicator(
-            modifier = Modifier.size(20.dp),
-            strokeWidth = 2.dp,
-            color = AurixTealAccent
-          )
-        }
-      } else if (isCurrent) {
-        Box(
-          modifier = Modifier
-            .fillMaxSize()
-            .background(Color.Black.copy(alpha = 0.45f)),
-          contentAlignment = Alignment.Center
-        ) {
-          EqualizerBars(
-            isPlaying = isPlaying,
-            color = AurixTealAccent,
-            reducedMotion = reducedMotion,
-            barWidth = 2.5.dp,
-            maxHeight = 14.dp
-          )
-        }
-      }
-    }
-
-    Spacer(modifier = Modifier.width(12.dp))
-
-    Column(modifier = Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(2.dp)) {
-      Row(verticalAlignment = Alignment.CenterVertically) {
-        Text(
-          text = song.title,
-          style = MaterialTheme.typography.bodyMedium.copy(fontWeight = FontWeight.Bold),
-          color = if (isCurrent) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurface,
-          maxLines = 1,
-          overflow = TextOverflow.Ellipsis,
-          modifier = Modifier.weight(1f, fill = false)
-        )
-        LyricsTag(
-          visible = hasLyrics,
-          size = LyricsTagSize.Mini,
-          darkTheme = darkTheme,
-          reducedMotion = reducedMotion,
-          modifier = Modifier.padding(start = 6.dp)
-        )
-      }
-      val metaText = if (song.durationSeconds > 0L) {
-        "${song.artist} · ${song.durationSeconds / 60}:${String.format("%02d", song.durationSeconds % 60)}"
-      } else {
-        song.artist
-      }
-      Text(
-        text = metaText,
-        style = MaterialTheme.typography.bodySmall,
-        color = MaterialTheme.colorScheme.onSurfaceVariant,
-        maxLines = 1,
-        overflow = TextOverflow.Ellipsis
-      )
-    }
-
-    IconButton(
-      onClick = onDownloadClick,
-      modifier = Modifier
-        .minimumInteractiveComponentSize()
-        .size(40.dp)
-        .testTag("home_yt_download_${song.id}")
-    ) {
-      when {
-        downloadProgress != null -> {
-          CircularProgressIndicator(
-            progress = { downloadProgress.coerceIn(0.05f, 1f) },
-            modifier = Modifier.size(18.dp),
-            strokeWidth = 2.dp,
-            color = AurixTealAccent
-          )
-        }
-        isDownloaded -> {
-          Icon(
-            imageVector = Icons.Rounded.CheckCircle,
-            contentDescription = stringResource(id = R.string.yt_saved_banner),
-            tint = AurixTealAccent,
-            modifier = Modifier.size(20.dp)
-          )
-        }
-        else -> {
-          Icon(
-            imageVector = Icons.Rounded.Download,
-            contentDescription = stringResource(id = R.string.yt_select_format_title),
-            tint = MaterialTheme.colorScheme.onSurfaceVariant,
-            modifier = Modifier.size(20.dp)
-          )
-        }
-      }
-    }
-
-    IconButton(
-      onClick = onFavoriteClick,
-      modifier = Modifier
-        .minimumInteractiveComponentSize()
-        .size(40.dp)
-        .testTag("home_yt_favorite_${song.id}")
-    ) {
-      Icon(
-        imageVector = if (song.isFavorite) Icons.Rounded.Favorite else Icons.Rounded.FavoriteBorder,
-        contentDescription = stringResource(id = R.string.home_favorites),
-        tint = if (song.isFavorite) HeartRed else MaterialTheme.colorScheme.onSurfaceVariant,
-        modifier = Modifier.size(20.dp)
-      )
-    }
-  }
-}
 
 @Composable
 private fun HomeLibraryPill(

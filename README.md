@@ -1,6 +1,6 @@
 # AURIX — ONE APP. ALL YOUR MUSIC.
 
-AURIX (`v1.8.2`, release date `2026-11-18`) is a modern Android music player and sound finder app built with Kotlin, Jetpack Compose, and Material 3.
+AURIX (`v1.8.1`, release date `2026-11-22`) is a modern Android music player and sound finder app built with Kotlin, Jetpack Compose, and Material 3.
 
 ## Features
 
@@ -8,7 +8,7 @@ AURIX (`v1.8.2`, release date `2026-11-18`) is a modern Android music player and
 - **Liquid Glass Player & Up Next Queue**: Ambient artwork aura in Now Playing, swipe-to-skip MiniPlayer, interactive **Up Next** queue drawer (reorder, jump, Play Next, Add to Queue), and Sleep Timer with gentle fade-out.
 - **Audio Studio (EQ + 3D Surround)**: 5-band Bezier spectrum equalizer with `Bass Boost`, hardware `3D Surround Virtualizer`, `Lo-Fi` and `Acoustic` presets, playback speed studio, and equal-power crossfade.
 - **Because You Listened & MoodFlow**: 30-day vocal sad & chill recommendations plus 5-dimensional mood-aware shuffle with live `Match %` badges.
-- **YouTube Search, iTunes 30s & Local Music**: Spring-animated Liquid Glass Search for full songs on YouTube, preview iTunes 30s tracks, pick audio format & quality (M4A / WebM), and import local audio files from device storage.
+- **YouTube Search & Local Music**: Spring-animated Liquid Glass Search for full songs on YouTube, pick audio format & quality (M4A / WebM), and import local audio files from device storage.
 - **Link Matcher & Synced Lyrics**: Match YouTube links in Search and follow real-time synced `.lrc` lyrics via LRCLIB, with plain lyrics fallback.
 - **Background Playback & Downloads**: Powered by AndroidX Media3 (ExoPlayer) plus a `dataSync` foreground `BackgroundDownloadService` for uninterrupted track and update downloads.
 - **Animated OTA Updates (`UpdateManager` + `WorkManager`)**: `version.json`-backed updater (`MEYYYNASH/AURIX`) with periodic release notifications, resumable APK downloads, real-time speed & progress, SHA-256 and package signature verification, reduced-motion aware planet animations, and in-app installer.
