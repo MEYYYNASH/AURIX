@@ -3,10 +3,10 @@
   "versionCode": 10850,
   "releaseDate": "2026-11-22",
   "apkUrl": "https://github.com/MEYYYNASH/AURIX/releases/download/v1.8.5/AURIX-v1.8.5.apk",
-  "sha256": "",
+  "sha256": "fb16c73a451eab2bdf3dc59eb489bbd821ce0ce4c96d46db48b3444b91bf5aa2",
   "mandatory": false,
   "notes": [
-    "Release v1.8.5 — End Download & Live Download Queue: Stop active playlist downloads immediately with End Download, or open the Download Queue sheet to monitor, cancel, and retry individual or failed tracks",
+    "Release v1.8.5 \u2014 End Download & Live Download Queue: Stop active playlist downloads immediately with End Download, or open the Download Queue sheet to monitor, cancel, and retry tracks",
     "Playlist Multi-Select: Select specific tracks inside any pasted playlist link to Download (N) or Save (N) only the songs you want",
     "Now Playing Beat Visualizer & Clean YT Titles: Added live beat-reactive audio spectrum bars in Now Playing and automatic removal of noisy YouTube tags like [Official Video] or (Official Audio)"
   ],
