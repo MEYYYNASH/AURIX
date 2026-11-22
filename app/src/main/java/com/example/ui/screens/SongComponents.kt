@@ -970,188 +970,155 @@ fun SongRow(
     label = "heart_pop"
   )
 
-  Row(
+  val cardBg = Brush.horizontalGradient(listOf(Color(0xFF18233B), Color(0xFF111728)))
+  val silverTopEdge = Color(0xFFBEC8DC).copy(alpha = 0.55f)
+  val faintBorder = Color.White.copy(alpha = 0.06f)
+  val hardShadowColor = Color(0xFF080C18).copy(alpha = 0.7f)
+
+  Box(
     modifier = Modifier
       .fillMaxWidth()
-      .clip(RoundedCornerShape(16.dp))
-      .then(
-        if (isCurrent) Modifier.background(MaterialTheme.colorScheme.primary.copy(alpha = 0.14f))
-        else Modifier
-      )
-      .clickable { onSongClick() }
-      .padding(vertical = 8.dp, horizontal = 8.dp),
-    verticalAlignment = Alignment.CenterVertically
-  ) {
-    if (rank != null) {
-      Box(
-        modifier = Modifier.width(28.dp),
-        contentAlignment = Alignment.Center
-      ) {
-        if (isCurrent) {
-          EqualizerBars(
-            isPlaying = isPlaying,
-            color = MaterialTheme.colorScheme.primary,
-            reducedMotion = reducedMotion,
-            maxHeight = 14.dp
-          )
-        } else {
-          Text(
-            text = String.format("%02d", rank),
-            style = MaterialTheme.typography.labelLarge.copy(fontWeight = FontWeight.Bold),
-            color = if (rank <= 3) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.78f)
-          )
-        }
-      }
-      Spacer(modifier = Modifier.width(6.dp))
-    }
+      .graphicsLayer { clip = false }
+      .drawBehind {
+        val cornerRadiusPx = 28.dp.toPx()
+        val shadowOffsetY = 5.dp.toPx()
 
-    Box(
-      modifier = Modifier
-        .size(50.dp)
-        .clip(RoundedCornerShape(13.dp))
-        .border(1.dp, Color.White.copy(alpha = 0.22f), RoundedCornerShape(13.dp))
+        // Hard solid shadow: 0 5px 0 rgba(8,12,24,0.7)
+        drawRoundRect(
+          color = hardShadowColor,
+          topLeft = Offset(0f, shadowOffsetY),
+          size = size,
+          cornerRadius = CornerRadius(cornerRadiusPx, cornerRadiusPx)
+        )
+
+        // Card background gradient
+        drawRoundRect(
+          brush = cardBg,
+          topLeft = Offset.Zero,
+          size = size,
+          cornerRadius = CornerRadius(cornerRadiusPx, cornerRadiusPx)
+        )
+
+        // 1px faint border on sides and bottom
+        drawRoundRect(
+          color = faintBorder,
+          topLeft = Offset.Zero,
+          size = size,
+          cornerRadius = CornerRadius(cornerRadiusPx, cornerRadiusPx),
+          style = Stroke(width = 1.dp.toPx())
+        )
+
+        // 2px light silver top edge following rounded corners
+        drawArc(
+          color = silverTopEdge,
+          startAngle = 180f,
+          sweepAngle = 180f,
+          useCenter = false,
+          topLeft = Offset.Zero,
+          size = Size(size.width, cornerRadiusPx * 2f),
+          style = Stroke(width = 2.dp.toPx())
+        )
+      }
+      .clip(RoundedCornerShape(28.dp))
+      .clickable { onSongClick() }
+      .padding(14.dp),
+    contentAlignment = Alignment.Center
+  ) {
+    Row(
+      modifier = Modifier.fillMaxWidth(),
+      verticalAlignment = Alignment.CenterVertically,
+      horizontalArrangement = Arrangement.spacedBy(14.dp)
     ) {
-      SongArtwork(song = song, modifier = Modifier.fillMaxSize(), cornerRadius = 13.dp)
-    }
-    Spacer(modifier = Modifier.width(12.dp))
-    Column(modifier = Modifier.weight(1f)) {
-      Row(verticalAlignment = Alignment.CenterVertically) {
-        if (rank == null) {
-          AnimatedVisibility(visible = isCurrent, enter = fadeIn(), exit = fadeOut()) {
-            Row {
-              EqualizerBars(
-                isPlaying = isPlaying,
-                color = MaterialTheme.colorScheme.primary,
-                reducedMotion = reducedMotion,
-                maxHeight = 13.dp
-              )
-              Spacer(modifier = Modifier.width(8.dp))
-            }
+      if (rank != null) {
+        Box(
+          modifier = Modifier.width(28.dp),
+          contentAlignment = Alignment.Center
+        ) {
+          if (isCurrent) {
+            EqualizerBars(
+              isPlaying = isPlaying,
+              color = MaterialTheme.colorScheme.primary,
+              reducedMotion = reducedMotion,
+              maxHeight = 14.dp
+            )
+          } else {
+            Text(
+              text = String.format("%02d", rank),
+              style = MaterialTheme.typography.labelLarge.copy(fontWeight = FontWeight.Bold),
+              color = if (rank <= 3) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.78f)
+            )
           }
         }
-        Text(
-          text = song.title,
-          style = MaterialTheme.typography.bodyMedium.copy(fontWeight = FontWeight.Bold),
-          maxLines = 1,
-          overflow = TextOverflow.Ellipsis,
-          color = if (isCurrent) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onBackground,
-          modifier = Modifier.weight(1f, fill = false)
-        )
-        LyricsTag(
-          visible = hasLyrics,
-          size = LyricsTagSize.Standard,
-          darkTheme = darkTheme,
-          reducedMotion = reducedMotion,
-          modifier = Modifier.padding(start = 8.dp)
-        )
       }
-      Row(
-        verticalAlignment = Alignment.CenterVertically,
-        horizontalArrangement = Arrangement.spacedBy(6.dp)
+
+      // Cover art: rounded square, radius 18px, 60px
+      Box(
+        modifier = Modifier
+          .size(60.dp)
+          .clip(RoundedCornerShape(18.dp))
+          .border(1.dp, Color.White.copy(alpha = 0.18f), RoundedCornerShape(18.dp))
       ) {
+        SongArtwork(song = song, modifier = Modifier.fillMaxSize(), cornerRadius = 18.dp)
+      }
+
+      // Title + "artist · duration" (two lines, ellipsis if too long)
+      Column(
+        modifier = Modifier.weight(1f),
+        verticalArrangement = Arrangement.spacedBy(4.dp)
+      ) {
+        Row(
+          verticalAlignment = Alignment.CenterVertically,
+          horizontalArrangement = Arrangement.spacedBy(6.dp)
+        ) {
+          if (isCurrent && rank == null) {
+            EqualizerBars(
+              isPlaying = isPlaying,
+              color = MaterialTheme.colorScheme.primary,
+              reducedMotion = reducedMotion,
+              maxHeight = 13.dp
+            )
+          }
+          Text(
+            text = song.title,
+            style = MaterialTheme.typography.bodyMedium.copy(fontWeight = FontWeight.Bold),
+            maxLines = 1,
+            overflow = TextOverflow.Ellipsis,
+            color = if (isCurrent) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onBackground,
+            modifier = Modifier.weight(1f, fill = false)
+          )
+        }
+
+        val durationStr = if (song.durationSeconds > 0) {
+          "${song.durationSeconds / 60}:${String.format("%02d", song.durationSeconds % 60)}"
+        } else ""
+        val subtitleText = if (durationStr.isNotBlank()) "${song.artist} · $durationStr" else song.artist
+
         Text(
-          text = song.artist,
+          text = subtitleText,
           style = MaterialTheme.typography.bodySmall,
           maxLines = 1,
           overflow = TextOverflow.Ellipsis,
-          color = MaterialTheme.colorScheme.onSurfaceVariant,
-          modifier = Modifier.weight(1f, fill = false)
+          color = MaterialTheme.colorScheme.onSurfaceVariant
         )
-        if (showSourceBadge && song.source == "iTunes 30s") {
-          Surface(
-            shape = RoundedCornerShape(6.dp),
-            color = MaterialTheme.colorScheme.primary.copy(alpha = 0.15f)
-          ) {
-            Text(
-              text = "30s",
-              style = MaterialTheme.typography.labelSmall.copy(fontWeight = FontWeight.Bold, fontSize = 10.sp),
-              color = MaterialTheme.colorScheme.primary,
-              modifier = Modifier.padding(horizontal = 5.dp, vertical = 1.dp)
-            )
-          }
-        } else if (showSourceBadge && song.source == "YouTube") {
-          Surface(
-            shape = RoundedCornerShape(6.dp),
-            color = Color(0xFFEF4444).copy(alpha = if (darkTheme) 0.20f else 0.14f)
-          ) {
-            Text(
-              text = "YT",
-              style = MaterialTheme.typography.labelSmall.copy(fontWeight = FontWeight.Bold, fontSize = 10.sp),
-              color = if (darkTheme) Color(0xFFFF8A8A) else Color(0xFFDC2626),
-              modifier = Modifier.padding(horizontal = 5.dp, vertical = 1.dp)
-            )
-          }
+      }
+
+      // ONE round 44px action button on the right (heart/like only)
+      Surface(
+        shape = CircleShape,
+        color = MaterialTheme.colorScheme.surface.copy(alpha = 0.22f),
+        modifier = Modifier
+          .size(44.dp)
+          .clickable { onFavoriteClick() }
+          .testTag("song_favorite_button_${song.id}")
+      ) {
+        Box(contentAlignment = Alignment.Center) {
+          Icon(
+            imageVector = if (song.isFavorite) Icons.Rounded.Favorite else Icons.Rounded.FavoriteBorder,
+            contentDescription = "Favorite",
+            tint = if (song.isFavorite) MaterialTheme.colorScheme.error else Color.White.copy(alpha = 0.85f),
+            modifier = Modifier.scale(heartScale).size(22.dp)
+          )
         }
-      }
-    }
-    if (song.durationSeconds > 0 && song.source != "iTunes 30s" && rank == null) {
-      Text(
-        text = "${song.durationSeconds / 60}:${String.format("%02d", song.durationSeconds % 60)}",
-        style = MaterialTheme.typography.bodySmall,
-        color = MaterialTheme.colorScheme.onSurfaceVariant,
-        modifier = Modifier.padding(horizontal = 4.dp)
-      )
-    }
-    if (onAddToAlbumClick != null) {
-      IconButton(
-        onClick = onAddToAlbumClick,
-        modifier = Modifier
-          .minimumInteractiveComponentSize()
-          .size(40.dp)
-          .testTag("song_add_album_button_${song.id}")
-      ) {
-        Icon(
-          imageVector = Icons.Rounded.PlaylistAdd,
-          contentDescription = "Add to album",
-          tint = MaterialTheme.colorScheme.primary,
-          modifier = Modifier.size(20.dp)
-        )
-      }
-    }
-    if (onEditPhotoClick != null) {
-      IconButton(
-        onClick = onEditPhotoClick,
-        modifier = Modifier
-          .minimumInteractiveComponentSize()
-          .size(40.dp)
-          .testTag("song_edit_photo_button_${song.id}")
-      ) {
-        Icon(
-          imageVector = Icons.Rounded.AddPhotoAlternate,
-          contentDescription = "Customize song photo",
-          tint = MaterialTheme.colorScheme.primary,
-          modifier = Modifier.size(20.dp)
-        )
-      }
-    }
-    IconButton(
-      onClick = onFavoriteClick,
-      modifier = Modifier
-        .minimumInteractiveComponentSize()
-        .size(40.dp)
-        .testTag("song_favorite_button_${song.id}")
-    ) {
-      Icon(
-        imageVector = if (song.isFavorite) Icons.Rounded.Favorite else Icons.Rounded.FavoriteBorder,
-        contentDescription = "Favorite",
-        tint = if (song.isFavorite) MaterialTheme.colorScheme.error else MaterialTheme.colorScheme.onSurfaceVariant,
-        modifier = Modifier.scale(heartScale).size(20.dp)
-      )
-    }
-    if (onDeleteClick != null) {
-      IconButton(
-        onClick = onDeleteClick,
-        modifier = Modifier
-          .minimumInteractiveComponentSize()
-          .size(40.dp)
-          .testTag("song_delete_button_${song.id}")
-      ) {
-        Icon(
-          imageVector = Icons.Rounded.DeleteOutline,
-          contentDescription = "Delete song",
-          tint = MaterialTheme.colorScheme.error.copy(alpha = 0.85f),
-          modifier = Modifier.size(20.dp)
-        )
       }
     }
   }

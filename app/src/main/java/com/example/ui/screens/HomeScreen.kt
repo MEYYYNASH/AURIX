@@ -907,63 +907,77 @@ fun HomeScreen(
             exit = sectionExit
           ) {
             Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
-              Row(
-                modifier = Modifier
-                  .fillMaxWidth()
-                  .horizontalScroll(rememberScrollState()),
-                horizontalArrangement = Arrangement.spacedBy(8.dp)
-              ) {
-                DailyFeedCategory.entries.forEach { category ->
-                  val selected = category == selectedFeed
-                  val chipBg by animateColorAsState(
-                    targetValue = when {
-                      selected -> AurixTealAccent
-                      darkTheme -> Color(0xFF151F30)
-                      else -> Color.White.copy(alpha = 0.84f)
-                    },
-                    animationSpec = if (reducedMotion) snap() else tween(200),
-                    label = "chip_bg_${category.id}"
-                  )
-                  val chipBorder by animateColorAsState(
-                    targetValue = when {
-                      selected -> AurixTealAccent
-                      darkTheme -> Color(0xFF273348)
-                      else -> Color.White
-                    },
-                    animationSpec = if (reducedMotion) snap() else tween(200),
-                    label = "chip_border_${category.id}"
-                  )
-                  val chipTextColor = if (selected) Color(0xFF06201C) else MaterialTheme.colorScheme.onSurface
+              Box(modifier = Modifier.fillMaxWidth()) {
+                Row(
+                  modifier = Modifier
+                    .fillMaxWidth()
+                    .horizontalScroll(rememberScrollState())
+                    .padding(end = 24.dp),
+                  horizontalArrangement = Arrangement.spacedBy(6.dp)
+                ) {
+                  DailyFeedCategory.entries.forEach { category ->
+                    val selected = category == selectedFeed
+                    val chipBg by animateColorAsState(
+                      targetValue = when {
+                        selected -> AurixTealAccent
+                        darkTheme -> Color(0xFF151F30)
+                        else -> Color.White.copy(alpha = 0.84f)
+                      },
+                      animationSpec = if (reducedMotion) snap() else tween(200),
+                      label = "chip_bg_${category.id}"
+                    )
+                    val chipBorder by animateColorAsState(
+                      targetValue = when {
+                        selected -> AurixTealAccent
+                        darkTheme -> Color(0xFF273348)
+                        else -> Color.White
+                      },
+                      animationSpec = if (reducedMotion) snap() else tween(200),
+                      label = "chip_border_${category.id}"
+                    )
+                    val chipTextColor = if (selected) Color(0xFF06201C) else MaterialTheme.colorScheme.onSurface
 
-                  Row(
-                    verticalAlignment = Alignment.CenterVertically,
-                    horizontalArrangement = Arrangement.spacedBy(6.dp),
-                    modifier = Modifier
-                      .heightIn(min = 40.dp)
-                      .clip(CircleShape)
-                      .background(chipBg)
-                      .border(1.dp, chipBorder, CircleShape)
-                      .clickable { onSelectFeed(category) }
-                      .testTag("home_feed_chip_${category.id}")
-                      .padding(horizontal = 14.dp, vertical = 8.dp)
-                  ) {
-                    Icon(
-                      imageVector = feedCategoryIcon(category),
-                      contentDescription = null,
-                      tint = if (selected) Color(0xFF06201C) else AurixTealAccent,
-                      modifier = Modifier.size(15.dp)
-                    )
-                    Text(
-                      text = feedLocalizedLabel(category),
-                      style = MaterialTheme.typography.bodySmall.copy(
-                        fontWeight = if (selected) FontWeight.Bold else FontWeight.SemiBold,
-                        fontSize = 13.sp,
-                        lineHeight = 18.sp
-                      ),
-                      color = chipTextColor
-                    )
+                    Row(
+                      verticalAlignment = Alignment.CenterVertically,
+                      horizontalArrangement = Arrangement.spacedBy(5.dp),
+                      modifier = Modifier
+                        .heightIn(min = 34.dp)
+                        .clip(CircleShape)
+                        .background(chipBg)
+                        .border(1.dp, chipBorder, CircleShape)
+                        .clickable { onSelectFeed(category) }
+                        .testTag("home_feed_chip_${category.id}")
+                        .padding(horizontal = 12.dp, vertical = 6.dp)
+                    ) {
+                      Icon(
+                        imageVector = feedCategoryIcon(category),
+                        contentDescription = null,
+                        tint = if (selected) Color(0xFF06201C) else AurixTealAccent,
+                        modifier = Modifier.size(13.dp)
+                      )
+                      Text(
+                        text = feedLocalizedLabel(category),
+                        style = MaterialTheme.typography.bodySmall.copy(
+                          fontWeight = if (selected) FontWeight.Bold else FontWeight.SemiBold,
+                          fontSize = 12.sp,
+                          lineHeight = 16.sp
+                        ),
+                        color = chipTextColor
+                      )
+                    }
                   }
                 }
+                Box(
+                  modifier = Modifier
+                    .align(Alignment.CenterEnd)
+                    .width(36.dp)
+                    .fillMaxHeight()
+                    .background(
+                      Brush.horizontalGradient(
+                        colors = listOf(Color.Transparent, if (darkTheme) Color(0xFF0D121F) else Color.White)
+                      )
+                    )
+                )
               }
 
               val cardBgColor = if (darkTheme) Color(0xFF151F30) else Color.White.copy(alpha = 0.92f)
@@ -1231,18 +1245,6 @@ private fun CleanSectionHeader(
             .padding(horizontal = 8.dp, vertical = 6.dp)
         )
       }
-      OpenCloseGlassPill(
-        isOpen = isOpen,
-        onToggle = onToggle,
-        darkTheme = darkTheme,
-        reducedMotion = reducedMotion,
-        testTag = toggleTestTag,
-        contentDescription = stringResource(
-          id = if (isOpen) R.string.section_close_cd else R.string.section_open_cd,
-          title
-        ),
-        accentColor = AurixTealAccent
-      )
     }
   }
 }
