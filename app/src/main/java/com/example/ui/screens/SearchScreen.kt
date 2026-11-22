@@ -1233,12 +1233,8 @@ fun SearchResultsArea(
       }
 
       is SearchUiState.Results -> {
-        val activeArtPair = artColors ?: (
-          rememberArtworkColors(
-            artworkUrl = currentSong?.artworkUrl.orEmpty(),
-            fallbackTitle = currentSong?.title.orEmpty()
-          )
-        )
+        val fallbackArtPair = remember { artworkHueColors("") }
+        val activeArtPair = artColors ?: fallbackArtPair
         val useDynamicArt = dynamicBlurGlass && currentSong != null
         val panelShape = RoundedCornerShape(26.dp)
         val panelBorderBrush = Brush.verticalGradient(

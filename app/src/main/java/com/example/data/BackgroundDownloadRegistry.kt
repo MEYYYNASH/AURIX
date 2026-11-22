@@ -7,6 +7,7 @@ import com.example.model.Song
 import com.example.model.YoutubeAnalysisResult
 import com.example.model.YoutubeDownloadState
 import com.example.recommendation.TrackMetadataClassifier
+import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
@@ -106,14 +107,18 @@ object BackgroundDownloadRegistry {
           _feedbackEvents.tryEmit(DownloadFeedbackEvent("Saved to My songs & Music/AURIX: ${song.title}"))
         }.onFailure { err ->
           val msg = err.localizedMessage ?: "Download failed"
-          AppNotificationHelper.notifySongDownloadFailed(appContext, song.id, song.title, msg)
+          runCatching { AppNotificationHelper.notifySongDownloadFailed(appContext, song.id, song.title, msg) }
           _feedbackEvents.tryEmit(DownloadFeedbackEvent(msg, isError = true))
         }
-      } catch (e: Exception) {
+      } catch (ce: CancellationException) {
+        _songDownloadProgress.update { it - song.id }
+        _activeTrackNotifications.update { it - song.id }
+        throw ce
+      } catch (e: Throwable) {
         _songDownloadProgress.update { it - song.id }
         _activeTrackNotifications.update { it - song.id }
         val msg = e.localizedMessage ?: "Download failed"
-        AppNotificationHelper.notifySongDownloadFailed(appContext, song.id, song.title, msg)
+        runCatching { AppNotificationHelper.notifySongDownloadFailed(appContext, song.id, song.title, msg) }
         _feedbackEvents.tryEmit(DownloadFeedbackEvent(msg, isError = true))
       }
     }
@@ -281,14 +286,17 @@ object BackgroundDownloadRegistry {
         }.onFailure { err ->
           val msg = err.localizedMessage ?: "Download failed"
           updateVideoState(YoutubeDownloadState.Error(msg))
-          AppNotificationHelper.notifySongDownloadFailed(appContext, notifKey, analysis.matchedTrackTitle, msg)
+          runCatching { AppNotificationHelper.notifySongDownloadFailed(appContext, notifKey, analysis.matchedTrackTitle, msg) }
           _feedbackEvents.tryEmit(DownloadFeedbackEvent(msg, isError = true))
         }
-      } catch (e: Exception) {
+      } catch (ce: CancellationException) {
+        _activeTrackNotifications.update { it - notifKey }
+        throw ce
+      } catch (e: Throwable) {
         _activeTrackNotifications.update { it - notifKey }
         val msg = e.localizedMessage ?: "Download failed"
         updateVideoState(YoutubeDownloadState.Error(msg))
-        AppNotificationHelper.notifySongDownloadFailed(appContext, notifKey, analysis.matchedTrackTitle, msg)
+        runCatching { AppNotificationHelper.notifySongDownloadFailed(appContext, notifKey, analysis.matchedTrackTitle, msg) }
         _feedbackEvents.tryEmit(DownloadFeedbackEvent(msg, isError = true))
       }
     }

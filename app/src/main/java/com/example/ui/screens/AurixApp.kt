@@ -997,7 +997,11 @@ private fun AurixMainShell(
             }
           }
 
-          val songArtColors = currentSong?.let { rememberArtworkColors(it.artworkUrl, it.title) }
+          val sampledSongArtColors = rememberArtworkColors(
+            artworkUrl = currentSong?.artworkUrl.orEmpty(),
+            fallbackTitle = currentSong?.title.orEmpty()
+          )
+          val songArtColors = if (currentSong != null) sampledSongArtColors else null
           val tabBarAmbient = if (dynamicBg && !amoledTheme) songArtColors else null
           if (AurixNavStyle.fromId(navStyle) == AurixNavStyle.BLUR) {
             LiquidBlurSplitTabBar(

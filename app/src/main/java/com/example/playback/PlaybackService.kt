@@ -339,14 +339,14 @@ class PlaybackService : MediaSessionService() {
       val durationMs = 340L
       val stepMs = 24L
       var elapsed = 0L
-      player.volume = 0.15f
+      runCatching { player.volume = 0.15f }
       while (isActive && elapsed < durationMs) {
         val progress = (elapsed.toFloat() / durationMs.toFloat()).coerceIn(0f, 1f)
-        player.volume = (0.15f + 0.85f * progress).coerceIn(0f, 1f)
+        runCatching { player.volume = (0.15f + 0.85f * progress).coerceIn(0f, 1f) }
         delay(stepMs)
         elapsed += stepMs
       }
-      player.volume = 1f
+      runCatching { player.volume = 1f }
     }
   }
 

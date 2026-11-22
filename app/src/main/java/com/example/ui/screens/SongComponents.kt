@@ -399,6 +399,7 @@ fun GlassCard(
   Box(
     modifier = modifier
       .drawBehind {
+        if (size.width <= 0f || size.height <= 0f) return@drawBehind
         val r = cornerRadius.toPx()
         drawRoundRect(
           brush = Brush.verticalGradient(

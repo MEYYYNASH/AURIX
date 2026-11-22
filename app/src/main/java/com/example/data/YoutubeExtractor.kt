@@ -578,9 +578,10 @@ object YoutubeExtractor {
   private fun collectVideoRenderers(
     node: Any?,
     out: MutableList<YoutubeSearchItem>,
-    limit: Int
+    limit: Int,
+    depth: Int = 0
   ) {
-    if (out.size >= limit || node == null) return
+    if (depth > 32 || out.size >= limit || node == null) return
     when (node) {
       is JSONObject -> {
         val vr = node.optJSONObject("videoRenderer")
@@ -591,14 +592,14 @@ object YoutubeExtractor {
         while (keys.hasNext() && out.size < limit) {
           val k = keys.next()
           if (k != "videoRenderer") {
-            collectVideoRenderers(node.opt(k), out, limit)
+            collectVideoRenderers(node.opt(k), out, limit, depth + 1)
           }
         }
       }
       is JSONArray -> {
         for (i in 0 until node.length()) {
           if (out.size >= limit) break
-          collectVideoRenderers(node.opt(i), out, limit)
+          collectVideoRenderers(node.opt(i), out, limit, depth + 1)
         }
       }
     }

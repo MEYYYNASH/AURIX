@@ -42,6 +42,7 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.async
 import kotlinx.coroutines.awaitAll
+import kotlinx.coroutines.channels.BufferOverflow
 import kotlinx.coroutines.coroutineScope
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.*
@@ -93,7 +94,7 @@ class AurixViewModel(application: Application) : AndroidViewModel(application) {
   )
   val dynamicBg = prefsManager.dynamicBg.stateIn(viewModelScope, SharingStarted.Lazily, true)
   val reducedMotion = prefsManager.reducedMotion.stateIn(viewModelScope, SharingStarted.Lazily, false)
-  val onboardingCompleted = prefsManager.onboardingCompleted.stateIn(viewModelScope, SharingStarted.Lazily, false)
+  val onboardingCompleted = prefsManager.onboardingCompleted.stateIn(viewModelScope, SharingStarted.Eagerly, false)
   val githubOwner = prefsManager.githubOwner.stateIn(viewModelScope, SharingStarted.Lazily, "MEYYYNASH")
   val githubRepo = prefsManager.githubRepo.stateIn(viewModelScope, SharingStarted.Lazily, "AURIX")
   val moodFlowEnabled: StateFlow<Boolean> = prefsManager.moodFlowEnabled
@@ -232,7 +233,10 @@ class AurixViewModel(application: Application) : AndroidViewModel(application) {
   )
 
   private val _searchModeEnum = MutableStateFlow(SearchMode.YouTubeSearch)
-  private val _searchDispatch = MutableSharedFlow<SearchDispatch>(extraBufferCapacity = 16)
+  private val _searchDispatch = MutableSharedFlow<SearchDispatch>(
+    extraBufferCapacity = 16,
+    onBufferOverflow = BufferOverflow.DROP_OLDEST
+  )
   private var searchDispatchNonce = 0L
   private val _searchUiState = MutableStateFlow<SearchUiState>(SearchUiState.Idle)
 
@@ -1042,21 +1046,35 @@ class AurixViewModel(application: Application) : AndroidViewModel(application) {
         val fallbackQueue = _queue.value
         playResolveJob?.cancel()
         playResolveJob = viewModelScope.launch {
-          _resolvingSongId.value = failing.id
-          val extracted = getOrExtractYoutubeData(videoId, forceRefresh = true)
-          val bestFmt = pickBestPlayableFormat(extracted?.audioFormats.orEmpty())
-          _resolvingSongId.value = null
-          if (bestFmt != null) {
-            StreamHeaderRegistry.register(bestFmt.streamUrl, bestFmt.requiredUserAgent)
-            val refreshedSong = failing.copy(streamUrl = bestFmt.streamUrl)
-            val updatedQueue = fallbackQueue.map { if (it.id == refreshedSong.id) refreshedSong else it }
-            playSong(refreshedSong, updatedQueue)
-          } else {
-            Toast.makeText(getApplication(), "Unable to stream this YouTube track. Try downloading a format.", Toast.LENGTH_SHORT).show()
+          try {
+            _resolvingSongId.value = failing.id
+            val extracted = getOrExtractYoutubeData(videoId, forceRefresh = true)
+            val bestFmt = pickBestPlayableFormat(extracted?.audioFormats.orEmpty())
+            _resolvingSongId.value = null
+            if (bestFmt != null) {
+              StreamHeaderRegistry.register(bestFmt.streamUrl, bestFmt.requiredUserAgent)
+              val refreshedSong = failing.copy(streamUrl = bestFmt.streamUrl)
+              val updatedQueue = fallbackQueue.map { if (it.id == refreshedSong.id) refreshedSong else it }
+              playSong(refreshedSong, updatedQueue)
+            } else {
+              runCatching {
+                Toast.makeText(getApplication(), "Unable to stream this YouTube track. Try downloading a format.", Toast.LENGTH_SHORT).show()
+              }
+            }
+          } catch (ce: CancellationException) {
+            _resolvingSongId.value = null
+            throw ce
+          } catch (_: Throwable) {
+            _resolvingSongId.value = null
+            runCatching {
+              Toast.makeText(getApplication(), "Unable to stream this YouTube track. Try downloading a format.", Toast.LENGTH_SHORT).show()
+            }
           }
         }
       } else if (failing != null && failing.id.startsWith("yt_")) {
-        Toast.makeText(getApplication(), "Stream failed. Try another track or format.", Toast.LENGTH_SHORT).show()
+        runCatching {
+          Toast.makeText(getApplication(), "Stream failed. Try another track or format.", Toast.LENGTH_SHORT).show()
+        }
       }
     }
   }
@@ -1138,7 +1156,9 @@ class AurixViewModel(application: Application) : AndroidViewModel(application) {
     }
     viewModelScope.launch {
       BackgroundDownloadRegistry.feedbackEvents.collect { event ->
-        Toast.makeText(getApplication(), event.message, Toast.LENGTH_LONG).show()
+        runCatching {
+          Toast.makeText(getApplication(), event.message, Toast.LENGTH_LONG).show()
+        }
       }
     }
   }
@@ -1388,9 +1408,9 @@ class AurixViewModel(application: Application) : AndroidViewModel(application) {
     val resolvedArtworkUri = when {
       song.artworkUrl == APP_ICON_ARTWORK ||
         (song.artworkUrl.isBlank() && (song.source == "Local" || song.source == "Imported")) -> {
-        Uri.parse("android.resource://$pkg/${com.example.R.drawable.aurix_clean_logo_1794625921343}")
+        runCatching { Uri.parse("android.resource://$pkg/${com.example.R.drawable.aurix_clean_logo_1794625921343}") }.getOrNull()
       }
-      song.artworkUrl.isNotBlank() -> Uri.parse(song.artworkUrl)
+      song.artworkUrl.isNotBlank() -> runCatching { Uri.parse(song.artworkUrl) }.getOrNull()
       else -> null
     }
     val metadata = MediaMetadata.Builder()
@@ -1403,9 +1423,10 @@ class AurixViewModel(application: Application) : AndroidViewModel(application) {
       }
       .build()
 
+    val streamUri = runCatching { Uri.parse(song.streamUrl) }.getOrDefault(Uri.EMPTY)
     return MediaItem.Builder()
       .setMediaId(song.id)
-      .setUri(Uri.parse(song.streamUrl))
+      .setUri(streamUri)
       .setMediaMetadata(metadata)
       .build()
   }
@@ -1611,7 +1632,9 @@ class AurixViewModel(application: Application) : AndroidViewModel(application) {
         extracted?.let { youtubeExtractCache[videoId] = System.currentTimeMillis() to it }
         _youtubeAnalysis.value = analysis
         _selectedYoutubeFormatId.value = fullFormats.first().id
-      } catch (_: Exception) {
+      } catch (ce: CancellationException) {
+        throw ce
+      } catch (_: Throwable) {
         _youtubeError.value = "Unable to analyze YouTube link. Check your network connection."
       } finally {
         _isAnalyzingYoutube.value = false
@@ -1723,7 +1746,7 @@ class AurixViewModel(application: Application) : AndroidViewModel(application) {
         )
       } catch (ce: CancellationException) {
         throw ce
-      } catch (_: Exception) {
+      } catch (_: Throwable) {
         _formatSheetState.value = YoutubeFormatSheetState.Error(
           song = song,
           videoId = videoId,
@@ -2192,7 +2215,9 @@ class AurixViewModel(application: Application) : AndroidViewModel(application) {
         if (tracks.isNotEmpty()) {
           _rawPopularYoutube.value = tracks
         }
-      } catch (_: Exception) {
+      } catch (ce: CancellationException) {
+        throw ce
+      } catch (_: Throwable) {
       } finally {
         _isLoadingPopularYoutube.value = false
       }
@@ -2230,7 +2255,9 @@ class AurixViewModel(application: Application) : AndroidViewModel(application) {
         if (tracks.isNotEmpty()) {
           _rawTiktokViralNewPipe.value = tracks
         }
-      } catch (_: Exception) {
+      } catch (ce: CancellationException) {
+        throw ce
+      } catch (_: Throwable) {
       } finally {
         _isLoadingTiktokViralNewPipe.value = false
       }
@@ -2298,7 +2325,9 @@ class AurixViewModel(application: Application) : AndroidViewModel(application) {
         if (loaded.isNotEmpty()) {
           _rawNewAlbums.value = loaded
         }
-      } catch (_: Exception) {
+      } catch (ce: CancellationException) {
+        throw ce
+      } catch (_: Throwable) {
       } finally {
         _isLoadingNewAlbums.value = false
       }
@@ -2455,7 +2484,9 @@ class AurixViewModel(application: Application) : AndroidViewModel(application) {
           _featuredError.value = getApplication<Application>().getString(R.string.home_refresh_error)
           _dailyUpdatedJustNow.value = false
         }
-      } catch (_: Exception) {
+      } catch (ce: CancellationException) {
+        throw ce
+      } catch (_: Throwable) {
         _rawFeatured.value = emptyList()
         _featuredError.value = getApplication<Application>().getString(R.string.home_refresh_error)
         _dailyUpdatedJustNow.value = false
@@ -2566,7 +2597,7 @@ class AurixViewModel(application: Application) : AndroidViewModel(application) {
           }
         } catch (ce: CancellationException) {
           throw ce
-        } catch (_: Exception) {
+        } catch (_: Throwable) {
           _rawSearchResults.value = emptyList()
           val message = "Search failed. Check your connection."
           _searchError.value = message
@@ -2614,7 +2645,9 @@ class AurixViewModel(application: Application) : AndroidViewModel(application) {
 
   fun playSong(song: Song, newQueue: List<Song> = _rawFeatured.value.ifEmpty { listOf(song) }) {
     if (song.streamUrl.isBlank()) {
-      Toast.makeText(getApplication(), "No playable stream URL for this track.", Toast.LENGTH_SHORT).show()
+      runCatching {
+        Toast.makeText(getApplication(), "No playable stream URL for this track.", Toast.LENGTH_SHORT).show()
+      }
       return
     }
 
@@ -2632,7 +2665,9 @@ class AurixViewModel(application: Application) : AndroidViewModel(application) {
           val bestFmt = pickBestPlayableFormat(extracted?.audioFormats.orEmpty())
           if (bestFmt == null) {
             _resolvingSongId.value = null
-            Toast.makeText(getApplication(), "Could not load YouTube audio stream. Try downloading a format.", Toast.LENGTH_SHORT).show()
+            runCatching {
+              Toast.makeText(getApplication(), "Could not load YouTube audio stream. Try downloading a format.", Toast.LENGTH_SHORT).show()
+            }
             return@launch
           }
           StreamHeaderRegistry.register(bestFmt.streamUrl, bestFmt.requiredUserAgent)
@@ -2657,10 +2692,13 @@ class AurixViewModel(application: Application) : AndroidViewModel(application) {
             startQueueOnController(controller, resolvedSong, updatedQueue)
           }
         } catch (ce: CancellationException) {
-          throw ce
-        } catch (_: Exception) {
           _resolvingSongId.value = null
-          Toast.makeText(getApplication(), "Unable to stream this track right now.", Toast.LENGTH_SHORT).show()
+          throw ce
+        } catch (_: Throwable) {
+          _resolvingSongId.value = null
+          runCatching {
+            Toast.makeText(getApplication(), "Unable to stream this track right now.", Toast.LENGTH_SHORT).show()
+          }
         }
       }
       return
@@ -2679,8 +2717,10 @@ class AurixViewModel(application: Application) : AndroidViewModel(application) {
 
     try {
       startQueueOnController(controller, song, resolvedQueue)
-    } catch (_: Exception) {
-      Toast.makeText(getApplication(), "Unable to play this track.", Toast.LENGTH_SHORT).show()
+    } catch (_: Throwable) {
+      runCatching {
+        Toast.makeText(getApplication(), "Unable to play this track.", Toast.LENGTH_SHORT).show()
+      }
     }
   }
 
@@ -3105,23 +3145,28 @@ class AurixViewModel(application: Application) : AndroidViewModel(application) {
       tracks = emptyList()
     )
     remoteAlbumJob = viewModelScope.launch {
-      val tracks = withContext(Dispatchers.IO) {
-        val byLookup = if (item.collectionId.isNotBlank()) {
-          runCatching {
-            NetworkClient.itunesApi.lookupAlbumTracks(collectionId = item.collectionId, limit = 25)
-          }.getOrNull()?.results.orEmpty()
-        } else emptyList()
-        val mapped = mapItunesTracks(byLookup, sourceTag = "iTunes 30s", albumOverride = item.title)
-        if (mapped.isNotEmpty()) {
-          mapped
-        } else {
-          val bySearch = runCatching {
-            NetworkClient.itunesApi.searchTracks(term = "${item.artist} ${item.title}", limit = 15)
-          }.getOrNull()?.results.orEmpty()
-          mapItunesTracks(bySearch, sourceTag = "iTunes 30s", albumOverride = item.title)
+      try {
+        val tracks = withContext(Dispatchers.IO) {
+          val byLookup = if (item.collectionId.isNotBlank()) {
+            runCatching {
+              NetworkClient.itunesApi.lookupAlbumTracks(collectionId = item.collectionId, limit = 25)
+            }.getOrNull()?.results.orEmpty()
+          } else emptyList()
+          val mapped = mapItunesTracks(byLookup, sourceTag = "iTunes 30s", albumOverride = item.title)
+          if (mapped.isNotEmpty()) {
+            mapped
+          } else {
+            val bySearch = runCatching {
+              NetworkClient.itunesApi.searchTracks(term = "${item.artist} ${item.title}", limit = 15)
+            }.getOrNull()?.results.orEmpty()
+            mapItunesTracks(bySearch, sourceTag = "iTunes 30s", albumOverride = item.title)
+          }
         }
+        _remoteAlbumInfo.value = _remoteAlbumInfo.value?.copy(tracks = tracks)
+      } catch (ce: CancellationException) {
+        throw ce
+      } catch (_: Throwable) {
       }
-      _remoteAlbumInfo.value = _remoteAlbumInfo.value?.copy(tracks = tracks)
     }
   }
 
@@ -4039,7 +4084,9 @@ class AurixViewModel(application: Application) : AndroidViewModel(application) {
             _lyrics.value = LyricsResult(synced = null, plain = noLyricsMsg, rawLrc = null)
           }
         }
-      } catch (_: Exception) {
+      } catch (ce: CancellationException) {
+        throw ce
+      } catch (_: Throwable) {
         _lyrics.value = LyricsResult(synced = null, plain = noLyricsMsg, rawLrc = null)
       }
     }
