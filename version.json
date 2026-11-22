@@ -3,11 +3,11 @@
   "versionCode": 10830,
   "releaseDate": "2026-11-22",
   "apkUrl": "https://github.com/MEYYYNASH/AURIX/releases/download/v1.8.3/AURIX-v1.8.3.apk",
-  "sha256": "",
+  "sha256": "c6544438c3c2d7cc4206b5004ca47bdd67ffc742f3b1eaa9d470e3d0e5949c16",
   "mandatory": false,
   "notes": [
-    "Release v1.8.3 \u2014 Dark Glass Popup Menus: Redesigned Album '...' and Library song-row popup menus with frosted 28dp glass cards, blue (#2F8BFF) and purple (#A78BFA) accents, and 220ms corner pop-in animations",
-    "Album Quick Actions: Added side-by-side Play gradient and Shuffle glass hero buttons at the top of the Album '...' menu, aligned cleanly under the three-dot button",
+    "Release v1.8.3 \u2014 Dark Glass Popup Menus: Redesigned Album ... and Library song-row popup menus with frosted 28dp glass cards, blue (#2F8BFF) and purple (#A78BFA) accents, and 220ms corner pop-in animations",
+    "Album Quick Actions: Added side-by-side Play gradient and Shuffle glass hero buttons at the top of the Album ... menu, aligned cleanly under the three-dot button",
     "Library Song-Row Menu & Safe Positioning: Added descriptive subtitle hints, colored icon tiles, consistent rounded icons, and automatic screen-edge flip/shift for small phones"
   ],
   "releasePageUrl": "https://github.com/MEYYYNASH/AURIX/releases/tag/v1.8.3"
