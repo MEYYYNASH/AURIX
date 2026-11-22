@@ -139,7 +139,6 @@ typealias Track = Song
 
 enum class SearchMode {
   YouTubeSearch,
-  ITunes30s,
   YouTubeLink
 }
 

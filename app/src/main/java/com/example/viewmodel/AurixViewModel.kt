@@ -1473,12 +1473,10 @@ class AurixViewModel(application: Application) : AndroidViewModel(application) {
   fun setSearchMode(mode: String) {
     val normalizedMode = when (mode) {
       "youtube" -> "youtube"
-      "itunes" -> "itunes"
       else -> "youtube_search"
     }
     val nextEnum = when (normalizedMode) {
       "youtube" -> SearchMode.YouTubeLink
-      "itunes" -> SearchMode.ITunes30s
       else -> SearchMode.YouTubeSearch
     }
     val changed = _searchMode.value != normalizedMode
@@ -1488,7 +1486,7 @@ class AurixViewModel(application: Application) : AndroidViewModel(application) {
       val currentQ = if (nextEnum == SearchMode.YouTubeLink) _youtubeUrl.value else _searchQuery.value
       if (currentQ.isBlank()) {
         _searchDispatch.tryEmit(SearchDispatch("", nextEnum, 0L, ++searchDispatchNonce))
-      } else if (nextEnum == SearchMode.YouTubeSearch || nextEnum == SearchMode.ITunes30s) {
+      } else if (nextEnum == SearchMode.YouTubeSearch) {
         _searchDispatch.tryEmit(SearchDispatch(currentQ, nextEnum, 0L, ++searchDispatchNonce))
       } else if (_youtubeAnalysis.value == null && !_isAnalyzingYoutube.value) {
         analyzeYoutubeUrl()
@@ -2548,21 +2546,6 @@ class AurixViewModel(application: Application) : AndroidViewModel(application) {
                   mapYoutubeSearchItem(item = item, sourceTag = "YouTube")
                 }
               }
-              _rawSearchResults.value = mapped
-              val visible = mapped
-                .filter { isTrackVisible(it, hiddenSongIds.value, blockedArtists.value) }
-                .map { it.copy(isFavorite = it.id in favoriteIds.value) }
-              _searchUiState.value = if (visible.isEmpty()) {
-                SearchUiState.Empty
-              } else {
-                SearchUiState.Results(visible)
-              }
-            }
-            SearchMode.ITunes30s -> {
-              val response = withContext(Dispatchers.IO) {
-                NetworkClient.itunesApi.searchTracks(term = trimmed, limit = 25, country = "US")
-              }
-              val mapped = mapItunesTracks(response.results, sourceTag = "iTunes 30s")
               _rawSearchResults.value = mapped
               val visible = mapped
                 .filter { isTrackVisible(it, hiddenSongIds.value, blockedArtists.value) }

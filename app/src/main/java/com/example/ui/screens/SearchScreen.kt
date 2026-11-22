@@ -185,7 +185,6 @@ fun SearchScreen(
     isSearching -> SearchUiState.Loading(
       mode = when (searchMode) {
         "youtube" -> SearchMode.YouTubeLink
-        "itunes" -> SearchMode.ITunes30s
         else -> SearchMode.YouTubeSearch
       },
       query = searchQuery
@@ -204,7 +203,6 @@ fun SearchScreen(
   val quickTags = remember { listOf("Trending", "Khmer", "TikTok Viral", "Phonk", "Pop", "R&B", "Lo-Fi") }
   val activeModeEnum = when (searchMode) {
     "youtube" -> SearchMode.YouTubeLink
-    "itunes" -> SearchMode.ITunes30s
     else -> SearchMode.YouTubeSearch
   }
   val hasPlayingSong = currentSong != null
@@ -279,28 +277,25 @@ fun SearchScreen(
 
       Spacer(modifier = Modifier.height(14.dp))
 
-      // Liquid Glass 3-Mode Switcher (YouTube | iTunes 30s | YT Link)
+      // Liquid Glass 2-Mode Switcher (YouTube Search | YT Link)
       GlassSegmentedBar(
         options = listOf(
           stringResource(id = R.string.search_mode_yt_search) to Icons.Rounded.PlayCircle,
-          stringResource(id = R.string.search_mode_itunes) to Icons.Rounded.MusicNote,
           stringResource(id = R.string.search_mode_youtube) to Icons.Rounded.Link
         ),
         selectedIndex = when (searchMode) {
-          "itunes" -> 1
-          "youtube" -> 2
+          "youtube" -> 1
           else -> 0
         },
         darkTheme = darkTheme,
         onSelect = { idx ->
           val next = when (idx) {
-            1 -> "itunes"
-            2 -> "youtube"
+            1 -> "youtube"
             else -> "youtube_search"
           }
           onSearchModeChanged(next)
         },
-        testTags = listOf("mode_youtube_search_button", "mode_itunes_button", "mode_youtube_button"),
+        testTags = listOf("mode_youtube_search_button", "mode_youtube_button"),
         reducedMotion = reducedMotion
       )
 
@@ -1196,7 +1191,6 @@ fun SearchResultsArea(
           reducedMotion = reducedMotion,
           modeText = when (state.mode) {
             SearchMode.YouTubeSearch -> stringResource(id = R.string.search_loading_yt)
-            SearchMode.ITunes30s -> stringResource(id = R.string.search_loading_itunes)
             SearchMode.YouTubeLink -> stringResource(id = R.string.search_loading_link)
           }
         )
