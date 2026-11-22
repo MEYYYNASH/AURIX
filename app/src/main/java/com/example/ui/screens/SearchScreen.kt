@@ -7,8 +7,13 @@ import android.widget.Toast
 import androidx.compose.animation.AnimatedContent
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.animateColorAsState
+import androidx.compose.animation.core.LinearEasing
+import androidx.compose.animation.core.RepeatMode
 import androidx.compose.animation.core.Spring
+import androidx.compose.animation.core.animateFloat
 import androidx.compose.animation.core.animateFloatAsState
+import androidx.compose.animation.core.infiniteRepeatable
+import androidx.compose.animation.core.rememberInfiniteTransition
 import androidx.compose.animation.core.snap
 import androidx.compose.animation.core.spring
 import androidx.compose.animation.core.tween
@@ -1186,50 +1191,15 @@ fun SearchResultsArea(
       }
 
       is SearchUiState.Loading -> {
-        Box(
-          modifier = Modifier
-            .fillMaxSize()
-            .padding(bottom = centerBottomPadding)
-            .semantics {
-              liveRegion = LiveRegionMode.Polite
-              contentDescription = "Searching"
-            }
-            .testTag("search_orbit_loader"),
-          contentAlignment = Alignment.Center
-        ) {
-          GlassCard(
-            darkTheme = darkTheme,
-            cornerRadius = 28.dp,
-            modifier = Modifier.fillMaxWidth()
-          ) {
-            Column(
-              modifier = Modifier
-                .fillMaxWidth()
-                .padding(vertical = 36.dp, horizontal = 24.dp),
-              horizontalAlignment = Alignment.CenterHorizontally,
-              verticalArrangement = Arrangement.spacedBy(14.dp)
-            ) {
-              OrbitLoader(
-                size = 82.dp,
-                ringColor = OrbitRingDefault,
-                planetColor = OrbitPlanetDefault,
-                eyeColor = OrbitEyeDefault,
-                cometColor = AurixTealAccent,
-                reducedMotion = reducedMotion
-              )
-              Text(
-                text = when (state.mode) {
-                  SearchMode.YouTubeSearch -> stringResource(id = R.string.search_loading_yt)
-                  SearchMode.ITunes30s -> stringResource(id = R.string.search_loading_itunes)
-                  SearchMode.YouTubeLink -> stringResource(id = R.string.search_loading_link)
-                },
-                style = MaterialTheme.typography.bodySmall.copy(fontWeight = FontWeight.Medium),
-                color = MaterialTheme.colorScheme.onSurfaceVariant,
-                textAlign = TextAlign.Center
-              )
-            }
+        SearchSkeletonLoadingView(
+          darkTheme = darkTheme,
+          reducedMotion = reducedMotion,
+          modeText = when (state.mode) {
+            SearchMode.YouTubeSearch -> stringResource(id = R.string.search_loading_yt)
+            SearchMode.ITunes30s -> stringResource(id = R.string.search_loading_itunes)
+            SearchMode.YouTubeLink -> stringResource(id = R.string.search_loading_link)
           }
-        }
+        )
       }
 
       is SearchUiState.Results -> {
@@ -2014,5 +1984,117 @@ private fun SearchResultsErrorPreview() {
       darkTheme = true,
       reducedMotion = false
     )
+  }
+}
+
+@Composable
+private fun SearchSkeletonLoadingView(
+  darkTheme: Boolean,
+  reducedMotion: Boolean,
+  modeText: String
+) {
+  val infiniteTransition = rememberInfiniteTransition(label = "search_skeleton")
+  val alphaAnim by infiniteTransition.animateFloat(
+    initialValue = 0.3f,
+    targetValue = 0.85f,
+    animationSpec = infiniteRepeatable(
+      animation = tween(durationMillis = 900, easing = LinearEasing),
+      repeatMode = RepeatMode.Reverse
+    ),
+    label = "skeleton_alpha"
+  )
+  val currentAlpha = if (reducedMotion) 0.5f else alphaAnim
+  val basePlaceholderColor = if (darkTheme) Color.White.copy(alpha = 0.12f) else Color.Black.copy(alpha = 0.08f)
+
+  Column(
+    modifier = Modifier
+      .fillMaxSize()
+      .padding(horizontal = 4.dp, vertical = 8.dp),
+    verticalArrangement = Arrangement.spacedBy(12.dp)
+  ) {
+    GlassCard(
+      darkTheme = darkTheme,
+      cornerRadius = 20.dp,
+      modifier = Modifier.fillMaxWidth()
+    ) {
+      Row(
+        modifier = Modifier
+          .fillMaxWidth()
+          .padding(16.dp),
+        verticalAlignment = Alignment.CenterVertically,
+        horizontalArrangement = Arrangement.spacedBy(16.dp)
+      ) {
+        OrbitLoader(
+          size = 42.dp,
+          ringColor = OrbitRingDefault,
+          planetColor = OrbitPlanetDefault,
+          eyeColor = OrbitEyeDefault,
+          cometColor = AurixTealAccent,
+          reducedMotion = reducedMotion
+        )
+        Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
+          Text(
+            text = modeText,
+            style = MaterialTheme.typography.bodyMedium.copy(fontWeight = FontWeight.SemiBold),
+            color = MaterialTheme.colorScheme.onSurface
+          )
+          Text(
+            text = "Searching across global music library...",
+            style = MaterialTheme.typography.bodySmall,
+            color = MaterialTheme.colorScheme.onSurfaceVariant
+          )
+        }
+      }
+    }
+
+    Spacer(modifier = Modifier.height(4.dp))
+
+    repeat(6) { index ->
+      GlassCard(
+        darkTheme = darkTheme,
+        cornerRadius = 18.dp,
+        modifier = Modifier.fillMaxWidth()
+      ) {
+        Row(
+          modifier = Modifier
+            .fillMaxWidth()
+            .padding(12.dp),
+          verticalAlignment = Alignment.CenterVertically,
+          horizontalArrangement = Arrangement.spacedBy(14.dp)
+        ) {
+          Box(
+            modifier = Modifier
+              .size(54.dp)
+              .clip(RoundedCornerShape(12.dp))
+              .background(basePlaceholderColor.copy(alpha = basePlaceholderColor.alpha * currentAlpha))
+          )
+          Column(
+            modifier = Modifier.weight(1f),
+            verticalArrangement = Arrangement.spacedBy(8.dp)
+          ) {
+            Box(
+              modifier = Modifier
+                .fillMaxWidth(fraction = 0.75f - (index % 3) * 0.15f)
+                .height(14.dp)
+                .clip(RoundedCornerShape(4.dp))
+                .background(basePlaceholderColor.copy(alpha = basePlaceholderColor.alpha * currentAlpha))
+            )
+            Box(
+              modifier = Modifier
+                .fillMaxWidth(fraction = 0.45f)
+                .height(10.dp)
+                .clip(RoundedCornerShape(4.dp))
+                .background(basePlaceholderColor.copy(alpha = basePlaceholderColor.alpha * currentAlpha))
+            )
+          }
+          Box(
+            modifier = Modifier
+              .size(32.dp)
+              .clip(CircleShape)
+              .background(basePlaceholderColor.copy(alpha = basePlaceholderColor.alpha * currentAlpha))
+          )
+        }
+      }
+    }
   }
 }
