@@ -65,19 +65,24 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.rounded.Analytics
 import androidx.compose.material.icons.rounded.BlurOff
 import androidx.compose.material.icons.rounded.BlurOn
+import androidx.compose.material.icons.rounded.BookmarkAdd
+import androidx.compose.material.icons.rounded.CheckCircle
 import androidx.compose.material.icons.rounded.Close
 import androidx.compose.material.icons.rounded.ContentPaste
 import androidx.compose.material.icons.rounded.Download
 import androidx.compose.material.icons.rounded.DownloadDone
 import androidx.compose.material.icons.rounded.ErrorOutline
+import androidx.compose.material.icons.rounded.LibraryAddCheck
 import androidx.compose.material.icons.rounded.LibraryMusic
 import androidx.compose.material.icons.rounded.Link
 import androidx.compose.material.icons.rounded.MusicNote
 import androidx.compose.material.icons.rounded.OndemandVideo
 import androidx.compose.material.icons.rounded.PlayArrow
 import androidx.compose.material.icons.rounded.PlayCircle
+import androidx.compose.material.icons.automirrored.rounded.QueueMusic
 import androidx.compose.material.icons.rounded.Refresh
 import androidx.compose.material.icons.rounded.Search
+import androidx.compose.material.icons.rounded.Shuffle
 import androidx.compose.material.icons.rounded.Tune
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
@@ -140,6 +145,7 @@ import com.example.model.Song
 import com.example.model.YoutubeAnalysisResult
 import com.example.model.YoutubeDownloadState
 import com.example.model.YoutubeFormatSheetState
+import com.example.model.YoutubePlaylistResult
 import com.example.ui.theme.AurixTheme
 import java.util.Locale
 
@@ -199,7 +205,14 @@ fun SearchScreen(
   onClearSearch: () -> Unit = { onSearchQueryChanged("") },
   onRetrySearch: () -> Unit = { onSearchQueryChanged(searchQuery) },
   onImmediateSearch: (String) -> Unit = onSearchQueryChanged,
-  onReportError: (String, Throwable?) -> Unit = { _, _ -> }
+  onReportError: (String, Throwable?) -> Unit = { _, _ -> },
+  youtubePlaylist: YoutubePlaylistResult? = null,
+  onPlayPlaylist: (Boolean) -> Unit = {},
+  onDownloadPlaylist: () -> Unit = {},
+  onSavePlaylist: () -> Unit = {},
+  onOpenSavedPlaylistAlbum: (String) -> Unit = {},
+  onOpenPlaylistUrl: (String) -> Unit = {},
+  onClearYoutubeResult: () -> Unit = {}
 ) {
   val context = LocalContext.current
   val keyboardController = LocalSoftwareKeyboardController.current
@@ -308,13 +321,18 @@ fun SearchScreen(
           YoutubeLinkGlassPane(
             youtubeUrl = youtubeUrl,
             youtubeAnalysis = youtubeAnalysis,
+            youtubePlaylist = youtubePlaylist,
             selectedYoutubeFormatId = selectedYoutubeFormatId,
             youtubeDownloadState = youtubeDownloadState,
             isAnalyzingYoutube = isAnalyzingYoutube,
             youtubeError = youtubeError,
             currentSong = currentSong,
+            isPlaying = isPlaying,
+            resolvingSongId = resolvingSongId,
             darkTheme = darkTheme,
             reducedMotion = reducedMotion,
+            songDownloadProgress = songDownloadProgress,
+            downloadedSongIds = downloadedSongIds,
             verifiedLyricsIds = verifiedLyricsIds,
             onCheckLyrics = onCheckLyrics,
             onYoutubeUrlChanged = onYoutubeUrlChanged,
@@ -327,6 +345,15 @@ fun SearchScreen(
             onDownloadYoutube = onDownloadYoutube,
             onPlaySaved = { saved -> onSongClick(saved, listOf(saved)) },
             onOpenMySongs = onOpenMySongs,
+            onPlayPlaylist = onPlayPlaylist,
+            onDownloadPlaylist = onDownloadPlaylist,
+            onSavePlaylist = onSavePlaylist,
+            onOpenSavedPlaylistAlbum = onOpenSavedPlaylistAlbum,
+            onOpenPlaylistUrl = onOpenPlaylistUrl,
+            onClearYoutubeResult = onClearYoutubeResult,
+            onSongClick = onSongClick,
+            onFavoriteClick = onFavoriteClick,
+            onTrackDownloadClick = onYoutubeSongDownloadClick,
             onReportError = onReportError,
             context = context
           )
@@ -697,13 +724,18 @@ private fun GlassQuickTagChip(
 private fun YoutubeLinkGlassPane(
   youtubeUrl: String,
   youtubeAnalysis: YoutubeAnalysisResult?,
+  youtubePlaylist: YoutubePlaylistResult?,
   selectedYoutubeFormatId: String?,
   youtubeDownloadState: YoutubeDownloadState,
   isAnalyzingYoutube: Boolean,
   youtubeError: String?,
   currentSong: Song?,
+  isPlaying: Boolean,
+  resolvingSongId: String?,
   darkTheme: Boolean,
   reducedMotion: Boolean,
+  songDownloadProgress: Map<String, Float>,
+  downloadedSongIds: Set<String>,
   verifiedLyricsIds: Set<String>,
   onCheckLyrics: (Song) -> Unit,
   onYoutubeUrlChanged: (String) -> Unit,
@@ -713,6 +745,15 @@ private fun YoutubeLinkGlassPane(
   onDownloadYoutube: () -> Unit,
   onPlaySaved: (Song) -> Unit,
   onOpenMySongs: () -> Unit,
+  onPlayPlaylist: (Boolean) -> Unit,
+  onDownloadPlaylist: () -> Unit,
+  onSavePlaylist: () -> Unit,
+  onOpenSavedPlaylistAlbum: (String) -> Unit,
+  onOpenPlaylistUrl: (String) -> Unit,
+  onClearYoutubeResult: () -> Unit,
+  onSongClick: (Song, List<Song>) -> Unit,
+  onFavoriteClick: (Song) -> Unit,
+  onTrackDownloadClick: (Song) -> Unit,
   onReportError: (String, Throwable?) -> Unit = { _, _ -> },
   context: Context
 ) {
@@ -967,6 +1008,81 @@ private fun YoutubeLinkGlassPane(
           }
         }
       }
+    } else if (youtubePlaylist != null) {
+      item {
+        YoutubePlaylistResultCard(
+          playlist = youtubePlaylist,
+          darkTheme = darkTheme,
+          songDownloadProgress = songDownloadProgress,
+          downloadedSongIds = downloadedSongIds,
+          onPlayAll = { onPlayPlaylist(false) },
+          onShuffle = { onPlayPlaylist(true) },
+          onSaveOrOpen = {
+            val savedId = youtubePlaylist.savedAlbumId
+            if (savedId != null) {
+              onOpenSavedPlaylistAlbum(savedId)
+            } else {
+              onSavePlaylist()
+            }
+          },
+          onDownloadAll = onDownloadPlaylist
+        )
+      }
+
+      item {
+        Row(
+          modifier = Modifier
+            .fillMaxWidth()
+            .padding(horizontal = 4.dp, vertical = 2.dp),
+          horizontalArrangement = Arrangement.SpaceBetween,
+          verticalAlignment = Alignment.CenterVertically
+        ) {
+          Text(
+            text = stringResource(id = R.string.playlist_songs_header, youtubePlaylist.tracks.size),
+            style = MaterialTheme.typography.labelLarge.copy(fontWeight = FontWeight.Bold),
+            color = AurixTealAccent,
+            modifier = Modifier.weight(1f)
+          )
+          Surface(
+            onClick = onClearYoutubeResult,
+            shape = CircleShape,
+            color = if (darkTheme) Color.White.copy(alpha = 0.08f) else Color.White.copy(alpha = 0.78f),
+            border = BorderStroke(
+              1.dp,
+              if (darkTheme) Color.White.copy(alpha = 0.16f) else Color.White
+            ),
+            modifier = Modifier
+              .minimumInteractiveComponentSize()
+              .testTag("playlist_clear_button")
+          ) {
+            Text(
+              text = stringResource(id = R.string.search_quick_clear),
+              style = MaterialTheme.typography.labelSmall.copy(fontWeight = FontWeight.SemiBold),
+              color = MaterialTheme.colorScheme.onSurfaceVariant,
+              modifier = Modifier.padding(horizontal = 12.dp, vertical = 6.dp)
+            )
+          }
+        }
+      }
+
+      itemsIndexed(youtubePlaylist.tracks, key = { index, song -> "pl_${index}_${song.id}" }) { index, song ->
+        SongDownloadRow(
+          song = song,
+          index = index + 1,
+          isPlaying = isPlaying,
+          isCurrent = currentSong?.id == song.id,
+          isResolving = resolvingSongId == song.id,
+          reducedMotion = reducedMotion,
+          darkTheme = darkTheme,
+          hasLyrics = song.id in verifiedLyricsIds,
+          downloadProgress = songDownloadProgress[song.id],
+          isDownloaded = song.id in downloadedSongIds,
+          onCheckLyrics = onCheckLyrics,
+          onSongClick = { onSongClick(song, youtubePlaylist.tracks) },
+          onFavoriteClick = { onFavoriteClick(song) },
+          onDownloadClick = { onTrackDownloadClick(song) }
+        )
+      }
     } else if (youtubeAnalysis != null) {
       item {
         YoutubeAnalysisResultCard(
@@ -981,7 +1097,8 @@ private fun YoutubeLinkGlassPane(
           onPlayClick = onPlayAnalyzedYoutube,
           onDownload = onDownloadYoutube,
           onPlaySaved = onPlaySaved,
-          onOpenMySongs = onOpenMySongs
+          onOpenMySongs = onOpenMySongs,
+          onOpenAssociatedPlaylist = { url -> onOpenPlaylistUrl(url) }
         )
       }
     } else {
@@ -1491,7 +1608,8 @@ private fun YoutubeAnalysisResultCard(
   onPlayClick: () -> Unit,
   onDownload: () -> Unit,
   onPlaySaved: (Song) -> Unit,
-  onOpenMySongs: () -> Unit
+  onOpenMySongs: () -> Unit,
+  onOpenAssociatedPlaylist: (String) -> Unit = {}
 ) {
   val probeSong = remember(analysis.videoId, analysis.matchedTrackTitle, analysis.matchedArtist, analysis.durationSeconds) {
     Song(
@@ -1818,6 +1936,366 @@ private fun YoutubeAnalysisResultCard(
             else -> stringResource(id = R.string.album_track_download)
           }
           Text(text = ctaLabel, fontWeight = FontWeight.Bold, maxLines = 1, overflow = TextOverflow.Ellipsis)
+        }
+      }
+
+      val playlistLink = analysis.associatedPlaylistUrl
+      if (!playlistLink.isNullOrBlank()) {
+        OutlinedButton(
+          onClick = { onOpenAssociatedPlaylist(playlistLink) },
+          modifier = Modifier
+            .fillMaxWidth()
+            .height(48.dp)
+            .testTag("youtube_open_associated_playlist_button"),
+          shape = CircleShape,
+          border = BorderStroke(1.dp, Color(0xFFA78BFA).copy(alpha = 0.55f)),
+          colors = ButtonDefaults.outlinedButtonColors(
+            containerColor = Color(0xFFA78BFA).copy(alpha = if (darkTheme) 0.14f else 0.10f),
+            contentColor = MaterialTheme.colorScheme.onSurface
+          )
+        ) {
+          Icon(
+            imageVector = Icons.AutoMirrored.Rounded.QueueMusic,
+            contentDescription = null,
+            tint = Color(0xFFA78BFA),
+            modifier = Modifier.size(19.dp)
+          )
+          Spacer(modifier = Modifier.width(8.dp))
+          Text(
+            text = stringResource(id = R.string.playlist_open_from_video),
+            fontWeight = FontWeight.Bold
+          )
+        }
+      }
+    }
+  }
+}
+
+@Composable
+private fun YoutubePlaylistResultCard(
+  playlist: YoutubePlaylistResult,
+  darkTheme: Boolean,
+  songDownloadProgress: Map<String, Float>,
+  downloadedSongIds: Set<String>,
+  onPlayAll: () -> Unit,
+  onShuffle: () -> Unit,
+  onSaveOrOpen: () -> Unit,
+  onDownloadAll: () -> Unit
+) {
+  val (c1, c2) = rememberArtworkColors(playlist.thumbnailUrl, playlist.title)
+  val cardShape = RoundedCornerShape(28.dp)
+  val totalDurSec = remember(playlist.tracks) {
+    playlist.tracks.sumOf { it.durationSeconds.coerceAtLeast(0L) }
+  }
+  val durFormatted = remember(totalDurSec) {
+    if (totalDurSec <= 0L) "" else {
+      val hrs = totalDurSec / 3600L
+      val mins = (totalDurSec % 3600L) / 60L
+      if (hrs > 0L) "${hrs}h ${mins}m" else "${mins.coerceAtLeast(1L)}m"
+    }
+  }
+  val activeDownloadCount = playlist.tracks.count { songDownloadProgress.containsKey(it.id) }
+  val downloadedCount = playlist.tracks.count { it.id in downloadedSongIds }
+  val allDownloaded = playlist.tracks.isNotEmpty() && downloadedCount == playlist.tracks.size
+  val isSaved = playlist.savedAlbumId != null
+
+  Box(
+    modifier = Modifier
+      .fillMaxWidth()
+      .clip(cardShape)
+      .background(if (darkTheme) Color(0xFF172034).copy(alpha = 0.86f) else Color.White.copy(alpha = 0.90f))
+      .border(1.dp, Color.White.copy(alpha = if (darkTheme) 0.24f else 0.96f), cardShape)
+      .testTag("youtube_playlist_card")
+  ) {
+    if (playlist.thumbnailUrl.isNotBlank()) {
+      AsyncImage(
+        model = playlist.thumbnailUrl,
+        contentDescription = null,
+        contentScale = ContentScale.Crop,
+        modifier = Modifier
+          .matchParentSize()
+          .alpha(if (darkTheme) 0.22f else 0.14f)
+          .blur(34.dp)
+      )
+    }
+    Box(
+      modifier = Modifier
+        .matchParentSize()
+        .background(
+          Brush.linearGradient(
+            colors = listOf(
+              Color(0xFF2F8BFF).copy(alpha = 0.18f),
+              c1.copy(alpha = 0.18f),
+              Color(0xFFA78BFA).copy(alpha = 0.12f)
+            )
+          )
+        )
+    )
+
+    Column(
+      modifier = Modifier.padding(18.dp),
+      verticalArrangement = Arrangement.spacedBy(14.dp)
+    ) {
+      Row(
+        modifier = Modifier.fillMaxWidth(),
+        horizontalArrangement = Arrangement.spacedBy(14.dp),
+        verticalAlignment = Alignment.CenterVertically
+      ) {
+        Box(
+          modifier = Modifier
+            .size(88.dp)
+            .clip(RoundedCornerShape(18.dp))
+            .background(
+              Brush.linearGradient(
+                colors = listOf(Color(0xFF2F8BFF), Color(0xFF6366F1), Color(0xFFA78BFA))
+              )
+            )
+            .border(1.dp, Color.White.copy(alpha = 0.28f), RoundedCornerShape(18.dp)),
+          contentAlignment = Alignment.Center
+        ) {
+          if (playlist.thumbnailUrl.isNotBlank()) {
+            AsyncImage(
+              model = playlist.thumbnailUrl,
+              contentDescription = playlist.title,
+              contentScale = ContentScale.Crop,
+              modifier = Modifier.fillMaxSize()
+            )
+          } else {
+            Icon(
+              imageVector = Icons.AutoMirrored.Rounded.QueueMusic,
+              contentDescription = playlist.title,
+              tint = Color.White,
+              modifier = Modifier.size(38.dp)
+            )
+          }
+        }
+
+        Column(
+          modifier = Modifier.weight(1f),
+          verticalArrangement = Arrangement.spacedBy(4.dp)
+        ) {
+          Surface(
+            shape = CircleShape,
+            color = Color(0xFF2F8BFF).copy(alpha = if (darkTheme) 0.26f else 0.16f),
+            border = BorderStroke(1.dp, Color(0xFF2F8BFF).copy(alpha = 0.45f))
+          ) {
+            Text(
+              text = stringResource(id = R.string.playlist_badge),
+              style = MaterialTheme.typography.labelSmall.copy(
+                fontWeight = FontWeight.ExtraBold,
+                fontSize = 10.sp
+              ),
+              color = if (darkTheme) Color(0xFF93C5FD) else Color(0xFF1D4ED8),
+              modifier = Modifier.padding(horizontal = 9.dp, vertical = 3.dp)
+            )
+          }
+          Text(
+            text = playlist.title,
+            style = MaterialTheme.typography.titleMedium.copy(
+              fontWeight = FontWeight.ExtraBold,
+              lineHeight = 22.sp
+            ),
+            color = MaterialTheme.colorScheme.onSurface,
+            maxLines = 2,
+            overflow = TextOverflow.Ellipsis
+          )
+          val countText = stringResource(id = R.string.playlist_songs_count, playlist.tracks.size)
+          val metaLine = buildString {
+            if (playlist.author.isNotBlank()) {
+              append(playlist.author)
+              append(" · ")
+            }
+            append(countText)
+            if (durFormatted.isNotBlank()) {
+              append(" · ")
+              append(durFormatted)
+            }
+          }
+          Text(
+            text = metaLine,
+            style = MaterialTheme.typography.bodySmall,
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
+            maxLines = 1,
+            overflow = TextOverflow.Ellipsis
+          )
+        }
+      }
+
+      // Row 1: Listen as Playlist (Play All & Shuffle)
+      Row(
+        modifier = Modifier.fillMaxWidth(),
+        horizontalArrangement = Arrangement.spacedBy(10.dp),
+        verticalAlignment = Alignment.CenterVertically
+      ) {
+        Box(
+          modifier = Modifier
+            .weight(1f)
+            .height(50.dp)
+            .clip(CircleShape)
+            .background(
+              Brush.horizontalGradient(
+                colors = listOf(Color(0xFF2F8BFF), Color(0xFF5B5CEB))
+              )
+            )
+            .clickable(onClick = onPlayAll)
+            .testTag("playlist_play_all_button"),
+          contentAlignment = Alignment.Center
+        ) {
+          Row(
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.spacedBy(6.dp),
+            modifier = Modifier.padding(horizontal = 12.dp)
+          ) {
+            Icon(
+              imageVector = Icons.Rounded.PlayArrow,
+              contentDescription = null,
+              tint = Color.White,
+              modifier = Modifier.size(20.dp)
+            )
+            Text(
+              text = stringResource(id = R.string.playlist_play_all),
+              style = MaterialTheme.typography.labelLarge.copy(fontWeight = FontWeight.Bold),
+              color = Color.White,
+              maxLines = 1,
+              overflow = TextOverflow.Ellipsis
+            )
+          }
+        }
+
+        OutlinedButton(
+          onClick = onShuffle,
+          modifier = Modifier
+            .weight(1f)
+            .height(50.dp)
+            .testTag("playlist_shuffle_button"),
+          shape = CircleShape,
+          border = BorderStroke(
+            1.dp,
+            if (darkTheme) Color.White.copy(alpha = 0.20f) else Color.White
+          ),
+          colors = ButtonDefaults.outlinedButtonColors(
+            containerColor = if (darkTheme) Color.White.copy(alpha = 0.08f) else Color.White.copy(alpha = 0.72f),
+            contentColor = MaterialTheme.colorScheme.onSurface
+          ),
+          contentPadding = PaddingValues(horizontal = 12.dp)
+        ) {
+          Icon(
+            imageVector = Icons.Rounded.Shuffle,
+            contentDescription = null,
+            tint = Color(0xFF2F8BFF),
+            modifier = Modifier.size(18.dp)
+          )
+          Spacer(modifier = Modifier.width(6.dp))
+          Text(
+            text = stringResource(id = R.string.playlist_shuffle),
+            fontWeight = FontWeight.Bold,
+            maxLines = 1,
+            overflow = TextOverflow.Ellipsis
+          )
+        }
+      }
+
+      // Row 2: Save Playlist & Download All
+      Row(
+        modifier = Modifier.fillMaxWidth(),
+        horizontalArrangement = Arrangement.spacedBy(10.dp),
+        verticalAlignment = Alignment.CenterVertically
+      ) {
+        OutlinedButton(
+          onClick = onSaveOrOpen,
+          modifier = Modifier
+            .weight(1f)
+            .height(48.dp)
+            .testTag("playlist_save_button"),
+          shape = CircleShape,
+          border = BorderStroke(
+            1.dp,
+            Color(0xFFA78BFA).copy(alpha = if (isSaved) 0.72f else 0.45f)
+          ),
+          colors = ButtonDefaults.outlinedButtonColors(
+            containerColor = Color(0xFFA78BFA).copy(alpha = if (isSaved) 0.22f else 0.12f),
+            contentColor = MaterialTheme.colorScheme.onSurface
+          ),
+          contentPadding = PaddingValues(horizontal = 12.dp)
+        ) {
+          Icon(
+            imageVector = if (isSaved) Icons.Rounded.LibraryAddCheck else Icons.Rounded.BookmarkAdd,
+            contentDescription = null,
+            tint = Color(0xFFA78BFA),
+            modifier = Modifier.size(18.dp)
+          )
+          Spacer(modifier = Modifier.width(6.dp))
+          Text(
+            text = stringResource(
+              id = if (isSaved) R.string.playlist_saved_open else R.string.playlist_save
+            ),
+            fontWeight = FontWeight.Bold,
+            maxLines = 1,
+            overflow = TextOverflow.Ellipsis
+          )
+        }
+
+        OutlinedButton(
+          onClick = onDownloadAll,
+          enabled = activeDownloadCount == 0 && !allDownloaded,
+          modifier = Modifier
+            .weight(1f)
+            .height(48.dp)
+            .testTag("playlist_download_all_button"),
+          shape = CircleShape,
+          border = BorderStroke(
+            1.dp,
+            when {
+              allDownloaded -> Color(0xFF10B981).copy(alpha = 0.55f)
+              else -> Color(0xFF2F8BFF).copy(alpha = 0.48f)
+            }
+          ),
+          colors = ButtonDefaults.outlinedButtonColors(
+            containerColor = when {
+              allDownloaded -> Color(0xFF10B981).copy(alpha = 0.16f)
+              else -> Color(0xFF2F8BFF).copy(alpha = 0.14f)
+            },
+            contentColor = MaterialTheme.colorScheme.onSurface
+          ),
+          contentPadding = PaddingValues(horizontal = 12.dp)
+        ) {
+          when {
+            activeDownloadCount > 0 -> {
+              CircularProgressIndicator(
+                modifier = Modifier.size(16.dp),
+                strokeWidth = 2.dp,
+                color = Color(0xFF2F8BFF)
+              )
+            }
+            allDownloaded -> {
+              Icon(
+                imageVector = Icons.Rounded.CheckCircle,
+                contentDescription = null,
+                tint = Color(0xFF10B981),
+                modifier = Modifier.size(18.dp)
+              )
+            }
+            else -> {
+              Icon(
+                imageVector = Icons.Rounded.Download,
+                contentDescription = null,
+                tint = Color(0xFF2F8BFF),
+                modifier = Modifier.size(18.dp)
+              )
+            }
+          }
+          Spacer(modifier = Modifier.width(6.dp))
+          val downloadLabel = when {
+            activeDownloadCount > 0 -> stringResource(id = R.string.playlist_downloading_count, activeDownloadCount)
+            allDownloaded -> stringResource(id = R.string.playlist_downloaded_all)
+            else -> stringResource(id = R.string.playlist_download_all)
+          }
+          Text(
+            text = downloadLabel,
+            fontWeight = FontWeight.Bold,
+            maxLines = 1,
+            overflow = TextOverflow.Ellipsis
+          )
         }
       }
     }

@@ -162,9 +162,9 @@ class UpdateManager(
     private const val META_FILE_NAME = "aurix_update.apk.meta.json"
 
     val CURRENT_RELEASE_NOTES = listOf(
-      "Release v1.8.3 — Dark Glass Popup Menus: Redesigned Album '...' and Library song-row popup menus with frosted 28dp glass cards, blue (#2F8BFF) and purple (#A78BFA) accents, and 220ms corner pop-in animations",
-      "Album Quick Actions: Added side-by-side Play gradient and Shuffle glass hero buttons at the top of the Album '...' menu, aligned cleanly under the three-dot button",
-      "Library Song-Row Menu & Safe Positioning: Added descriptive subtitle hints, colored icon tiles, consistent rounded icons, and automatic screen-edge flip/shift for small phones"
+      "Release v1.8.4 — Playlist Link Support: Paste any YouTube or YouTube Music playlist URL in YT Link to view every track inside the playlist",
+      "Play, Shuffle & Save Playlists: Stream any playlist as a full queue with Play All or Shuffle, or save it directly to your Library Albums with cover art",
+      "Batch & Single Downloads: Download all playlist songs at once with Download All or pick formats per track, plus an Open Full Playlist shortcut on video links"
     )
 
     fun parseVersionJson(rawJson: String): RemoteVersionInfo {

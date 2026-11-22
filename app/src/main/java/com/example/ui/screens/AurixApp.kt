@@ -260,6 +260,7 @@ private fun AurixMainShell(
   val searchQuery by viewModel.searchQuery.collectAsStateWithLifecycle()
   val youtubeUrl by viewModel.youtubeUrl.collectAsStateWithLifecycle()
   val youtubeAnalysis by viewModel.youtubeAnalysis.collectAsStateWithLifecycle()
+  val youtubePlaylist by viewModel.youtubePlaylist.collectAsStateWithLifecycle()
   val selectedYoutubeFormatId by viewModel.selectedYoutubeFormatId.collectAsStateWithLifecycle()
   val youtubeDownloadState by viewModel.youtubeDownloadState.collectAsStateWithLifecycle()
   val isAnalyzingYoutube by viewModel.isAnalyzingYoutube.collectAsStateWithLifecycle()
@@ -928,7 +929,17 @@ private fun AurixMainShell(
               onClearSearch = { viewModel.clearSearch() },
               onRetrySearch = { viewModel.retrySearch() },
               onImmediateSearch = { viewModel.search(it, immediate = true) },
-              onReportError = { title, err -> viewModel.reportError(title, err) }
+              onReportError = { title, err -> viewModel.reportError(title, err) },
+              youtubePlaylist = youtubePlaylist,
+              onPlayPlaylist = { shuffle -> viewModel.playLoadedPlaylist(shuffle) },
+              onDownloadPlaylist = { viewModel.downloadLoadedPlaylist(context) },
+              onSavePlaylist = { viewModel.saveLoadedPlaylist() },
+              onOpenSavedPlaylistAlbum = { albumId ->
+                viewModel.openAlbum(albumId)
+                currentScreen = Screen.Album
+              },
+              onOpenPlaylistUrl = { url -> viewModel.openPlaylistFromUrl(url) },
+              onClearYoutubeResult = { viewModel.clearYoutubeLinkResult() }
             )
             is Screen.Library -> LibraryScreen(
               localSongs = localSongs,

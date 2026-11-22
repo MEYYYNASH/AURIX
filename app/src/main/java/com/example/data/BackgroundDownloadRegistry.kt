@@ -19,6 +19,9 @@ import kotlinx.coroutines.flow.asSharedFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.sync.Semaphore
+import kotlinx.coroutines.sync.withPermit
+import java.util.Locale
 
 data class TrackDownloadNotificationInfo(
   val key: String,
@@ -35,6 +38,7 @@ data class DownloadFeedbackEvent(
 
 object BackgroundDownloadRegistry {
   private val scope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
+  private val songDownloadSemaphore = Semaphore(permits = 2)
 
   private val _songDownloadProgress = MutableStateFlow<Map<String, Float>>(emptyMap())
   val songDownloadProgress: StateFlow<Map<String, Float>> = _songDownloadProgress.asStateFlow()
@@ -62,53 +66,140 @@ object BackgroundDownloadRegistry {
 
   fun hasActiveSongDownloads(): Boolean = _activeTrackNotifications.value.isNotEmpty()
 
-  fun enqueueSongDownload(context: Context, song: Song) {
+  private fun isYoutubeWatchLink(song: Song): Boolean {
+    return song.id.startsWith("yt_") &&
+      (song.streamUrl.contains("youtube.com/watch", ignoreCase = true) ||
+        song.streamUrl.contains("youtu.be/", ignoreCase = true))
+  }
+
+  fun enqueueSongDownload(context: Context, song: Song, silentToast: Boolean = false) {
     val appContext = context.applicationContext
     if (_songDownloadProgress.value.containsKey(song.id)) return
 
-    _songDownloadProgress.update { it + (song.id to 0.05f) }
+    _songDownloadProgress.update { it + (song.id to 0.03f) }
     _activeTrackNotifications.update {
-      it + (song.id to TrackDownloadNotificationInfo(song.id, song.title, song.artist, 0.05f))
+      it + (song.id to TrackDownloadNotificationInfo(song.id, song.title, song.artist, 0.03f))
     }
     BackgroundDownloadService.startSync(appContext)
-    _feedbackEvents.tryEmit(DownloadFeedbackEvent("Downloading in background: ${song.title}"))
+    if (!silentToast) {
+      _feedbackEvents.tryEmit(DownloadFeedbackEvent("Downloading in background: ${song.title}"))
+    }
 
     scope.launch {
       try {
-        val result = SongDownloader.downloadSongToDevice(appContext, song) { progress ->
-          _songDownloadProgress.update { it + (song.id to progress) }
-          _activeTrackNotifications.update { current ->
-            val existing = current[song.id]
-            if (existing != null) {
-              current + (song.id to existing.copy(fraction = progress))
+        songDownloadSemaphore.withPermit {
+          val youtubeVideoId = if (isYoutubeWatchLink(song)) {
+            song.id.removePrefix("yt_").takeIf { it.isNotBlank() }
+              ?: YoutubeExtractor.extractVideoId(song.streamUrl)
+          } else {
+            null
+          }
+
+          val result = if (youtubeVideoId != null) {
+            val extracted = YoutubeExtractor.extractFullAudio(youtubeVideoId)
+            val initialFormat = extracted?.audioFormats?.let { fmts ->
+              fmts.firstOrNull { it.extension.equals("m4a", ignoreCase = true) }
+                ?: fmts.firstOrNull { it.extension.equals("mp4", ignoreCase = true) }
+                ?: fmts.firstOrNull()
+            }
+            if (initialFormat == null) {
+              Result.failure(
+                IllegalStateException(
+                  extracted?.extractorError ?: "Could not extract audio stream for ${song.title}"
+                )
+              )
             } else {
-              current
+              var activeFmt = initialFormat
+              var fmtLabel = "${activeFmt.formatLabel} (${activeFmt.qualityLabel})"
+              var dlRes = SongDownloader.downloadFormatToApp(
+                context = appContext,
+                title = song.title,
+                artist = song.artist,
+                format = activeFmt
+              ) { info ->
+                _songDownloadProgress.update { it + (song.id to info.fraction) }
+                _activeTrackNotifications.update { current ->
+                  val existing = current[song.id]
+                  if (existing != null) {
+                    current + (song.id to existing.copy(fraction = info.fraction, statusHint = fmtLabel))
+                  } else {
+                    current
+                  }
+                }
+              }
+              if (dlRes.isFailure) {
+                val refreshed = YoutubeExtractor.extractFreshWorkingFormat(
+                  videoId = youtubeVideoId,
+                  preferredExtension = activeFmt.extension.lowercase(Locale.US),
+                  failedFormatId = activeFmt.id
+                )
+                if (refreshed != null) {
+                  activeFmt = refreshed
+                  fmtLabel = "${activeFmt.formatLabel} (${activeFmt.qualityLabel})"
+                  dlRes = SongDownloader.downloadFormatToApp(
+                    context = appContext,
+                    title = song.title,
+                    artist = song.artist,
+                    format = activeFmt
+                  ) { info ->
+                    _songDownloadProgress.update { it + (song.id to info.fraction) }
+                    _activeTrackNotifications.update { current ->
+                      val existing = current[song.id]
+                      if (existing != null) {
+                        current + (song.id to existing.copy(fraction = info.fraction, statusHint = fmtLabel))
+                      } else {
+                        current
+                      }
+                    }
+                  }
+                }
+              }
+              dlRes
+            }
+          } else {
+            SongDownloader.downloadSongToDevice(appContext, song) { progress ->
+              _songDownloadProgress.update { it + (song.id to progress) }
+              _activeTrackNotifications.update { current ->
+                val existing = current[song.id]
+                if (existing != null) {
+                  current + (song.id to existing.copy(fraction = progress))
+                } else {
+                  current
+                }
+              }
             }
           }
-        }
 
-        _songDownloadProgress.update { it - song.id }
-        _activeTrackNotifications.update { it - song.id }
+          _songDownloadProgress.update { it - song.id }
+          _activeTrackNotifications.update { it - song.id }
 
-        result.onSuccess { savedAudio ->
-          _downloadedSongIds.update { it + song.id }
-          val cachedCover = SongDownloader.cacheRemoteArtwork(appContext, savedAudio.uri.toString(), song.artworkUrl)
-          val entity = LocalSongEntity(
-            id = savedAudio.uri.toString(),
-            title = song.title,
-            artist = song.artist,
-            artworkUrl = cachedCover ?: song.artworkUrl.ifBlank { APP_ICON_ARTWORK },
-            durationSeconds = savedAudio.durationSeconds.takeIf { it > 0L } ?: song.durationSeconds,
-            streamUrl = savedAudio.uri.toString(),
-            source = "Downloaded"
-          )
-          AurixDatabase.getInstance(appContext).aurixDao().insertLocalSong(entity)
-          AppNotificationHelper.notifySongDownloadComplete(appContext, song.id, song.title, song.artist)
-          _feedbackEvents.tryEmit(DownloadFeedbackEvent("Saved to My songs & Music/AURIX: ${song.title}"))
-        }.onFailure { err ->
-          val msg = err.localizedMessage ?: "Download failed"
-          runCatching { AppNotificationHelper.notifySongDownloadFailed(appContext, song.id, song.title, msg) }
-          _feedbackEvents.tryEmit(DownloadFeedbackEvent(msg, isError = true))
+          result.onSuccess { savedAudio ->
+            _downloadedSongIds.update { current ->
+              if (youtubeVideoId != null) current + song.id + "yt_$youtubeVideoId" else current + song.id
+            }
+            val cachedCover = SongDownloader.cacheRemoteArtwork(appContext, savedAudio.uri.toString(), song.artworkUrl)
+            val entity = LocalSongEntity(
+              id = savedAudio.uri.toString(),
+              title = song.title,
+              artist = song.artist,
+              artworkUrl = cachedCover ?: song.artworkUrl.ifBlank { APP_ICON_ARTWORK },
+              durationSeconds = savedAudio.durationSeconds.takeIf { it > 0L } ?: song.durationSeconds,
+              streamUrl = savedAudio.uri.toString(),
+              source = "Downloaded",
+              album = song.album.ifBlank { "Unknown Album" },
+              trackNumber = song.trackNumber,
+              year = song.year
+            )
+            AurixDatabase.getInstance(appContext).aurixDao().insertLocalSong(entity)
+            AppNotificationHelper.notifySongDownloadComplete(appContext, song.id, song.title, song.artist)
+            if (!silentToast) {
+              _feedbackEvents.tryEmit(DownloadFeedbackEvent("Saved to My songs & Music/AURIX: ${song.title}"))
+            }
+          }.onFailure { err ->
+            val msg = err.localizedMessage ?: "Download failed"
+            runCatching { AppNotificationHelper.notifySongDownloadFailed(appContext, song.id, song.title, msg) }
+            _feedbackEvents.tryEmit(DownloadFeedbackEvent(msg, isError = true))
+          }
         }
       } catch (ce: CancellationException) {
         _songDownloadProgress.update { it - song.id }

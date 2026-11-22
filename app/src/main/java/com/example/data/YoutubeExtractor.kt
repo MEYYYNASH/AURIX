@@ -78,6 +78,16 @@ data class ExtractedYoutubeData(
   val extractorError: String? = null
 )
 
+data class ExtractedYoutubePlaylist(
+  val playlistId: String,
+  val originalUrl: String,
+  val title: String,
+  val author: String,
+  val thumbnailUrl: String,
+  val totalCount: Long,
+  val tracks: List<YoutubeSearchItem>
+)
+
 private data class InnerTubeClientProfile(
   val clientName: String,
   val clientVersion: String,
@@ -542,6 +552,260 @@ object YoutubeExtractor {
       ?.substringBefore('&')
       ?.trim()
       ?.takeIf { it.length in 8..16 }
+  }
+
+  fun extractPlaylistId(rawUrl: String): String? {
+    val trimmed = rawUrl.trim()
+    if (trimmed.isBlank()) return null
+
+    val parsedUri = runCatching { java.net.URI(trimmed) }.getOrNull()
+    val query = parsedUri?.rawQuery.orEmpty()
+    val fromUri = Regex("""(?:^|&)list=([^&#]+)""")
+      .find(query)
+      ?.groupValues
+      ?.getOrNull(1)
+    val rawListId = fromUri ?: Regex("""[?&]list=([A-Za-z0-9_-]{6,120})""")
+      .find(trimmed)
+      ?.groupValues
+      ?.getOrNull(1)
+
+    return rawListId
+      ?.substringBefore('&')
+      ?.substringBefore('#')
+      ?.trim()
+      ?.takeIf { it.matches(Regex("""^[A-Za-z0-9_-]{6,120}$""")) }
+  }
+
+  fun isDirectPlaylistUrl(rawUrl: String): Boolean {
+    val trimmed = rawUrl.trim()
+    val listId = extractPlaylistId(trimmed) ?: return false
+    if (listId.isBlank()) return false
+    val parsedUri = runCatching { java.net.URI(trimmed) }.getOrNull()
+    val path = parsedUri?.path.orEmpty().lowercase(Locale.US)
+    if (path.contains("/playlist")) return true
+    return extractVideoId(trimmed) == null
+  }
+
+  suspend fun extractPlaylist(
+    rawUrlOrId: String,
+    limit: Int = 100
+  ): ExtractedYoutubePlaylist? = withContext(Dispatchers.IO) {
+    val trimmed = rawUrlOrId.trim()
+    val playlistId = extractPlaylistId(trimmed)
+      ?: trimmed.takeIf { it.matches(Regex("""^[A-Za-z0-9_-]{10,120}$""")) }
+      ?: return@withContext null
+    val normalizedUrl = "https://www.youtube.com/playlist?list=$playlistId"
+
+    currentCoroutineContext().ensureActive()
+    val npResult = try {
+      fetchPlaylistViaNewPipe(playlistId, normalizedUrl, limit)
+    } catch (ce: CancellationException) {
+      throw ce
+    } catch (_: Throwable) {
+      null
+    }
+    if (npResult != null && npResult.tracks.isNotEmpty()) {
+      return@withContext npResult
+    }
+
+    for (base in basePipedMirrors.take(4)) {
+      currentCoroutineContext().ensureActive()
+      val piped = try {
+        fetchPlaylistViaPiped(base, playlistId, normalizedUrl, limit)
+      } catch (ce: CancellationException) {
+        throw ce
+      } catch (_: Throwable) {
+        null
+      }
+      if (piped != null && piped.tracks.isNotEmpty()) {
+        return@withContext piped
+      }
+    }
+
+    for (base in getInvidiousMirrors().take(4)) {
+      currentCoroutineContext().ensureActive()
+      val inv = try {
+        fetchPlaylistViaInvidious(base, playlistId, normalizedUrl, limit)
+      } catch (ce: CancellationException) {
+        throw ce
+      } catch (_: Throwable) {
+        null
+      }
+      if (inv != null && inv.tracks.isNotEmpty()) {
+        return@withContext inv
+      }
+    }
+
+    null
+  }
+
+  private fun fetchPlaylistViaNewPipe(
+    playlistId: String,
+    normalizedUrl: String,
+    limit: Int
+  ): ExtractedYoutubePlaylist? {
+    ensureNewPipeInitialized()
+    val info = PlaylistInfo.getInfo(ServiceList.YouTube, normalizedUrl)
+    val collected = LinkedHashMap<String, YoutubeSearchItem>()
+
+    for (stream in info.relatedItems) {
+      if (collected.size >= limit) break
+      mapStreamInfoItem(stream)?.let { item ->
+        collected.putIfAbsent(item.videoId, item)
+      }
+    }
+
+    var nextPage = info.nextPage
+    var pageCount = 0
+    while (nextPage != null && collected.size < limit && pageCount < 5) {
+      pageCount++
+      val more = cancellableRunCatching {
+        PlaylistInfo.getMoreItems(ServiceList.YouTube, normalizedUrl, nextPage)
+      }.getOrNull() ?: break
+      val items = more.items.orEmpty()
+      if (items.isEmpty()) break
+      for (stream in items) {
+        if (collected.size >= limit) break
+        mapStreamInfoItem(stream)?.let { item ->
+          collected.putIfAbsent(item.videoId, item)
+        }
+      }
+      nextPage = more.nextPage
+    }
+
+    val tracks = collected.values.toList()
+    if (tracks.isEmpty()) return null
+
+    val thumb = info.thumbnails
+      .maxByOrNull { it.width * it.height }
+      ?.url
+      ?.takeIf { it.isNotBlank() }
+      ?: info.banners.maxByOrNull { it.width * it.height }?.url?.takeIf { it.isNotBlank() }
+      ?: tracks.firstOrNull()?.thumbnailUrl.orEmpty()
+
+    return ExtractedYoutubePlaylist(
+      playlistId = playlistId,
+      originalUrl = normalizedUrl,
+      title = info.name.orEmpty().trim().ifBlank { "YouTube Playlist" },
+      author = info.uploaderName.orEmpty().trim().ifBlank { "YouTube" },
+      thumbnailUrl = thumb,
+      totalCount = info.streamCount.takeIf { it > 0L } ?: tracks.size.toLong(),
+      tracks = tracks
+    )
+  }
+
+  private suspend fun fetchPlaylistViaPiped(
+    base: String,
+    playlistId: String,
+    normalizedUrl: String,
+    limit: Int
+  ): ExtractedYoutubePlaylist? {
+    val req = cancellableRunCatching {
+      Request.Builder()
+        .url("$base/playlists/$playlistId")
+        .header("User-Agent", "AURIX-Android")
+        .build()
+    }.getOrNull() ?: return null
+
+    return executeCancellable(probeClient, req).use { resp ->
+      if (!resp.isSuccessful) return@use null
+      val body = readBoundedBody(resp)
+      if (body.isBlank()) return@use null
+      val root = JSONObject(body)
+      val arr = root.optJSONArray("relatedStreams") ?: return@use null
+      val collected = LinkedHashMap<String, YoutubeSearchItem>()
+      for (i in 0 until minOf(arr.length(), limit)) {
+        val obj = arr.optJSONObject(i) ?: continue
+        val itemUrl = obj.optString("url").trim()
+        val fullUrl = if (itemUrl.startsWith("http")) itemUrl else "https://www.youtube.com$itemUrl"
+        val videoId = extractVideoId(fullUrl) ?: continue
+        val title = obj.optString("title").trim()
+        if (title.isBlank()) continue
+        val durSec = obj.optLong("duration", 0L).coerceAtLeast(0L)
+        if (durSec <= 0L) continue
+        val thumb = obj.optString("thumbnail").trim()
+          .ifBlank { "https://i.ytimg.com/vi/$videoId/hqdefault.jpg" }
+        collected.putIfAbsent(
+          videoId,
+          YoutubeSearchItem(
+            videoId = videoId,
+            rawTitle = title,
+            author = obj.optString("uploaderName").trim().ifBlank { "YouTube" },
+            thumbnailUrl = thumb,
+            durationSeconds = durSec
+          )
+        )
+      }
+      val tracks = collected.values.toList()
+      if (tracks.isEmpty()) return@use null
+      val playlistThumb = root.optString("thumbnailUrl").trim()
+        .ifBlank { tracks.firstOrNull()?.thumbnailUrl.orEmpty() }
+      ExtractedYoutubePlaylist(
+        playlistId = playlistId,
+        originalUrl = normalizedUrl,
+        title = root.optString("name").trim().ifBlank { "YouTube Playlist" },
+        author = root.optString("uploader").trim().ifBlank { "YouTube" },
+        thumbnailUrl = playlistThumb,
+        totalCount = root.optLong("videos", tracks.size.toLong()).takeIf { it > 0L } ?: tracks.size.toLong(),
+        tracks = tracks
+      )
+    }
+  }
+
+  private suspend fun fetchPlaylistViaInvidious(
+    base: String,
+    playlistId: String,
+    normalizedUrl: String,
+    limit: Int
+  ): ExtractedYoutubePlaylist? {
+    val req = cancellableRunCatching {
+      Request.Builder()
+        .url("$base/api/v1/playlists/$playlistId")
+        .header("User-Agent", "AURIX-Android")
+        .build()
+    }.getOrNull() ?: return null
+
+    return executeCancellable(probeClient, req).use { resp ->
+      if (!resp.isSuccessful) return@use null
+      val body = readBoundedBody(resp)
+      if (body.isBlank()) return@use null
+      val root = JSONObject(body)
+      val arr = root.optJSONArray("videos") ?: return@use null
+      val collected = LinkedHashMap<String, YoutubeSearchItem>()
+      for (i in 0 until minOf(arr.length(), limit)) {
+        val obj = arr.optJSONObject(i) ?: continue
+        val videoId = obj.optString("videoId").trim().takeIf { it.length in 8..16 } ?: continue
+        val title = obj.optString("title").trim()
+        if (title.isBlank()) continue
+        val durSec = obj.optLong("lengthSeconds", 0L).coerceAtLeast(0L)
+        if (durSec <= 0L) continue
+        val thumb = bestThumbnailUrl(obj.optJSONArray("videoThumbnails"))
+          ?: "https://i.ytimg.com/vi/$videoId/hqdefault.jpg"
+        collected.putIfAbsent(
+          videoId,
+          YoutubeSearchItem(
+            videoId = videoId,
+            rawTitle = title,
+            author = obj.optString("author").trim().ifBlank { "YouTube" },
+            thumbnailUrl = thumb,
+            durationSeconds = durSec
+          )
+        )
+      }
+      val tracks = collected.values.toList()
+      if (tracks.isEmpty()) return@use null
+      val playlistThumb = root.optString("playlistThumbnail").trim()
+        .ifBlank { tracks.firstOrNull()?.thumbnailUrl.orEmpty() }
+      ExtractedYoutubePlaylist(
+        playlistId = playlistId,
+        originalUrl = normalizedUrl,
+        title = root.optString("title").trim().ifBlank { "YouTube Playlist" },
+        author = root.optString("author").trim().ifBlank { "YouTube" },
+        thumbnailUrl = playlistThumb,
+        totalCount = root.optLong("videoCount", tracks.size.toLong()).takeIf { it > 0L } ?: tracks.size.toLong(),
+        tracks = tracks
+      )
+    }
   }
 
   suspend fun searchSongs(

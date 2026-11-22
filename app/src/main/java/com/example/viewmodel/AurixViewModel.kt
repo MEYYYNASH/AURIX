@@ -199,6 +199,8 @@ class AurixViewModel(application: Application) : AndroidViewModel(application) {
   private val _youtubeAnalysis = MutableStateFlow<YoutubeAnalysisResult?>(null)
   val youtubeAnalysis: StateFlow<YoutubeAnalysisResult?> = _youtubeAnalysis
 
+  private val _rawYoutubePlaylist = MutableStateFlow<YoutubePlaylistResult?>(null)
+
   private val _selectedYoutubeFormatId = MutableStateFlow<String?>(null)
   val selectedYoutubeFormatId: StateFlow<String?> = _selectedYoutubeFormatId
 
@@ -221,6 +223,7 @@ class AurixViewModel(application: Application) : AndroidViewModel(application) {
   private val retriedPlaybackIds = ConcurrentHashMap.newKeySet<String>()
   private var playResolveJob: Job? = null
   private var formatSheetJob: Job? = null
+  private var youtubeAnalyzeJob: Job? = null
 
   // OTA Update Engine (shared app-wide instance so BackgroundDownloadService stays synced)
   private val updateManager = UpdateManagerHolder.getInstance(application)
@@ -406,6 +409,28 @@ class AurixViewModel(application: Application) : AndroidViewModel(application) {
   }
     .catchSafe(emptySet())
     .stateIn(viewModelScope, SharingStarted.Eagerly, emptySet())
+
+  val youtubePlaylist: StateFlow<YoutubePlaylistResult?> = combine(
+    _rawYoutubePlaylist,
+    favoriteIds,
+    hiddenSongIds,
+    blockedArtists,
+    customAlbumEntities
+  ) { playlist, favs, hidden, blocked, customAlbums ->
+    playlist?.let { pl ->
+      val visibleTracks = pl.tracks
+        .filter { isTrackVisible(it, hidden, blocked) }
+        .map { it.copy(isFavorite = it.id in favs) }
+      val expectedAlbumId = "yt_playlist_${pl.playlistId}"
+      val isSaved = customAlbums.any { it.albumId == expectedAlbumId }
+      pl.copy(
+        tracks = visibleTracks,
+        savedAlbumId = if (isSaved) expectedAlbumId else null
+      )
+    }
+  }
+    .catchSafe(null)
+    .stateIn(viewModelScope, SharingStarted.Eagerly, null)
 
   val favorites: StateFlow<List<Song>> = combine(
     rawFavorites,
@@ -1687,7 +1712,7 @@ class AurixViewModel(application: Application) : AndroidViewModel(application) {
         _searchDispatch.tryEmit(SearchDispatch("", nextEnum, 0L, ++searchDispatchNonce))
       } else if (nextEnum == SearchMode.YouTubeSearch) {
         _searchDispatch.tryEmit(SearchDispatch(currentQ, nextEnum, 0L, ++searchDispatchNonce))
-      } else if (_youtubeAnalysis.value == null && !_isAnalyzingYoutube.value) {
+      } else if (_youtubeAnalysis.value == null && _rawYoutubePlaylist.value == null && !_isAnalyzingYoutube.value) {
         analyzeYoutubeUrl()
       }
     }
@@ -1695,6 +1720,16 @@ class AurixViewModel(application: Application) : AndroidViewModel(application) {
 
   fun setYoutubeUrl(url: String) {
     _youtubeUrl.value = url
+    _youtubeError.value = null
+  }
+
+  fun clearYoutubeLinkResult() {
+    youtubeAnalyzeJob?.cancel()
+    _isAnalyzingYoutube.value = false
+    _youtubeAnalysis.value = null
+    _rawYoutubePlaylist.value = null
+    _selectedYoutubeFormatId.value = null
+    _youtubeDownloadState.value = YoutubeDownloadState.Idle
     _youtubeError.value = null
   }
 
@@ -1747,7 +1782,7 @@ class AurixViewModel(application: Application) : AndroidViewModel(application) {
   fun analyzeYoutubeUrl() {
     val rawUrl = _youtubeUrl.value.trim()
     if (rawUrl.isBlank()) {
-      _youtubeError.value = "Paste a YouTube URL first."
+      _youtubeError.value = "Paste a YouTube song or playlist URL first."
       return
     }
     if (!rawUrl.contains("youtube.com", ignoreCase = true) && !rawUrl.contains("youtu.be", ignoreCase = true)) {
@@ -1755,18 +1790,35 @@ class AurixViewModel(application: Application) : AndroidViewModel(application) {
       return
     }
 
-    viewModelScope.launch {
+    if (YoutubeExtractor.isDirectPlaylistUrl(rawUrl)) {
+      analyzeYoutubePlaylistUrl(rawUrl)
+      return
+    }
+
+    youtubeAnalyzeJob?.cancel()
+    youtubeAnalyzeJob = viewModelScope.launch {
       _isAnalyzingYoutube.value = true
       _youtubeError.value = null
       _youtubeAnalysis.value = null
+      _rawYoutubePlaylist.value = null
       _selectedYoutubeFormatId.value = null
       _youtubeDownloadState.value = YoutubeDownloadState.Idle
 
       try {
         val videoId = YoutubeExtractor.extractVideoId(rawUrl)
         if (videoId.isNullOrBlank()) {
-          _youtubeError.value = "Could not find a valid YouTube video ID in this link."
+          val fallbackPlaylistId = YoutubeExtractor.extractPlaylistId(rawUrl)
+          if (!fallbackPlaylistId.isNullOrBlank()) {
+            _isAnalyzingYoutube.value = false
+            analyzeYoutubePlaylistUrl("https://www.youtube.com/playlist?list=$fallbackPlaylistId")
+            return@launch
+          }
+          _youtubeError.value = "Could not find a valid YouTube video or playlist ID in this link."
           return@launch
+        }
+
+        val associatedPlaylistUrl = YoutubeExtractor.extractPlaylistId(rawUrl)?.let { listId ->
+          "https://www.youtube.com/playlist?list=$listId"
         }
 
         val oembedDeferred = async {
@@ -1824,7 +1876,8 @@ class AurixViewModel(application: Application) : AndroidViewModel(application) {
           matchedTrackTitle = trackTitle,
           matchedArtist = trackArtist,
           durationSeconds = videoDurSec,
-          formats = fullFormats
+          formats = fullFormats,
+          associatedPlaylistUrl = associatedPlaylistUrl
         )
         extracted?.let { youtubeExtractCache[videoId] = System.currentTimeMillis() to it }
         _youtubeAnalysis.value = analysis
@@ -1839,6 +1892,173 @@ class AurixViewModel(application: Application) : AndroidViewModel(application) {
         _isAnalyzingYoutube.value = false
       }
     }
+  }
+
+  fun openPlaylistFromUrl(playlistUrl: String) {
+    val cleanUrl = playlistUrl.trim()
+    if (cleanUrl.isBlank()) return
+    _youtubeUrl.value = cleanUrl
+    analyzeYoutubePlaylistUrl(cleanUrl)
+  }
+
+  private fun analyzeYoutubePlaylistUrl(rawUrl: String) {
+    youtubeAnalyzeJob?.cancel()
+    youtubeAnalyzeJob = viewModelScope.launch {
+      _isAnalyzingYoutube.value = true
+      _youtubeError.value = null
+      _youtubeAnalysis.value = null
+      _rawYoutubePlaylist.value = null
+      _selectedYoutubeFormatId.value = null
+      _youtubeDownloadState.value = YoutubeDownloadState.Idle
+
+      try {
+        val extracted = YoutubeExtractor.extractPlaylist(rawUrl, limit = 100)
+        if (extracted == null || extracted.tracks.isEmpty()) {
+          _youtubeError.value = "Unable to load songs from this playlist. Make sure the playlist is public or unlisted."
+          return@launch
+        }
+
+        val songs = extracted.tracks.mapIndexed { idx, item ->
+          mapYoutubeSearchItem(
+            item = item,
+            sourceTag = "YouTube"
+          ).copy(
+            album = extracted.title,
+            trackNumber = idx + 1
+          )
+        }
+
+        _rawYoutubePlaylist.value = YoutubePlaylistResult(
+          playlistId = extracted.playlistId,
+          originalUrl = extracted.originalUrl,
+          title = extracted.title,
+          author = extracted.author,
+          thumbnailUrl = extracted.thumbnailUrl,
+          totalCount = extracted.totalCount.toInt().coerceAtLeast(songs.size),
+          tracks = songs
+        )
+      } catch (ce: CancellationException) {
+        throw ce
+      } catch (t: Throwable) {
+        val message = "Unable to load YouTube playlist. Check your network connection."
+        _youtubeError.value = message
+        reportError("Playlist Load Failed", t, message)
+      } finally {
+        _isAnalyzingYoutube.value = false
+      }
+    }
+  }
+
+  fun playLoadedPlaylist(shuffle: Boolean = false) {
+    val tracks = youtubePlaylist.value?.tracks.orEmpty()
+    if (tracks.isEmpty()) return
+    if (shuffle) {
+      shuffleAlbum(tracks)
+    } else {
+      playAlbumFromStart(tracks)
+    }
+  }
+
+  fun downloadLoadedPlaylist(context: Context) {
+    val playlist = youtubePlaylist.value ?: return
+    val tracks = playlist.tracks
+    if (tracks.isEmpty()) return
+    val pending = tracks.filter {
+      it.streamUrl.isNotBlank() &&
+        it.id !in downloadedSongIds.value &&
+        !songDownloadProgress.value.containsKey(it.id)
+    }
+    if (pending.isEmpty()) {
+      Toast.makeText(
+        context,
+        context.getString(R.string.playlist_all_downloaded_toast),
+        Toast.LENGTH_SHORT
+      ).show()
+      return
+    }
+    Toast.makeText(
+      context,
+      context.getString(R.string.playlist_downloading_count_toast, pending.size),
+      Toast.LENGTH_SHORT
+    ).show()
+    pending.forEachIndexed { idx, song ->
+      BackgroundDownloadRegistry.enqueueSongDownload(
+        context = context,
+        song = song,
+        silentToast = idx > 0
+      )
+    }
+  }
+
+  fun saveLoadedPlaylist(): String? {
+    val playlist = youtubePlaylist.value ?: return null
+    if (playlist.tracks.isEmpty()) return null
+    val appContext = getApplication<Application>()
+    val albumId = "yt_playlist_${playlist.playlistId}"
+    val cleanTitle = playlist.title.trim().ifBlank { "YouTube Playlist" }
+    val cleanArtist = playlist.author.trim().ifBlank { "YouTube" }
+    val tracksSnapshot = playlist.tracks
+
+    viewModelScope.launch {
+      withContext(Dispatchers.IO) {
+        dao.unmarkAlbumDeleted(albumId)
+        dao.upsertCustomAlbum(
+          CustomAlbumEntity(
+            albumId = albumId,
+            title = cleanTitle,
+            artist = cleanArtist,
+            year = ""
+          )
+        )
+        val baseTime = System.currentTimeMillis()
+        val entries = tracksSnapshot.mapIndexed { idx, song ->
+          AlbumTrackEntity(
+            albumId = albumId,
+            songId = song.id,
+            title = song.title,
+            artist = song.artist.ifBlank { cleanArtist },
+            artworkUrl = song.artworkUrl,
+            durationSeconds = song.fullDurationSeconds.takeIf { it > 0L } ?: song.durationSeconds,
+            streamUrl = song.streamUrl,
+            source = song.source,
+            genre = song.genre,
+            bpm = song.bpm,
+            mood = song.mood,
+            albumName = cleanTitle,
+            trackNumber = idx + 1,
+            year = song.year,
+            addedAt = baseTime + idx
+          )
+        }
+        dao.insertAlbumTracks(entries)
+
+        if (playlist.thumbnailUrl.isNotBlank() && dao.getAlbumCover(albumId) == null) {
+          runCatching {
+            val savedCover = AlbumCoverStorage.renderAndSavePhotoCover(
+              context = appContext,
+              albumId = albumId,
+              imageSource = playlist.thumbnailUrl
+            ).getOrNull()
+            if (!savedCover.isNullOrBlank()) {
+              dao.upsertAlbumCover(
+                AlbumCoverEntity(
+                  albumId = albumId,
+                  coverPath = savedCover,
+                  mode = CustomCoverMode.PHOTO.id,
+                  sourceUris = playlist.thumbnailUrl
+                )
+              )
+            }
+          }
+        }
+      }
+      Toast.makeText(
+        appContext,
+        appContext.getString(R.string.playlist_saved_toast, cleanTitle),
+        Toast.LENGTH_SHORT
+      ).show()
+    }
+    return albumId
   }
 
   fun playAnalyzedYoutubeTrack() {
@@ -2947,7 +3167,11 @@ class AurixViewModel(application: Application) : AndroidViewModel(application) {
       }
 
       val curIdx = q.indexOfFirst { it.id == current?.id }.coerceAtLeast(0)
-      val nextQueueSong = q.getOrNull(curIdx + 1)
+      val nextQueueSong = if (_shuffleEnabled.value && q.size > 1) {
+        q[q.indices.filter { it != curIdx }.random()]
+      } else {
+        q.getOrNull(curIdx + 1)
+      }
       if (nextQueueSong != null && isUnresolvedYoutubeWatchUrl(nextQueueSong)) {
         playSong(nextQueueSong, q)
         return

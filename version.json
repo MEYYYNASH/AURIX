@@ -1,14 +1,14 @@
 {
-  "versionName": "1.8.3",
-  "versionCode": 10830,
+  "versionName": "1.8.4",
+  "versionCode": 10840,
   "releaseDate": "2026-11-22",
-  "apkUrl": "https://github.com/MEYYYNASH/AURIX/releases/download/v1.8.3/AURIX-v1.8.3.apk",
-  "sha256": "c6544438c3c2d7cc4206b5004ca47bdd67ffc742f3b1eaa9d470e3d0e5949c16",
+  "apkUrl": "https://github.com/MEYYYNASH/AURIX/releases/download/v1.8.4/AURIX-v1.8.4.apk",
+  "sha256": "",
   "mandatory": false,
   "notes": [
-    "Release v1.8.3 \u2014 Dark Glass Popup Menus: Redesigned Album ... and Library song-row popup menus with frosted 28dp glass cards, blue (#2F8BFF) and purple (#A78BFA) accents, and 220ms corner pop-in animations",
-    "Album Quick Actions: Added side-by-side Play gradient and Shuffle glass hero buttons at the top of the Album ... menu, aligned cleanly under the three-dot button",
-    "Library Song-Row Menu & Safe Positioning: Added descriptive subtitle hints, colored icon tiles, consistent rounded icons, and automatic screen-edge flip/shift for small phones"
+    "Release v1.8.4 \u2014 Playlist Link Support: Paste any YouTube or YouTube Music playlist URL in YT Link to view every track inside the playlist",
+    "Play, Shuffle & Save Playlists: Stream any playlist as a full queue with Play All or Shuffle, or save it directly to your Library Albums with cover art",
+    "Batch & Single Downloads: Download all playlist songs at once with Download All or pick formats per track, plus an Open Full Playlist shortcut on video links"
   ],
-  "releasePageUrl": "https://github.com/MEYYYNASH/AURIX/releases/tag/v1.8.3"
+  "releasePageUrl": "https://github.com/MEYYYNASH/AURIX/releases/tag/v1.8.4"
 }

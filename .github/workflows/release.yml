@@ -10,9 +10,9 @@ on:
   workflow_dispatch:
     inputs:
       tag:
-        description: 'Release tag (e.g. v1.8.3)'
+        description: 'Release tag (e.g. v1.8.4)'
         required: false
-        default: 'v1.8.3'
+        default: 'v1.8.4'
 
 permissions:
   contents: write
@@ -52,13 +52,13 @@ jobs:
             RELEASE_TAG="${{ github.ref_name }}"
           else
             VERSION=$(grep -m1 'versionName' app/build.gradle.kts | sed -E 's/.*"([^"]+)".*/\1/')
-            RELEASE_TAG="v${VERSION:-1.8.3}"
+            RELEASE_TAG="v${VERSION:-1.8.4}"
           fi
           VCODE=$(grep -m1 'versionCode' app/build.gradle.kts | sed -E 's/[^0-9]*([0-9]+).*/\1/')
           RDATE=$(grep -m1 'RELEASE_DATE' app/build.gradle.kts | sed -E 's/.*\\"([^\\"]+)\\".*/\1/')
           echo "RELEASE_TAG=${RELEASE_TAG}" >> "$GITHUB_ENV"
           echo "RELEASE_VERSION=${RELEASE_TAG#v}" >> "$GITHUB_ENV"
-          echo "RELEASE_VERSION_CODE=${VCODE:-10830}" >> "$GITHUB_ENV"
+          echo "RELEASE_VERSION_CODE=${VCODE:-10840}" >> "$GITHUB_ENV"
           echo "RELEASE_DATE=${RDATE:-$(date -u +%Y-%m-%d)}" >> "$GITHUB_ENV"
 
       - name: Ensure keystores exist
@@ -98,9 +98,9 @@ jobs:
             "sha256": os.environ["APK_SHA256"],
             "mandatory": False,
             "notes": [
-              f"Release {tag} — Dark Glass Popup Menus: Redesigned Album '...' and Library song-row popup menus with frosted 28dp glass cards, blue (#2F8BFF) and purple (#A78BFA) accents, and 220ms corner pop-in animations",
-              "Album Quick Actions: Added side-by-side Play gradient and Shuffle glass hero buttons at the top of the Album '...' menu, aligned cleanly under the three-dot button",
-              "Library Song-Row Menu & Safe Positioning: Added descriptive subtitle hints, colored icon tiles, consistent rounded icons, and automatic screen-edge flip/shift for small phones"
+              f"Release {tag} — Playlist Link Support: Paste any YouTube or YouTube Music playlist URL in YT Link to view every track inside the playlist",
+              "Play, Shuffle & Save Playlists: Stream any playlist as a full queue with Play All or Shuffle, or save it directly to your Library Albums with cover art",
+              "Batch & Single Downloads: Download all playlist songs at once with Download All or pick formats per track, plus an Open Full Playlist shortcut on video links"
             ],
             "releasePageUrl": f"https://github.com/{repo}/releases/tag/{tag}"
           }
@@ -126,9 +126,9 @@ jobs:
             mandatory: false
 
             What's New in AURIX ${{ env.RELEASE_TAG }}:
-            - Dark Glass Popup Menus: Frosted 28dp glass cards with blue (#2F8BFF) & purple (#A78BFA) accents and 220ms corner pop-in animations
-            - Album '...' Menu: Side-by-side Play gradient and Shuffle glass top buttons, aligned right under the three-dot button
-            - Library Song-Row Menu: Subtitle hints, colored rounded-square icon tiles, and automatic small-screen edge clamping/flipping
+            - Playlist Link Support: Paste any YouTube or YouTube Music playlist URL in YT Link to view all tracks in the playlist
+            - Play, Shuffle & Save Playlists: Stream the playlist as a full queue or save it directly to your Library Albums
+            - Batch & Track Downloads: Download all songs at once with Download All or choose formats per track, plus Open Full Playlist on video links
           files: |
             app/build/outputs/apk/release/app-release.apk
             AURIX-${{ env.RELEASE_TAG }}.apk

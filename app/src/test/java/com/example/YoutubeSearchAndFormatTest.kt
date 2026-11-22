@@ -8,7 +8,9 @@ import com.example.model.Song
 import com.example.model.YoutubeAnalysisResult
 import com.example.model.YoutubeDownloadState
 import com.example.model.YoutubeFormatSheetState
+import com.example.model.YoutubePlaylistResult
 import org.junit.Assert.assertEquals
+import org.junit.Assert.assertFalse
 import org.junit.Assert.assertNotNull
 import org.junit.Assert.assertNull
 import org.junit.Assert.assertTrue
@@ -106,5 +108,43 @@ class YoutubeSearchAndFormatTest {
     )
     assertEquals("itag_140", ready.selectedFormatId)
     assertEquals(1, ready.analysis.formats.size)
+  }
+
+  @Test
+  fun extractPlaylistId_andIsDirectPlaylistUrl_handleStandardAndMusicUrls() {
+    val stdPlaylist = "https://www.youtube.com/playlist?list=PLFgquLnL59alCl_2TQvOiD5Vgm1hCaGSI"
+    val musicPlaylist = "https://music.youtube.com/playlist?list=OLAK5uy_kL9z7ExamplePlaylist123"
+    val watchWithPlaylist = "https://www.youtube.com/watch?v=dQw4w9WgXcQ&list=PLFgquLnL59alCl_2TQvOiD5Vgm1hCaGSI&index=2"
+
+    assertEquals("PLFgquLnL59alCl_2TQvOiD5Vgm1hCaGSI", YoutubeExtractor.extractPlaylistId(stdPlaylist))
+    assertEquals("OLAK5uy_kL9z7ExamplePlaylist123", YoutubeExtractor.extractPlaylistId(musicPlaylist))
+    assertEquals("PLFgquLnL59alCl_2TQvOiD5Vgm1hCaGSI", YoutubeExtractor.extractPlaylistId(watchWithPlaylist))
+    assertNull(YoutubeExtractor.extractPlaylistId("https://www.youtube.com/watch?v=dQw4w9WgXcQ"))
+    assertNull(YoutubeExtractor.extractPlaylistId("not a url"))
+
+    assertTrue(YoutubeExtractor.isDirectPlaylistUrl(stdPlaylist))
+    assertTrue(YoutubeExtractor.isDirectPlaylistUrl(musicPlaylist))
+    assertFalse(YoutubeExtractor.isDirectPlaylistUrl(watchWithPlaylist))
+    assertFalse(YoutubeExtractor.isDirectPlaylistUrl("https://www.youtube.com/watch?v=dQw4w9WgXcQ"))
+  }
+
+  @Test
+  fun youtubePlaylistResult_holdsTracksAndSavedState() {
+    val tracks = listOf(
+      Song("yt_track1", "Song One", "Artist A", "", 180L, "https://www.youtube.com/watch?v=track1", "YouTube"),
+      Song("yt_track2", "Song Two", "Artist B", "", 210L, "https://www.youtube.com/watch?v=track2", "YouTube")
+    )
+    val pl = YoutubePlaylistResult(
+      playlistId = "PL12345678",
+      originalUrl = "https://www.youtube.com/playlist?list=PL12345678",
+      title = "Chill Mix",
+      author = "Curator",
+      thumbnailUrl = "https://i.ytimg.com/vi/track1/hqdefault.jpg",
+      totalCount = 2,
+      tracks = tracks,
+      savedAlbumId = "yt_playlist_PL12345678"
+    )
+    assertEquals(2, pl.tracks.size)
+    assertEquals("yt_playlist_PL12345678", pl.savedAlbumId)
   }
 }

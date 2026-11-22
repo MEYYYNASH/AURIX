@@ -120,7 +120,19 @@ data class YoutubeAnalysisResult(
   val matchedTrackTitle: String,
   val matchedArtist: String,
   val durationSeconds: Long = 0L,
-  val formats: List<AudioFormatOption>
+  val formats: List<AudioFormatOption>,
+  val associatedPlaylistUrl: String? = null
+)
+
+data class YoutubePlaylistResult(
+  val playlistId: String,
+  val originalUrl: String,
+  val title: String,
+  val author: String,
+  val thumbnailUrl: String,
+  val totalCount: Int,
+  val tracks: List<Song>,
+  val savedAlbumId: String? = null
 )
 
 sealed interface YoutubeDownloadState {
