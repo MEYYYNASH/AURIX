@@ -20,23 +20,33 @@ class MainActivity : ComponentActivity() {
   }
 
   override fun onCreate(savedInstanceState: Bundle?) {
-    val splashScreen = installSplashScreen()
+    val splashScreen = runCatching { installSplashScreen() }.getOrNull()
     super.onCreate(savedInstanceState)
 
     // Remove the system splash immediately once the first Compose frame draws its matching background,
     // preventing any double logo before AurixLaunchOverlay animates in.
-    splashScreen.setOnExitAnimationListener { provider ->
-      provider.remove()
+    runCatching {
+      splashScreen?.setOnExitAnimationListener { provider ->
+        runCatching { provider.remove() }
+      }
     }
 
     // Never show the animated launch overlay again on configuration change or process recreation.
     if (savedInstanceState != null) {
-      viewModel.markLaunchSplashShown()
+      runCatching { viewModel.markLaunchSplashShown() }
     }
 
-    viewModel.handleNotificationIntent(intent)
+    try {
+      viewModel.handleNotificationIntent(intent)
+    } catch (t: Throwable) {
+      viewModel.reportError(
+        title = "Unable to Open Notification",
+        throwable = t,
+        fallbackMessage = "The notification shortcut could not be opened."
+      )
+    }
 
-    enableEdgeToEdge()
+    runCatching { enableEdgeToEdge() }
     setContent {
       AurixApp(viewModel = viewModel)
     }
@@ -44,7 +54,15 @@ class MainActivity : ComponentActivity() {
 
   override fun onNewIntent(intent: Intent) {
     super.onNewIntent(intent)
-    setIntent(intent)
-    viewModel.handleNotificationIntent(intent)
+    try {
+      setIntent(intent)
+      viewModel.handleNotificationIntent(intent)
+    } catch (t: Throwable) {
+      viewModel.reportError(
+        title = "Unable to Open Notification",
+        throwable = t,
+        fallbackMessage = "The notification shortcut could not be opened."
+      )
+    }
   }
 }

@@ -381,4 +381,9 @@
     <string name="mix_saved_toast">បានរក្សាទុក \"%1$s\" ទៅអាល់ប៊ុម</string>
     <string name="mix_refreshed_toast">បានផ្ទុកមិចប្រចាំថ្ងៃឡើងវិញ</string>
     <string name="mix_remove_recent_cd">ដកចេញពីទើបតែចាក់</string>
+    <string name="error_dialog_default_title">មានបញ្ហាកើតឡើង</string>
+    <string name="error_dialog_dismiss">បិទ</string>
+    <string name="error_dialog_copy">ចម្លងព័ត៌មានលម្អិត</string>
+    <string name="error_dialog_copied">បានចម្លងព័ត៌មានកំហុស</string>
+    <string name="search_clipboard_error">មិនអាចអាន Clipboard បានទេ</string>
 </resources>

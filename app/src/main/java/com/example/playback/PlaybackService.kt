@@ -62,19 +62,21 @@ class PlaybackService : MediaSessionService() {
       .setReadTimeoutMs(25_000)
     val upstreamFactory = DefaultDataSource.Factory(this, httpFactory)
     val resolvingFactory = ResolvingDataSource.Factory(upstreamFactory) { dataSpec ->
-      val url = dataSpec.uri.toString()
-      val ua = StreamHeaderRegistry.resolveUserAgent(url)
-        ?: YoutubeExtractor.inferPrimaryUserAgentForUrl(url)
-      if (!ua.isNullOrBlank()) {
-        dataSpec.withAdditionalHeaders(
-          mapOf(
-            "User-Agent" to ua,
-            "Accept" to "*/*"
+      runCatching {
+        val url = dataSpec.uri.toString()
+        val ua = StreamHeaderRegistry.resolveUserAgent(url)
+          ?: YoutubeExtractor.inferPrimaryUserAgentForUrl(url)
+        if (!ua.isNullOrBlank()) {
+          dataSpec.withAdditionalHeaders(
+            mapOf(
+              "User-Agent" to ua,
+              "Accept" to "*/*"
+            )
           )
-        )
-      } else {
-        dataSpec
-      }
+        } else {
+          dataSpec
+        }
+      }.getOrDefault(dataSpec)
     }
 
     return ExoPlayer.Builder(this, renderersFactory)
@@ -92,102 +94,116 @@ class PlaybackService : MediaSessionService() {
   override fun onCreate() {
     super.onCreate()
 
-    val player = buildExoPlayer(handleAudioFocus = true)
+    val player = runCatching { buildExoPlayer(handleAudioFocus = true) }.getOrNull() ?: return
     mainPlayer = player
 
     player.addListener(object : Player.Listener {
       override fun onAudioSessionIdChanged(audioSessionId: Int) {
-        AudioEqualizerController.attachAudioSession(audioSessionId)
+        runCatching { AudioEqualizerController.attachAudioSession(audioSessionId) }
       }
 
       override fun onIsPlayingChanged(isPlaying: Boolean) {
-        val fadeOut = crossfadeOutPlayer
-        if (!isPlaying && isCrossfadingNow && fadeOut != null) {
-          fadeOut.pause()
-        } else if (isPlaying && isCrossfadingNow && fadeOut != null && fadeOut.playbackState == Player.STATE_READY) {
-          fadeOut.play()
-        } else if (!isPlaying && !isCrossfadingNow && fadeOut != null) {
-          releaseCrossfadeOutPlayer()
+        runCatching {
+          val fadeOut = crossfadeOutPlayer
+          if (!isPlaying && isCrossfadingNow && fadeOut != null) {
+            fadeOut.pause()
+          } else if (isPlaying && isCrossfadingNow && fadeOut != null && fadeOut.playbackState == Player.STATE_READY) {
+            fadeOut.play()
+          } else if (!isPlaying && !isCrossfadingNow && fadeOut != null) {
+            releaseCrossfadeOutPlayer()
+          }
         }
       }
 
       override fun onPlaybackStateChanged(playbackState: Int) {
-        if (playbackState == Player.STATE_READY) {
-          reclaimRecoveryCount = 0
-        } else if ((playbackState == Player.STATE_IDLE || playbackState == Player.STATE_ENDED) && !isCrossfadingNow) {
-          releaseCrossfadeOutPlayer()
+        runCatching {
+          if (playbackState == Player.STATE_READY) {
+            reclaimRecoveryCount = 0
+          } else if ((playbackState == Player.STATE_IDLE || playbackState == Player.STATE_ENDED) && !isCrossfadingNow) {
+            releaseCrossfadeOutPlayer()
+          }
         }
       }
 
       override fun onMediaItemTransition(mediaItem: MediaItem?, reason: Int) {
-        reclaimRecoveryCount = 0
-        if (!isCrossfadingNow && reason == Player.MEDIA_ITEM_TRANSITION_REASON_SEEK) {
-          val settings = CrossfadeController.state.value
-          if (settings.durationSeconds > 0 && settings.fadeOnManualSkip) {
-            runManualSkipFadeIn(player)
-          } else {
-            player.volume = 1f
+        runCatching {
+          reclaimRecoveryCount = 0
+          if (!isCrossfadingNow && reason == Player.MEDIA_ITEM_TRANSITION_REASON_SEEK) {
+            val settings = CrossfadeController.state.value
+            if (settings.durationSeconds > 0 && settings.fadeOnManualSkip) {
+              runManualSkipFadeIn(player)
+            } else {
+              player.volume = 1f
+            }
           }
         }
       }
 
       override fun onPlayerError(error: PlaybackException) {
-        if (isRecoverableCodecError(error) && reclaimRecoveryCount < MAX_CODEC_RECOVERY_ATTEMPTS) {
-          reclaimRecoveryCount += 1
-          abortCrossfadeAndRestoreVolume(player)
+        runCatching {
+          if (isRecoverableCodecError(error) && reclaimRecoveryCount < MAX_CODEC_RECOVERY_ATTEMPTS) {
+            reclaimRecoveryCount += 1
+            abortCrossfadeAndRestoreVolume(player)
 
-          val itemCount = player.mediaItemCount
-          if (itemCount <= 0) return
-          val savedIndex = player.currentMediaItemIndex
-            .takeIf { it != C.INDEX_UNSET && it in 0 until itemCount }
-            ?: 0
-          val savedPosition = player.currentPosition.coerceAtLeast(0L)
-          val shouldPlay = player.playWhenReady
+            val itemCount = player.mediaItemCount
+            if (itemCount <= 0) return
+            val savedIndex = player.currentMediaItemIndex
+              .takeIf { it != C.INDEX_UNSET && it in 0 until itemCount }
+              ?: 0
+            val savedPosition = player.currentPosition.coerceAtLeast(0L)
+            val shouldPlay = player.playWhenReady
 
-          recoveryJob?.cancel()
-          recoveryJob = serviceScope.launch {
-            delay(CODEC_RECOVERY_DELAY_MS)
-            val activePlayer = mainPlayer ?: return@launch
-            if (activePlayer.mediaItemCount > 0) {
-              val targetIndex = savedIndex.coerceIn(0, activePlayer.mediaItemCount - 1)
-              activePlayer.seekTo(targetIndex, savedPosition)
-              activePlayer.prepare()
-              activePlayer.playWhenReady = shouldPlay
+            recoveryJob?.cancel()
+            recoveryJob = serviceScope.launch {
+              delay(CODEC_RECOVERY_DELAY_MS)
+              runCatching {
+                val activePlayer = mainPlayer ?: return@launch
+                if (activePlayer.mediaItemCount > 0) {
+                  val targetIndex = savedIndex.coerceIn(0, activePlayer.mediaItemCount - 1)
+                  activePlayer.seekTo(targetIndex, savedPosition)
+                  activePlayer.prepare()
+                  activePlayer.playWhenReady = shouldPlay
+                }
+              }
             }
-          }
-        } else {
-          abortCrossfadeAndRestoreVolume(player)
-          runCatching {
-            player.stop()
-            player.clearMediaItems()
+          } else {
+            abortCrossfadeAndRestoreVolume(player)
+            runCatching {
+              player.stop()
+              player.clearMediaItems()
+            }
           }
         }
       }
     })
-    if (player.audioSessionId != C.AUDIO_SESSION_ID_UNSET && player.audioSessionId > 0) {
-      AudioEqualizerController.attachAudioSession(player.audioSessionId)
-    }
-
-    val launchIntent = Intent(this, MainActivity::class.java).apply {
-      flags = Intent.FLAG_ACTIVITY_SINGLE_TOP or Intent.FLAG_ACTIVITY_CLEAR_TOP
-    }
-    val sessionActivityPendingIntent = PendingIntent.getActivity(
-      this,
-      0,
-      launchIntent,
-      PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE
-    )
-
-    val notificationProvider = DefaultMediaNotificationProvider.Builder(this)
-      .build()
-      .apply {
-        setSmallIcon(R.drawable.ic_stat_aurix)
+    runCatching {
+      if (player.audioSessionId != C.AUDIO_SESSION_ID_UNSET && player.audioSessionId > 0) {
+        AudioEqualizerController.attachAudioSession(player.audioSessionId)
       }
-    setMediaNotificationProvider(notificationProvider)
+    }
 
-    mediaSession = MediaSession.Builder(this, player)
-      .setSessionActivity(sessionActivityPendingIntent)
-      .build()
+    runCatching {
+      val launchIntent = Intent(this, MainActivity::class.java).apply {
+        flags = Intent.FLAG_ACTIVITY_SINGLE_TOP or Intent.FLAG_ACTIVITY_CLEAR_TOP
+      }
+      val sessionActivityPendingIntent = PendingIntent.getActivity(
+        this,
+        0,
+        launchIntent,
+        PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE
+      )
+
+      val notificationProvider = DefaultMediaNotificationProvider.Builder(this)
+        .build()
+        .apply {
+          setSmallIcon(R.drawable.ic_stat_aurix)
+        }
+      setMediaNotificationProvider(notificationProvider)
+
+      mediaSession = MediaSession.Builder(this, player)
+        .setSessionActivity(sessionActivityPendingIntent)
+        .build()
+    }
 
     startCrossfadeMonitor()
   }
@@ -215,7 +231,7 @@ class PlaybackService : MediaSessionService() {
     skipFadeJob?.cancel()
     crossfadeJob?.cancel()
     releaseCrossfadeOutPlayer()
-    player.volume = 1f
+    runCatching { player.volume = 1f }
   }
 
   private fun releaseCrossfadeOutPlayer() {
@@ -368,11 +384,13 @@ class PlaybackService : MediaSessionService() {
     recoveryJob?.cancel()
     serviceScope.cancel()
     releaseCrossfadeOutPlayer()
-    AudioEqualizerController.releaseSession()
-    mediaSession?.run {
-      player.release()
-      release()
-      mediaSession = null
+    runCatching { AudioEqualizerController.releaseSession() }
+    runCatching {
+      mediaSession?.run {
+        runCatching { player.release() }
+        runCatching { release() }
+        mediaSession = null
+      }
     }
     mainPlayer = null
     super.onDestroy()

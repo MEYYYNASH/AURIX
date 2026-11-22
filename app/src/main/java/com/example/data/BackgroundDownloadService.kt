@@ -6,9 +6,11 @@ import android.content.Intent
 import android.content.pm.ServiceInfo
 import android.os.Build
 import android.os.IBinder
+import androidx.core.app.NotificationCompat
 import androidx.core.app.NotificationManagerCompat
 import androidx.core.app.ServiceCompat
 import androidx.core.content.ContextCompat
+import com.example.R
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
@@ -43,29 +45,39 @@ class BackgroundDownloadService : Service() {
 
   override fun onCreate() {
     super.onCreate()
-    AppNotificationHelper.ensureChannels(this)
-    val promoted = promoteToForeground(
-      UpdateManagerHolder.getInstance(this).uiState.value,
-      BackgroundDownloadRegistry.activeTrackNotifications.value
-    )
+    runCatching { AppNotificationHelper.ensureChannels(this) }
+    val updateState = runCatching { UpdateManagerHolder.getInstance(this).uiState.value }
+      .getOrDefault(defaultUpdateState())
+    val activeTracks = runCatching { BackgroundDownloadRegistry.activeTrackNotifications.value }
+      .getOrDefault(emptyMap())
+    val promoted = promoteToForeground(updateState, activeTracks)
     if (!promoted) {
-      stopSelf()
+      stopSelfSafely()
       return
     }
     startObservingDownloads()
   }
 
   override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {
-    val updateManager = UpdateManagerHolder.getInstance(this)
-    when (intent?.action) {
-      ACTION_PAUSE_UPDATE -> updateManager.pauseDownload()
-      ACTION_RESUME_UPDATE -> updateManager.startOrResumeDownload()
-      ACTION_CANCEL_UPDATE -> updateManager.cancelDownload()
-      else -> Unit
+    val updateManager = runCatching { UpdateManagerHolder.getInstance(this) }.getOrNull()
+    if (updateManager == null) {
+      promoteToForeground(defaultUpdateState(), emptyMap())
+      stopSelfSafely()
+      return START_NOT_STICKY
     }
 
-    val currentUpdate = updateManager.uiState.value
-    val activeTracks = BackgroundDownloadRegistry.activeTrackNotifications.value
+    runCatching {
+      when (intent?.action) {
+        ACTION_PAUSE_UPDATE -> updateManager.pauseDownload()
+        ACTION_RESUME_UPDATE -> updateManager.startOrResumeDownload()
+        ACTION_CANCEL_UPDATE -> updateManager.cancelDownload()
+        else -> Unit
+      }
+    }
+
+    val currentUpdate = runCatching { updateManager.uiState.value }.getOrDefault(defaultUpdateState())
+    val activeTracks = runCatching { BackgroundDownloadRegistry.activeTrackNotifications.value }
+      .getOrDefault(emptyMap())
     val promoted = promoteToForeground(currentUpdate, activeTracks)
 
     if (!promoted || !isAnyTransferActive(currentUpdate, activeTracks)) {
@@ -90,7 +102,7 @@ class BackgroundDownloadService : Service() {
 
   private fun startObservingDownloads() {
     observeJob?.cancel()
-    val updateManager = UpdateManagerHolder.getInstance(this)
+    val updateManager = runCatching { UpdateManagerHolder.getInstance(this) }.getOrNull() ?: return
     observeJob = serviceScope.launch {
       combine(
         updateManager.uiState,
@@ -107,9 +119,9 @@ class BackgroundDownloadService : Service() {
         val forceImmediate = updateState.stage == UpdateStage.Verifying || updateState.isPaused
         if (forceImmediate || now - lastNotifUpdateMs >= 450L) {
           lastNotifUpdateMs = now
-          val notif = AppNotificationHelper.buildBackgroundDownloadNotification(this@BackgroundDownloadService, updateState, tracks)
-          if (AppNotificationHelper.canPostNotifications(this@BackgroundDownloadService)) {
-            runCatching {
+          runCatching {
+            val notif = AppNotificationHelper.buildBackgroundDownloadNotification(this@BackgroundDownloadService, updateState, tracks)
+            if (AppNotificationHelper.canPostNotifications(this@BackgroundDownloadService)) {
               NotificationManagerCompat.from(this@BackgroundDownloadService)
                 .notify(AppNotificationHelper.NOTIF_ID_BACKGROUND_DOWNLOAD, notif)
             }
@@ -123,13 +135,23 @@ class BackgroundDownloadService : Service() {
     updateState: UpdateUiState,
     tracks: Map<String, TrackDownloadNotificationInfo>
   ): Boolean {
+    val fgsType = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
+      ServiceInfo.FOREGROUND_SERVICE_TYPE_DATA_SYNC
+    } else {
+      0
+    }
+    val notif = runCatching {
+      AppNotificationHelper.buildBackgroundDownloadNotification(this, updateState, tracks)
+    }.getOrElse {
+      NotificationCompat.Builder(this, AppNotificationHelper.CHANNEL_BACKGROUND_DOWNLOADS)
+        .setSmallIcon(R.drawable.ic_stat_aurix)
+        .setContentTitle("AURIX")
+        .setContentText("Syncing downloads")
+        .setOngoing(true)
+        .setSilent(true)
+        .build()
+    }
     return runCatching {
-      val notif = AppNotificationHelper.buildBackgroundDownloadNotification(this, updateState, tracks)
-      val fgsType = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
-        ServiceInfo.FOREGROUND_SERVICE_TYPE_DATA_SYNC
-      } else {
-        0
-      }
       ServiceCompat.startForeground(
         this,
         AppNotificationHelper.NOTIF_ID_BACKGROUND_DOWNLOAD,
@@ -149,10 +171,14 @@ class BackgroundDownloadService : Service() {
     return updateActive || tracks.isNotEmpty()
   }
 
+  private fun defaultUpdateState(): UpdateUiState {
+    return UpdateUiState(installed = GitHubUpdater.getInstalledAppInfo(applicationContext))
+  }
+
   private fun stopSelfSafely() {
     runCatching {
       ServiceCompat.stopForeground(this, ServiceCompat.STOP_FOREGROUND_REMOVE)
     }
-    stopSelf()
+    runCatching { stopSelf() }
   }
 }

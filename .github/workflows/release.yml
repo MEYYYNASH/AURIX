@@ -10,9 +10,9 @@ on:
   workflow_dispatch:
     inputs:
       tag:
-        description: 'Release tag (e.g. v1.8.1.2)'
+        description: 'Release tag (e.g. v1.8.2)'
         required: false
-        default: 'v1.8.1.2'
+        default: 'v1.8.2'
 
 permissions:
   contents: write
@@ -52,13 +52,13 @@ jobs:
             RELEASE_TAG="${{ github.ref_name }}"
           else
             VERSION=$(grep -m1 'versionName' app/build.gradle.kts | sed -E 's/.*"([^"]+)".*/\1/')
-            RELEASE_TAG="v${VERSION:-1.8.1.2}"
+            RELEASE_TAG="v${VERSION:-1.8.2}"
           fi
           VCODE=$(grep -m1 'versionCode' app/build.gradle.kts | sed -E 's/[^0-9]*([0-9]+).*/\1/')
           RDATE=$(grep -m1 'RELEASE_DATE' app/build.gradle.kts | sed -E 's/.*\\"([^\\"]+)\\".*/\1/')
           echo "RELEASE_TAG=${RELEASE_TAG}" >> "$GITHUB_ENV"
           echo "RELEASE_VERSION=${RELEASE_TAG#v}" >> "$GITHUB_ENV"
-          echo "RELEASE_VERSION_CODE=${VCODE:-10812}" >> "$GITHUB_ENV"
+          echo "RELEASE_VERSION_CODE=${VCODE:-10820}" >> "$GITHUB_ENV"
           echo "RELEASE_DATE=${RDATE:-$(date -u +%Y-%m-%d)}" >> "$GITHUB_ENV"
 
       - name: Ensure keystores exist
@@ -98,9 +98,9 @@ jobs:
             "sha256": os.environ["APK_SHA256"],
             "mandatory": False,
             "notes": [
-              f"Release {tag} — Liquid-Glass Pill Cards & Search Stability: Crisp 34dp pill-shaped track cards with specular silver rims, translucent navy glass fills, and matching 5-card skeleton loader",
-              "Quick 3-Button Action Cluster: Download, Love (Heart), and circular Play/Pause controls right on track cards, plus long-press menu and status-bar safe padding",
-              "Search Stability & Full AURIX Suite: Cancellable YouTube extraction without multi-query crashes, personalized Home mixes, Khmer & English UI, Equalizer, Crossfade, and OTA updates"
+              f"Release {tag} — Launch, Upgrade & Search Crash Fixes: Idempotent 1.7.8->1.8.2 Room migrations, resilient DataStore recovery, and foreground download service fail-safe",
+              "On-Screen Error Dialog: Non-fatal exceptions across startup, Search, Clipboard Paste, Audio Playback, and Share sheets are caught cleanly and displayed with Copy Details instead of closing the app",
+              "Extraction, Lyrics & Liquid-Glass Stability: Safe null/bounds checks in SyncedLyricsView, Tab Bars, TrackMetadataClassifier, and YouTube Search extraction"
             ],
             "releasePageUrl": f"https://github.com/{repo}/releases/tag/{tag}"
           }
@@ -126,9 +126,9 @@ jobs:
             mandatory: false
 
             What's New in AURIX ${{ env.RELEASE_TAG }}:
-            - Liquid-Glass 34dp Pill Cards: Translucent dark-navy pill boxes with specular silver glass rims and matching 5-card skeleton loader
-            - 3-Button Action Cluster: Download, Love (Heart), and circular Play/Pause buttons on track cards plus long-press menu
-            - Search Stability & Crash Fix: Cancellable YouTube extraction, bounded JSON parsing, off-main-thread mixes, and status-bar safe padding
+            - Launch & 1.7.8 Upgrade Stability: Idempotent Room DB migrations, resilient DataStore preferences, and ForegroundService fail-safe
+            - On-Screen Error Recovery: Non-fatal exceptions across startup, Search, Clipboard Paste, Playback, and Share sheets display a dismissible error dialog with Copy Details
+            - Extraction, Lyrics & UI Guards: Bounds-safe SyncedLyricsView/TabBar/Card drawing, HashCode MIN_VALUE fix, and bounded YouTube search parsing
           files: |
             app/build/outputs/apk/release/app-release.apk
             AURIX-${{ env.RELEASE_TAG }}.apk

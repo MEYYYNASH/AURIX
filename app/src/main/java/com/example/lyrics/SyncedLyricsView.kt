@@ -116,8 +116,10 @@ class SyncedLyricsView @JvmOverloads constructor(
         ((frameTimeNanos - lastFrameTimeNanos) * 1e-9f).coerceIn(0.001f, 0.064f)
       }
       lastFrameTimeNanos = frameTimeNanos
-      tickFrame(dtSeconds)
-      choreographer.postFrameCallback(this)
+      runCatching { tickFrame(dtSeconds) }
+      if (isFrameLoopRunning) {
+        runCatching { choreographer.postFrameCallback(this) }
+      }
     }
   }
 
@@ -225,8 +227,11 @@ class SyncedLyricsView @JvmOverloads constructor(
 
     // 2. Crisp 1dp outer glass border with top-to-bottom luminance gradient
     val strokeW = (1.15f * dp).coerceAtLeast(1f)
+    if (glassBoxRect.width() <= strokeW * 2f || glassBoxRect.height() <= strokeW * 2f) return
     val halfStroke = strokeW * 0.5f
+    val innerCorner = (cornerRadius - halfStroke).coerceAtLeast(0f)
     glassBoxRect.inset(halfStroke, halfStroke)
+    if (glassBoxRect.width() <= 0f || glassBoxRect.height() <= 0f) return
     glassBorderPaint.strokeWidth = strokeW
     glassBorderPaint.shader = LinearGradient(
       glassBoxRect.left,
@@ -239,8 +244,8 @@ class SyncedLyricsView @JvmOverloads constructor(
     )
     canvas.drawRoundRect(
       glassBoxRect,
-      cornerRadius - halfStroke,
-      cornerRadius - halfStroke,
+      innerCorner,
+      innerCorner,
       glassBorderPaint
     )
 
@@ -258,8 +263,8 @@ class SyncedLyricsView @JvmOverloads constructor(
     )
     canvas.drawRoundRect(
       glassBoxRect,
-      cornerRadius - halfStroke,
-      cornerRadius - halfStroke,
+      innerCorner,
+      innerCorner,
       glassSpecularPaint
     )
   }
@@ -294,7 +299,7 @@ class SyncedLyricsView @JvmOverloads constructor(
     layoutManager.scrollToPositionWithOffset(0, 0)
 
     if (parsed.isSynced && isAttachedToWindow) {
-      tickFrame(0.016f)
+      runCatching { tickFrame(0.016f) }
       startFrameLoop()
     } else {
       stopFrameLoop()

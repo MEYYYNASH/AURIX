@@ -1,14 +1,14 @@
 {
-  "versionName": "1.8.1.2",
-  "versionCode": 10812,
+  "versionName": "1.8.2",
+  "versionCode": 10820,
   "releaseDate": "2026-11-22",
-  "apkUrl": "https://github.com/MEYYYNASH/AURIX/releases/download/v1.8.1.2/AURIX-v1.8.1.2.apk",
+  "apkUrl": "https://github.com/MEYYYNASH/AURIX/releases/download/v1.8.2/AURIX-v1.8.2.apk",
   "sha256": "f266b10b83e976959e49a89e60a0247af2118ff53a282681d97dd3c071e72b41",
   "mandatory": false,
   "notes": [
-    "Release v1.8.1.2 \u2014 Liquid-Glass Pill Cards & Search Stability: Crisp 34dp pill-shaped track cards with specular silver rims, translucent navy glass fills, and matching 5-card skeleton loader",
-    "Quick 3-Button Action Cluster: Download, Love (Heart), and circular Play/Pause controls right on track cards, plus long-press menu and status-bar safe padding",
-    "Search Stability & Full AURIX Suite: Cancellable YouTube extraction without multi-query crashes, personalized Home mixes, Khmer & English UI, Equalizer, Crossfade, and OTA updates"
+    "Release v1.8.2 — Launch, Upgrade & Search Crash Fixes: Idempotent 1.7.8->1.8.2 Room migrations, resilient DataStore recovery, and foreground download service fail-safe",
+    "On-Screen Error Dialog: Non-fatal exceptions across startup, Search, Clipboard Paste, Audio Playback, and Share sheets are caught cleanly and displayed with Copy Details instead of closing the app",
+    "Extraction, Lyrics & Liquid-Glass Stability: Safe null/bounds checks in SyncedLyricsView, Tab Bars, TrackMetadataClassifier, and YouTube Search extraction"
   ],
-  "releasePageUrl": "https://github.com/MEYYYNASH/AURIX/releases/tag/v1.8.1.2"
+  "releasePageUrl": "https://github.com/MEYYYNASH/AURIX/releases/tag/v1.8.2"
 }

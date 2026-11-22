@@ -484,4 +484,9 @@
     <string name="mix_saved_toast">Saved \"%1$s\" to Library Albums</string>
     <string name="mix_refreshed_toast">Daily mixes refreshed</string>
     <string name="mix_remove_recent_cd">Remove from recent</string>
+    <string name="error_dialog_default_title">Something Went Wrong</string>
+    <string name="error_dialog_dismiss">Dismiss</string>
+    <string name="error_dialog_copy">Copy Details</string>
+    <string name="error_dialog_copied">Error details copied</string>
+    <string name="search_clipboard_error">Unable to Read Clipboard</string>
 </resources>

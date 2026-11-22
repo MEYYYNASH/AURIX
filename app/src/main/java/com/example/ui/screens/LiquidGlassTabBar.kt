@@ -140,19 +140,24 @@ fun LiquidGlassTabBar(
   }
 
   fun computeLensRoundRect(rowSize: Size): RoundRect {
-    if (tabWidthPx <= 0f) return RoundRect(0f, 0f, 0f, 0f, CornerRadius.Zero)
-    val p = pressProgress.value.coerceIn(0f, 1f)
+    if (tabWidthPx <= 0f || rowSize.width <= 0f || rowSize.height <= 0f) {
+      return RoundRect(0f, 0f, 0f, 0f, CornerRadius.Zero)
+    }
+    val p = pressProgress.value.takeIf { it.isFinite() }?.coerceIn(0f, 1f) ?: 0f
+    val safeVx = velocityX.takeIf { it.isFinite() } ?: 0f
     val speedStretch = if (skipAnimations) {
       0f
     } else {
-      min(abs(velocityX) / 4000f, 0.1f) * tabWidthPx * 0.6f
+      min(abs(safeVx) / 4000f, 0.1f) * tabWidthPx * 0.6f
     }
     val expandW = if (skipAnimations) 0f else extraWidthPressedPx * p
     val expandH = if (skipAnimations) 0f else extraHeightPressedPx * p
 
-    val lensW = (tabWidthPx - restMarginPx) + expandW + speedStretch
-    val lensH = (barInnerHeightPx - restMarginPx) + expandH
-    val centerX = lensX.value + tabWidthPx * 0.5f
+    val lensW = ((tabWidthPx - restMarginPx) + expandW + speedStretch).coerceAtLeast(0f)
+    val lensH = ((barInnerHeightPx - restMarginPx) + expandH).coerceAtLeast(0f)
+    if (lensW <= 0f || lensH <= 0f) return RoundRect(0f, 0f, 0f, 0f, CornerRadius.Zero)
+    val safeLensX = lensX.value.takeIf { it.isFinite() } ?: 0f
+    val centerX = safeLensX + tabWidthPx * 0.5f
     val centerY = rowSize.height * 0.5f
 
     val left = centerX - lensW * 0.5f
@@ -309,14 +314,15 @@ fun LiquidGlassTabBar(
                   val event = awaitPointerEvent()
                   val change = event.changes.firstOrNull { it.id == pointerId } ?: event.changes.firstOrNull()
                   if (change == null || !change.pressed) {
-                    val vX = velocityTracker.calculateVelocity().x
+                    val vX = runCatching { velocityTracker.calculateVelocity().x }.getOrDefault(0f)
+                      .takeIf { it.isFinite() } ?: 0f
                     velocityX = vX
                     val elapsed = System.currentTimeMillis() - pressStartMs
 
                     if (!didDrag) {
                       val tappedIdx = (lastPos.x / tabWidthPx).toInt().coerceIn(0, tabCount - 1)
                       if (tappedIdx != currentSelected) {
-                        haptic.performHapticFeedback(HapticFeedbackType.TextHandleMove)
+                        runCatching { haptic.performHapticFeedback(HapticFeedbackType.TextHandleMove) }
                         currentOnSelect(tappedIdx)
                       }
                       val targetX = tappedIdx * tabWidthPx
@@ -331,9 +337,10 @@ fun LiquidGlassTabBar(
                         pressProgress.animateTo(0f, pressSpring)
                       }
                     } else {
-                      val finalIdx = (lensX.value / tabWidthPx).roundToInt().coerceIn(0, tabCount - 1)
+                      val safeVal = lensX.value.takeIf { it.isFinite() } ?: 0f
+                      val finalIdx = (safeVal / tabWidthPx).roundToInt().coerceIn(0, tabCount - 1)
                       if (finalIdx != currentSelected) {
-                        haptic.performHapticFeedback(HapticFeedbackType.TextHandleMove)
+                        runCatching { haptic.performHapticFeedback(HapticFeedbackType.TextHandleMove) }
                         currentOnSelect(finalIdx)
                       }
                       val targetX = finalIdx * tabWidthPx
@@ -356,7 +363,8 @@ fun LiquidGlassTabBar(
                   }
 
                   if (didDrag || change.positionChange() != Offset.Zero) {
-                    velocityX = velocityTracker.calculateVelocity().x
+                    velocityX = runCatching { velocityTracker.calculateVelocity().x }.getOrDefault(0f)
+                      .takeIf { it.isFinite() } ?: 0f
                     val rawX = change.position.x - tabWidthPx * 0.5f
                     val rubberX = when {
                       rawX < 0f -> rawX * 0.25f
@@ -368,7 +376,7 @@ fun LiquidGlassTabBar(
                     val liveIdx = (rubberX / tabWidthPx).roundToInt().coerceIn(0, tabCount - 1)
                     if (liveIdx != activeIndex) {
                       activeIndex = liveIdx
-                      haptic.performHapticFeedback(HapticFeedbackType.TextHandleMove)
+                      runCatching { haptic.performHapticFeedback(HapticFeedbackType.TextHandleMove) }
                       currentOnSelect(liveIdx)
                     }
                   }

@@ -597,11 +597,39 @@ val AURIX_MIGRATION_5_6 = object : Migration(5, 6) {
   }
 }
 
+private fun hasColumn(db: SupportSQLiteDatabase, table: String, column: String): Boolean {
+  return runCatching {
+    db.query("PRAGMA table_info(`$table`)").use { cursor ->
+      val nameIndex = cursor.getColumnIndex("name")
+      if (nameIndex < 0) return false
+      while (cursor.moveToNext()) {
+        if (cursor.getString(nameIndex).equals(column, ignoreCase = true)) {
+          return true
+        }
+      }
+      false
+    }
+  }.getOrDefault(false)
+}
+
+private fun execSafeAddColumn(
+  db: SupportSQLiteDatabase,
+  table: String,
+  column: String,
+  definition: String
+) {
+  if (!hasColumn(db, table, column)) {
+    runCatching {
+      db.execSQL("ALTER TABLE `$table` ADD COLUMN `$column` $definition")
+    }
+  }
+}
+
 val AURIX_MIGRATION_6_7 = object : Migration(6, 7) {
   override fun migrate(db: SupportSQLiteDatabase) {
-    db.execSQL("ALTER TABLE `local_songs` ADD COLUMN `album` TEXT NOT NULL DEFAULT 'Unknown Album'")
-    db.execSQL("ALTER TABLE `local_songs` ADD COLUMN `trackNumber` INTEGER NOT NULL DEFAULT 0")
-    db.execSQL("ALTER TABLE `local_songs` ADD COLUMN `year` TEXT NOT NULL DEFAULT ''")
+    execSafeAddColumn(db, "local_songs", "album", "TEXT NOT NULL DEFAULT 'Unknown Album'")
+    execSafeAddColumn(db, "local_songs", "trackNumber", "INTEGER NOT NULL DEFAULT 0")
+    execSafeAddColumn(db, "local_songs", "year", "TEXT NOT NULL DEFAULT ''")
     db.execSQL(
       """
       CREATE TABLE IF NOT EXISTS `album_covers` (
@@ -667,24 +695,24 @@ val AURIX_MIGRATION_7_8 = object : Migration(7, 8) {
 
 val AURIX_MIGRATION_8_9 = object : Migration(8, 9) {
   override fun migrate(db: SupportSQLiteDatabase) {
-    db.execSQL("ALTER TABLE `play_history` ADD COLUMN `completedPercent` REAL NOT NULL DEFAULT 0.0")
-    db.execSQL("ALTER TABLE `play_history` ADD COLUMN `completed` INTEGER NOT NULL DEFAULT 0")
-    db.execSQL("ALTER TABLE `play_history` ADD COLUMN `skipped` INTEGER NOT NULL DEFAULT 0")
-    db.execSQL("ALTER TABLE `play_history` ADD COLUMN `replayed` INTEGER NOT NULL DEFAULT 0")
+    execSafeAddColumn(db, "play_history", "completedPercent", "REAL NOT NULL DEFAULT 0.0")
+    execSafeAddColumn(db, "play_history", "completed", "INTEGER NOT NULL DEFAULT 0")
+    execSafeAddColumn(db, "play_history", "skipped", "INTEGER NOT NULL DEFAULT 0")
+    execSafeAddColumn(db, "play_history", "replayed", "INTEGER NOT NULL DEFAULT 0")
 
-    db.execSQL("ALTER TABLE `play_logs` ADD COLUMN `completedPercent` REAL NOT NULL DEFAULT 0.0")
-    db.execSQL("ALTER TABLE `play_logs` ADD COLUMN `completed` INTEGER NOT NULL DEFAULT 0")
-    db.execSQL("ALTER TABLE `play_logs` ADD COLUMN `skipped` INTEGER NOT NULL DEFAULT 0")
-    db.execSQL("ALTER TABLE `play_logs` ADD COLUMN `replayed` INTEGER NOT NULL DEFAULT 0")
-    db.execSQL("ALTER TABLE `play_logs` ADD COLUMN `energy` REAL NOT NULL DEFAULT 0.5")
-    db.execSQL("ALTER TABLE `play_logs` ADD COLUMN `sad` REAL NOT NULL DEFAULT 0.0")
-    db.execSQL("ALTER TABLE `play_logs` ADD COLUMN `chill` REAL NOT NULL DEFAULT 0.0")
-    db.execSQL("ALTER TABLE `play_logs` ADD COLUMN `happy` REAL NOT NULL DEFAULT 0.0")
-    db.execSQL("ALTER TABLE `play_logs` ADD COLUMN `calm` REAL NOT NULL DEFAULT 0.0")
-    db.execSQL("ALTER TABLE `play_logs` ADD COLUMN `energetic` REAL NOT NULL DEFAULT 0.0")
-    db.execSQL("ALTER TABLE `play_logs` ADD COLUMN `romantic` REAL NOT NULL DEFAULT 0.0")
-    db.execSQL("ALTER TABLE `play_logs` ADD COLUMN `hasVocals` INTEGER NOT NULL DEFAULT 1")
-    db.execSQL("ALTER TABLE `play_logs` ADD COLUMN `language` TEXT NOT NULL DEFAULT 'en'")
+    execSafeAddColumn(db, "play_logs", "completedPercent", "REAL NOT NULL DEFAULT 0.0")
+    execSafeAddColumn(db, "play_logs", "completed", "INTEGER NOT NULL DEFAULT 0")
+    execSafeAddColumn(db, "play_logs", "skipped", "INTEGER NOT NULL DEFAULT 0")
+    execSafeAddColumn(db, "play_logs", "replayed", "INTEGER NOT NULL DEFAULT 0")
+    execSafeAddColumn(db, "play_logs", "energy", "REAL NOT NULL DEFAULT 0.5")
+    execSafeAddColumn(db, "play_logs", "sad", "REAL NOT NULL DEFAULT 0.0")
+    execSafeAddColumn(db, "play_logs", "chill", "REAL NOT NULL DEFAULT 0.0")
+    execSafeAddColumn(db, "play_logs", "happy", "REAL NOT NULL DEFAULT 0.0")
+    execSafeAddColumn(db, "play_logs", "calm", "REAL NOT NULL DEFAULT 0.0")
+    execSafeAddColumn(db, "play_logs", "energetic", "REAL NOT NULL DEFAULT 0.0")
+    execSafeAddColumn(db, "play_logs", "romantic", "REAL NOT NULL DEFAULT 0.0")
+    execSafeAddColumn(db, "play_logs", "hasVocals", "INTEGER NOT NULL DEFAULT 1")
+    execSafeAddColumn(db, "play_logs", "language", "TEXT NOT NULL DEFAULT 'en'")
 
     db.execSQL(
       """

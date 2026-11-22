@@ -2,7 +2,6 @@ package com.example.recommendation
 
 import com.example.model.Song
 import java.util.Locale
-import kotlin.math.abs
 
 /**
  * Normalizes and enriches missing genre, BPM, mood label, 5D MoodFlow vectors
@@ -109,7 +108,7 @@ object TrackMetadataClassifier {
       ?: matchedRule?.first
       ?: "Pop"
 
-    val hashSeed = abs((song.id.ifBlank { song.title + song.artist }).hashCode())
+    val hashSeed = (song.id.ifBlank { song.title + song.artist }).hashCode() and 0x7FFFFFFF
     val bpmBand = matchedRule?.second ?: bpmBandForGenre(resolvedGenre)
     val resolvedBpm = if (song.bpm > 0) {
       song.bpm

@@ -1093,23 +1093,27 @@ internal fun Modifier.standaloneNavyCardSurface(
       // Continuous crisp liquid-glass specular rim around entire pill
       val rimStrokePx = 1.15.dp.toPx()
       val rimInset = rimStrokePx * 0.5f
-      drawRoundRect(
-        brush = glassRimBrush,
-        topLeft = Offset(rimInset, rimInset),
-        size = Size(size.width - rimStrokePx, size.height - rimStrokePx),
-        cornerRadius = CornerRadius(cornerRadiusPx, cornerRadiusPx),
-        style = Stroke(width = rimStrokePx)
-      )
+      if (size.width > rimStrokePx * 2f && size.height > rimStrokePx * 2f) {
+        drawRoundRect(
+          brush = glassRimBrush,
+          topLeft = Offset(rimInset, rimInset),
+          size = Size(size.width - rimStrokePx, size.height - rimStrokePx),
+          cornerRadius = CornerRadius(cornerRadiusPx, cornerRadiusPx),
+          style = Stroke(width = rimStrokePx)
+        )
+      }
 
       if (isCurrent) {
         val activeStrokePx = 1.5.dp.toPx()
-        drawRoundRect(
-          color = accentColor.copy(alpha = 0.72f),
-          topLeft = Offset(activeStrokePx * 0.5f, activeStrokePx * 0.5f),
-          size = Size(size.width - activeStrokePx, size.height - activeStrokePx),
-          cornerRadius = CornerRadius(cornerRadiusPx, cornerRadiusPx),
-          style = Stroke(width = activeStrokePx)
-        )
+        if (size.width > activeStrokePx * 2f && size.height > activeStrokePx * 2f) {
+          drawRoundRect(
+            color = accentColor.copy(alpha = 0.72f),
+            topLeft = Offset(activeStrokePx * 0.5f, activeStrokePx * 0.5f),
+            size = Size(size.width - activeStrokePx, size.height - activeStrokePx),
+            cornerRadius = CornerRadius(cornerRadiusPx, cornerRadiusPx),
+            style = Stroke(width = activeStrokePx)
+          )
+        }
       }
     }
 }

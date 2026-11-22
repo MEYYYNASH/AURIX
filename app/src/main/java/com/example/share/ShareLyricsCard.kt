@@ -1311,7 +1311,9 @@ object ShareCardExporter {
     val chooser = Intent.createChooser(sendIntent, "Share lyrics").apply {
       addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
     }
-    context.startActivity(chooser)
+    runCatching {
+      context.startActivity(chooser)
+    }
   }
 
   /**

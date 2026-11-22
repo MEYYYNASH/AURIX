@@ -117,28 +117,33 @@ private class NewPipeOkHttpDownloader(
       else -> null
     }
 
-    val reqBuilder = Request.Builder()
-      .url(url)
-      .method(httpMethod, body)
-      .header("User-Agent", DESKTOP_FIREFOX_UA)
-
-    for ((key, values) in headers) {
-      if (values.isEmpty()) continue
-      if (key.equals("User-Agent", ignoreCase = true)) {
-        reqBuilder.header("User-Agent", values.first())
-      } else {
-        reqBuilder.removeHeader(key)
-        for (v in values) {
-          reqBuilder.addHeader(key, v)
+    val reqBuilder = try {
+      Request.Builder()
+        .url(url)
+        .method(httpMethod, body)
+        .header("User-Agent", DESKTOP_FIREFOX_UA)
+        .apply {
+          for ((key, values) in headers) {
+            if (values.isEmpty()) continue
+            if (key.equals("User-Agent", ignoreCase = true)) {
+              header("User-Agent", values.first())
+            } else {
+              removeHeader(key)
+              for (v in values) {
+                addHeader(key, v)
+              }
+            }
+          }
         }
-      }
+    } catch (e: IllegalArgumentException) {
+      throw IOException("Invalid request parameters for URL: $url", e)
     }
 
     httpClient.newCall(reqBuilder.build()).execute().use { resp ->
       if (resp.code == 429) {
         throw ReCaptchaException("reCaptcha Challenge requested", url)
       }
-      val responseBody = resp.body?.string().orEmpty()
+      val responseBody = readBoundedResponseBody(resp)
       val finalUrl = resp.request.url.toString()
       return NpResponse(
         resp.code,
@@ -147,6 +152,22 @@ private class NewPipeOkHttpDownloader(
         responseBody,
         finalUrl
       )
+    }
+  }
+
+  private fun readBoundedResponseBody(resp: Response, maxChars: Int = 2_500_000): String {
+    val body = resp.body ?: return ""
+    val contentLength = body.contentLength()
+    if (contentLength > maxChars.toLong()) return ""
+    return body.charStream().use { reader ->
+      val buf = CharArray(8192)
+      val sb = StringBuilder()
+      while (sb.length < maxChars) {
+        val read = reader.read(buf, 0, minOf(buf.size, maxChars - sb.length))
+        if (read <= 0) break
+        sb.append(buf, 0, read)
+      }
+      sb.toString()
     }
   }
 }
@@ -209,6 +230,16 @@ object YoutubeExtractor {
         }
       }
     })
+  }
+
+  private inline fun <T> cancellableRunCatching(block: () -> T): Result<T> {
+    return try {
+      Result.success(block())
+    } catch (ce: CancellationException) {
+      throw ce
+    } catch (t: Throwable) {
+      Result.failure(t)
+    }
   }
 
   private fun readBoundedBody(resp: Response, maxChars: Int = 2_500_000): String {
@@ -376,27 +407,29 @@ object YoutubeExtractor {
       listOf(0L to 1023L)
     }
 
-    return offsets.mapIndexed { index, (start, end) ->
-      val req = when (mode) {
-        StreamDownloadMode.QUERY_RANGE -> Request.Builder()
-          .url(appendRangeQueryParam(url, start, end))
-          .header("User-Agent", userAgent)
-          .header("Accept", "*/*")
-          .build()
-        StreamDownloadMode.HEADER_RANGE -> Request.Builder()
-          .url(url)
-          .header("User-Agent", userAgent)
-          .header("Accept", "*/*")
-          .header("Range", "bytes=$start-$end")
-          .build()
-        StreamDownloadMode.DIRECT -> Request.Builder()
-          .url(url)
-          .header("User-Agent", userAgent)
-          .header("Accept", "*/*")
-          .build()
-      }
-      probeRequestOk(req, allow416 = (index > 0 && contentLengthBytes <= 0L))
-    }.all { it }
+    return runCatching {
+      offsets.mapIndexed { index, (start, end) ->
+        val req = when (mode) {
+          StreamDownloadMode.QUERY_RANGE -> Request.Builder()
+            .url(appendRangeQueryParam(url, start, end))
+            .header("User-Agent", userAgent)
+            .header("Accept", "*/*")
+            .build()
+          StreamDownloadMode.HEADER_RANGE -> Request.Builder()
+            .url(url)
+            .header("User-Agent", userAgent)
+            .header("Accept", "*/*")
+            .header("Range", "bytes=$start-$end")
+            .build()
+          StreamDownloadMode.DIRECT -> Request.Builder()
+            .url(url)
+            .header("User-Agent", userAgent)
+            .header("Accept", "*/*")
+            .build()
+        }
+        probeRequestOk(req, allow416 = (index > 0 && contentLengthBytes <= 0L))
+      }.all { it }
+    }.getOrDefault(false)
   }
 
   /**
@@ -411,35 +444,37 @@ object YoutubeExtractor {
     if (url.isBlank()) return null
     val isGoogleVideo = url.contains("googlevideo.com", ignoreCase = true)
 
-    return if (isGoogleVideo) {
-      val cParam = Regex("""[?&]c=([^&]+)""", RegexOption.IGNORE_CASE)
-        .find(url)?.groupValues?.getOrNull(1)?.uppercase(Locale.US).orEmpty()
-      val orderedModes = if (cParam.startsWith("WEB") || cParam.startsWith("TV") || cParam == "MWEB") {
-        listOf(StreamDownloadMode.HEADER_RANGE, StreamDownloadMode.QUERY_RANGE, StreamDownloadMode.DIRECT)
+    return runCatching {
+      if (isGoogleVideo) {
+        val cParam = Regex("""[?&]c=([^&]+)""", RegexOption.IGNORE_CASE)
+          .find(url)?.groupValues?.getOrNull(1)?.uppercase(Locale.US).orEmpty()
+        val orderedModes = if (cParam.startsWith("WEB") || cParam.startsWith("TV") || cParam == "MWEB") {
+          listOf(StreamDownloadMode.HEADER_RANGE, StreamDownloadMode.QUERY_RANGE, StreamDownloadMode.DIRECT)
+        } else {
+          listOf(StreamDownloadMode.QUERY_RANGE, StreamDownloadMode.HEADER_RANGE, StreamDownloadMode.DIRECT)
+        }
+        orderedModes.firstOrNull { mode ->
+          probeModeAtOffsets(url, userAgent, mode, contentLengthBytes)
+        }
       } else {
-        listOf(StreamDownloadMode.QUERY_RANGE, StreamDownloadMode.HEADER_RANGE, StreamDownloadMode.DIRECT)
-      }
-      orderedModes.firstOrNull { mode ->
-        probeModeAtOffsets(url, userAgent, mode, contentLengthBytes)
-      }
-    } else {
-      val hReq = Request.Builder()
-        .url(url)
-        .header("User-Agent", userAgent)
-        .header("Accept", "*/*")
-        .header("Range", "bytes=0-1023")
-        .build()
-      if (probeRequestOk(hReq)) return StreamDownloadMode.DIRECT
+        val hReq = Request.Builder()
+          .url(url)
+          .header("User-Agent", userAgent)
+          .header("Accept", "*/*")
+          .header("Range", "bytes=0-1023")
+          .build()
+        if (probeRequestOk(hReq)) return@runCatching StreamDownloadMode.DIRECT
 
-      val dReq = Request.Builder()
-        .url(url)
-        .header("User-Agent", userAgent)
-        .header("Accept", "*/*")
-        .build()
-      if (probeRequestOk(dReq)) return StreamDownloadMode.DIRECT
+        val dReq = Request.Builder()
+          .url(url)
+          .header("User-Agent", userAgent)
+          .header("Accept", "*/*")
+          .build()
+        if (probeRequestOk(dReq)) return@runCatching StreamDownloadMode.DIRECT
 
-      null
-    }
+        null
+      }
+    }.getOrNull()
   }
 
   private fun getInvidiousMirrors(): List<String> {
@@ -451,7 +486,7 @@ object YoutubeExtractor {
         .build()
       probeClient.newCall(req).execute().use { resp ->
         if (!resp.isSuccessful) return@use emptyList<String>()
-        val body = resp.body?.string().orEmpty()
+        val body = readBoundedBody(resp, 512_000)
         val arr = JSONArray(body)
         val out = mutableListOf<String>()
         for (i in 0 until minOf(arr.length(), 20)) {
@@ -600,7 +635,7 @@ object YoutubeExtractor {
     val collected = LinkedHashMap<String, YoutubeSearchItem>()
 
     // 1. Discover TikTok viral music chart playlists via NewPipe SearchInfo + PlaylistInfo
-    runCatching {
+    cancellableRunCatching {
       ensureNewPipeInitialized()
       val playlistQueries = listOf(
         "TikTok Viral Hits Chart 2026 playlist",
@@ -608,10 +643,11 @@ object YoutubeExtractor {
       )
       for (pq in playlistQueries) {
         if (collected.size >= limit) break
-        val qh = runCatching {
+        currentCoroutineContext().ensureActive()
+        val qh = cancellableRunCatching {
           ServiceList.YouTube.searchQHFactory.fromQuery(pq, listOf("playlists"), "")
         }.getOrNull() ?: ServiceList.YouTube.searchQHFactory.fromQuery(pq)
-        val searchInfo = runCatching { SearchInfo.getInfo(ServiceList.YouTube, qh) }.getOrNull() ?: continue
+        val searchInfo = cancellableRunCatching { SearchInfo.getInfo(ServiceList.YouTube, qh) }.getOrNull() ?: continue
         val playlistUrls = searchInfo.relatedItems
           .filterIsInstance<PlaylistInfoItem>()
           .mapNotNull { it.url?.takeIf { u -> u.isNotBlank() } }
@@ -619,7 +655,8 @@ object YoutubeExtractor {
 
         for (pUrl in playlistUrls) {
           if (collected.size >= limit) break
-          val playlistInfo = runCatching { PlaylistInfo.getInfo(ServiceList.YouTube, pUrl) }.getOrNull() ?: continue
+          currentCoroutineContext().ensureActive()
+          val playlistInfo = cancellableRunCatching { PlaylistInfo.getInfo(ServiceList.YouTube, pUrl) }.getOrNull() ?: continue
           for (stream in playlistInfo.relatedItems) {
             if (collected.size >= limit) break
             mapStreamInfoItem(stream)?.let { ytItem ->
@@ -638,7 +675,8 @@ object YoutubeExtractor {
     )
     for (q in chartQueries) {
       if (collected.size >= limit) break
-      val npItems = runCatching { searchViaNewPipe(q, 14) }.getOrNull().orEmpty()
+      currentCoroutineContext().ensureActive()
+      val npItems = cancellableRunCatching { searchViaNewPipe(q, 14) }.getOrNull().orEmpty()
       for (item in npItems) {
         collected.putIfAbsent(item.videoId, item)
         if (collected.size >= limit) break
@@ -649,7 +687,8 @@ object YoutubeExtractor {
     if (collected.size < 8) {
       for (q in chartQueries) {
         if (collected.size >= limit) break
-        val fallbackItems = runCatching { searchSongs(q, 14) }.getOrNull().orEmpty()
+        currentCoroutineContext().ensureActive()
+        val fallbackItems = cancellableRunCatching { searchSongs(q, 14) }.getOrNull().orEmpty()
         for (item in fallbackItems) {
           collected.putIfAbsent(item.videoId, item)
           if (collected.size >= limit) break
@@ -672,24 +711,28 @@ object YoutubeExtractor {
       put("query", query)
       put("context", JSONObject().put("client", clientObj))
     }
-    val request = Request.Builder()
-      .url("https://www.youtube.com/youtubei/v1/search?prettyPrint=false")
-      .post(payload.toString().toRequestBody(jsonMediaType))
-      .header("User-Agent", NewPipeOkHttpDownloader.DESKTOP_CHROME_UA)
-      .header("Content-Type", "application/json")
-      .build()
+    val request = cancellableRunCatching {
+      Request.Builder()
+        .url("https://www.youtube.com/youtubei/v1/search?prettyPrint=false")
+        .post(payload.toString().toRequestBody(jsonMediaType))
+        .header("User-Agent", NewPipeOkHttpDownloader.DESKTOP_CHROME_UA)
+        .header("Content-Type", "application/json")
+        .build()
+    }.getOrNull() ?: return emptyList()
 
-    executeCancellable(client, request).use { resp ->
-      if (!resp.isSuccessful) return emptyList()
-      val body = readBoundedBody(resp)
-      if (body.isBlank()) return emptyList()
-      currentCoroutineContext().ensureActive()
-      val root = JSONObject(body)
-      val collected = mutableListOf<YoutubeSearchItem>()
-      val visitedNodes = intArrayOf(0)
-      collectVideoRenderers(root, collected, limit, depth = 0, visitedNodes = visitedNodes)
-      return collected.distinctBy { it.videoId }.take(limit)
-    }
+    return cancellableRunCatching {
+      executeCancellable(client, request).use { resp ->
+        if (!resp.isSuccessful) return emptyList()
+        val body = readBoundedBody(resp)
+        if (body.isBlank()) return emptyList()
+        currentCoroutineContext().ensureActive()
+        val root = JSONObject(body)
+        val collected = mutableListOf<YoutubeSearchItem>()
+        val visitedNodes = intArrayOf(0)
+        collectVideoRenderers(root, collected, limit, depth = 0, visitedNodes = visitedNodes)
+        collected.distinctBy { it.videoId }.take(limit)
+      }
+    }.getOrDefault(emptyList())
   }
 
   private fun collectVideoRenderers(
@@ -803,10 +846,12 @@ object YoutubeExtractor {
     val encoded = URLEncoder.encode(query, "UTF-8")
     for (filter in listOf("music_songs", "videos")) {
       currentCoroutineContext().ensureActive()
-      val req = Request.Builder()
-        .url("$base/search?q=$encoded&filter=$filter")
-        .header("User-Agent", "AURIX-Android")
-        .build()
+      val req = cancellableRunCatching {
+        Request.Builder()
+          .url("$base/search?q=$encoded&filter=$filter")
+          .header("User-Agent", "AURIX-Android")
+          .build()
+      }.getOrNull() ?: continue
       val items = try {
         executeCancellable(probeClient, req).use { resp ->
           if (!resp.isSuccessful) return@use emptyList<YoutubeSearchItem>()
@@ -850,37 +895,41 @@ object YoutubeExtractor {
   private suspend fun searchViaInvidious(base: String, query: String, limit: Int): List<YoutubeSearchItem> {
     currentCoroutineContext().ensureActive()
     val encoded = URLEncoder.encode(query, "UTF-8")
-    val req = Request.Builder()
-      .url("$base/api/v1/search?q=$encoded&type=video")
-      .header("User-Agent", "AURIX-Android")
-      .build()
-    return executeCancellable(probeClient, req).use { resp ->
-      if (!resp.isSuccessful) return emptyList()
-      val body = readBoundedBody(resp)
-      if (body.isBlank()) return emptyList()
-      val arr = JSONArray(body)
-      val out = mutableListOf<YoutubeSearchItem>()
-      for (i in 0 until minOf(arr.length(), limit)) {
-        val obj = arr.optJSONObject(i) ?: continue
-        val videoId = obj.optString("videoId").trim().takeIf { it.length in 8..16 } ?: continue
-        val title = obj.optString("title").trim()
-        if (title.isBlank()) continue
-        val durSec = obj.optLong("lengthSeconds", 0L)
-        if (durSec <= 0L) continue
-        val thumb = bestThumbnailUrl(obj.optJSONArray("videoThumbnails"))
-          ?: "https://i.ytimg.com/vi/$videoId/hqdefault.jpg"
-        out.add(
-          YoutubeSearchItem(
-            videoId = videoId,
-            rawTitle = title,
-            author = obj.optString("author").trim().ifBlank { "YouTube" },
-            thumbnailUrl = thumb,
-            durationSeconds = durSec
+    val req = cancellableRunCatching {
+      Request.Builder()
+        .url("$base/api/v1/search?q=$encoded&type=video")
+        .header("User-Agent", "AURIX-Android")
+        .build()
+    }.getOrNull() ?: return emptyList()
+    return cancellableRunCatching {
+      executeCancellable(probeClient, req).use { resp ->
+        if (!resp.isSuccessful) return emptyList()
+        val body = readBoundedBody(resp)
+        if (body.isBlank()) return emptyList()
+        val arr = JSONArray(body)
+        val out = mutableListOf<YoutubeSearchItem>()
+        for (i in 0 until minOf(arr.length(), limit)) {
+          val obj = arr.optJSONObject(i) ?: continue
+          val videoId = obj.optString("videoId").trim().takeIf { it.length in 8..16 } ?: continue
+          val title = obj.optString("title").trim()
+          if (title.isBlank()) continue
+          val durSec = obj.optLong("lengthSeconds", 0L)
+          if (durSec <= 0L) continue
+          val thumb = bestThumbnailUrl(obj.optJSONArray("videoThumbnails"))
+            ?: "https://i.ytimg.com/vi/$videoId/hqdefault.jpg"
+          out.add(
+            YoutubeSearchItem(
+              videoId = videoId,
+              rawTitle = title,
+              author = obj.optString("author").trim().ifBlank { "YouTube" },
+              thumbnailUrl = thumb,
+              durationSeconds = durSec
+            )
           )
-        )
+        }
+        out.distinctBy { it.videoId }
       }
-      out.distinctBy { it.videoId }
-    }
+    }.getOrDefault(emptyList())
   }
 
   fun parseDurationTextSeconds(raw: String): Long {
@@ -911,7 +960,8 @@ object YoutubeExtractor {
 
     // 1. Primary: NewPipeExtractor (full JS signature & n-parameter deobfuscation + client rotation)
     if ("NEWPIPE" !in skipClients) {
-      val npAttempt = runCatching { fetchFromNewPipeExtractor(videoId) }.getOrNull()
+      currentCoroutineContext().ensureActive()
+      val npAttempt = cancellableRunCatching { fetchFromNewPipeExtractor(videoId) }.getOrNull()
       if (npAttempt != null) {
         if (npAttempt.title.isNotBlank()) lastTitle = npAttempt.title
         if (npAttempt.author.isNotBlank()) lastAuthor = npAttempt.author
@@ -938,7 +988,8 @@ object YoutubeExtractor {
     // 2. Direct InnerTube clients (verified at both byte 0 and chunk 1)
     for (profile in innerTubeProfiles) {
       if (profile.clientName in skipClients) continue
-      val attempt = runCatching { fetchFromInnerTube(videoId, profile) }.getOrNull() ?: continue
+      currentCoroutineContext().ensureActive()
+      val attempt = cancellableRunCatching { fetchFromInnerTube(videoId, profile) }.getOrNull() ?: continue
       if (attempt.title.isNotBlank()) lastTitle = attempt.title
       if (attempt.author.isNotBlank()) lastAuthor = attempt.author
       if (attempt.thumbnailUrl.isNotBlank()) lastThumb = attempt.thumbnailUrl
@@ -962,7 +1013,8 @@ object YoutubeExtractor {
 
     // 3. Piped public instances (server-side deciphered & proxied)
     for (base in basePipedMirrors) {
-      val attempt = runCatching { fetchFromPiped(base, videoId) }.getOrNull() ?: continue
+      currentCoroutineContext().ensureActive()
+      val attempt = cancellableRunCatching { fetchFromPiped(base, videoId) }.getOrNull() ?: continue
       if (attempt.title.isNotBlank()) lastTitle = attempt.title
       if (attempt.author.isNotBlank()) lastAuthor = attempt.author
       if (attempt.thumbnailUrl.isNotBlank()) lastThumb = attempt.thumbnailUrl
@@ -983,7 +1035,8 @@ object YoutubeExtractor {
 
     // 4. Invidious public instances (checks direct URL AND Invidious `local=true` server proxy)
     for (base in getInvidiousMirrors()) {
-      val attempt = runCatching { fetchFromInvidious(base, videoId) }.getOrNull() ?: continue
+      currentCoroutineContext().ensureActive()
+      val attempt = cancellableRunCatching { fetchFromInvidious(base, videoId) }.getOrNull() ?: continue
       if (attempt.title.isNotBlank()) lastTitle = attempt.title
       if (attempt.author.isNotBlank()) lastAuthor = attempt.author
       if (attempt.thumbnailUrl.isNotBlank()) lastThumb = attempt.thumbnailUrl
@@ -1111,7 +1164,7 @@ object YoutubeExtractor {
       } else ""
 
       val candidateUas = inferUserAgentsForStreamUrl(url)
-      val primaryUa = candidateUas.first()
+      val primaryUa = candidateUas.firstOrNull() ?: NewPipeOkHttpDownloader.DESKTOP_FIREFOX_UA
       val extraBackups = candidateUas.drop(1).map { ua ->
         StreamCandidate(url = url, userAgent = ua, downloadMode = StreamDownloadMode.HEADER_RANGE)
       }
@@ -1162,7 +1215,7 @@ object YoutubeExtractor {
           streamUrl = url,
           durationSeconds = durSec,
           contentLengthBytes = contentLength,
-          requiredUserAgent = candidateUas.first(),
+          requiredUserAgent = candidateUas.firstOrNull() ?: NewPipeOkHttpDownloader.DESKTOP_FIREFOX_UA,
           fallbackCandidates = candidateUas.drop(1).map { ua ->
             StreamCandidate(url = url, userAgent = ua, downloadMode = StreamDownloadMode.HEADER_RANGE)
           }
@@ -1308,7 +1361,7 @@ object YoutubeExtractor {
 
     client.newCall(request).execute().use { resp ->
       if (!resp.isSuccessful) return null
-      val body = resp.body?.string().orEmpty()
+      val body = readBoundedBody(resp)
       if (body.isBlank()) return null
 
       val root = JSONObject(body)
@@ -1454,7 +1507,7 @@ object YoutubeExtractor {
       .build()
     client.newCall(req).execute().use { resp ->
       if (!resp.isSuccessful) return null
-      val body = resp.body?.string().orEmpty()
+      val body = readBoundedBody(resp)
       if (body.isBlank()) return null
 
       val root = JSONObject(body)
@@ -1525,7 +1578,7 @@ object YoutubeExtractor {
       .build()
     client.newCall(req).execute().use { resp ->
       if (!resp.isSuccessful) return null
-      val body = resp.body?.string().orEmpty()
+      val body = readBoundedBody(resp)
       if (body.isBlank()) return null
 
       val root = JSONObject(body)

@@ -1,8 +1,12 @@
 package com.example.ui.screens
 
 import android.Manifest
+import android.content.ClipData
+import android.content.ClipboardManager
+import android.content.Context
 import android.content.pm.PackageManager
 import android.os.Build
+import android.widget.Toast
 import androidx.activity.compose.BackHandler
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
@@ -16,12 +20,17 @@ import androidx.compose.animation.core.tween
 import androidx.compose.foundation.background
 import androidx.compose.foundation.isSystemInDarkTheme
 import androidx.compose.foundation.layout.*
+import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.foundation.text.selection.SelectionContainer
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.outlined.Folder
 import androidx.compose.material.icons.outlined.Home
 import androidx.compose.material.icons.outlined.Search
 import androidx.compose.material.icons.outlined.Settings
+import androidx.compose.material.icons.rounded.ContentCopy
+import androidx.compose.material.icons.rounded.ErrorOutline
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
@@ -32,8 +41,11 @@ import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.platform.LocalConfiguration
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.res.stringResource
+import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.sp
 import androidx.compose.ui.window.DialogProperties
 import androidx.core.content.ContextCompat
 import androidx.lifecycle.Lifecycle
@@ -93,6 +105,8 @@ private fun AurixAppContent(
   val accentHex by viewModel.accentColorHex.collectAsStateWithLifecycle()
   val dynamicBg by viewModel.dynamicBg.collectAsStateWithLifecycle()
   val reducedMotion by viewModel.reducedMotion.collectAsStateWithLifecycle()
+  val appError by viewModel.appError.collectAsStateWithLifecycle()
+  val hostContext = LocalContext.current
 
   val systemDark = isSystemInDarkTheme()
   val amoledTheme = themeMode == "amoled"
@@ -131,6 +145,96 @@ private fun AurixAppContent(
           darkTheme = darkTheme,
           reducedMotion = reducedMotion,
           onDismissed = { viewModel.markLaunchSplashShown() }
+        )
+      }
+
+      val activeError = appError
+      if (activeError != null) {
+        AlertDialog(
+          onDismissRequest = { viewModel.dismissAppError() },
+          modifier = Modifier.testTag("app_error_dialog"),
+          icon = {
+            Icon(
+              imageVector = Icons.Rounded.ErrorOutline,
+              contentDescription = null,
+              tint = MaterialTheme.colorScheme.error
+            )
+          },
+          title = {
+            Text(activeError.title.ifBlank { stringResource(R.string.error_dialog_default_title) })
+          },
+          text = {
+            Column(
+              modifier = Modifier
+                .fillMaxWidth()
+                .heightIn(max = 260.dp)
+                .verticalScroll(rememberScrollState()),
+              verticalArrangement = Arrangement.spacedBy(8.dp)
+            ) {
+              Text(
+                text = activeError.message,
+                style = MaterialTheme.typography.bodyMedium
+              )
+              val detailsText = activeError.details
+              if (!detailsText.isNullOrBlank()) {
+                Surface(
+                  color = MaterialTheme.colorScheme.surfaceVariant,
+                  shape = RoundedCornerShape(10.dp)
+                ) {
+                  SelectionContainer {
+                    Text(
+                      text = detailsText,
+                      style = MaterialTheme.typography.bodySmall.copy(
+                        fontFamily = FontFamily.Monospace,
+                        fontSize = 11.sp
+                      ),
+                      modifier = Modifier.padding(10.dp)
+                    )
+                  }
+                }
+              }
+            }
+          },
+          dismissButton = {
+            val detailsText = activeError.details
+            if (!detailsText.isNullOrBlank()) {
+              TextButton(
+                onClick = {
+                  runCatching {
+                    val clipboard = hostContext.getSystemService(Context.CLIPBOARD_SERVICE) as? ClipboardManager
+                    val copyPayload = "${activeError.title}\n${activeError.message}\n$detailsText"
+                    clipboard?.setPrimaryClip(ClipData.newPlainText("AURIX Error", copyPayload))
+                    Toast.makeText(
+                      hostContext,
+                      hostContext.getString(R.string.error_dialog_copied),
+                      Toast.LENGTH_SHORT
+                    ).show()
+                  }
+                },
+                modifier = Modifier
+                  .defaultMinSize(minHeight = 48.dp)
+                  .testTag("app_error_copy_button")
+              ) {
+                Icon(
+                  imageVector = Icons.Rounded.ContentCopy,
+                  contentDescription = null,
+                  modifier = Modifier.size(16.dp)
+                )
+                Spacer(modifier = Modifier.width(6.dp))
+                Text(stringResource(R.string.error_dialog_copy))
+              }
+            }
+          },
+          confirmButton = {
+            Button(
+              onClick = { viewModel.dismissAppError() },
+              modifier = Modifier
+                .defaultMinSize(minHeight = 48.dp)
+                .testTag("app_error_dismiss_button")
+            ) {
+              Text(stringResource(R.string.error_dialog_dismiss))
+            }
+          }
         )
       }
     }
@@ -823,7 +927,8 @@ private fun AurixMainShell(
               searchUiState = searchUiState,
               onClearSearch = { viewModel.clearSearch() },
               onRetrySearch = { viewModel.retrySearch() },
-              onImmediateSearch = { viewModel.search(it, immediate = true) }
+              onImmediateSearch = { viewModel.search(it, immediate = true) },
+              onReportError = { title, err -> viewModel.reportError(title, err) }
             )
             is Screen.Library -> LibraryScreen(
               localSongs = localSongs,
@@ -1134,7 +1239,11 @@ private fun AurixMainShell(
               type = "text/plain"
               putExtra(android.content.Intent.EXTRA_TEXT, "${detailTarget.title} — ${detailTarget.artist}")
             }
-            context.startActivity(android.content.Intent.createChooser(shareIntent, null))
+            runCatching {
+              context.startActivity(android.content.Intent.createChooser(shareIntent, null))
+            }.onFailure { err ->
+              viewModel.reportError("Unable to Share Track", err)
+            }
           },
           onHideSong = {
             albumDetailSong = null

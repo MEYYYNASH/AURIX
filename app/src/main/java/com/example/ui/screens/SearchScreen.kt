@@ -198,7 +198,8 @@ fun SearchScreen(
   },
   onClearSearch: () -> Unit = { onSearchQueryChanged("") },
   onRetrySearch: () -> Unit = { onSearchQueryChanged(searchQuery) },
-  onImmediateSearch: (String) -> Unit = onSearchQueryChanged
+  onImmediateSearch: (String) -> Unit = onSearchQueryChanged,
+  onReportError: (String, Throwable?) -> Unit = { _, _ -> }
 ) {
   val context = LocalContext.current
   val keyboardController = LocalSoftwareKeyboardController.current
@@ -326,6 +327,7 @@ fun SearchScreen(
             onDownloadYoutube = onDownloadYoutube,
             onPlaySaved = { saved -> onSongClick(saved, listOf(saved)) },
             onOpenMySongs = onOpenMySongs,
+            onReportError = onReportError,
             context = context
           )
         } else {
@@ -711,6 +713,7 @@ private fun YoutubeLinkGlassPane(
   onDownloadYoutube: () -> Unit,
   onPlaySaved: (Song) -> Unit,
   onOpenMySongs: () -> Unit,
+  onReportError: (String, Throwable?) -> Unit = { _, _ -> },
   context: Context
 ) {
   val navBarBottom = WindowInsets.navigationBars.asPaddingValues().calculateBottomPadding()
@@ -832,12 +835,21 @@ private fun YoutubeLinkGlassPane(
                 .background(pasteBg)
                 .border(1.dp, inputBorder, CircleShape)
                 .clickable {
-                  val cm = context.getSystemService(Context.CLIPBOARD_SERVICE) as? ClipboardManager
-                  val clip = cm?.primaryClip?.getItemAt(0)?.coerceToText(context)?.toString()?.trim().orEmpty()
-                  if (clip.isNotBlank()) {
-                    onYoutubeUrlChanged(clip)
-                  } else {
-                    Toast.makeText(context, context.getString(R.string.search_yt_clipboard_empty), Toast.LENGTH_SHORT).show()
+                  runCatching {
+                    val cm = context.getSystemService(Context.CLIPBOARD_SERVICE) as? ClipboardManager
+                    val primaryClip = cm?.primaryClip
+                    val clip = if (primaryClip != null && primaryClip.itemCount > 0) {
+                      primaryClip.getItemAt(0)?.coerceToText(context)?.toString()?.trim().orEmpty()
+                    } else {
+                      ""
+                    }
+                    if (clip.isNotBlank()) {
+                      onYoutubeUrlChanged(clip)
+                    } else {
+                      Toast.makeText(context, context.getString(R.string.search_yt_clipboard_empty), Toast.LENGTH_SHORT).show()
+                    }
+                  }.onFailure { err ->
+                    onReportError(context.getString(R.string.search_clipboard_error), err)
                   }
                 },
               contentAlignment = Alignment.Center

@@ -162,9 +162,9 @@ class UpdateManager(
     private const val META_FILE_NAME = "aurix_update.apk.meta.json"
 
     val CURRENT_RELEASE_NOTES = listOf(
-      "Release v1.8.1.2 — Liquid-Glass Pill Cards & Search Stability: Crisp 34dp pill-shaped track cards with specular silver rims, translucent navy glass fills, and matching 5-card skeleton loader",
-      "Quick 3-Button Action Cluster: Download, Love (Heart), and circular Play/Pause controls right on track cards, plus long-press menu and status-bar safe padding",
-      "Search Stability & Full AURIX Suite: Cancellable YouTube extraction without multi-query crashes, personalized Home mixes, Khmer & English UI, Equalizer, Crossfade, and OTA updates"
+      "Release v1.8.2 — Launch, Upgrade & Search Crash Fixes: Idempotent 1.7.8->1.8.2 Room migrations, resilient DataStore recovery, and foreground download service fail-safe",
+      "On-Screen Error Dialog: Non-fatal exceptions across startup, Search, Clipboard Paste, Audio Playback, and Share sheets are caught cleanly and displayed with Copy Details instead of closing the app",
+      "Extraction, Lyrics & Liquid-Glass Stability: Safe null/bounds checks in SyncedLyricsView, Tab Bars, TrackMetadataClassifier, and YouTube Search extraction"
     )
 
     fun parseVersionJson(rawJson: String): RemoteVersionInfo {
@@ -1323,11 +1323,21 @@ class UpdateManager(
   }
 
   fun restartApp(hostContext: Context = context) {
-    val launchIntent = hostContext.packageManager.getLaunchIntentForPackage(hostContext.packageName)
-    if (launchIntent != null) {
-      launchIntent.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_CLEAR_TASK)
-      hostContext.startActivity(launchIntent)
-      Runtime.getRuntime().exit(0)
+    runCatching {
+      val launchIntent = hostContext.packageManager.getLaunchIntentForPackage(hostContext.packageName)
+      if (launchIntent != null) {
+        launchIntent.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_CLEAR_TASK)
+        hostContext.startActivity(launchIntent)
+        Runtime.getRuntime().exit(0)
+      }
+    }.onFailure { err ->
+      _uiState.update {
+        it.copy(
+          stage = UpdateStage.Error,
+          statusMessage = err.localizedMessage ?: "Unable to restart app",
+          errorMessage = err.localizedMessage ?: "Unable to restart app"
+        )
+      }
     }
   }
 

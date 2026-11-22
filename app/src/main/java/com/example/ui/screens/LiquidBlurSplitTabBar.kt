@@ -293,14 +293,15 @@ fun LiquidBlurSplitTabBar(
                     val event = awaitPointerEvent()
                     val change = event.changes.firstOrNull { it.id == down.id } ?: event.changes.firstOrNull()
                     if (change == null || !change.pressed) {
+                      val safeOrb = orbX.value.takeIf { it.isFinite() } ?: 0f
                       val chosenSlot = if (!didDrag) {
                         (lastPos.x / slotWidthPx).toInt().coerceIn(0, pillTabCount - 1)
                       } else {
-                        (orbX.value / slotWidthPx).roundToInt().coerceIn(0, pillTabCount - 1)
+                        (safeOrb / slotWidthPx).roundToInt().coerceIn(0, pillTabCount - 1)
                       }
                       val targetOrigIndex = pillIndices[chosenSlot]
                       if (targetOrigIndex != currentSelected) {
-                        haptic.performHapticFeedback(HapticFeedbackType.TextHandleMove)
+                        runCatching { haptic.performHapticFeedback(HapticFeedbackType.TextHandleMove) }
                         currentOnSelect(targetOrigIndex)
                       }
                       isDragging = false
@@ -330,7 +331,7 @@ fun LiquidBlurSplitTabBar(
                         activeSlot = liveSlot
                         val liveOrig = pillIndices[liveSlot]
                         if (liveOrig != currentSelected) {
-                          haptic.performHapticFeedback(HapticFeedbackType.TextHandleMove)
+                          runCatching { haptic.performHapticFeedback(HapticFeedbackType.TextHandleMove) }
                           currentOnSelect(liveOrig)
                         }
                       }
@@ -347,12 +348,15 @@ fun LiquidBlurSplitTabBar(
             .matchParentSize()
             .drawBehind {
               if (size.width <= 0f || size.height <= 0f || slotWidthPx <= 0f || pillOrbAlpha <= 0.01f) return@drawBehind
+              val safeOrbX = orbX.value.takeIf { it.isFinite() } ?: 0f
+              val safeScale = pressScale.value.takeIf { it.isFinite() } ?: 1f
               val orbPad = 2.dp.toPx()
               val orbW = (slotWidthPx - orbPad * 2f).coerceAtLeast(size.height)
               val orbH = size.height
-              val centerX = orbX.value + slotWidthPx * 0.5f
-              val scaledW = (orbW * pressScale.value).coerceAtLeast(1f)
-              val scaledH = (orbH * (1f + (pressScale.value - 1f) * 0.5f)).coerceAtLeast(1f)
+              val centerX = safeOrbX + slotWidthPx * 0.5f
+              val scaledW = (orbW * safeScale).coerceAtLeast(1f)
+              val scaledH = (orbH * (1f + (safeScale - 1f) * 0.5f)).coerceAtLeast(1f)
+              if (!centerX.isFinite() || scaledW <= 1f || scaledH <= 1f) return@drawBehind
               val left = centerX - scaledW * 0.5f
               val top = (size.height - scaledH) * 0.5f
               val corner = CornerRadius(scaledH * 0.5f, scaledH * 0.5f)
@@ -374,18 +378,21 @@ fun LiquidBlurSplitTabBar(
               )
 
               // Frosted specular rim on active orb
-              drawRoundRect(
-                brush = Brush.verticalGradient(
-                  colors = listOf(
-                    Color.White.copy(alpha = (if (darkTheme) 0.38f else 0.90f) * pillOrbAlpha),
-                    accentColor.copy(alpha = 0.18f * pillOrbAlpha)
-                  )
-                ),
-                topLeft = Offset(left, top),
-                size = Size(scaledW, scaledH),
-                cornerRadius = corner,
-                style = Stroke(width = 1.1.dp.toPx())
-              )
+              val rimStroke = 1.1.dp.toPx()
+              if (scaledW > rimStroke * 2f && scaledH > rimStroke * 2f) {
+                drawRoundRect(
+                  brush = Brush.verticalGradient(
+                    colors = listOf(
+                      Color.White.copy(alpha = (if (darkTheme) 0.38f else 0.90f) * pillOrbAlpha),
+                      accentColor.copy(alpha = 0.18f * pillOrbAlpha)
+                    )
+                  ),
+                  topLeft = Offset(left, top),
+                  size = Size(scaledW, scaledH),
+                  cornerRadius = corner,
+                  style = Stroke(width = rimStroke)
+                )
+              }
             }
         )
 

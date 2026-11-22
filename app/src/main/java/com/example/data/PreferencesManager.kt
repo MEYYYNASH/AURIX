@@ -11,10 +11,10 @@ import androidx.datastore.preferences.core.longPreferencesKey
 import androidx.datastore.preferences.core.stringPreferencesKey
 import androidx.datastore.preferences.core.stringSetPreferencesKey
 import androidx.datastore.preferences.preferencesDataStore
+import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.catch
 import kotlinx.coroutines.flow.map
-import java.io.IOException
 
 internal val AURIX_PREFS_CORRUPTION_HANDLER = ReplaceFileCorruptionHandler(
   produceNewData = { emptyPreferences() }
@@ -51,11 +51,8 @@ class PreferencesManager(private val context: Context) {
   }
 
   private val safeDataFlow: Flow<Preferences> = context.dataStore.data.catch { exception ->
-    if (exception is IOException) {
-      emit(emptyPreferences())
-    } else {
-      throw exception
-    }
+    if (exception is CancellationException) throw exception
+    emit(emptyPreferences())
   }
 
   val themeMode: Flow<String> = safeDataFlow.map { prefs -> prefs[THEME_MODE] ?: "system" }
