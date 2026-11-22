@@ -323,6 +323,13 @@ private fun AurixMainShell(
   var albumDetailSong by remember { mutableStateOf<com.example.model.Song?>(null) }
   var songForAlbumPicker by remember { mutableStateOf<com.example.model.Song?>(null) }
   var showNavPreviewSheet by remember { mutableStateOf(false) }
+  var showDownloadQueueSheet by remember { mutableStateOf(false) }
+  val downloadQueueItems by viewModel.downloadQueueItems.collectAsStateWithLifecycle()
+  val playlistSelectionMode by viewModel.playlistSelectionMode.collectAsStateWithLifecycle()
+  val selectedPlaylistTrackIds by viewModel.selectedPlaylistTrackIds.collectAsStateWithLifecycle()
+  val autoCleanYoutubeTitles by viewModel.autoCleanYoutubeTitles.collectAsStateWithLifecycle()
+  val nowPlayingVisualizerEnabled by viewModel.nowPlayingVisualizerEnabled.collectAsStateWithLifecycle()
+  val spectrumBars by viewModel.spectrumBars.collectAsStateWithLifecycle()
   val navStyle by viewModel.navStyle.collectAsStateWithLifecycle()
   val smartRecommendations by viewModel.smartRecommendations.collectAsStateWithLifecycle()
   val moodFlowEnabled by viewModel.moodFlowEnabled.collectAsStateWithLifecycle()
@@ -939,7 +946,18 @@ private fun AurixMainShell(
                 currentScreen = Screen.Album
               },
               onOpenPlaylistUrl = { url -> viewModel.openPlaylistFromUrl(url) },
-              onClearYoutubeResult = { viewModel.clearYoutubeLinkResult() }
+              onClearYoutubeResult = { viewModel.clearYoutubeLinkResult() },
+              downloadQueueItems = downloadQueueItems,
+              onOpenDownloadQueue = { showDownloadQueueSheet = true },
+              playlistSelectionMode = playlistSelectionMode,
+              selectedPlaylistTrackIds = selectedPlaylistTrackIds,
+              onTogglePlaylistSelectionMode = { viewModel.togglePlaylistSelectionMode() },
+              onTogglePlaylistTrackSelection = { viewModel.togglePlaylistTrackSelection(it) },
+              onSelectAllPlaylistTracks = { viewModel.selectAllPlaylistTracks() },
+              onClearPlaylistTrackSelection = { viewModel.clearPlaylistTrackSelection() },
+              onDownloadSelectedPlaylistTracks = { viewModel.downloadSelectedPlaylistTracks(context) },
+              onSaveSelectedPlaylistTracks = { viewModel.saveSelectedPlaylistTracks() },
+              onCancelPlaylistDownloads = { viewModel.cancelLoadedPlaylistDownloads(context) }
             )
             is Screen.Library -> LibraryScreen(
               localSongs = localSongs,
@@ -1034,7 +1052,11 @@ private fun AurixMainShell(
               logoState = logoState,
               onStartUpdateLogoIntro = { viewModel.startUpdateLogoIntro() },
               navStyle = navStyle,
-              onOpenNavPreview = { showNavPreviewSheet = true }
+              onOpenNavPreview = { showNavPreviewSheet = true },
+              nowPlayingVisualizerEnabled = nowPlayingVisualizerEnabled,
+              onNowPlayingVisualizerChanged = { viewModel.setNowPlayingVisualizerEnabled(it) },
+              autoCleanYoutubeTitles = autoCleanYoutubeTitles,
+              onAutoCleanYoutubeTitlesChanged = { viewModel.setAutoCleanYoutubeTitles(it) }
             )
           }
         }
@@ -1221,7 +1243,10 @@ private fun AurixMainShell(
             },
             moodFlowEnabled = moodFlowEnabled,
             moodFlowPick = moodFlowCurrentPick,
-            onToggleMoodFlow = { viewModel.toggleMoodFlow() }
+            onToggleMoodFlow = { viewModel.toggleMoodFlow() },
+            visualizerEnabled = nowPlayingVisualizerEnabled,
+            onToggleVisualizer = { viewModel.setNowPlayingVisualizerEnabled(it) },
+            spectrumBars = spectrumBars
           )
         }
       }
@@ -1327,6 +1352,19 @@ private fun AurixMainShell(
           reducedMotion = reducedMotion,
           onApplyNavStyle = { viewModel.setNavStyle(it) },
           onDismiss = { showNavPreviewSheet = false }
+        )
+      }
+
+      if (showDownloadQueueSheet) {
+        DownloadQueueSheet(
+          items = downloadQueueItems,
+          darkTheme = darkTheme,
+          onDismiss = { showDownloadQueueSheet = false },
+          onCancelItem = { viewModel.cancelDownloadItem(it) },
+          onRetryItem = { viewModel.retryDownloadItem(context, it) },
+          onCancelAll = { viewModel.cancelAllDownloads() },
+          onRetryAllFailed = { viewModel.retryAllFailedDownloads(context) },
+          onClearFinished = { viewModel.clearFinishedDownloads() }
         )
       }
 

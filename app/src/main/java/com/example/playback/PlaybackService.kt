@@ -1,6 +1,7 @@
 package com.example.playback
 
 import android.app.PendingIntent
+import android.content.Context
 import android.content.Intent
 import android.media.MediaCodec
 import androidx.annotation.OptIn
@@ -15,6 +16,8 @@ import androidx.media3.datasource.DefaultHttpDataSource
 import androidx.media3.datasource.ResolvingDataSource
 import androidx.media3.exoplayer.DefaultRenderersFactory
 import androidx.media3.exoplayer.ExoPlayer
+import androidx.media3.exoplayer.audio.AudioSink
+import androidx.media3.exoplayer.audio.DefaultAudioSink
 import androidx.media3.exoplayer.source.DefaultMediaSourceFactory
 import androidx.media3.session.DefaultMediaNotificationProvider
 import androidx.media3.session.MediaSession
@@ -53,8 +56,24 @@ class PlaybackService : MediaSessionService() {
 
   @OptIn(UnstableApi::class)
   private fun buildExoPlayer(handleAudioFocus: Boolean): ExoPlayer {
-    val renderersFactory = DefaultRenderersFactory(this)
-      .setEnableDecoderFallback(true)
+    val renderersFactory = if (handleAudioFocus) {
+      object : DefaultRenderersFactory(this) {
+        override fun buildAudioSink(
+          context: Context,
+          enableFloatOutput: Boolean,
+          enableAudioTrackPlaybackParams: Boolean
+        ): AudioSink {
+          return DefaultAudioSink.Builder(context)
+            .setEnableFloatOutput(enableFloatOutput)
+            .setEnableAudioTrackPlaybackParams(enableAudioTrackPlaybackParams)
+            .setAudioProcessors(arrayOf(PlaybackAudioSpectrumProcessor()))
+            .build()
+        }
+      }.setEnableDecoderFallback(true)
+    } else {
+      DefaultRenderersFactory(this)
+        .setEnableDecoderFallback(true)
+    }
 
     val httpFactory = DefaultHttpDataSource.Factory()
       .setAllowCrossProtocolRedirects(true)
@@ -103,6 +122,9 @@ class PlaybackService : MediaSessionService() {
       }
 
       override fun onIsPlayingChanged(isPlaying: Boolean) {
+        if (!isPlaying) {
+          AudioSpectrumBus.reset()
+        }
         runCatching {
           val fadeOut = crossfadeOutPlayer
           if (!isPlaying && isCrossfadingNow && fadeOut != null) {
@@ -116,6 +138,9 @@ class PlaybackService : MediaSessionService() {
       }
 
       override fun onPlaybackStateChanged(playbackState: Int) {
+        if (playbackState == Player.STATE_IDLE || playbackState == Player.STATE_ENDED) {
+          AudioSpectrumBus.reset()
+        }
         runCatching {
           if (playbackState == Player.STATE_READY) {
             reclaimRecoveryCount = 0
@@ -384,6 +409,7 @@ class PlaybackService : MediaSessionService() {
     recoveryJob?.cancel()
     serviceScope.cancel()
     releaseCrossfadeOutPlayer()
+    AudioSpectrumBus.reset()
     runCatching { AudioEqualizerController.releaseSession() }
     runCatching {
       mediaSession?.run {

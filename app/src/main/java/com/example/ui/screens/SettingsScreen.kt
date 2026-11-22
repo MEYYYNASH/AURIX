@@ -107,7 +107,11 @@ fun SettingsScreen(
   logoState: UpdateLogoState = UpdateLogoState.Idle,
   onStartUpdateLogoIntro: () -> Unit = {},
   navStyle: String = AurixNavStyle.CLASSIC.id,
-  onOpenNavPreview: () -> Unit = {}
+  onOpenNavPreview: () -> Unit = {},
+  nowPlayingVisualizerEnabled: Boolean = true,
+  onNowPlayingVisualizerChanged: (Boolean) -> Unit = {},
+  autoCleanYoutubeTitles: Boolean = true,
+  onAutoCleanYoutubeTitlesChanged: (Boolean) -> Unit = {}
 ) {
   val context = LocalContext.current
   LaunchedEffect(Unit) {
@@ -355,6 +359,64 @@ fun SettingsScreen(
               checked = reducedMotion,
               onCheckedChange = onReducedMotionChanged,
               modifier = Modifier.testTag("reduced_motion_toggle")
+            )
+          }
+
+          HorizontalDivider(color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.08f))
+
+          Row(
+            modifier = Modifier
+              .fillMaxWidth()
+              .clickable { onNowPlayingVisualizerChanged(!nowPlayingVisualizerEnabled) }
+              .padding(horizontal = 18.dp, vertical = 12.dp),
+            horizontalArrangement = Arrangement.SpaceBetween,
+            verticalAlignment = Alignment.CenterVertically
+          ) {
+            Column(modifier = Modifier.weight(1f)) {
+              Text(
+                text = stringResource(id = R.string.settings_visualizer_title),
+                style = MaterialTheme.typography.bodyLarge.copy(fontWeight = FontWeight.Medium, lineHeight = 22.sp),
+                color = MaterialTheme.colorScheme.onSurface
+              )
+              Text(
+                text = stringResource(id = R.string.settings_visualizer_desc),
+                style = MaterialTheme.typography.bodySmall.copy(lineHeight = 18.sp),
+                color = MaterialTheme.colorScheme.onSurfaceVariant
+              )
+            }
+            Switch(
+              checked = nowPlayingVisualizerEnabled,
+              onCheckedChange = onNowPlayingVisualizerChanged,
+              modifier = Modifier.testTag("np_visualizer_settings_toggle")
+            )
+          }
+
+          HorizontalDivider(color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.08f))
+
+          Row(
+            modifier = Modifier
+              .fillMaxWidth()
+              .clickable { onAutoCleanYoutubeTitlesChanged(!autoCleanYoutubeTitles) }
+              .padding(horizontal = 18.dp, vertical = 12.dp),
+            horizontalArrangement = Arrangement.SpaceBetween,
+            verticalAlignment = Alignment.CenterVertically
+          ) {
+            Column(modifier = Modifier.weight(1f)) {
+              Text(
+                text = stringResource(id = R.string.settings_clean_yt_titles_title),
+                style = MaterialTheme.typography.bodyLarge.copy(fontWeight = FontWeight.Medium, lineHeight = 22.sp),
+                color = MaterialTheme.colorScheme.onSurface
+              )
+              Text(
+                text = stringResource(id = R.string.settings_clean_yt_titles_desc),
+                style = MaterialTheme.typography.bodySmall.copy(lineHeight = 18.sp),
+                color = MaterialTheme.colorScheme.onSurfaceVariant
+              )
+            }
+            Switch(
+              checked = autoCleanYoutubeTitles,
+              onCheckedChange = onAutoCleanYoutubeTitlesChanged,
+              modifier = Modifier.testTag("auto_clean_yt_titles_toggle")
             )
           }
 

@@ -48,6 +48,8 @@ class PreferencesManager(private val context: Context) {
     val UPDATE_DOWNLOAD_META = stringPreferencesKey("update_download_meta")
     val MOOD_FLOW_ENABLED = booleanPreferencesKey("mood_flow_enabled")
     val NAV_STYLE = stringPreferencesKey("nav_style")
+    val AUTO_CLEAN_YOUTUBE_TITLES = booleanPreferencesKey("auto_clean_youtube_titles")
+    val NOW_PLAYING_VISUALIZER_ENABLED = booleanPreferencesKey("now_playing_visualizer_enabled")
   }
 
   private val safeDataFlow: Flow<Preferences> = context.dataStore.data.catch { exception ->
@@ -78,6 +80,8 @@ class PreferencesManager(private val context: Context) {
   val updateDownloadMeta: Flow<String> = safeDataFlow.map { prefs -> prefs[UPDATE_DOWNLOAD_META] ?: "" }
   val moodFlowEnabled: Flow<Boolean> = safeDataFlow.map { prefs -> prefs[MOOD_FLOW_ENABLED] ?: true }
   val navStyle: Flow<String> = safeDataFlow.map { prefs -> prefs[NAV_STYLE] ?: "classic" }
+  val autoCleanYoutubeTitles: Flow<Boolean> = safeDataFlow.map { prefs -> prefs[AUTO_CLEAN_YOUTUBE_TITLES] ?: true }
+  val nowPlayingVisualizerEnabled: Flow<Boolean> = safeDataFlow.map { prefs -> prefs[NOW_PLAYING_VISUALIZER_ENABLED] ?: true }
 
   suspend fun setThemeMode(mode: String) { context.dataStore.edit { it[THEME_MODE] = mode } }
   suspend fun setAccentColor(color: String) { context.dataStore.edit { it[ACCENT_COLOR] = color } }
@@ -150,6 +154,18 @@ class PreferencesManager(private val context: Context) {
   suspend fun setMoodFlowEnabled(enabled: Boolean) {
     context.dataStore.edit { prefs ->
       prefs[MOOD_FLOW_ENABLED] = enabled
+    }
+  }
+
+  suspend fun setAutoCleanYoutubeTitles(enabled: Boolean) {
+    context.dataStore.edit { prefs ->
+      prefs[AUTO_CLEAN_YOUTUBE_TITLES] = enabled
+    }
+  }
+
+  suspend fun setNowPlayingVisualizerEnabled(enabled: Boolean) {
+    context.dataStore.edit { prefs ->
+      prefs[NOW_PLAYING_VISUALIZER_ENABLED] = enabled
     }
   }
 }

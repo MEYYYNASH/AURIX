@@ -67,6 +67,7 @@ import androidx.compose.material.icons.rounded.BlurOff
 import androidx.compose.material.icons.rounded.BlurOn
 import androidx.compose.material.icons.rounded.BookmarkAdd
 import androidx.compose.material.icons.rounded.CheckCircle
+import androidx.compose.material.icons.rounded.Checklist
 import androidx.compose.material.icons.rounded.Close
 import androidx.compose.material.icons.rounded.ContentPaste
 import androidx.compose.material.icons.rounded.Download
@@ -80,9 +81,11 @@ import androidx.compose.material.icons.rounded.OndemandVideo
 import androidx.compose.material.icons.rounded.PlayArrow
 import androidx.compose.material.icons.rounded.PlayCircle
 import androidx.compose.material.icons.automirrored.rounded.QueueMusic
+import androidx.compose.material.icons.rounded.RadioButtonUnchecked
 import androidx.compose.material.icons.rounded.Refresh
 import androidx.compose.material.icons.rounded.Search
 import androidx.compose.material.icons.rounded.Shuffle
+import androidx.compose.material.icons.rounded.StopCircle
 import androidx.compose.material.icons.rounded.Tune
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
@@ -139,6 +142,8 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import coil.compose.AsyncImage
 import com.example.R
+import com.example.data.DownloadQueueItem
+import com.example.data.DownloadQueueStatus
 import com.example.model.SearchMode
 import com.example.model.SearchUiState
 import com.example.model.Song
@@ -212,7 +217,18 @@ fun SearchScreen(
   onSavePlaylist: () -> Unit = {},
   onOpenSavedPlaylistAlbum: (String) -> Unit = {},
   onOpenPlaylistUrl: (String) -> Unit = {},
-  onClearYoutubeResult: () -> Unit = {}
+  onClearYoutubeResult: () -> Unit = {},
+  downloadQueueItems: List<DownloadQueueItem> = emptyList(),
+  onOpenDownloadQueue: () -> Unit = {},
+  playlistSelectionMode: Boolean = false,
+  selectedPlaylistTrackIds: Set<String> = emptySet(),
+  onTogglePlaylistSelectionMode: () -> Unit = {},
+  onTogglePlaylistTrackSelection: (String) -> Unit = {},
+  onSelectAllPlaylistTracks: () -> Unit = {},
+  onClearPlaylistTrackSelection: () -> Unit = {},
+  onDownloadSelectedPlaylistTracks: () -> Unit = {},
+  onSaveSelectedPlaylistTracks: () -> Unit = {},
+  onCancelPlaylistDownloads: () -> Unit = {}
 ) {
   val context = LocalContext.current
   val keyboardController = LocalSoftwareKeyboardController.current
@@ -274,6 +290,55 @@ fun SearchScreen(
             maxLines = 1,
             overflow = TextOverflow.Ellipsis
           )
+        }
+        if (downloadQueueItems.isNotEmpty()) {
+          val activeQueueCount = downloadQueueItems.count { it.isActive }
+          val hasFailed = downloadQueueItems.any { it.status == DownloadQueueStatus.FAILED }
+          val pillAccent = when {
+            activeQueueCount > 0 -> Color(0xFF2F8BFF)
+            hasFailed -> Color(0xFFF59E0B)
+            else -> Color(0xFF10B981)
+          }
+          Surface(
+            onClick = onOpenDownloadQueue,
+            shape = CircleShape,
+            color = pillAccent.copy(alpha = if (darkTheme) 0.18f else 0.14f),
+            border = BorderStroke(1.dp, pillAccent.copy(alpha = 0.45f)),
+            modifier = Modifier
+              .minimumInteractiveComponentSize()
+              .testTag("open_download_queue_button")
+          ) {
+            Row(
+              modifier = Modifier.padding(horizontal = 12.dp, vertical = 8.dp),
+              verticalAlignment = Alignment.CenterVertically,
+              horizontalArrangement = Arrangement.spacedBy(6.dp)
+            ) {
+              if (activeQueueCount > 0) {
+                CircularProgressIndicator(
+                  modifier = Modifier.size(14.dp),
+                  strokeWidth = 2.dp,
+                  color = pillAccent
+                )
+              } else {
+                Icon(
+                  imageVector = Icons.Rounded.Download,
+                  contentDescription = null,
+                  tint = pillAccent,
+                  modifier = Modifier.size(16.dp)
+                )
+              }
+              Text(
+                text = if (activeQueueCount > 0) {
+                  stringResource(id = R.string.download_queue_pill_active, activeQueueCount)
+                } else {
+                  stringResource(id = R.string.download_queue_pill_ready, downloadQueueItems.size)
+                },
+                style = MaterialTheme.typography.labelSmall.copy(fontWeight = FontWeight.Bold),
+                color = pillAccent,
+                maxLines = 1
+              )
+            }
+          }
         }
       }
 
@@ -351,6 +416,17 @@ fun SearchScreen(
             onOpenSavedPlaylistAlbum = onOpenSavedPlaylistAlbum,
             onOpenPlaylistUrl = onOpenPlaylistUrl,
             onClearYoutubeResult = onClearYoutubeResult,
+            playlistSelectionMode = playlistSelectionMode,
+            selectedPlaylistTrackIds = selectedPlaylistTrackIds,
+            onTogglePlaylistSelectionMode = onTogglePlaylistSelectionMode,
+            onTogglePlaylistTrackSelection = onTogglePlaylistTrackSelection,
+            onSelectAllPlaylistTracks = onSelectAllPlaylistTracks,
+            onClearPlaylistTrackSelection = onClearPlaylistTrackSelection,
+            onDownloadSelectedPlaylistTracks = onDownloadSelectedPlaylistTracks,
+            onSaveSelectedPlaylistTracks = onSaveSelectedPlaylistTracks,
+            onCancelPlaylistDownloads = onCancelPlaylistDownloads,
+            onOpenDownloadQueue = onOpenDownloadQueue,
+            hasQueueItems = downloadQueueItems.isNotEmpty(),
             onSongClick = onSongClick,
             onFavoriteClick = onFavoriteClick,
             onTrackDownloadClick = onYoutubeSongDownloadClick,
@@ -751,6 +827,17 @@ private fun YoutubeLinkGlassPane(
   onOpenSavedPlaylistAlbum: (String) -> Unit,
   onOpenPlaylistUrl: (String) -> Unit,
   onClearYoutubeResult: () -> Unit,
+  playlistSelectionMode: Boolean,
+  selectedPlaylistTrackIds: Set<String>,
+  onTogglePlaylistSelectionMode: () -> Unit,
+  onTogglePlaylistTrackSelection: (String) -> Unit,
+  onSelectAllPlaylistTracks: () -> Unit,
+  onClearPlaylistTrackSelection: () -> Unit,
+  onDownloadSelectedPlaylistTracks: () -> Unit,
+  onSaveSelectedPlaylistTracks: () -> Unit,
+  onCancelPlaylistDownloads: () -> Unit,
+  onOpenDownloadQueue: () -> Unit,
+  hasQueueItems: Boolean,
   onSongClick: (Song, List<Song>) -> Unit,
   onFavoriteClick: (Song) -> Unit,
   onTrackDownloadClick: (Song) -> Unit,
@@ -1013,75 +1100,214 @@ private fun YoutubeLinkGlassPane(
         YoutubePlaylistResultCard(
           playlist = youtubePlaylist,
           darkTheme = darkTheme,
+          reducedMotion = reducedMotion,
           songDownloadProgress = songDownloadProgress,
           downloadedSongIds = downloadedSongIds,
+          selectionMode = playlistSelectionMode,
+          selectedCount = selectedPlaylistTrackIds.size,
+          hasQueueItems = hasQueueItems,
           onPlayAll = { onPlayPlaylist(false) },
           onShuffle = { onPlayPlaylist(true) },
           onSaveOrOpen = {
-            val savedId = youtubePlaylist.savedAlbumId
-            if (savedId != null) {
-              onOpenSavedPlaylistAlbum(savedId)
+            if (playlistSelectionMode && selectedPlaylistTrackIds.isNotEmpty()) {
+              onSaveSelectedPlaylistTracks()
             } else {
-              onSavePlaylist()
+              val savedId = youtubePlaylist.savedAlbumId
+              if (savedId != null) {
+                onOpenSavedPlaylistAlbum(savedId)
+              } else {
+                onSavePlaylist()
+              }
             }
           },
-          onDownloadAll = onDownloadPlaylist
+          onDownloadAll = {
+            if (playlistSelectionMode && selectedPlaylistTrackIds.isNotEmpty()) {
+              onDownloadSelectedPlaylistTracks()
+            } else {
+              onDownloadPlaylist()
+            }
+          },
+          onEndDownload = onCancelPlaylistDownloads,
+          onOpenDownloadQueue = onOpenDownloadQueue
         )
       }
 
       item {
-        Row(
-          modifier = Modifier
-            .fillMaxWidth()
-            .padding(horizontal = 4.dp, vertical = 2.dp),
-          horizontalArrangement = Arrangement.SpaceBetween,
-          verticalAlignment = Alignment.CenterVertically
-        ) {
-          Text(
-            text = stringResource(id = R.string.playlist_songs_header, youtubePlaylist.tracks.size),
-            style = MaterialTheme.typography.labelLarge.copy(fontWeight = FontWeight.Bold),
-            color = AurixTealAccent,
-            modifier = Modifier.weight(1f)
-          )
-          Surface(
-            onClick = onClearYoutubeResult,
-            shape = CircleShape,
-            color = if (darkTheme) Color.White.copy(alpha = 0.08f) else Color.White.copy(alpha = 0.78f),
-            border = BorderStroke(
-              1.dp,
-              if (darkTheme) Color.White.copy(alpha = 0.16f) else Color.White
-            ),
+        Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+          Row(
             modifier = Modifier
-              .minimumInteractiveComponentSize()
-              .testTag("playlist_clear_button")
+              .fillMaxWidth()
+              .padding(horizontal = 4.dp, vertical = 2.dp),
+            horizontalArrangement = Arrangement.spacedBy(8.dp),
+            verticalAlignment = Alignment.CenterVertically
           ) {
             Text(
-              text = stringResource(id = R.string.search_quick_clear),
-              style = MaterialTheme.typography.labelSmall.copy(fontWeight = FontWeight.SemiBold),
-              color = MaterialTheme.colorScheme.onSurfaceVariant,
-              modifier = Modifier.padding(horizontal = 12.dp, vertical = 6.dp)
+              text = stringResource(id = R.string.playlist_songs_header, youtubePlaylist.tracks.size),
+              style = MaterialTheme.typography.labelLarge.copy(fontWeight = FontWeight.Bold),
+              color = AurixTealAccent,
+              modifier = Modifier.weight(1f)
             )
+            Surface(
+              onClick = onTogglePlaylistSelectionMode,
+              shape = CircleShape,
+              color = if (playlistSelectionMode) Color(0xFF2F8BFF).copy(alpha = 0.22f)
+              else if (darkTheme) Color.White.copy(alpha = 0.08f) else Color.White.copy(alpha = 0.78f),
+              border = BorderStroke(
+                1.dp,
+                if (playlistSelectionMode) Color(0xFF2F8BFF).copy(alpha = 0.55f)
+                else if (darkTheme) Color.White.copy(alpha = 0.16f) else Color.White
+              ),
+              modifier = Modifier
+                .minimumInteractiveComponentSize()
+                .testTag("playlist_select_toggle_button")
+            ) {
+              Row(
+                modifier = Modifier.padding(horizontal = 12.dp, vertical = 6.dp),
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.spacedBy(5.dp)
+              ) {
+                Icon(
+                  imageVector = Icons.Rounded.Checklist,
+                  contentDescription = null,
+                  tint = if (playlistSelectionMode) Color(0xFF2F8BFF) else MaterialTheme.colorScheme.onSurfaceVariant,
+                  modifier = Modifier.size(15.dp)
+                )
+                Text(
+                  text = stringResource(
+                    id = if (playlistSelectionMode) R.string.playlist_done_selecting else R.string.playlist_select_songs
+                  ),
+                  style = MaterialTheme.typography.labelSmall.copy(fontWeight = FontWeight.Bold),
+                  color = if (playlistSelectionMode) Color(0xFF2F8BFF) else MaterialTheme.colorScheme.onSurfaceVariant
+                )
+              }
+            }
+            Surface(
+              onClick = onClearYoutubeResult,
+              shape = CircleShape,
+              color = if (darkTheme) Color.White.copy(alpha = 0.08f) else Color.White.copy(alpha = 0.78f),
+              border = BorderStroke(
+                1.dp,
+                if (darkTheme) Color.White.copy(alpha = 0.16f) else Color.White
+              ),
+              modifier = Modifier
+                .minimumInteractiveComponentSize()
+                .testTag("playlist_clear_button")
+            ) {
+              Text(
+                text = stringResource(id = R.string.search_quick_clear),
+                style = MaterialTheme.typography.labelSmall.copy(fontWeight = FontWeight.SemiBold),
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                modifier = Modifier.padding(horizontal = 12.dp, vertical = 6.dp)
+              )
+            }
+          }
+
+          AnimatedVisibility(
+            visible = playlistSelectionMode,
+            enter = if (reducedMotion) fadeIn(snap()) else fadeIn(tween(180)) + expandVertically(),
+            exit = if (reducedMotion) fadeOut(snap()) else fadeOut(tween(140)) + shrinkVertically()
+          ) {
+            Row(
+              modifier = Modifier
+                .fillMaxWidth()
+                .clip(RoundedCornerShape(18.dp))
+                .background(
+                  if (darkTheme) Color(0xFF1A233E).copy(alpha = 0.80f)
+                  else Color.White.copy(alpha = 0.85f)
+                )
+                .border(1.dp, Color(0xFF2F8BFF).copy(alpha = 0.30f), RoundedCornerShape(18.dp))
+                .padding(horizontal = 12.dp, vertical = 8.dp),
+              verticalAlignment = Alignment.CenterVertically,
+              horizontalArrangement = Arrangement.spacedBy(8.dp)
+            ) {
+              Text(
+                text = stringResource(id = R.string.playlist_selected_count, selectedPlaylistTrackIds.size),
+                style = MaterialTheme.typography.labelMedium.copy(fontWeight = FontWeight.Bold),
+                color = MaterialTheme.colorScheme.onSurface,
+                modifier = Modifier.weight(1f)
+              )
+              Surface(
+                onClick = onSelectAllPlaylistTracks,
+                shape = CircleShape,
+                color = Color(0xFF2F8BFF).copy(alpha = 0.16f),
+                border = BorderStroke(1.dp, Color(0xFF2F8BFF).copy(alpha = 0.40f)),
+                modifier = Modifier
+                  .minimumInteractiveComponentSize()
+                  .testTag("playlist_select_all_button")
+              ) {
+                Text(
+                  text = stringResource(id = R.string.playlist_select_all),
+                  style = MaterialTheme.typography.labelSmall.copy(fontWeight = FontWeight.Bold),
+                  color = Color(0xFF2F8BFF),
+                  modifier = Modifier.padding(horizontal = 11.dp, vertical = 6.dp)
+                )
+              }
+              Surface(
+                onClick = onClearPlaylistTrackSelection,
+                shape = CircleShape,
+                color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.08f),
+                modifier = Modifier
+                  .minimumInteractiveComponentSize()
+                  .testTag("playlist_clear_selection_button")
+              ) {
+                Text(
+                  text = stringResource(id = R.string.playlist_clear_selection),
+                  style = MaterialTheme.typography.labelSmall.copy(fontWeight = FontWeight.SemiBold),
+                  color = MaterialTheme.colorScheme.onSurfaceVariant,
+                  modifier = Modifier.padding(horizontal = 11.dp, vertical = 6.dp)
+                )
+              }
+            }
           }
         }
       }
 
       itemsIndexed(youtubePlaylist.tracks, key = { index, song -> "pl_${index}_${song.id}" }) { index, song ->
-        SongDownloadRow(
-          song = song,
-          index = index + 1,
-          isPlaying = isPlaying,
-          isCurrent = currentSong?.id == song.id,
-          isResolving = resolvingSongId == song.id,
-          reducedMotion = reducedMotion,
-          darkTheme = darkTheme,
-          hasLyrics = song.id in verifiedLyricsIds,
-          downloadProgress = songDownloadProgress[song.id],
-          isDownloaded = song.id in downloadedSongIds,
-          onCheckLyrics = onCheckLyrics,
-          onSongClick = { onSongClick(song, youtubePlaylist.tracks) },
-          onFavoriteClick = { onFavoriteClick(song) },
-          onDownloadClick = { onTrackDownloadClick(song) }
-        )
+        val isChecked = song.id in selectedPlaylistTrackIds
+        Row(
+          modifier = Modifier.fillMaxWidth(),
+          verticalAlignment = Alignment.CenterVertically,
+          horizontalArrangement = Arrangement.spacedBy(8.dp)
+        ) {
+          if (playlistSelectionMode) {
+            IconButton(
+              onClick = { onTogglePlaylistTrackSelection(song.id) },
+              modifier = Modifier
+                .minimumInteractiveComponentSize()
+                .testTag("playlist_track_checkbox_${song.id}")
+            ) {
+              Icon(
+                imageVector = if (isChecked) Icons.Rounded.CheckCircle else Icons.Rounded.RadioButtonUnchecked,
+                contentDescription = song.title,
+                tint = if (isChecked) Color(0xFF2F8BFF) else MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.72f),
+                modifier = Modifier.size(24.dp)
+              )
+            }
+          }
+          SongDownloadRow(
+            song = song,
+            index = index + 1,
+            isPlaying = isPlaying,
+            isCurrent = currentSong?.id == song.id,
+            isResolving = resolvingSongId == song.id,
+            reducedMotion = reducedMotion,
+            darkTheme = darkTheme,
+            hasLyrics = song.id in verifiedLyricsIds,
+            downloadProgress = songDownloadProgress[song.id],
+            isDownloaded = song.id in downloadedSongIds,
+            onCheckLyrics = onCheckLyrics,
+            onSongClick = {
+              if (playlistSelectionMode) {
+                onTogglePlaylistTrackSelection(song.id)
+              } else {
+                onSongClick(song, youtubePlaylist.tracks)
+              }
+            },
+            onFavoriteClick = { onFavoriteClick(song) },
+            onDownloadClick = { onTrackDownloadClick(song) },
+            modifier = Modifier.weight(1f)
+          )
+        }
       }
     } else if (youtubeAnalysis != null) {
       item {
@@ -1975,12 +2201,18 @@ private fun YoutubeAnalysisResultCard(
 private fun YoutubePlaylistResultCard(
   playlist: YoutubePlaylistResult,
   darkTheme: Boolean,
+  reducedMotion: Boolean,
   songDownloadProgress: Map<String, Float>,
   downloadedSongIds: Set<String>,
+  selectionMode: Boolean,
+  selectedCount: Int,
+  hasQueueItems: Boolean,
   onPlayAll: () -> Unit,
   onShuffle: () -> Unit,
   onSaveOrOpen: () -> Unit,
-  onDownloadAll: () -> Unit
+  onDownloadAll: () -> Unit,
+  onEndDownload: () -> Unit,
+  onOpenDownloadQueue: () -> Unit
 ) {
   val (c1, c2) = rememberArtworkColors(playlist.thumbnailUrl, playlist.title)
   val cardShape = RoundedCornerShape(28.dp)
@@ -1998,6 +2230,7 @@ private fun YoutubePlaylistResultCard(
   val downloadedCount = playlist.tracks.count { it.id in downloadedSongIds }
   val allDownloaded = playlist.tracks.isNotEmpty() && downloadedCount == playlist.tracks.size
   val isSaved = playlist.savedAlbumId != null
+  val hasSelectionActions = selectionMode && selectedCount > 0
 
   Box(
     modifier = Modifier
@@ -2034,7 +2267,7 @@ private fun YoutubePlaylistResultCard(
 
     Column(
       modifier = Modifier.padding(18.dp),
-      verticalArrangement = Arrangement.spacedBy(14.dp)
+      verticalArrangement = Arrangement.spacedBy(12.dp)
     ) {
       Row(
         modifier = Modifier.fillMaxWidth(),
@@ -2195,7 +2428,7 @@ private fun YoutubePlaylistResultCard(
         }
       }
 
-      // Row 2: Save Playlist & Download All
+      // Row 2: Save Playlist (or Save Selected) & Download All (or Download Selected)
       Row(
         modifier = Modifier.fillMaxWidth(),
         horizontalArrangement = Arrangement.spacedBy(10.dp),
@@ -2210,25 +2443,28 @@ private fun YoutubePlaylistResultCard(
           shape = CircleShape,
           border = BorderStroke(
             1.dp,
-            Color(0xFFA78BFA).copy(alpha = if (isSaved) 0.72f else 0.45f)
+            Color(0xFFA78BFA).copy(alpha = if (isSaved && !hasSelectionActions) 0.72f else 0.45f)
           ),
           colors = ButtonDefaults.outlinedButtonColors(
-            containerColor = Color(0xFFA78BFA).copy(alpha = if (isSaved) 0.22f else 0.12f),
+            containerColor = Color(0xFFA78BFA).copy(alpha = if (isSaved && !hasSelectionActions) 0.22f else 0.12f),
             contentColor = MaterialTheme.colorScheme.onSurface
           ),
           contentPadding = PaddingValues(horizontal = 12.dp)
         ) {
           Icon(
-            imageVector = if (isSaved) Icons.Rounded.LibraryAddCheck else Icons.Rounded.BookmarkAdd,
+            imageVector = if (isSaved && !hasSelectionActions) Icons.Rounded.LibraryAddCheck else Icons.Rounded.BookmarkAdd,
             contentDescription = null,
             tint = Color(0xFFA78BFA),
             modifier = Modifier.size(18.dp)
           )
           Spacer(modifier = Modifier.width(6.dp))
+          val saveText = when {
+            hasSelectionActions -> stringResource(id = R.string.playlist_save_selected, selectedCount)
+            isSaved -> stringResource(id = R.string.playlist_saved_open)
+            else -> stringResource(id = R.string.playlist_save)
+          }
           Text(
-            text = stringResource(
-              id = if (isSaved) R.string.playlist_saved_open else R.string.playlist_save
-            ),
+            text = saveText,
             fontWeight = FontWeight.Bold,
             maxLines = 1,
             overflow = TextOverflow.Ellipsis
@@ -2237,7 +2473,7 @@ private fun YoutubePlaylistResultCard(
 
         OutlinedButton(
           onClick = onDownloadAll,
-          enabled = activeDownloadCount == 0 && !allDownloaded,
+          enabled = activeDownloadCount == 0 && (!allDownloaded || hasSelectionActions),
           modifier = Modifier
             .weight(1f)
             .height(48.dp)
@@ -2246,13 +2482,13 @@ private fun YoutubePlaylistResultCard(
           border = BorderStroke(
             1.dp,
             when {
-              allDownloaded -> Color(0xFF10B981).copy(alpha = 0.55f)
+              allDownloaded && !hasSelectionActions -> Color(0xFF10B981).copy(alpha = 0.55f)
               else -> Color(0xFF2F8BFF).copy(alpha = 0.48f)
             }
           ),
           colors = ButtonDefaults.outlinedButtonColors(
             containerColor = when {
-              allDownloaded -> Color(0xFF10B981).copy(alpha = 0.16f)
+              allDownloaded && !hasSelectionActions -> Color(0xFF10B981).copy(alpha = 0.16f)
               else -> Color(0xFF2F8BFF).copy(alpha = 0.14f)
             },
             contentColor = MaterialTheme.colorScheme.onSurface
@@ -2267,7 +2503,7 @@ private fun YoutubePlaylistResultCard(
                 color = Color(0xFF2F8BFF)
               )
             }
-            allDownloaded -> {
+            allDownloaded && !hasSelectionActions -> {
               Icon(
                 imageVector = Icons.Rounded.CheckCircle,
                 contentDescription = null,
@@ -2287,6 +2523,7 @@ private fun YoutubePlaylistResultCard(
           Spacer(modifier = Modifier.width(6.dp))
           val downloadLabel = when {
             activeDownloadCount > 0 -> stringResource(id = R.string.playlist_downloading_count, activeDownloadCount)
+            hasSelectionActions -> stringResource(id = R.string.playlist_download_selected, selectedCount)
             allDownloaded -> stringResource(id = R.string.playlist_downloaded_all)
             else -> stringResource(id = R.string.playlist_download_all)
           }
@@ -2296,6 +2533,71 @@ private fun YoutubePlaylistResultCard(
             maxLines = 1,
             overflow = TextOverflow.Ellipsis
           )
+        }
+      }
+
+      // Row 3: Immediate End Download control + Download Queue shortcut when downloads are active
+      AnimatedVisibility(
+        visible = activeDownloadCount > 0,
+        enter = if (reducedMotion) fadeIn(snap()) else fadeIn(tween(180)) + expandVertically(),
+        exit = if (reducedMotion) fadeOut(snap()) else fadeOut(tween(140)) + shrinkVertically()
+      ) {
+        Row(
+          modifier = Modifier.fillMaxWidth(),
+          horizontalArrangement = Arrangement.spacedBy(10.dp),
+          verticalAlignment = Alignment.CenterVertically
+        ) {
+          OutlinedButton(
+            onClick = onEndDownload,
+            modifier = Modifier
+              .weight(1f)
+              .height(48.dp)
+              .testTag("playlist_end_download_button"),
+            shape = CircleShape,
+            border = BorderStroke(1.dp, Color(0xFFF87171).copy(alpha = 0.58f)),
+            colors = ButtonDefaults.outlinedButtonColors(
+              containerColor = Color(0xFFF87171).copy(alpha = if (darkTheme) 0.18f else 0.14f),
+              contentColor = Color(0xFFF87171)
+            ),
+            contentPadding = PaddingValues(horizontal = 14.dp)
+          ) {
+            Icon(
+              imageVector = Icons.Rounded.StopCircle,
+              contentDescription = null,
+              tint = Color(0xFFF87171),
+              modifier = Modifier.size(18.dp)
+            )
+            Spacer(modifier = Modifier.width(7.dp))
+            Text(
+              text = stringResource(id = R.string.playlist_end_download),
+              fontWeight = FontWeight.Bold,
+              color = Color(0xFFF87171),
+              maxLines = 1,
+              overflow = TextOverflow.Ellipsis
+            )
+          }
+
+          if (hasQueueItems) {
+            OutlinedButton(
+              onClick = onOpenDownloadQueue,
+              modifier = Modifier
+                .height(48.dp)
+                .testTag("playlist_open_queue_button"),
+              shape = CircleShape,
+              border = BorderStroke(1.dp, Color(0xFF2F8BFF).copy(alpha = 0.45f)),
+              colors = ButtonDefaults.outlinedButtonColors(
+                containerColor = Color(0xFF2F8BFF).copy(alpha = if (darkTheme) 0.16f else 0.12f),
+                contentColor = Color(0xFF2F8BFF)
+              ),
+              contentPadding = PaddingValues(horizontal = 16.dp)
+            ) {
+              Text(
+                text = stringResource(id = R.string.download_queue_title),
+                fontWeight = FontWeight.Bold,
+                maxLines = 1
+              )
+            }
+          }
         }
       }
     }

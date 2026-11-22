@@ -30,6 +30,7 @@ import com.example.lyrics.LyricsMatchOutcome
 import com.example.lyrics.LyricsMatcher
 import com.example.model.*
 import com.example.playback.AudioEqualizerController
+import com.example.playback.AudioSpectrumBus
 import com.example.playback.CrossfadeController
 import com.example.playback.CrossfadeSettings
 import com.example.playback.EqPreset
@@ -185,6 +186,11 @@ class AurixViewModel(application: Application) : AndroidViewModel(application) {
     .stateIn(viewModelScope, SharingStarted.Eagerly, true)
   val navStyle: StateFlow<String> = prefsManager.navStyle
     .stateIn(viewModelScope, SharingStarted.Eagerly, "classic")
+  val autoCleanYoutubeTitles: StateFlow<Boolean> = prefsManager.autoCleanYoutubeTitles
+    .stateIn(viewModelScope, SharingStarted.Eagerly, true)
+  val nowPlayingVisualizerEnabled: StateFlow<Boolean> = prefsManager.nowPlayingVisualizerEnabled
+    .stateIn(viewModelScope, SharingStarted.Eagerly, true)
+  val spectrumBars: StateFlow<FloatArray> = AudioSpectrumBus.bars
 
   // Search-Only Mode & YouTube Analyze/Download States
   private val _searchMode = MutableStateFlow("youtube_search") // "youtube_search" | "youtube"
@@ -256,6 +262,13 @@ class AurixViewModel(application: Application) : AndroidViewModel(application) {
 
   // Song Download States (mirrored from BackgroundDownloadRegistry so background transfers stay live)
   val songDownloadProgress: StateFlow<Map<String, Float>> = BackgroundDownloadRegistry.songDownloadProgress
+  val downloadQueueItems: StateFlow<List<DownloadQueueItem>> = BackgroundDownloadRegistry.queueItems
+
+  private val _playlistSelectionMode = MutableStateFlow(false)
+  val playlistSelectionMode: StateFlow<Boolean> = _playlistSelectionMode.asStateFlow()
+
+  private val _selectedPlaylistTrackIds = MutableStateFlow<Set<String>>(emptySet())
+  val selectedPlaylistTrackIds: StateFlow<Set<String>> = _selectedPlaylistTrackIds.asStateFlow()
 
   private val _localDeletedOrAddedIds = MutableStateFlow<Set<String>>(emptySet())
   val downloadedSongIds: StateFlow<Set<String>> = combine(
@@ -1728,6 +1741,8 @@ class AurixViewModel(application: Application) : AndroidViewModel(application) {
     _isAnalyzingYoutube.value = false
     _youtubeAnalysis.value = null
     _rawYoutubePlaylist.value = null
+    _playlistSelectionMode.value = false
+    _selectedPlaylistTrackIds.value = emptySet()
     _selectedYoutubeFormatId.value = null
     _youtubeDownloadState.value = YoutubeDownloadState.Idle
     _youtubeError.value = null
@@ -1741,42 +1756,19 @@ class AurixViewModel(application: Application) : AndroidViewModel(application) {
   }
 
   private fun cleanChannelAuthor(rawAuthor: String): String {
-    return rawAuthor
-      .replace(Regex("""\s*-\s*Topic$""", RegexOption.IGNORE_CASE), "")
-      .replace(Regex("""VEVO$""", RegexOption.IGNORE_CASE), "")
-      .replace(Regex("""Official$""", RegexOption.IGNORE_CASE), "")
-      .trim()
+    return YoutubeTitleCleaner.cleanChannelAuthor(rawAuthor)
   }
 
   private fun stripYoutubeNoiseTags(rawTitle: String): String {
-    return rawTitle
-      .replace(
-        Regex(
-          """[\(\[]\s*(?:official\s*(?:music\s*)?(?:video|audio|lyric\s*video|visualizer)|lyric(?:s|\s*video)?|audio\s*only|full\s*audio|mv|m/v|hd|4k|hq|explicit|clean)\s*[\)\]]""",
-          RegexOption.IGNORE_CASE
-        ),
-        ""
-      )
-      .replace(Regex("""\s*\|\s*[^|]+$"""), "")
-      .replace(Regex("""\s+"""), " ")
-      .trim()
+    return YoutubeTitleCleaner.stripNoiseTags(rawTitle, enabled = autoCleanYoutubeTitles.value)
   }
 
   private fun parseYoutubeTitleAndArtist(rawTitle: String, rawAuthor: String): Pair<String, String> {
-    val cleanedNoise = stripYoutubeNoiseTags(rawTitle)
-    val channelArtist = cleanChannelAuthor(rawAuthor)
-    val separators = listOf(" - ", " – ", " — ")
-    for (sep in separators) {
-      val idx = cleanedNoise.indexOf(sep)
-      if (idx > 0 && idx + sep.length < cleanedNoise.length) {
-        val left = cleanedNoise.substring(0, idx).trim()
-        val right = cleanedNoise.substring(idx + sep.length).trim()
-        if (left.isNotBlank() && right.isNotBlank()) {
-          return right to left
-        }
-      }
-    }
-    return cleanedNoise.ifBlank { rawTitle } to channelArtist
+    return YoutubeTitleCleaner.parseTitleAndArtist(
+      rawTitle = rawTitle,
+      rawAuthor = rawAuthor,
+      cleanEnabled = autoCleanYoutubeTitles.value
+    )
   }
 
   fun analyzeYoutubeUrl() {
@@ -1908,6 +1900,8 @@ class AurixViewModel(application: Application) : AndroidViewModel(application) {
       _youtubeError.value = null
       _youtubeAnalysis.value = null
       _rawYoutubePlaylist.value = null
+      _playlistSelectionMode.value = false
+      _selectedPlaylistTrackIds.value = emptySet()
       _selectedYoutubeFormatId.value = null
       _youtubeDownloadState.value = YoutubeDownloadState.Idle
 
@@ -1959,11 +1953,45 @@ class AurixViewModel(application: Application) : AndroidViewModel(application) {
     }
   }
 
-  fun downloadLoadedPlaylist(context: Context) {
-    val playlist = youtubePlaylist.value ?: return
-    val tracks = playlist.tracks
+  private fun playlistBatchId(playlistId: String): String = "playlist_$playlistId"
+
+  fun togglePlaylistSelectionMode() {
+    val next = !_playlistSelectionMode.value
+    _playlistSelectionMode.value = next
+    if (!next) {
+      _selectedPlaylistTrackIds.value = emptySet()
+    }
+  }
+
+  fun togglePlaylistTrackSelection(trackId: String) {
+    if (!_playlistSelectionMode.value) {
+      _playlistSelectionMode.value = true
+    }
+    _selectedPlaylistTrackIds.update { current ->
+      if (trackId in current) current - trackId else current + trackId
+    }
+  }
+
+  fun selectAllPlaylistTracks() {
+    val tracks = youtubePlaylist.value?.tracks.orEmpty()
     if (tracks.isEmpty()) return
-    val pending = tracks.filter {
+    _playlistSelectionMode.value = true
+    _selectedPlaylistTrackIds.value = tracks.map { it.id }.toSet()
+  }
+
+  fun clearPlaylistTrackSelection() {
+    _selectedPlaylistTrackIds.value = emptySet()
+  }
+
+  fun downloadLoadedPlaylist(context: Context, onlyTrackIds: Set<String>? = null) {
+    val playlist = youtubePlaylist.value ?: return
+    val baseTracks = if (onlyTrackIds != null) {
+      playlist.tracks.filter { it.id in onlyTrackIds }
+    } else {
+      playlist.tracks
+    }
+    if (baseTracks.isEmpty()) return
+    val pending = baseTracks.filter {
       it.streamUrl.isNotBlank() &&
         it.id !in downloadedSongIds.value &&
         !songDownloadProgress.value.containsKey(it.id)
@@ -1976,6 +2004,7 @@ class AurixViewModel(application: Application) : AndroidViewModel(application) {
       ).show()
       return
     }
+    val batchId = playlistBatchId(playlist.playlistId)
     Toast.makeText(
       context,
       context.getString(R.string.playlist_downloading_count_toast, pending.size),
@@ -1985,19 +2014,81 @@ class AurixViewModel(application: Application) : AndroidViewModel(application) {
       BackgroundDownloadRegistry.enqueueSongDownload(
         context = context,
         song = song,
-        silentToast = idx > 0
+        silentToast = idx > 0,
+        batchId = batchId
       )
+    }
+    if (onlyTrackIds != null) {
+      _playlistSelectionMode.value = false
+      _selectedPlaylistTrackIds.value = emptySet()
     }
   }
 
-  fun saveLoadedPlaylist(): String? {
+  fun downloadSelectedPlaylistTracks(context: Context) {
+    val selected = _selectedPlaylistTrackIds.value
+    if (selected.isEmpty()) return
+    downloadLoadedPlaylist(context = context, onlyTrackIds = selected)
+  }
+
+  fun cancelLoadedPlaylistDownloads(context: Context) {
+    val playlist = youtubePlaylist.value ?: return
+    val batchId = playlistBatchId(playlist.playlistId)
+    var stopped = BackgroundDownloadRegistry.cancelBatch(batchId, silentToast = true)
+    // Fallback for any playlist tracks started individually
+    playlist.tracks.forEach { song ->
+      if (songDownloadProgress.value.containsKey(song.id) &&
+        BackgroundDownloadRegistry.cancelDownload(song.id, silentToast = true)
+      ) {
+        stopped++
+      }
+    }
+    val msg = if (stopped > 0) {
+      context.getString(R.string.playlist_download_stopped_toast, stopped)
+    } else {
+      context.getString(R.string.playlist_no_active_downloads_toast)
+    }
+    Toast.makeText(context, msg, Toast.LENGTH_SHORT).show()
+  }
+
+  fun cancelDownloadItem(key: String) {
+    BackgroundDownloadRegistry.cancelDownload(key)
+  }
+
+  fun cancelAllDownloads() {
+    BackgroundDownloadRegistry.cancelAll()
+  }
+
+  fun retryDownloadItem(context: Context, key: String) {
+    BackgroundDownloadRegistry.retryDownload(
+      context = context,
+      key = key,
+      isFavoriteProvider = { id -> id in favoriteIds.value }
+    )
+  }
+
+  fun retryAllFailedDownloads(context: Context) {
+    BackgroundDownloadRegistry.retryAllFailed(
+      context = context,
+      isFavoriteProvider = { id -> id in favoriteIds.value }
+    )
+  }
+
+  fun clearFinishedDownloads() {
+    BackgroundDownloadRegistry.clearFinished()
+  }
+
+  fun saveLoadedPlaylist(onlyTrackIds: Set<String>? = null): String? {
     val playlist = youtubePlaylist.value ?: return null
-    if (playlist.tracks.isEmpty()) return null
+    val tracksSnapshot = if (onlyTrackIds != null) {
+      playlist.tracks.filter { it.id in onlyTrackIds }
+    } else {
+      playlist.tracks
+    }
+    if (tracksSnapshot.isEmpty()) return null
     val appContext = getApplication<Application>()
     val albumId = "yt_playlist_${playlist.playlistId}"
     val cleanTitle = playlist.title.trim().ifBlank { "YouTube Playlist" }
     val cleanArtist = playlist.author.trim().ifBlank { "YouTube" }
-    val tracksSnapshot = playlist.tracks
 
     viewModelScope.launch {
       withContext(Dispatchers.IO) {
@@ -2058,7 +2149,17 @@ class AurixViewModel(application: Application) : AndroidViewModel(application) {
         Toast.LENGTH_SHORT
       ).show()
     }
+    if (onlyTrackIds != null) {
+      _playlistSelectionMode.value = false
+      _selectedPlaylistTrackIds.value = emptySet()
+    }
     return albumId
+  }
+
+  fun saveSelectedPlaylistTracks(): String? {
+    val selected = _selectedPlaylistTrackIds.value
+    if (selected.isEmpty()) return null
+    return saveLoadedPlaylist(onlyTrackIds = selected)
   }
 
   fun playAnalyzedYoutubeTrack() {
@@ -4727,6 +4828,8 @@ class AurixViewModel(application: Application) : AndroidViewModel(application) {
   fun setDynamicBg(enabled: Boolean) { safeLaunch(notifyUser = false) { prefsManager.setDynamicBg(enabled) } }
   fun setReducedMotion(enabled: Boolean) { safeLaunch(notifyUser = false) { prefsManager.setReducedMotion(enabled) } }
   fun setNavStyle(style: String) { safeLaunch(notifyUser = false) { prefsManager.setNavStyle(style) } }
+  fun setAutoCleanYoutubeTitles(enabled: Boolean) { safeLaunch(notifyUser = false) { prefsManager.setAutoCleanYoutubeTitles(enabled) } }
+  fun setNowPlayingVisualizerEnabled(enabled: Boolean) { safeLaunch(notifyUser = false) { prefsManager.setNowPlayingVisualizerEnabled(enabled) } }
   fun setOnboardingCompleted(completed: Boolean) { safeLaunch(notifyUser = false) { prefsManager.setOnboardingCompleted(completed) } }
   fun setGithubOwner(owner: String) { safeLaunch(notifyUser = false) { prefsManager.setGithubOwner(owner) } }
   fun setGithubRepo(repo: String) { safeLaunch(notifyUser = false) { prefsManager.setGithubRepo(repo) } }

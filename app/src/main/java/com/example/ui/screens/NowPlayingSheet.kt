@@ -20,6 +20,7 @@ import androidx.compose.animation.fadeOut
 import androidx.compose.animation.shrinkVertically
 import androidx.compose.animation.togetherWith
 import androidx.compose.foundation.BorderStroke
+import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
@@ -43,7 +44,9 @@ import androidx.compose.ui.draw.blur
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.draw.drawBehind
 import androidx.compose.ui.draw.scale
+import androidx.compose.ui.geometry.CornerRadius
 import androidx.compose.ui.geometry.Offset
+import androidx.compose.ui.geometry.Size
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.luminance
@@ -60,6 +63,7 @@ import coil.compose.AsyncImage
 import com.example.R
 import com.example.model.LyricsResult
 import com.example.model.Song
+import com.example.playback.AudioSpectrumBus
 import com.example.playback.EqPreset
 import com.example.playback.EqualizerUiState
 import com.example.recommendation.MoodFlowPick
@@ -128,7 +132,10 @@ fun NowPlayingSheet(
   onPlaySimilarSong: (Song) -> Unit = {},
   moodFlowEnabled: Boolean = true,
   moodFlowPick: MoodFlowPick? = null,
-  onToggleMoodFlow: () -> Unit = {}
+  onToggleMoodFlow: () -> Unit = {},
+  visualizerEnabled: Boolean = true,
+  onToggleVisualizer: (Boolean) -> Unit = {},
+  spectrumBars: FloatArray = FloatArray(AudioSpectrumBus.BAR_COUNT)
 ) {
   BackHandler { onClose() }
   LaunchedEffect(song.id) {
@@ -494,6 +501,26 @@ fun NowPlayingSheet(
                 )
               }
             }
+
+            AnimatedVisibility(
+              visible = visualizerEnabled,
+              enter = if (reducedMotion) fadeIn(snap()) else expandVertically(tween(220)) + fadeIn(tween(200)),
+              exit = if (reducedMotion) fadeOut(snap()) else shrinkVertically(tween(180)) + fadeOut(tween(150))
+            ) {
+              Column(modifier = Modifier.fillMaxWidth()) {
+                Spacer(modifier = Modifier.height(10.dp))
+                BeatReactiveVisualizerStrip(
+                  bars = spectrumBars,
+                  isPlaying = isPlaying,
+                  reducedMotion = reducedMotion,
+                  accentStart = c1,
+                  accentEnd = c2,
+                  modifier = Modifier
+                    .fillMaxWidth()
+                    .testTag("np_beat_visualizer")
+                )
+              }
+            }
           }
         }
       }
@@ -647,24 +674,43 @@ fun NowPlayingSheet(
 
           Spacer(modifier = Modifier.height(6.dp))
 
-          // Controls Utility Header: Art Blur Toggle + Open/Close Feature Dock Toggle
+          // Controls Utility Header: Art Blur Toggle + Beat Visualizer Toggle + Open/Close Feature Dock Toggle
           Row(
             modifier = Modifier.fillMaxWidth(),
             horizontalArrangement = Arrangement.SpaceBetween,
             verticalAlignment = Alignment.CenterVertically
           ) {
-            IconButton(
-              onClick = { dynamicControlsBlur = !dynamicControlsBlur },
-              modifier = Modifier
-                .minimumInteractiveComponentSize()
-                .testTag("np_toggle_controls_blur_button")
+            Row(
+              verticalAlignment = Alignment.CenterVertically,
+              horizontalArrangement = Arrangement.spacedBy(2.dp)
             ) {
-              Icon(
-                imageVector = if (controlsBlurActive) Icons.Rounded.BlurOn else Icons.Rounded.BlurOff,
-                contentDescription = stringResource(id = R.string.np_controls_blur_cd),
-                tint = if (controlsBlurActive) Color.White else Color.White.copy(alpha = 0.62f),
-                modifier = Modifier.size(20.dp)
-              )
+              IconButton(
+                onClick = { dynamicControlsBlur = !dynamicControlsBlur },
+                modifier = Modifier
+                  .minimumInteractiveComponentSize()
+                  .testTag("np_toggle_controls_blur_button")
+              ) {
+                Icon(
+                  imageVector = if (controlsBlurActive) Icons.Rounded.BlurOn else Icons.Rounded.BlurOff,
+                  contentDescription = stringResource(id = R.string.np_controls_blur_cd),
+                  tint = if (controlsBlurActive) Color.White else Color.White.copy(alpha = 0.62f),
+                  modifier = Modifier.size(20.dp)
+                )
+              }
+
+              IconButton(
+                onClick = { onToggleVisualizer(!visualizerEnabled) },
+                modifier = Modifier
+                  .minimumInteractiveComponentSize()
+                  .testTag("np_toggle_visualizer_button")
+              ) {
+                Icon(
+                  imageVector = Icons.Rounded.GraphicEq,
+                  contentDescription = stringResource(id = R.string.np_visualizer_toggle_cd),
+                  tint = if (visualizerEnabled) c1 else Color.White.copy(alpha = 0.62f),
+                  modifier = Modifier.size(20.dp)
+                )
+              }
             }
 
             Surface(
@@ -1290,4 +1336,70 @@ fun formatTime(ms: Long): String {
   val min = totalSec / 60
   val sec = totalSec % 60
   return "$min:${String.format("%02d", sec)}"
+}
+
+@Composable
+private fun BeatReactiveVisualizerStrip(
+  bars: FloatArray,
+  isPlaying: Boolean,
+  reducedMotion: Boolean,
+  accentStart: Color,
+  accentEnd: Color,
+  modifier: Modifier = Modifier
+) {
+  val barCount = AudioSpectrumBus.BAR_COUNT
+  val animatedLevels = List(barCount) { idx ->
+    val target = if (!isPlaying) {
+      0.14f
+    } else if (reducedMotion) {
+      0.16f + (bars.getOrElse(idx) { 0f }.coerceIn(0f, 1f) * 0.48f)
+    } else {
+      bars.getOrElse(idx) { 0f }.coerceIn(0.10f, 1f)
+    }
+    animateFloatAsState(
+      targetValue = target,
+      animationSpec = if (reducedMotion) snap() else tween(durationMillis = 75, easing = FastOutSlowInEasing),
+      label = "viz_bar_$idx"
+    ).value
+  }
+
+  Box(
+    modifier = modifier
+      .height(34.dp)
+      .clip(RoundedCornerShape(14.dp))
+      .background(Color.White.copy(alpha = 0.08f))
+      .border(1.dp, Color.White.copy(alpha = 0.14f), RoundedCornerShape(14.dp))
+      .padding(horizontal = 12.dp, vertical = 6.dp)
+  ) {
+    Canvas(modifier = Modifier.fillMaxSize()) {
+      val count = animatedLevels.size
+      if (count <= 0) return@Canvas
+      val totalWidth = size.width
+      val totalHeight = size.height
+      val gap = 4.dp.toPx()
+      val barWidth = ((totalWidth - gap * (count - 1)) / count).coerceAtLeast(2.dp.toPx())
+      val corner = CornerRadius(barWidth / 2f, barWidth / 2f)
+      val barBrush = Brush.horizontalGradient(
+        colors = listOf(
+          accentStart.copy(alpha = 0.95f),
+          Color.White.copy(alpha = 0.92f),
+          accentEnd.copy(alpha = 0.95f)
+        )
+      )
+
+      for (i in 0 until count) {
+        val level = animatedLevels[i].coerceIn(0.10f, 1f)
+        val barHeight = (totalHeight * level).coerceAtLeast(3.dp.toPx())
+        val left = i * (barWidth + gap)
+        val top = (totalHeight - barHeight) / 2f
+        drawRoundRect(
+          brush = barBrush,
+          topLeft = Offset(left, top),
+          size = Size(barWidth, barHeight),
+          cornerRadius = corner,
+          alpha = if (isPlaying) 0.92f else 0.42f
+        )
+      }
+    }
+  }
 }

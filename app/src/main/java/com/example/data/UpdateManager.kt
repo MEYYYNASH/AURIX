@@ -162,9 +162,9 @@ class UpdateManager(
     private const val META_FILE_NAME = "aurix_update.apk.meta.json"
 
     val CURRENT_RELEASE_NOTES = listOf(
-      "Release v1.8.4 — Playlist Link Support: Paste any YouTube or YouTube Music playlist URL in YT Link to view every track inside the playlist",
-      "Play, Shuffle & Save Playlists: Stream any playlist as a full queue with Play All or Shuffle, or save it directly to your Library Albums with cover art",
-      "Batch & Single Downloads: Download all playlist songs at once with Download All or pick formats per track, plus an Open Full Playlist shortcut on video links"
+      "Release v1.8.5 — End Download & Live Download Queue: Stop active playlist downloads immediately with End Download, or open the Download Queue sheet to cancel and retry tracks",
+      "Playlist Multi-Select: Select specific tracks in any pasted playlist link to Download (N) or Save (N) only the songs you want",
+      "Now Playing Beat Visualizer & Clean YT Titles: Live beat-reactive audio spectrum bars in Now Playing and automatic removal of YouTube [Official Video] / (Official Audio) tags"
     )
 
     fun parseVersionJson(rawJson: String): RemoteVersionInfo {
