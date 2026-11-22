@@ -149,6 +149,7 @@ fun MiniPlayer(
         .matchParentSize()
         .offset { IntOffset(dragOffsetX.value.roundToInt(), 0) }
         .drawBehind {
+          if (size.width <= 0f || size.height <= 0f) return@drawBehind
           val r = size.height * 0.5f
           drawRoundRect(
             brush = Brush.verticalGradient(
@@ -259,8 +260,9 @@ fun MiniPlayer(
           .border(1.dp, miniRimBrush, CircleShape)
           .drawBehind {
             val stroke15 = 1.5.dp.toPx()
+            if (size.width <= stroke15 || size.height <= stroke15) return@drawBehind
             val inset = stroke15 * 0.5f
-            val r = (size.height - stroke15) * 0.5f
+            val r = ((size.height - stroke15) * 0.5f).coerceAtLeast(0f)
             drawRoundRect(
               brush = Brush.verticalGradient(
                 colors = listOf(

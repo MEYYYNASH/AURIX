@@ -649,6 +649,7 @@ private fun DiscoveryGauge(
   ) {
     Canvas(modifier = Modifier.fillMaxSize()) {
       val strokePx = 9.dp.toPx()
+      if (size.width <= strokePx || size.height <= strokePx) return@Canvas
       val pad = strokePx / 2f
       val arcSize = Size(size.width - strokePx, size.height - strokePx)
       drawArc(
@@ -698,6 +699,7 @@ private fun ListeningHoursBarChart(
       .fillMaxWidth()
       .height(58.dp)
   ) {
+    if (size.width <= 0f || size.height <= 0f) return@Canvas
     val gap = 4.dp.toPx()
     val barWidth = ((size.width - gap * 23f) / 24f).coerceAtLeast(2f)
     buckets.forEachIndexed { idx, count ->

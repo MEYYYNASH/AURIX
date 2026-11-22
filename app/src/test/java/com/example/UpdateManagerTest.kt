@@ -291,9 +291,9 @@ class UpdateManagerTest {
   }
 
   @Test
-  fun `app release metadata targets 1_8_3`() {
-    assertEquals("1.8.3", BuildConfig.VERSION_NAME)
-    assertEquals(10803, BuildConfig.VERSION_CODE)
+  fun `app release metadata targets 1_9_0`() {
+    assertEquals("1.9.0", BuildConfig.VERSION_NAME)
+    assertEquals(10900, BuildConfig.VERSION_CODE)
     assertTrue(UpdateManager.CURRENT_RELEASE_NOTES.isNotEmpty())
   }
 }

@@ -1055,7 +1055,8 @@ private fun GlassPillActionButton(
       )
       .drawBehind {
         val stroke = 1.dp.toPx()
-        val r = (size.height - stroke) * 0.5f
+        if (size.width <= stroke || size.height <= stroke) return@drawBehind
+        val r = ((size.height - stroke) * 0.5f).coerceAtLeast(0f)
         drawRoundRect(
           brush = Brush.verticalGradient(
             listOf(Color.White.copy(alpha = 0.22f), Color.Transparent),

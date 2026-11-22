@@ -173,8 +173,10 @@ object GitHubUpdater {
         if (contents != null) sigList.addAll(contents)
       }
     }
-    if (sigList.isEmpty() && info.signatures != null) {
-      sigList.addAll(info.signatures!!)
+    @Suppress("DEPRECATION")
+    val legacySigs = info.signatures
+    if (sigList.isEmpty() && legacySigs != null) {
+      sigList.addAll(legacySigs)
     }
     val digest = MessageDigest.getInstance("SHA-256")
     return sigList.map { sig ->

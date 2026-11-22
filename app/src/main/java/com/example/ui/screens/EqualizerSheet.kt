@@ -331,6 +331,7 @@ fun EqualizerSheet(
               }
 
               Canvas(modifier = Modifier.fillMaxSize()) {
+                if (size.width <= 0f || size.height <= 0f) return@Canvas
                 // Center 0dB reference hairline
                 val midY = size.height * 0.5f
                 drawLine(

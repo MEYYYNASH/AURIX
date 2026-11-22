@@ -25,6 +25,7 @@ import androidx.compose.foundation.interaction.collectIsPressedAsState
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.lazy.itemsIndexed
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
@@ -339,7 +340,10 @@ fun LibraryScreen(
               )
             }
           }
-          items(albumRows, key = { row -> row.joinToString("_") { "${it.albumId}_${it.coverUrl}_${it.tracks.size}" } }) { rowAlbums ->
+          itemsIndexed(
+            items = albumRows,
+            key = { idx, row -> "${idx}_${row.joinToString("_") { "${it.albumId}_${it.coverUrl}_${it.tracks.size}" }}" }
+          ) { _, rowAlbums ->
             Row(
               modifier = Modifier.fillMaxWidth(),
               horizontalArrangement = Arrangement.spacedBy(14.dp)
@@ -480,7 +484,10 @@ fun LibraryScreen(
             }
           }
 
-          items(currentList, key = { "${activeTab}_${it.id}_${it.artworkUrl}" }) { song ->
+          itemsIndexed(
+            items = currentList,
+            key = { idx, song -> "${activeTab}_${idx}_${song.id}_${song.artworkUrl}" }
+          ) { _, song ->
             SongRow(
               song = song,
               isPlaying = isPlaying,

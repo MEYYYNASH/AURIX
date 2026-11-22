@@ -343,10 +343,11 @@ fun CrossfadeSheet(
             ) {
               val w = size.width
               val h = size.height
+              if (w <= 0f || h <= 0f) return@Canvas
               val padY = 8.dp.toPx()
               val usableH = (h - padY * 2f).coerceAtLeast(1f)
               val topY = padY
-              val bottomY = h - padY
+              val bottomY = (h - padY).coerceAtLeast(topY + 1f)
 
               // Baseline hairline
               drawLine(
@@ -391,7 +392,7 @@ fun CrossfadeSheet(
                 return@Canvas
               }
 
-              val overlapWidth = w * (0.28f + 0.56f * animatedOverlapFraction)
+              val overlapWidth = (w * (0.28f + 0.56f * animatedOverlapFraction)).coerceAtLeast(1f)
               val overlapStart = (w - overlapWidth) * 0.5f
               val overlapEnd = overlapStart + overlapWidth
 

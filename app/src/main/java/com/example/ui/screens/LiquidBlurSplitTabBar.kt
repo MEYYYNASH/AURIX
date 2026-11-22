@@ -189,6 +189,7 @@ fun LiquidBlurSplitTabBar(
         modifier = Modifier
           .matchParentSize()
           .drawBehind {
+            if (size.width <= 0f || size.height <= 0f) return@drawBehind
             val r = size.height * 0.5f
             drawRoundRect(
               brush = Brush.verticalGradient(
@@ -240,8 +241,9 @@ fun LiquidBlurSplitTabBar(
             .border(1.dp, borderBrush, CircleShape)
             .drawBehind {
               val stroke15 = 1.5.dp.toPx()
+              if (size.width <= stroke15 || size.height <= stroke15) return@drawBehind
               val inset = stroke15 * 0.5f
-              val r = (size.height - stroke15) * 0.5f
+              val r = ((size.height - stroke15) * 0.5f).coerceAtLeast(0f)
               drawRoundRect(
                 brush = Brush.verticalGradient(
                   colors = listOf(
@@ -541,6 +543,7 @@ fun LiquidBlurSplitTabBar(
             .border(if (isSearchSelected) 1.4.dp else 1.dp, orbBorder, CircleShape)
             .drawBehind {
               val stroke15 = 1.5.dp.toPx()
+              if (size.minDimension <= stroke15) return@drawBehind
               drawCircle(
                 brush = Brush.verticalGradient(
                   colors = listOf(
@@ -551,7 +554,7 @@ fun LiquidBlurSplitTabBar(
                   startY = 0f,
                   endY = size.height * 0.52f
                 ),
-                radius = (size.minDimension - stroke15) * 0.5f,
+                radius = ((size.minDimension - stroke15) * 0.5f).coerceAtLeast(0f),
                 style = Stroke(width = stroke15)
               )
             }

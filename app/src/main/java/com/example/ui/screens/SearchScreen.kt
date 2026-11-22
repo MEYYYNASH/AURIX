@@ -530,6 +530,7 @@ private fun LiquidGlassSearchBar(
     modifier = Modifier
       .fillMaxWidth()
       .drawBehind {
+        if (size.width <= 0f || size.height <= 0f) return@drawBehind
         val h = size.height
         val r = h / 2f
         drawRoundRect(
@@ -549,6 +550,7 @@ private fun LiquidGlassSearchBar(
       .border(width = if (isFocused) 1.4.dp else 1.dp, color = borderColor, shape = CircleShape)
       .drawBehind {
         val stroke = 1.2.dp.toPx()
+        if (size.width <= stroke || size.height <= stroke) return@drawBehind
         val inset = stroke * 0.5f
         val r = (size.height / 2f - inset).coerceAtLeast(0f)
         drawRoundRect(
@@ -1409,7 +1411,7 @@ fun SearchResultsArea(
                   verticalArrangement = Arrangement.spacedBy(8.dp),
                   contentPadding = PaddingValues(bottom = listBottomPadding)
                 ) {
-                  itemsIndexed(state.items, key = { _, song -> song.id }) { index, song ->
+                  itemsIndexed(state.items, key = { index, song -> "${index}_${song.id}" }) { index, song ->
                     SongDownloadRow(
                       song = song,
                       index = index + 1,

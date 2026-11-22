@@ -44,10 +44,14 @@ class BackgroundDownloadService : Service() {
   override fun onCreate() {
     super.onCreate()
     AppNotificationHelper.ensureChannels(this)
-    promoteToForeground(
+    val promoted = promoteToForeground(
       UpdateManagerHolder.getInstance(this).uiState.value,
       BackgroundDownloadRegistry.activeTrackNotifications.value
     )
+    if (!promoted) {
+      stopSelf()
+      return
+    }
     startObservingDownloads()
   }
 
@@ -62,9 +66,9 @@ class BackgroundDownloadService : Service() {
 
     val currentUpdate = updateManager.uiState.value
     val activeTracks = BackgroundDownloadRegistry.activeTrackNotifications.value
-    promoteToForeground(currentUpdate, activeTracks)
+    val promoted = promoteToForeground(currentUpdate, activeTracks)
 
-    if (!isAnyTransferActive(currentUpdate, activeTracks)) {
+    if (!promoted || !isAnyTransferActive(currentUpdate, activeTracks)) {
       stopSelfSafely()
     }
     return START_NOT_STICKY
@@ -118,21 +122,22 @@ class BackgroundDownloadService : Service() {
   private fun promoteToForeground(
     updateState: UpdateUiState,
     tracks: Map<String, TrackDownloadNotificationInfo>
-  ) {
-    val notif = AppNotificationHelper.buildBackgroundDownloadNotification(this, updateState, tracks)
-    val fgsType = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
-      ServiceInfo.FOREGROUND_SERVICE_TYPE_DATA_SYNC
-    } else {
-      0
-    }
-    runCatching {
+  ): Boolean {
+    return runCatching {
+      val notif = AppNotificationHelper.buildBackgroundDownloadNotification(this, updateState, tracks)
+      val fgsType = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
+        ServiceInfo.FOREGROUND_SERVICE_TYPE_DATA_SYNC
+      } else {
+        0
+      }
       ServiceCompat.startForeground(
         this,
         AppNotificationHelper.NOTIF_ID_BACKGROUND_DOWNLOAD,
         notif,
         fgsType
       )
-    }
+      true
+    }.getOrDefault(false)
   }
 
   private fun isAnyTransferActive(

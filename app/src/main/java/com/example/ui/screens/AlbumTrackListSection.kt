@@ -449,7 +449,7 @@ fun AlbumTrackListSection(
       } else {
         itemsIndexed(
           items = tracks,
-          key = { _, song -> song.id }
+          key = { index, song -> "${index}_${song.id}" }
         ) { index, song ->
           val isCurrent = currentSong?.id == song.id
           val displayNumber = song.trackNumber.takeIf { it > 0 } ?: (index + 1)
@@ -975,8 +975,9 @@ private fun AlbumHeaderIconButton(
       )
       .drawBehind {
         val stroke = 1.dp.toPx()
+        if (size.width <= stroke || size.height <= stroke) return@drawBehind
         val inset = stroke * 0.5f
-        val r = (size.minDimension - stroke) * 0.5f
+        val r = ((size.minDimension - stroke) * 0.5f).coerceAtLeast(0f)
         drawRoundRect(
           brush = Brush.verticalGradient(
             colors = listOf(AlbumDesignTokens.TopHighlight, Color.Transparent),
@@ -1103,8 +1104,9 @@ fun PlayShuffleRow(
         .clip(buttonShape)
         .drawBehind {
           val stroke = 1.dp.toPx()
+          if (size.width <= stroke || size.height <= stroke) return@drawBehind
           val inset = stroke * 0.5f
-          val r = (size.height - stroke) * 0.5f
+          val r = ((size.height - stroke) * 0.5f).coerceAtLeast(0f)
           drawRoundRect(
             brush = Brush.verticalGradient(
               colors = listOf(AlbumDesignTokens.TopHighlight, Color.Transparent),
@@ -1207,6 +1209,7 @@ fun TrackRow(
             .border(1.dp, accentColor.copy(alpha = 0.30f), rowShape)
             .drawBehind {
               val stroke = 1.dp.toPx()
+              if (size.width <= stroke || size.height <= stroke) return@drawBehind
               val r = 20.dp.toPx()
               drawRoundRect(
                 brush = Brush.verticalGradient(

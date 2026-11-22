@@ -162,9 +162,9 @@ class UpdateManager(
     private const val META_FILE_NAME = "aurix_update.apk.meta.json"
 
     val CURRENT_RELEASE_NOTES = listOf(
-      "Launch & Upgrade Stability Fix (v1.8.3): Resolved cold-start crashes caused by unconfigured startup providers, zero-size radial gradient passes, and legacy preference/database upgrades",
-      "Smoother Startup & Storage Recovery: Moved APK update restoration off the main thread and added automatic DataStore & Room schema recovery",
-      "Includes v1.8.2 Personalized Home: Dedicated Artist Mixes for You, daily-refreshed My Mix 1–4, New for You, Daily Discovery, Favorites Mix, and 10 Mood Mixes"
+      "Release v1.9.0 — Startup & Crash Stability: Eliminated infinite crash-relaunch loops, removed unconfigured startup provider initialization, and hardened Android 12+ foreground download services",
+      "Safe Compose Rendering & List Keys: Guarded custom Canvas/drawBehind shaders against zero/tiny layout bounds and added unique indexed LazyColumn keys across playlists, albums, search, and library",
+      "Full AURIX Experience: Personalized Home mixes, Khmer & English localization, animated planet brand & update logos, Equalizer, Crossfade, and OTA updates"
     )
 
     fun parseVersionJson(rawJson: String): RemoteVersionInfo {
@@ -1111,17 +1111,18 @@ class UpdateManager(
     downloadJob?.cancel()
     clearPartialFiles(keepFinalApk = false)
     _uiState.update { current ->
-      val hasRemoteUpdate = current.latestRelease != null &&
-        current.latestRelease.versionCode > current.installed.versionCode
+      val readyRelease = current.latestRelease?.takeIf {
+        it.versionCode > current.installed.versionCode
+      }
       current.copy(
-        stage = if (hasRemoteUpdate) UpdateStage.Available else UpdateStage.Idle,
-        subtitleMessage = if (hasRemoteUpdate) {
-          "AURIX ${current.latestRelease!!.tagName} is ready to download"
+        stage = if (readyRelease != null) UpdateStage.Available else UpdateStage.Idle,
+        subtitleMessage = if (readyRelease != null) {
+          "AURIX ${readyRelease.tagName} is ready to download"
         } else {
           "Over-the-air updates & release notes"
         },
-        statusMessage = if (hasRemoteUpdate) {
-          "Update available: ${current.latestRelease!!.tagName}"
+        statusMessage = if (readyRelease != null) {
+          "Update available: ${readyRelease.tagName}"
         } else {
           "Download canceled"
         },

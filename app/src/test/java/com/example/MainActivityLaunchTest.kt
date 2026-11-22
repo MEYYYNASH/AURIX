@@ -3,6 +3,7 @@ package com.example
 import android.app.Application
 import android.content.ComponentName
 import androidx.compose.ui.test.junit4.createAndroidComposeRule
+import androidx.compose.ui.test.performClick
 import androidx.test.core.app.ApplicationProvider
 import com.example.data.PreferencesManager
 import com.example.playback.PlaybackService
@@ -80,6 +81,33 @@ class MainActivityLaunchTest {
     composeTestRule.waitForIdle()
     composeTestRule.mainClock.advanceTimeBy(3000)
     composeTestRule.waitForIdle()
+    assertTrue(true)
+  }
+
+  @Test
+  fun navigateAllMainTabs_enAndKm_rendersWithoutCrash() = runBlocking {
+    val app = ApplicationProvider.getApplicationContext<Application>()
+    val prefs = PreferencesManager(app)
+    prefs.setOnboardingCompleted(true)
+    prefs.setLastSeenVersionCode(10900L)
+
+    listOf("en", "km").forEach { lang ->
+      prefs.setLanguage(lang)
+      composeTestRule.activityRule.scenario.onActivity { activity ->
+        activity.recreate()
+      }
+      composeTestRule.waitForIdle()
+      composeTestRule.mainClock.advanceTimeBy(3000)
+      composeTestRule.waitForIdle()
+
+      listOf(1, 2, 3, 0).forEach { tabIdx ->
+        val nodes = composeTestRule.onAllNodes(androidx.compose.ui.test.hasTestTag("nav_tab_$tabIdx")).fetchSemanticsNodes()
+        if (nodes.isNotEmpty()) {
+          composeTestRule.onNode(androidx.compose.ui.test.hasTestTag("nav_tab_$tabIdx")).performClick()
+          composeTestRule.waitForIdle()
+        }
+      }
+    }
     assertTrue(true)
   }
 }

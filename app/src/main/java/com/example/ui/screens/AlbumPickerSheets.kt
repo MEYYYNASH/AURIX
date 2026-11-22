@@ -24,6 +24,7 @@ import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.lazy.itemsIndexed
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.KeyboardActions
@@ -585,7 +586,10 @@ fun AddSongsToAlbumSheet(
             .weight(1f, fill = false),
           verticalArrangement = Arrangement.spacedBy(8.dp)
         ) {
-          items(filteredSongs, key = { it.id }) { song ->
+          itemsIndexed(
+            items = filteredSongs,
+            key = { idx, song -> "${idx}_${song.id}" }
+          ) { _, song ->
             val alreadyIn = song.id in existingIds
             val isSelected = song.id in selectedIds
             Row(
@@ -788,7 +792,10 @@ fun AddSongToAlbumSheet(
           .weight(1f, fill = false),
         verticalArrangement = Arrangement.spacedBy(8.dp)
       ) {
-        items(albums, key = { it.albumId }) { album ->
+        itemsIndexed(
+          items = albums,
+          key = { idx, album -> "${idx}_${album.albumId}" }
+        ) { _, album ->
           val alreadyAdded = album.tracks.any { it.id == song.id }
           Row(
             modifier = Modifier

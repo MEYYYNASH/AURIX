@@ -3060,9 +3060,10 @@ class AurixViewModel(application: Application) : AndroidViewModel(application) {
     if (tracks.isEmpty()) return
     _shuffleEnabled.value = true
     mediaController?.shuffleModeEnabled = !moodFlowEnabled.value
-    val starter = if (moodFlowEnabled.value && _rawCurrentSong.value != null && tracks.size > 1) {
+    val activeSong = _rawCurrentSong.value
+    val starter = if (moodFlowEnabled.value && activeSong != null && tracks.size > 1) {
       val pick = MoodFlowEngine.pickNextSong(
-        currentSong = _rawCurrentSong.value!!,
+        currentSong = activeSong,
         allSongs = tracks,
         playHistory = richPlayHistory.value,
         favoriteIds = favoriteIds.value,

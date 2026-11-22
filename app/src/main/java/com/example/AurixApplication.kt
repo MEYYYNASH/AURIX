@@ -1,9 +1,8 @@
 package com.example
 
 import android.app.Application
-import android.content.Intent
+import android.content.Context
 import android.util.Log
-import com.google.firebase.crashlytics.FirebaseCrashlytics
 import java.io.File
 import java.io.FileWriter
 import java.io.PrintWriter
@@ -16,52 +15,63 @@ class AurixApplication : Application() {
 
     override fun onCreate() {
         super.onCreate()
-        runCatching {
-            FirebaseCrashlytics.getInstance().setCrashlyticsCollectionEnabled(true)
-            FirebaseCrashlytics.getInstance().log("AurixApplication initialized successfully")
-        }
         setupGlobalCrashHandler()
     }
 
     private fun setupGlobalCrashHandler() {
         val defaultHandler = Thread.getDefaultUncaughtExceptionHandler()
-        Thread.setDefaultUncaughtExceptionHandler { thread, throwable ->
+        Thread.setDefaultUncaughtExceptionHandler(createCrashHandler(this, defaultHandler))
+    }
+
+    companion object {
+        private val logLock = Any()
+        private const val MAX_CRASH_LOG_BYTES = 512L * 1024L
+
+        internal fun createCrashHandler(
+            context: Context,
+            defaultHandler: Thread.UncaughtExceptionHandler?
+        ): Thread.UncaughtExceptionHandler {
+            val appContext = context.applicationContext ?: context
+            return Thread.UncaughtExceptionHandler { thread, throwable ->
+                recordCrashToDisk(appContext, thread, throwable)
+                if (defaultHandler != null) {
+                    defaultHandler.uncaughtException(thread, throwable)
+                } else {
+                    runCatching {
+                        android.os.Process.killProcess(android.os.Process.myPid())
+                    }
+                }
+            }
+        }
+
+        internal fun recordCrashToDisk(
+            context: Context,
+            thread: Thread,
+            throwable: Throwable
+        ) {
             try {
-                // Report to Firebase Crashlytics
-                runCatching {
-                    FirebaseCrashlytics.getInstance().recordException(throwable)
-                }
+                synchronized(logLock) {
+                    val logFile = File(context.filesDir, "aurix_crash_logs.txt")
+                    if (logFile.exists() && logFile.length() > MAX_CRASH_LOG_BYTES) {
+                        logFile.writeText("")
+                    }
+                    val timestamp = SimpleDateFormat("yyyy-MM-dd HH:mm:ss", Locale.US).format(Date())
+                    val sw = StringWriter()
+                    val pw = PrintWriter(sw)
+                    throwable.printStackTrace(pw)
+                    pw.flush()
 
-                val logFile = File(filesDir, "aurix_crash_logs.txt")
-                val timestamp = SimpleDateFormat("yyyy-MM-dd HH:mm:ss", Locale.getDefault()).format(Date())
-                val sw = StringWriter()
-                val pw = PrintWriter(sw)
-                throwable.printStackTrace(pw)
-                val stackTraceString = sw.toString()
-
-                FileWriter(logFile, true).use { writer ->
-                    writer.append("\n==============================\n")
-                    writer.append("CRASH TIMESTAMP: $timestamp\n")
-                    writer.append("THREAD: ${thread.name}\n")
-                    writer.append(stackTraceString)
-                    writer.append("==============================\n")
+                    FileWriter(logFile, true).use { writer ->
+                        writer.append("\n==============================\n")
+                        writer.append("CRASH TIMESTAMP: $timestamp\n")
+                        writer.append("THREAD: ${thread.name}\n")
+                        writer.append(sw.toString())
+                        writer.append("==============================\n")
+                    }
                 }
-                Log.e("AurixCrashLogger", "Intercepted fatal exception, logged to Crashlytics & disk", throwable)
+                Log.e("AurixCrashLogger", "Intercepted fatal exception, logged to disk", throwable)
             } catch (e: Exception) {
                 Log.e("AurixCrashLogger", "Failed to write crash log", e)
-            } finally {
-                // Gracefully restart MainActivity instead of letting the app die silently or freeze
-                try {
-                    val intent = Intent(this, MainActivity::class.java).apply {
-                        addFlags(Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_CLEAR_TASK)
-                    }
-                    startActivity(intent)
-                } catch (_: Exception) {}
-
-                try {
-                    android.os.Process.killProcess(android.os.Process.myPid())
-                    System.exit(10)
-                } catch (_: Exception) {}
             }
         }
     }

@@ -1235,9 +1235,10 @@ private fun AurixMainShell(
                   modifier = Modifier.fillMaxWidth()
                 )
               }
-              if (updateUiState.stage == UpdateStage.Error && !updateUiState.errorMessage.isNullOrBlank()) {
+              val errorMsg = updateUiState.errorMessage
+              if (updateUiState.stage == UpdateStage.Error && !errorMsg.isNullOrBlank()) {
                 Text(
-                  text = updateUiState.errorMessage!!,
+                  text = errorMsg,
                   color = MaterialTheme.colorScheme.error,
                   style = MaterialTheme.typography.bodySmall
                 )

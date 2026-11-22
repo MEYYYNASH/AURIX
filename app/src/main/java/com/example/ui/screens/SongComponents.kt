@@ -1335,6 +1335,7 @@ fun SongDownloadRow(
       .border(1.dp, borderBrush, rowShape)
       .drawBehind {
         val stroke = 1.2.dp.toPx()
+        if (size.width <= stroke || size.height <= stroke) return@drawBehind
         val inset = stroke * 0.5f
         val r = (22.dp.toPx() - inset).coerceAtLeast(0f)
         drawRoundRect(
