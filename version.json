@@ -3,10 +3,10 @@
   "versionCode": 10860,
   "releaseDate": "2026-11-22",
   "apkUrl": "https://github.com/MEYYYNASH/AURIX/releases/download/v1.8.6/AURIX-v1.8.6.apk",
-  "sha256": "",
+  "sha256": "e60e2bf6053dbfc6568b380de189cefd121801e08a3d8fdb5b9789b0d022ebbf",
   "mandatory": false,
   "notes": [
-    "Release v1.8.6 — Recent Play UI Fix: Fixed the oversized dark close circle on Recent Play cards so the remove badge stays crisp and aligned inside the artwork corner",
+    "Release v1.8.6 \u2014 Recent Play UI Fix: Fixed the oversized dark close circle on Recent Play cards so the remove badge stays crisp and aligned inside the artwork corner",
     "Fluid Search Mode Transition: Added a spring-gliding liquid glass pill and directional parallax transition when switching between YouTube Search and YT Link",
     "Playlist Controls & Visualizer: Includes End Download, Live Download Queue with cancel & retry, Playlist Multi-Select, Beat Visualizer in Now Playing, and Auto-Clean YT Titles"
   ],
