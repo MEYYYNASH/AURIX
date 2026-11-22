@@ -6,7 +6,9 @@ import android.provider.Settings
 import android.widget.Toast
 import androidx.compose.animation.AnimatedContent
 import androidx.compose.animation.AnimatedVisibility
+import androidx.compose.animation.SizeTransform
 import androidx.compose.animation.animateColorAsState
+import androidx.compose.animation.core.CubicBezierEasing
 import androidx.compose.animation.core.LinearEasing
 import androidx.compose.animation.core.RepeatMode
 import androidx.compose.animation.core.Spring
@@ -20,8 +22,12 @@ import androidx.compose.animation.core.tween
 import androidx.compose.animation.expandVertically
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
+import androidx.compose.animation.scaleIn
+import androidx.compose.animation.scaleOut
 import androidx.compose.animation.shrinkVertically
+import androidx.compose.animation.slideInHorizontally
 import androidx.compose.animation.slideInVertically
+import androidx.compose.animation.slideOutHorizontally
 import androidx.compose.animation.togetherWith
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.LocalIndication
@@ -368,6 +374,7 @@ fun SearchScreen(
 
       Spacer(modifier = Modifier.height(14.dp))
 
+      val modeEase = remember { CubicBezierEasing(0.22f, 1.0f, 0.36f, 1.0f) }
       AnimatedContent(
         targetState = searchMode,
         modifier = Modifier
@@ -377,9 +384,37 @@ fun SearchScreen(
           if (reducedMotion) {
             fadeIn(snap()) togetherWith fadeOut(snap())
           } else {
-            fadeIn(tween(200)) togetherWith fadeOut(tween(150))
+            val goingToLink = targetState == "youtube" && initialState != "youtube"
+            (
+              slideInHorizontally(
+                animationSpec = tween(durationMillis = 330, easing = modeEase)
+              ) { fullWidth ->
+                if (goingToLink) (fullWidth * 0.24f).toInt() else -(fullWidth * 0.24f).toInt()
+              } +
+                fadeIn(
+                  animationSpec = tween(durationMillis = 250, delayMillis = 35, easing = modeEase)
+                ) +
+                scaleIn(
+                  animationSpec = tween(durationMillis = 330, easing = modeEase),
+                  initialScale = 0.96f
+                )
+              ) togetherWith (
+              slideOutHorizontally(
+                animationSpec = tween(durationMillis = 240, easing = modeEase)
+              ) { fullWidth ->
+                if (goingToLink) -(fullWidth * 0.14f).toInt() else (fullWidth * 0.14f).toInt()
+              } +
+                fadeOut(
+                  animationSpec = tween(durationMillis = 170, easing = modeEase)
+                ) +
+                scaleOut(
+                  animationSpec = tween(durationMillis = 240, easing = modeEase),
+                  targetScale = 0.96f
+                )
+              ) using SizeTransform(clip = false)
           }
         },
+        contentKey = { mode -> if (mode == "youtube") "youtube_link" else "youtube_search" },
         label = "search_mode_content"
       ) { mode ->
         if (mode == "youtube") {

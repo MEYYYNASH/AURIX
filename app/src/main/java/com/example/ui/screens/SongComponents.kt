@@ -450,75 +450,138 @@ fun GlassSegmentedBar(
   testTags: List<String> = emptyList(),
   reducedMotion: Boolean = false
 ) {
-  val barBg = if (darkTheme) Color(0xFF151E32).copy(alpha = 0.72f) else Color.White.copy(alpha = 0.72f)
+  if (options.isEmpty()) return
+  val barBg = if (darkTheme) Color(0xFF151E32).copy(alpha = 0.72f) else Color.White.copy(alpha = 0.74f)
   val barBorder = if (darkTheme) Color.White.copy(alpha = 0.22f) else Color.White.copy(alpha = 0.96f)
-  val pillBg = if (darkTheme) Color(0xFF283652).copy(alpha = 0.94f) else Color.White.copy(alpha = 0.96f)
-  val pillBorderColor = Color.White.copy(alpha = if (darkTheme) 0.28f else 0.98f)
+  val primaryAccent = MaterialTheme.colorScheme.primary
+  val pillBrush = if (darkTheme) {
+    Brush.linearGradient(
+      colors = listOf(
+        Color(0xFF33466B).copy(alpha = 0.95f),
+        primaryAccent.copy(alpha = 0.34f),
+        Color(0xFF24324E).copy(alpha = 0.96f)
+      )
+    )
+  } else {
+    Brush.linearGradient(
+      colors = listOf(
+        Color.White.copy(alpha = 0.98f),
+        primaryAccent.copy(alpha = 0.12f),
+        Color.White.copy(alpha = 0.95f)
+      )
+    )
+  }
+  val pillBorderBrush = Brush.verticalGradient(
+    colors = listOf(
+      Color.White.copy(alpha = if (darkTheme) 0.42f else 1.0f),
+      primaryAccent.copy(alpha = if (darkTheme) 0.32f else 0.24f)
+    )
+  )
+  val clampedIndex = selectedIndex.coerceIn(0, options.lastIndex)
+  val gap = 4.dp
+  val outerPad = 4.dp
   val colorSpec = if (reducedMotion) snap<Color>() else tween<Color>(durationMillis = 220, easing = FastOutSlowInEasing)
 
-  Row(
+  BoxWithConstraints(
     modifier = modifier
       .fillMaxWidth()
       .clip(CircleShape)
       .background(barBg)
       .border(1.dp, barBorder, CircleShape)
-      .padding(4.dp),
-    horizontalArrangement = Arrangement.spacedBy(4.dp)
+      .padding(outerPad)
   ) {
-    options.forEachIndexed { index, (label, icon) ->
-      val selected = selectedIndex == index
-      val tag = testTags.getOrNull(index)
-      val animatedBg by animateColorAsState(
-        targetValue = if (selected) pillBg else Color.Transparent,
-        animationSpec = colorSpec,
-        label = "seg_bg_$index"
-      )
-      val animatedBorder by animateColorAsState(
-        targetValue = if (selected) pillBorderColor else Color.Transparent,
-        animationSpec = colorSpec,
-        label = "seg_border_$index"
-      )
-      val animatedContentColor by animateColorAsState(
-        targetValue = if (selected) MaterialTheme.colorScheme.onSurface else MaterialTheme.colorScheme.onSurfaceVariant,
-        animationSpec = colorSpec,
-        label = "seg_text_$index"
-      )
-      val animatedIconColor by animateColorAsState(
-        targetValue = if (selected) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurfaceVariant,
-        animationSpec = colorSpec,
-        label = "seg_icon_$index"
+    val count = options.size
+    val totalGap = gap * (count - 1).coerceAtLeast(0)
+    val slotWidth = ((maxWidth - totalGap) / count).coerceAtLeast(1.dp)
+    val targetOffset = (slotWidth + gap) * clampedIndex
+    val pillOffset by animateDpAsState(
+      targetValue = targetOffset,
+      animationSpec = if (reducedMotion) {
+        snap()
+      } else {
+        spring(
+          dampingRatio = 0.78f,
+          stiffness = 460f
+        )
+      },
+      label = "seg_pill_offset"
+    )
+
+    Box(
+      modifier = Modifier
+        .fillMaxWidth()
+        .height(IntrinsicSize.Min)
+    ) {
+      // Sliding Frosted Liquid Glass Pill Indicator
+      Box(
+        modifier = Modifier
+          .offset(x = pillOffset)
+          .width(slotWidth)
+          .fillMaxHeight()
+          .clip(CircleShape)
+          .background(pillBrush)
+          .border(0.9.dp, pillBorderBrush, CircleShape)
       )
 
       Row(
-        modifier = Modifier
-          .weight(1f)
-          .clip(CircleShape)
-          .background(animatedBg)
-          .border(0.75.dp, animatedBorder, CircleShape)
-          .clickable { onSelect(index) }
-          .then(if (tag != null) Modifier.testTag(tag) else Modifier)
-          .padding(vertical = 10.dp, horizontal = 8.dp),
-        horizontalArrangement = Arrangement.Center,
+        modifier = Modifier.fillMaxWidth(),
+        horizontalArrangement = Arrangement.spacedBy(gap),
         verticalAlignment = Alignment.CenterVertically
       ) {
-        if (icon != null) {
-          Icon(
-            imageVector = icon,
-            contentDescription = null,
-            tint = animatedIconColor,
-            modifier = Modifier.size(16.dp)
+        options.forEachIndexed { index, (label, icon) ->
+          val selected = clampedIndex == index
+          val tag = testTags.getOrNull(index)
+          val animatedContentColor by animateColorAsState(
+            targetValue = if (selected) MaterialTheme.colorScheme.onSurface else MaterialTheme.colorScheme.onSurfaceVariant,
+            animationSpec = colorSpec,
+            label = "seg_text_$index"
           )
-          Spacer(modifier = Modifier.width(6.dp))
+          val animatedIconColor by animateColorAsState(
+            targetValue = if (selected) primaryAccent else MaterialTheme.colorScheme.onSurfaceVariant,
+            animationSpec = colorSpec,
+            label = "seg_icon_$index"
+          )
+          val itemScale by animateFloatAsState(
+            targetValue = if (selected) 1.0f else 0.96f,
+            animationSpec = if (reducedMotion) snap() else spring(dampingRatio = 0.8f, stiffness = 500f),
+            label = "seg_scale_$index"
+          )
+
+          Row(
+            modifier = Modifier
+              .weight(1f)
+              .defaultMinSize(minHeight = 48.dp)
+              .clip(CircleShape)
+              .clickable { onSelect(index) }
+              .then(if (tag != null) Modifier.testTag(tag) else Modifier)
+              .graphicsLayer {
+                scaleX = itemScale
+                scaleY = itemScale
+              }
+              .padding(vertical = 10.dp, horizontal = 8.dp),
+            horizontalArrangement = Arrangement.Center,
+            verticalAlignment = Alignment.CenterVertically
+          ) {
+            if (icon != null) {
+              Icon(
+                imageVector = icon,
+                contentDescription = null,
+                tint = animatedIconColor,
+                modifier = Modifier.size(16.dp)
+              )
+              Spacer(modifier = Modifier.width(6.dp))
+            }
+            Text(
+              text = label,
+              style = MaterialTheme.typography.bodySmall.copy(
+                fontWeight = if (selected) FontWeight.Bold else FontWeight.SemiBold
+              ),
+              color = animatedContentColor,
+              maxLines = 1,
+              overflow = TextOverflow.Ellipsis
+            )
+          }
         }
-        Text(
-          text = label,
-          style = MaterialTheme.typography.bodySmall.copy(
-            fontWeight = if (selected) FontWeight.Bold else FontWeight.SemiBold
-          ),
-          color = animatedContentColor,
-          maxLines = 1,
-          overflow = TextOverflow.Ellipsis
-        )
       }
     }
   }

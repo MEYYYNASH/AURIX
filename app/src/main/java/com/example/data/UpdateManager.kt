@@ -162,9 +162,9 @@ class UpdateManager(
     private const val META_FILE_NAME = "aurix_update.apk.meta.json"
 
     val CURRENT_RELEASE_NOTES = listOf(
-      "Release v1.8.5 — End Download & Live Download Queue: Stop active playlist downloads immediately with End Download, or open the Download Queue sheet to cancel and retry tracks",
-      "Playlist Multi-Select: Select specific tracks in any pasted playlist link to Download (N) or Save (N) only the songs you want",
-      "Now Playing Beat Visualizer & Clean YT Titles: Live beat-reactive audio spectrum bars in Now Playing and automatic removal of YouTube [Official Video] / (Official Audio) tags"
+      "Release v1.8.6 — Recent Play UI Fix: Fixed the oversized close circle on Recent Play cards so the remove badge sits cleanly inside the artwork corner",
+      "Fluid Search Mode Transition: Spring-gliding liquid glass pill and directional parallax animation between YouTube Search and YT Link",
+      "Playlist Controls & Visualizer: End Download, Live Download Queue with cancel & retry, Playlist Multi-Select, Beat Visualizer, and Auto-Clean YT Titles"
     )
 
     fun parseVersionJson(rawJson: String): RemoteVersionInfo {
