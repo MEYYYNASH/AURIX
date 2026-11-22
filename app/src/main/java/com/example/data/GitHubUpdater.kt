@@ -192,7 +192,12 @@ object GitHubUpdater {
     val major = parts.getOrElse(0) { 0L }
     val minor = parts.getOrElse(1) { 0L }
     val patch = parts.getOrElse(2) { 0L }
-    return major * 10000L + minor * 100L + patch
+    return if (parts.size >= 4) {
+      val hotfix = parts.getOrElse(3) { 0L }
+      major * 10000L + minor * 100L + patch * 10L + hotfix
+    } else {
+      major * 10000L + minor * 100L + patch
+    }
   }
 
   private fun parseVersionCodeFromText(text: String): Long? {

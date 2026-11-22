@@ -1328,7 +1328,7 @@ fun SearchResultsArea(
                 .weight(1f)
                 .fillMaxWidth()
                 .padding(top = 8.dp),
-              verticalArrangement = Arrangement.spacedBy(12.dp),
+              verticalArrangement = Arrangement.spacedBy(8.dp),
               contentPadding = PaddingValues(bottom = listBottomPadding)
             ) {
               itemsIndexed(state.items, key = { index, song -> "${index}_${song.id}" }) { index, song ->
@@ -1939,67 +1939,49 @@ private fun SearchSkeletonLoadingView(
 ) {
   val infiniteTransition = rememberInfiniteTransition(label = "search_skeleton")
   val alphaAnim by infiniteTransition.animateFloat(
-    initialValue = 0.35f,
-    targetValue = 0.85f,
+    initialValue = 0.45f,
+    targetValue = 0.90f,
     animationSpec = infiniteRepeatable(
       animation = tween(durationMillis = 900, easing = LinearEasing),
       repeatMode = RepeatMode.Reverse
     ),
     label = "skeleton_alpha"
   )
-  val currentAlpha = if (reducedMotion) 0.55f else alphaAnim
-  val placeholderBase = if (darkTheme) Color(0xFF33415C) else Color(0xFFCBD5E1)
-  val cardBg = if (darkTheme) {
-    Brush.horizontalGradient(listOf(Color(0xFF18233B), Color(0xFF111728)))
-  } else {
-    Brush.horizontalGradient(listOf(Color.White.copy(alpha = 0.96f), Color(0xFFF3F6FF)))
-  }
-  val silverTopEdge = if (darkTheme) Color(0xFFBEC8DC).copy(alpha = 0.55f) else Color.White
-  val faintBorder = if (darkTheme) Color.White.copy(alpha = 0.06f) else Color(0xFFCBD5E1).copy(alpha = 0.55f)
-  val hardShadowColor = if (darkTheme) Color(0xFF080C18).copy(alpha = 0.70f) else Color(0xFF64748B).copy(alpha = 0.16f)
+  val currentAlpha = if (reducedMotion) 0.65f else alphaAnim
+  val placeholderBase = if (darkTheme) Color(0xFF2B3852) else Color(0xFFCBD5E1)
+  val barWidths = remember { listOf(0.84f, 0.68f, 0.50f, 0.84f, 0.78f) }
 
   Column(
     modifier = Modifier
       .fillMaxSize()
-      .padding(vertical = 4.dp),
-    verticalArrangement = Arrangement.spacedBy(12.dp)
+      .padding(top = 4.dp),
+    verticalArrangement = Arrangement.spacedBy(8.dp)
   ) {
-    GlassCard(
-      darkTheme = darkTheme,
-      cornerRadius = 24.dp,
-      modifier = Modifier.fillMaxWidth()
+    Row(
+      modifier = Modifier
+        .fillMaxWidth()
+        .padding(horizontal = 6.dp, vertical = 4.dp),
+      verticalAlignment = Alignment.CenterVertically,
+      horizontalArrangement = Arrangement.spacedBy(10.dp)
     ) {
-      Row(
-        modifier = Modifier
-          .fillMaxWidth()
-          .padding(14.dp),
-        verticalAlignment = Alignment.CenterVertically,
-        horizontalArrangement = Arrangement.spacedBy(14.dp)
-      ) {
-        OrbitLoader(
-          size = 40.dp,
-          ringColor = OrbitRingDefault,
-          planetColor = OrbitPlanetDefault,
-          eyeColor = OrbitEyeDefault,
-          cometColor = AurixTealAccent,
-          reducedMotion = reducedMotion
-        )
-        Column(verticalArrangement = Arrangement.spacedBy(2.dp)) {
-          Text(
-            text = modeText,
-            style = MaterialTheme.typography.bodyMedium.copy(fontWeight = FontWeight.SemiBold),
-            color = MaterialTheme.colorScheme.onSurface
-          )
-          Text(
-            text = "Searching across global music library...",
-            style = MaterialTheme.typography.bodySmall,
-            color = MaterialTheme.colorScheme.onSurfaceVariant
-          )
-        }
-      }
+      OrbitLoader(
+        size = 28.dp,
+        ringColor = OrbitRingDefault,
+        planetColor = OrbitPlanetDefault,
+        eyeColor = OrbitEyeDefault,
+        cometColor = AurixTealAccent,
+        reducedMotion = reducedMotion
+      )
+      Text(
+        text = modeText,
+        style = MaterialTheme.typography.labelLarge.copy(fontWeight = FontWeight.SemiBold),
+        color = MaterialTheme.colorScheme.onSurfaceVariant,
+        maxLines = 1,
+        overflow = TextOverflow.Ellipsis
+      )
     }
 
-    repeat(5) { index ->
+    barWidths.forEach { titleFraction ->
       Box(
         modifier = Modifier
           .fillMaxWidth()
@@ -2008,80 +1990,45 @@ private fun SearchSkeletonLoadingView(
         Box(
           modifier = Modifier
             .fillMaxWidth()
-            .graphicsLayer { clip = false }
-            .drawBehind {
-              if (size.width <= 0f || size.height <= 0f) return@drawBehind
-              val r = 28.dp.toPx().coerceAtMost(minOf(size.width, size.height) / 2f)
-              drawRoundRect(
-                color = hardShadowColor,
-                topLeft = Offset(0f, 5.dp.toPx()),
-                size = size,
-                cornerRadius = CornerRadius(r, r)
-              )
-              drawRoundRect(
-                brush = cardBg,
-                topLeft = Offset.Zero,
-                size = size,
-                cornerRadius = CornerRadius(r, r)
-              )
-              drawRoundRect(
-                color = faintBorder,
-                topLeft = Offset.Zero,
-                size = size,
-                cornerRadius = CornerRadius(r, r),
-                style = Stroke(width = 1.dp.toPx())
-              )
-              val arcDiameter = (r * 2f).coerceAtMost(size.height)
-              if (arcDiameter > 0f && size.width > 0f) {
-                drawArc(
-                  color = silverTopEdge,
-                  startAngle = 180f,
-                  sweepAngle = 180f,
-                  useCenter = false,
-                  topLeft = Offset.Zero,
-                  size = Size(size.width, arcDiameter),
-                  style = Stroke(width = 2.dp.toPx())
-                )
-              }
-            }
-            .clip(RoundedCornerShape(28.dp))
-            .padding(14.dp)
+            .standaloneNavyCardSurface(darkTheme = darkTheme)
+            .clip(RoundedCornerShape(34.dp))
+            .padding(horizontal = 14.dp, vertical = 12.dp)
         ) {
           Row(
             modifier = Modifier.fillMaxWidth(),
             verticalAlignment = Alignment.CenterVertically,
-            horizontalArrangement = Arrangement.spacedBy(14.dp)
+            horizontalArrangement = Arrangement.spacedBy(12.dp)
           ) {
             Box(
               modifier = Modifier
-                .size(60.dp)
-                .clip(RoundedCornerShape(18.dp))
-                .background(placeholderBase.copy(alpha = 0.52f * currentAlpha))
+                .size(56.dp)
+                .clip(RoundedCornerShape(16.dp))
+                .background(placeholderBase.copy(alpha = 0.85f * currentAlpha))
             )
             Column(
               modifier = Modifier.weight(1f),
-              verticalArrangement = Arrangement.spacedBy(9.dp)
+              verticalArrangement = Arrangement.spacedBy(10.dp)
             ) {
               Box(
                 modifier = Modifier
-                  .fillMaxWidth(fraction = 0.78f - (index % 3) * 0.14f)
+                  .fillMaxWidth(fraction = titleFraction)
                   .height(14.dp)
                   .clip(RoundedCornerShape(7.dp))
-                  .background(placeholderBase.copy(alpha = 0.56f * currentAlpha))
+                  .background(placeholderBase.copy(alpha = 0.82f * currentAlpha))
               )
               Box(
                 modifier = Modifier
-                  .fillMaxWidth(fraction = 0.44f)
-                  .height(11.dp)
-                  .clip(RoundedCornerShape(6.dp))
-                  .background(placeholderBase.copy(alpha = 0.42f * currentAlpha))
+                  .fillMaxWidth(fraction = 0.50f)
+                  .height(10.dp)
+                  .clip(RoundedCornerShape(5.dp))
+                  .background(placeholderBase.copy(alpha = 0.65f * currentAlpha))
               )
             }
             Box(
               modifier = Modifier
                 .size(44.dp)
                 .clip(CircleShape)
-                .background(placeholderBase.copy(alpha = 0.50f * currentAlpha))
+                .background(placeholderBase.copy(alpha = 0.78f * currentAlpha))
             )
           }
         }

@@ -24,7 +24,7 @@
     <string name="settings_about">អំពីកម្មវិធី</string>
     <string name="try_again">ព្យាយាមម្តងទៀត</string>
     <string name="add_local_song">បន្ថែមតន្ត្រីក្នុងទូរសព្ទ</string>
-    <string name="empty_library">គ្មានបទចម្រៀងក្នុងបណ្ណាល័យទេ។ បន្ថែមតន្ត្រី ឬចុចបេះដូងលើបទ YouTube និង iTunes!</string>
+    <string name="empty_library">គ្មានបទចម្រៀងក្នុងបណ្ណាល័យទេ។ បន្ថែមតន្ត្រី ឬចុចបេះដូងលើបទពី YouTube!</string>
     <string name="lyrics_tag_label">ទំនុកច្រៀង</string>
     <string name="report_wrong_lyrics">ទំនុកច្រៀងខុស? រាយការណ៍ / Wrong lyrics? Report</string>
     <string name="report_wrong_lyrics_short">ទំនុកច្រៀងខុស? រាយការណ៍</string>
@@ -155,7 +155,7 @@
     <string name="search_mode_yt_search">YouTube</string>
     <string name="search_mode_itunes">iTunes 30s</string>
     <string name="search_mode_youtube">តំណ YT</string>
-    <string name="search_placeholder">ស្វែងរកបទចម្រៀង សិល្បករលើ iTunes…</string>
+    <string name="search_placeholder">ស្វែងរកបទចម្រៀង ឬសិល្បករលើ YouTube…</string>
     <string name="search_yt_songs_placeholder">ស្វែងរកបទចម្រៀង សិល្បករលើ YouTube…</string>
     <string name="search_results_count">%1$d លទ្ធផល</string>
     <string name="search_quick_clear">សម្អាត</string>
@@ -254,8 +254,8 @@
     <string name="home_song_list_title">បញ្ជីបទចម្រៀង</string>
     <string name="home_popular_yt_title">បទពេញនិយមលើ YouTube</string>
     <string name="home_yt_badge">YouTube</string>
-    <string name="home_itunes_badge">iTunes</string>
-    <string name="home_itunes_yt_badge">iTunes + YT</string>
+    <string name="home_itunes_badge">តារាងចម្រៀង</string>
+    <string name="home_itunes_yt_badge">YouTube</string>
     <string name="home_song_list_empty">កំពុងផ្ទុកបទពេញពី YouTube…</string>
     <string name="home_new_albums_empty">កំពុងផ្ទុកអាល់ប៊ុមថ្មី…</string>
     <string name="home_featured_badge">ពិសេស</string>

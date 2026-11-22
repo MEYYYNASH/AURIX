@@ -911,7 +911,7 @@ fun PlaylistDetailScreen(
       .windowInsetsPadding(WindowInsets.statusBars)
       .padding(horizontal = 20.dp)
       .testTag("playlist_detail_screen"),
-    verticalArrangement = Arrangement.spacedBy(12.dp),
+    verticalArrangement = Arrangement.spacedBy(8.dp),
     contentPadding = PaddingValues(
       top = 14.dp,
       bottom = if (currentSong != null) 205.dp else 135.dp

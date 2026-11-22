@@ -453,7 +453,7 @@ fun LibraryScreen(
       } else {
         LazyColumn(
           modifier = Modifier.fillMaxSize(),
-          verticalArrangement = Arrangement.spacedBy(12.dp),
+          verticalArrangement = Arrangement.spacedBy(8.dp),
           contentPadding = PaddingValues(bottom = if (currentSong != null) 195.dp else 125.dp)
         ) {
           if (activeTab == 0) {

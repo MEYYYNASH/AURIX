@@ -10,13 +10,11 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.test.hasTestTag
 import androidx.compose.ui.test.junit4.createComposeRule
-import androidx.compose.ui.test.longClick
 import androidx.compose.ui.test.onNodeWithTag
 import androidx.compose.ui.test.onNodeWithText
 import androidx.compose.ui.test.performClick
 import androidx.compose.ui.test.performImeAction
 import androidx.compose.ui.test.performTextInput
-import androidx.compose.ui.test.performTouchInput
 import androidx.test.core.app.ApplicationProvider
 import com.example.data.PreferencesManager
 import com.example.data.YoutubeExtractor
@@ -194,12 +192,10 @@ class SearchFlowStabilityTest {
     composeTestRule.mainClock.advanceTimeBy(350)
     composeTestRule.waitForIdle()
 
-    // Click favorite button right on the standalone row
+    // Click favorite, play, and download buttons directly on the standalone row
     composeTestRule.onNodeWithTag("song_favorite_button_yt_vid_1").performClick()
     composeTestRule.waitForIdle()
-
-    // Long-press row to open context menu, then click download -> opens YoutubeFormatPickerSheet
-    composeTestRule.onNodeWithTag("song_row_yt_vid_1").performTouchInput { longClick() }
+    composeTestRule.onNodeWithTag("song_play_button_yt_vid_1").performClick()
     composeTestRule.waitForIdle()
     composeTestRule.onNodeWithTag("song_download_button_yt_vid_1").performClick()
     composeTestRule.waitForIdle()

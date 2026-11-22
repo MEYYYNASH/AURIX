@@ -1031,6 +1031,89 @@ fun SongDownloadRow(
   )
 }
 
+internal fun Modifier.standaloneNavyCardSurface(
+  darkTheme: Boolean,
+  isCurrent: Boolean = false,
+  accentColor: Color = AurixTealAccent,
+  cornerRadius: Dp = 34.dp
+): Modifier {
+  val cardBg = if (darkTheme) {
+    Brush.horizontalGradient(
+      listOf(
+        Color(0xFF1A253D).copy(alpha = 0.68f),
+        Color(0xFF10182B).copy(alpha = 0.62f)
+      )
+    )
+  } else {
+    Brush.horizontalGradient(listOf(Color.White.copy(alpha = 0.90f), Color(0xFFF3F6FF).copy(alpha = 0.86f)))
+  }
+  val glassRimBrush = if (darkTheme) {
+    Brush.verticalGradient(
+      0.0f to Color(0xFFE3ECFF).copy(alpha = 0.56f),
+      0.32f to Color.White.copy(alpha = 0.16f),
+      0.72f to Color.White.copy(alpha = 0.14f),
+      1.0f to Color(0xFFC2D0EC).copy(alpha = 0.30f)
+    )
+  } else {
+    Brush.verticalGradient(
+      0.0f to Color.White,
+      0.5f to Color(0xFFCBD5E1).copy(alpha = 0.55f),
+      1.0f to Color.White.copy(alpha = 0.85f)
+    )
+  }
+  val softShadowColor = if (darkTheme) {
+    Color(0xFF040814).copy(alpha = 0.44f)
+  } else {
+    Color(0xFF64748B).copy(alpha = 0.14f)
+  }
+
+  return this
+    .graphicsLayer { clip = false }
+    .drawBehind {
+      if (size.width <= 0f || size.height <= 0f) return@drawBehind
+      val cornerRadiusPx = cornerRadius.toPx().coerceAtMost(minOf(size.width, size.height) / 2f)
+      val shadowOffsetY = 4.dp.toPx()
+
+      // Soft ambient drop shadow below pill box
+      drawRoundRect(
+        color = softShadowColor,
+        topLeft = Offset(0f, shadowOffsetY),
+        size = size,
+        cornerRadius = CornerRadius(cornerRadiusPx, cornerRadiusPx)
+      )
+
+      // Translucent dark-navy glass fill
+      drawRoundRect(
+        brush = cardBg,
+        topLeft = Offset.Zero,
+        size = size,
+        cornerRadius = CornerRadius(cornerRadiusPx, cornerRadiusPx)
+      )
+
+      // Continuous crisp liquid-glass specular rim around entire pill
+      val rimStrokePx = 1.15.dp.toPx()
+      val rimInset = rimStrokePx * 0.5f
+      drawRoundRect(
+        brush = glassRimBrush,
+        topLeft = Offset(rimInset, rimInset),
+        size = Size(size.width - rimStrokePx, size.height - rimStrokePx),
+        cornerRadius = CornerRadius(cornerRadiusPx, cornerRadiusPx),
+        style = Stroke(width = rimStrokePx)
+      )
+
+      if (isCurrent) {
+        val activeStrokePx = 1.5.dp.toPx()
+        drawRoundRect(
+          color = accentColor.copy(alpha = 0.72f),
+          topLeft = Offset(activeStrokePx * 0.5f, activeStrokePx * 0.5f),
+          size = Size(size.width - activeStrokePx, size.height - activeStrokePx),
+          cornerRadius = CornerRadius(cornerRadiusPx, cornerRadiusPx),
+          style = Stroke(width = activeStrokePx)
+        )
+      }
+    }
+}
+
 @OptIn(ExperimentalFoundationApi::class)
 @Composable
 private fun StandaloneSongCard(
@@ -1066,29 +1149,8 @@ private fun StandaloneSongCard(
     label = "heart_pop"
   )
 
-  val cardBg = if (darkTheme) {
-    Brush.horizontalGradient(listOf(Color(0xFF18233B), Color(0xFF111728)))
-  } else {
-    Brush.horizontalGradient(listOf(Color.White.copy(alpha = 0.96f), Color(0xFFF3F6FF)))
-  }
-  val silverTopEdge = if (darkTheme) {
-    Color(0xFFBEC8DC).copy(alpha = 0.55f)
-  } else {
-    Color.White
-  }
-  val faintBorder = if (darkTheme) {
-    Color.White.copy(alpha = 0.06f)
-  } else {
-    Color(0xFFCBD5E1).copy(alpha = 0.55f)
-  }
-  val hardShadowColor = if (darkTheme) {
-    Color(0xFF080C18).copy(alpha = 0.70f)
-  } else {
-    Color(0xFF64748B).copy(alpha = 0.16f)
-  }
   val accentColor = MaterialTheme.colorScheme.primary
-  val hasMenuActions = onDownloadClick != null ||
-    onAddToAlbumClick != null ||
+  val hasMenuActions = onAddToAlbumClick != null ||
     onEditPhotoClick != null ||
     onDeleteClick != null
 
@@ -1100,66 +1162,17 @@ private fun StandaloneSongCard(
     Box(
       modifier = Modifier
         .fillMaxWidth()
-        .graphicsLayer { clip = false }
-        .drawBehind {
-          if (size.width <= 0f || size.height <= 0f) return@drawBehind
-          val cornerRadiusPx = 28.dp.toPx().coerceAtMost(minOf(size.width, size.height) / 2f)
-          val shadowOffsetY = 5.dp.toPx()
-
-          // Hard solid shadow: 0 5px 0 rgba(8,12,24,0.7)
-          drawRoundRect(
-            color = hardShadowColor,
-            topLeft = Offset(0f, shadowOffsetY),
-            size = size,
-            cornerRadius = CornerRadius(cornerRadiusPx, cornerRadiusPx)
-          )
-
-          // Card background gradient
-          drawRoundRect(
-            brush = cardBg,
-            topLeft = Offset.Zero,
-            size = size,
-            cornerRadius = CornerRadius(cornerRadiusPx, cornerRadiusPx)
-          )
-
-          // 1px faint border on other sides
-          drawRoundRect(
-            color = faintBorder,
-            topLeft = Offset.Zero,
-            size = size,
-            cornerRadius = CornerRadius(cornerRadiusPx, cornerRadiusPx),
-            style = Stroke(width = 1.dp.toPx())
-          )
-
-          // 2px light silver top edge following the rounded corners
-          if (isCurrent) {
-            drawRoundRect(
-              color = accentColor.copy(alpha = 0.72f),
-              topLeft = Offset.Zero,
-              size = size,
-              cornerRadius = CornerRadius(cornerRadiusPx, cornerRadiusPx),
-              style = Stroke(width = 1.5.dp.toPx())
-            )
-          }
-          val arcDiameter = (cornerRadiusPx * 2f).coerceAtMost(size.height)
-          if (arcDiameter > 0f && size.width > 0f) {
-            drawArc(
-              color = silverTopEdge,
-              startAngle = 180f,
-              sweepAngle = 180f,
-              useCenter = false,
-              topLeft = Offset.Zero,
-              size = Size(size.width, arcDiameter),
-              style = Stroke(width = 2.dp.toPx())
-            )
-          }
-        }
-        .clip(RoundedCornerShape(28.dp))
+        .standaloneNavyCardSurface(
+          darkTheme = darkTheme,
+          isCurrent = isCurrent,
+          accentColor = accentColor
+        )
+        .clip(RoundedCornerShape(34.dp))
         .combinedClickable(
           onClick = onSongClick,
           onLongClick = { if (hasMenuActions) showContextMenu = true }
         )
-        .padding(14.dp)
+        .padding(horizontal = 14.dp, vertical = 12.dp)
         .testTag("song_row_${song.id}"),
       contentAlignment = Alignment.Center
     ) {
@@ -1167,21 +1180,21 @@ private fun StandaloneSongCard(
         Row(
           modifier = Modifier.fillMaxWidth(),
           verticalAlignment = Alignment.CenterVertically,
-          horizontalArrangement = Arrangement.spacedBy(14.dp)
+          horizontalArrangement = Arrangement.spacedBy(12.dp)
         ) {
-          // Cover art: rounded square, radius 18dp, 60dp, object-fit cover centered
+          // Cover art: rounded square, radius 16dp, 56dp, object-fit cover centered
           Box(
             modifier = Modifier
-              .size(60.dp)
-              .clip(RoundedCornerShape(18.dp))
+              .size(56.dp)
+              .clip(RoundedCornerShape(16.dp))
               .border(
                 1.dp,
                 Color.White.copy(alpha = if (darkTheme) 0.16f else 0.75f),
-                RoundedCornerShape(18.dp)
+                RoundedCornerShape(16.dp)
               ),
             contentAlignment = Alignment.Center
           ) {
-            SongArtwork(song = song, modifier = Modifier.fillMaxSize(), cornerRadius = 18.dp)
+            SongArtwork(song = song, modifier = Modifier.fillMaxSize(), cornerRadius = 16.dp)
             if (isResolving) {
               Box(
                 modifier = Modifier
@@ -1245,23 +1258,57 @@ private fun StandaloneSongCard(
             )
           }
 
-          // ONE round 44dp action button on the right (heart/like only)
-          Surface(
-            shape = CircleShape,
-            color = if (song.isFavorite) {
-              MaterialTheme.colorScheme.error.copy(alpha = 0.16f)
-            } else if (darkTheme) {
-              Color.White.copy(alpha = 0.08f)
-            } else {
-              Color.Black.copy(alpha = 0.05f)
-            },
-            modifier = Modifier
-              .size(44.dp)
-              .clip(CircleShape)
-              .clickable { onFavoriteClick() }
-              .testTag("song_favorite_button_${song.id}")
+          // Right-side action cluster: Download (when available), Love, and circular Play
+          Row(
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.spacedBy(2.dp)
           ) {
-            Box(contentAlignment = Alignment.Center) {
+            if (onDownloadClick != null) {
+              Box(
+                modifier = Modifier
+                  .size(38.dp)
+                  .clip(CircleShape)
+                  .clickable(enabled = downloadProgress == null) { onDownloadClick() }
+                  .testTag("song_download_button_${song.id}"),
+                contentAlignment = Alignment.Center
+              ) {
+                when {
+                  downloadProgress != null -> {
+                    CircularProgressIndicator(
+                      progress = { downloadProgress.coerceIn(0.05f, 1f) },
+                      modifier = Modifier.size(18.dp),
+                      strokeWidth = 2.dp,
+                      color = accentColor
+                    )
+                  }
+                  isDownloaded -> {
+                    Icon(
+                      imageVector = Icons.Rounded.DownloadDone,
+                      contentDescription = "Downloaded",
+                      tint = accentColor,
+                      modifier = Modifier.size(20.dp)
+                    )
+                  }
+                  else -> {
+                    Icon(
+                      imageVector = Icons.Rounded.Download,
+                      contentDescription = "Download",
+                      tint = if (darkTheme) Color.White.copy(alpha = 0.85f) else MaterialTheme.colorScheme.onSurfaceVariant,
+                      modifier = Modifier.size(20.dp)
+                    )
+                  }
+                }
+              }
+            }
+
+            Box(
+              modifier = Modifier
+                .size(38.dp)
+                .clip(CircleShape)
+                .clickable { onFavoriteClick() }
+                .testTag("song_favorite_button_${song.id}"),
+              contentAlignment = Alignment.Center
+            ) {
               Icon(
                 imageVector = if (song.isFavorite) Icons.Rounded.Favorite else Icons.Rounded.FavoriteBorder,
                 contentDescription = "Favorite",
@@ -1274,8 +1321,37 @@ private fun StandaloneSongCard(
                 },
                 modifier = Modifier
                   .scale(heartScale)
-                  .size(21.dp)
+                  .size(20.dp)
               )
+            }
+
+            Spacer(modifier = Modifier.width(2.dp))
+
+            Surface(
+              shape = CircleShape,
+              color = when {
+                isCurrent -> accentColor.copy(alpha = 0.24f)
+                darkTheme -> Color.White.copy(alpha = 0.12f)
+                else -> Color.Black.copy(alpha = 0.08f)
+              },
+              border = BorderStroke(
+                1.dp,
+                if (isCurrent) accentColor.copy(alpha = 0.55f) else Color.White.copy(alpha = if (darkTheme) 0.14f else 0.70f)
+              ),
+              modifier = Modifier
+                .size(42.dp)
+                .clip(CircleShape)
+                .clickable { onSongClick() }
+                .testTag("song_play_button_${song.id}")
+            ) {
+              Box(contentAlignment = Alignment.Center) {
+                Icon(
+                  imageVector = if (isCurrent && isPlaying) Icons.Rounded.Pause else Icons.Rounded.PlayArrow,
+                  contentDescription = if (isCurrent && isPlaying) "Pause" else "Play",
+                  tint = if (isCurrent) accentColor else if (darkTheme) Color.White else MaterialTheme.colorScheme.onBackground,
+                  modifier = Modifier.size(21.dp)
+                )
+              }
             }
           }
         }
@@ -1299,31 +1375,6 @@ private fun StandaloneSongCard(
           expanded = showContextMenu,
           onDismissRequest = { showContextMenu = false }
         ) {
-          if (onDownloadClick != null) {
-            DropdownMenuItem(
-              text = {
-                Text(
-                  text = if (isDownloaded) {
-                    stringResource(id = R.string.yt_download_another)
-                  } else {
-                    stringResource(id = R.string.yt_select_format_title)
-                  }
-                )
-              },
-              leadingIcon = {
-                Icon(
-                  imageVector = if (isDownloaded) Icons.Rounded.DownloadDone else Icons.Rounded.Download,
-                  contentDescription = null,
-                  tint = if (isDownloaded) accentColor else MaterialTheme.colorScheme.onSurface
-                )
-              },
-              modifier = Modifier.testTag("song_download_button_${song.id}"),
-              onClick = {
-                showContextMenu = false
-                onDownloadClick()
-              }
-            )
-          }
           if (onAddToAlbumClick != null) {
             DropdownMenuItem(
               text = { Text("Add to Album") },

@@ -55,7 +55,7 @@ class MainActivityLaunchTest {
     val app = ApplicationProvider.getApplicationContext<Application>()
     val prefs = PreferencesManager(app)
     prefs.setOnboardingCompleted(true)
-    prefs.setLastSeenVersionCode(10800L)
+    prefs.setLastSeenVersionCode(10801L)
 
     composeTestRule.activityRule.scenario.onActivity { activity ->
       activity.recreate()

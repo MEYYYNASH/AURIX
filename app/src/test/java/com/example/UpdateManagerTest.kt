@@ -6,6 +6,7 @@ import android.net.NetworkCapabilities
 import android.os.Environment
 import androidx.test.core.app.ApplicationProvider
 import com.example.data.AppNotificationHelper
+import com.example.data.GitHubUpdater
 import com.example.data.InstalledAppInfo
 import com.example.data.RemoteVersionInfo
 import com.example.data.TrackDownloadNotificationInfo
@@ -291,9 +292,11 @@ class UpdateManagerTest {
   }
 
   @Test
-  fun `app release metadata targets 1_8_1`() {
-    assertEquals("1.8.1", BuildConfig.VERSION_NAME)
-    assertEquals(10801, BuildConfig.VERSION_CODE)
+  fun `app release metadata targets 1_8_1_2`() {
+    assertEquals("1.8.1.2", BuildConfig.VERSION_NAME)
+    assertEquals(10812, BuildConfig.VERSION_CODE)
+    assertEquals(10812L, GitHubUpdater.deriveVersionCodeFromTag("v1.8.1.2"))
+    assertEquals(10801L, GitHubUpdater.deriveVersionCodeFromTag("v1.8.1"))
     assertTrue(UpdateManager.CURRENT_RELEASE_NOTES.isNotEmpty())
   }
 }

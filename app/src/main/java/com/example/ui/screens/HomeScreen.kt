@@ -839,7 +839,7 @@ fun HomeScreen(
                 modifier = Modifier
                   .fillMaxWidth()
                   .testTag("home_smart_recommendations_card"),
-                verticalArrangement = Arrangement.spacedBy(12.dp)
+                verticalArrangement = Arrangement.spacedBy(8.dp)
               ) {
                 previewRecs.forEach { rec ->
                   Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
@@ -1082,7 +1082,7 @@ fun HomeScreen(
                       val displayTracks = trendingSongs.take(8)
                       Column(
                         modifier = Modifier.fillMaxWidth(),
-                        verticalArrangement = Arrangement.spacedBy(12.dp)
+                        verticalArrangement = Arrangement.spacedBy(8.dp)
                       ) {
                         displayTracks.forEachIndexed { idx, song ->
                           if (song.id.startsWith("yt_")) {

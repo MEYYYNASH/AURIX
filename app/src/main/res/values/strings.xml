@@ -24,7 +24,7 @@
     <string name="settings_about">About</string>
     <string name="try_again">Try again</string>
     <string name="add_local_song">Add local music</string>
-    <string name="empty_library">No songs in library. Add local music or like songs from YouTube or iTunes Search!</string>
+    <string name="empty_library">No songs in library. Add local music or like songs from YouTube Search!</string>
     <string name="lyrics_tag_label">Lyrics</string>
     <string name="report_wrong_lyrics">ទំនុកច្រៀងខុស? រាយការណ៍ / Wrong lyrics? Report</string>
     <string name="report_wrong_lyrics_short">Wrong lyrics? Report</string>
@@ -155,7 +155,7 @@
     <string name="search_mode_yt_search">YouTube</string>
     <string name="search_mode_itunes">iTunes 30s</string>
     <string name="search_mode_youtube">YT Link</string>
-    <string name="search_placeholder">Search songs, artists on iTunes…</string>
+    <string name="search_placeholder">Search songs or artists on YouTube…</string>
     <string name="search_yt_songs_placeholder">Search songs, artists on YouTube…</string>
     <string name="search_results_count">%1$d results</string>
     <string name="search_quick_clear">Clear</string>
@@ -357,8 +357,8 @@
     <string name="home_song_list_title">Song List</string>
     <string name="home_popular_yt_title">Popular on YouTube</string>
     <string name="home_yt_badge">YouTube</string>
-    <string name="home_itunes_badge">iTunes</string>
-    <string name="home_itunes_yt_badge">iTunes + YT</string>
+    <string name="home_itunes_badge">Charts</string>
+    <string name="home_itunes_yt_badge">YouTube</string>
     <string name="home_song_list_empty">Loading full songs from YouTube…</string>
     <string name="home_new_albums_empty">Loading new releases…</string>
     <string name="home_featured_badge">FEATURED</string>
