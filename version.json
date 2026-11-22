@@ -3,10 +3,10 @@
   "versionCode": 10820,
   "releaseDate": "2026-11-22",
   "apkUrl": "https://github.com/MEYYYNASH/AURIX/releases/download/v1.8.2/AURIX-v1.8.2.apk",
-  "sha256": "f266b10b83e976959e49a89e60a0247af2118ff53a282681d97dd3c071e72b41",
+  "sha256": "ae71dc11f82ba8620a4effed5bde70005687ef9c0bef186c972e314e981801a7",
   "mandatory": false,
   "notes": [
-    "Release v1.8.2 — Launch, Upgrade & Search Crash Fixes: Idempotent 1.7.8->1.8.2 Room migrations, resilient DataStore recovery, and foreground download service fail-safe",
+    "Release v1.8.2 \u2014 Launch, Upgrade & Search Crash Fixes: Idempotent 1.7.8->1.8.2 Room migrations, resilient DataStore recovery, and foreground download service fail-safe",
     "On-Screen Error Dialog: Non-fatal exceptions across startup, Search, Clipboard Paste, Audio Playback, and Share sheets are caught cleanly and displayed with Copy Details instead of closing the app",
     "Extraction, Lyrics & Liquid-Glass Stability: Safe null/bounds checks in SyncedLyricsView, Tab Bars, TrackMetadataClassifier, and YouTube Search extraction"
   ],
