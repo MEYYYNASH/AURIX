@@ -489,4 +489,10 @@
     <string name="error_dialog_copy">Copy Details</string>
     <string name="error_dialog_copied">Error details copied</string>
     <string name="search_clipboard_error">Unable to Read Clipboard</string>
+    <string name="song_menu_add_to_album">Add to album</string>
+    <string name="song_menu_add_to_album_hint">Pick or create an album</string>
+    <string name="song_menu_edit_cover">Edit cover</string>
+    <string name="song_menu_edit_cover_hint">Choose a photo</string>
+    <string name="song_menu_remove">Remove</string>
+    <string name="song_menu_remove_hint">Delete from library</string>
 </resources>

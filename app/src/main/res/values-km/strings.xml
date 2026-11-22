@@ -386,4 +386,10 @@
     <string name="error_dialog_copy">ចម្លងព័ត៌មានលម្អិត</string>
     <string name="error_dialog_copied">បានចម្លងព័ត៌មានកំហុស</string>
     <string name="search_clipboard_error">មិនអាចអាន Clipboard បានទេ</string>
+    <string name="song_menu_add_to_album">បញ្ចូលទៅអាល់ប៊ុម</string>
+    <string name="song_menu_add_to_album_hint">ជ្រើស ឬបង្កើតអាល់ប៊ុមថ្មី</string>
+    <string name="song_menu_edit_cover">កែសម្រួលរូបគម្រប</string>
+    <string name="song_menu_edit_cover_hint">ជ្រើសរើសរូបភាព</string>
+    <string name="song_menu_remove">លុបចេញ</string>
+    <string name="song_menu_remove_hint">លុបចេញពីបណ្ណាល័យ</string>
 </resources>

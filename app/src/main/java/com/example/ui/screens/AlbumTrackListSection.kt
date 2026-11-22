@@ -320,6 +320,7 @@ fun AlbumTrackListSection(
           coverUrl = resolvedCover,
           isAddedToLibrary = isAddedToLibrary,
           isAlbumDownloaded = isAlbumDownloaded,
+          isShuffleEnabled = isShuffleEnabled,
           showAlbumMenu = showAlbumMenu,
           canResetCover = effectiveAlbumInfo.customCoverMode != null,
           reducedMotion = effectiveReducedMotion,
@@ -611,6 +612,7 @@ fun AlbumHeader(
   coverUrl: String? = null,
   isAddedToLibrary: Boolean = false,
   isAlbumDownloaded: Boolean = false,
+  isShuffleEnabled: Boolean = false,
   showAlbumMenu: Boolean = false,
   canResetCover: Boolean = false,
   reducedMotion: Boolean = false,
@@ -748,145 +750,34 @@ fun AlbumHeader(
 
       Spacer(modifier = Modifier.height(6.dp))
 
-      Box {
-        ActionButtons(
-          isAddedToLibrary = isAddedToLibrary,
-          isAlbumDownloaded = isAlbumDownloaded,
-          onAddToLibraryClick = onAddToLibraryClick,
-          onDownloadClick = onDownloadClick,
-          onAddSongsClick = onAddSongsClick,
-          onMoreClick = onMoreClick
-        )
-        DropdownMenu(
-          expanded = showAlbumMenu,
-          onDismissRequest = onDismissMenu,
-          containerColor = AlbumDesignTokens.RaisedSurface
-        ) {
-          DropdownMenuItem(
-            leadingIcon = {
-              Icon(Icons.Rounded.PlaylistAdd, contentDescription = null, tint = AlbumDesignTokens.Accent)
-            },
-            text = {
-              Text(
-                text = stringResource(id = R.string.album_add_songs),
-                color = AlbumDesignTokens.Text,
-                fontFamily = AlbumDesignTokens.OutfitFontFamily
-              )
-            },
-            onClick = onAddSongsClick,
-            modifier = Modifier.testTag("album_menu_add_songs")
+      ActionButtons(
+        isAddedToLibrary = isAddedToLibrary,
+        isAlbumDownloaded = isAlbumDownloaded,
+        onAddToLibraryClick = onAddToLibraryClick,
+        onDownloadClick = onDownloadClick,
+        onAddSongsClick = onAddSongsClick,
+        onMoreClick = onMoreClick,
+        moreMenuContent = {
+          AlbumMoreGlassMenu(
+            expanded = showAlbumMenu,
+            isAddedToLibrary = isAddedToLibrary,
+            isAlbumDownloaded = isAlbumDownloaded,
+            isShuffleEnabled = isShuffleEnabled,
+            canResetCover = canResetCover,
+            reducedMotion = reducedMotion,
+            onDismissRequest = onDismissMenu,
+            onPlayClick = onPlayClick,
+            onShuffleClick = onShuffleClick,
+            onAddSongsClick = onAddSongsClick,
+            onImportAudioClick = onImportAudioClick,
+            onEditCoverClick = onEditCoverClick,
+            onResetCoverClick = onResetCoverClick,
+            onToggleLibraryClick = onAddToLibraryClick,
+            onDownloadAlbumClick = onDownloadClick,
+            onDeleteAlbumClick = onDeleteAlbumClick
           )
-          DropdownMenuItem(
-            leadingIcon = {
-              Icon(Icons.Rounded.Edit, contentDescription = null, tint = AlbumDesignTokens.Accent)
-            },
-            text = {
-              Text(
-                text = stringResource(id = R.string.album_edit_cover),
-                color = AlbumDesignTokens.Text,
-                fontFamily = AlbumDesignTokens.OutfitFontFamily
-              )
-            },
-            onClick = onEditCoverClick,
-            modifier = Modifier.testTag("album_menu_edit_cover")
-          )
-          if (canResetCover) {
-            DropdownMenuItem(
-              leadingIcon = {
-                Icon(Icons.Rounded.Refresh, contentDescription = null, tint = AlbumDesignTokens.DimText)
-              },
-              text = {
-                Text(
-                  text = stringResource(id = R.string.album_reset_cover),
-                  color = AlbumDesignTokens.Text,
-                  fontFamily = AlbumDesignTokens.OutfitFontFamily
-                )
-              },
-              onClick = onResetCoverClick,
-              modifier = Modifier.testTag("album_menu_reset_cover")
-            )
-          }
-          DropdownMenuItem(
-            leadingIcon = {
-              Icon(Icons.Rounded.FolderOpen, contentDescription = null, tint = AlbumDesignTokens.DimText)
-            },
-            text = {
-              Text(
-                text = stringResource(id = R.string.album_import_audio),
-                color = AlbumDesignTokens.Text,
-                fontFamily = AlbumDesignTokens.OutfitFontFamily
-              )
-            },
-            onClick = onImportAudioClick
-          )
-          DropdownMenuItem(
-            text = {
-              Text(
-                text = stringResource(id = R.string.album_action_play),
-                color = AlbumDesignTokens.Text,
-                fontFamily = AlbumDesignTokens.OutfitFontFamily
-              )
-            },
-            onClick = onPlayClick
-          )
-          DropdownMenuItem(
-            text = {
-              Text(
-                text = stringResource(id = R.string.album_action_shuffle),
-                color = AlbumDesignTokens.Text,
-                fontFamily = AlbumDesignTokens.OutfitFontFamily
-              )
-            },
-            onClick = onShuffleClick
-          )
-          DropdownMenuItem(
-            text = {
-              Text(
-                text = if (isAddedToLibrary) {
-                  stringResource(id = R.string.album_remove_from_library)
-                } else {
-                  stringResource(id = R.string.album_add_to_library)
-                },
-                color = AlbumDesignTokens.Text,
-                fontFamily = AlbumDesignTokens.OutfitFontFamily
-              )
-            },
-            onClick = {
-              onDismissMenu()
-              onAddToLibraryClick()
-            }
-          )
-          DropdownMenuItem(
-            text = {
-              Text(
-                text = stringResource(id = R.string.album_download),
-                color = AlbumDesignTokens.Text,
-                fontFamily = AlbumDesignTokens.OutfitFontFamily
-              )
-            },
-            onClick = {
-              onDismissMenu()
-              onDownloadClick()
-            }
-          )
-          if (onDeleteAlbumClick != null) {
-            DropdownMenuItem(
-              leadingIcon = {
-                Icon(Icons.Rounded.DeleteOutline, contentDescription = null, tint = Color(0xFFFF6B6B))
-              },
-              text = {
-                Text(
-                  text = stringResource(id = R.string.album_delete),
-                  color = Color(0xFFFF6B6B),
-                  fontFamily = AlbumDesignTokens.OutfitFontFamily
-                )
-              },
-              onClick = onDeleteAlbumClick,
-              modifier = Modifier.testTag("album_menu_delete_album")
-            )
-          }
         }
-      }
+      )
     }
   }
 }
@@ -899,7 +790,8 @@ fun ActionButtons(
   onDownloadClick: () -> Unit,
   onAddSongsClick: () -> Unit = {},
   onMoreClick: () -> Unit,
-  modifier: Modifier = Modifier
+  modifier: Modifier = Modifier,
+  moreMenuContent: (@Composable () -> Unit)? = null
 ) {
   val libraryTint by animateColorAsState(
     targetValue = if (isAddedToLibrary) AlbumDesignTokens.Accent else AlbumDesignTokens.Text.copy(alpha = 0.88f),
@@ -942,13 +834,16 @@ fun ActionButtons(
       onClick = onAddSongsClick,
       testTag = "album_add_songs_button"
     )
-    AlbumHeaderIconButton(
-      icon = Icons.Rounded.MoreHoriz,
-      contentDescription = "More album options",
-      tint = AlbumDesignTokens.Text.copy(alpha = 0.88f),
-      onClick = onMoreClick,
-      testTag = "album_more_button"
-    )
+    Box {
+      AlbumHeaderIconButton(
+        icon = Icons.Rounded.MoreHoriz,
+        contentDescription = "More album options",
+        tint = AlbumDesignTokens.Text.copy(alpha = 0.88f),
+        onClick = onMoreClick,
+        testTag = "album_more_button"
+      )
+      moreMenuContent?.invoke()
+    }
   }
 }
 

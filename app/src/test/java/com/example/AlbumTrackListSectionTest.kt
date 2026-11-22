@@ -155,4 +155,99 @@ class AlbumTrackListSectionTest {
 
     assertEquals(targetAlbum.albumId, deletedAlbumId)
   }
+
+  @Test
+  fun albumMoreMenu_showsPlayShuffleHeroButtonsAndDeleteConfirmDialog() {
+    var playClicked = false
+    var shuffleClicked = false
+    var deletedConfirmed = false
+
+    composeTestRule.setContent {
+      AurixTheme(darkTheme = true) {
+        AlbumTrackListSection(
+          albumTitle = "Midnight Album",
+          artistName = "Artist Name",
+          tracks = sampleTracks,
+          currentSong = null,
+          isPlaying = false,
+          reducedMotion = true,
+          onPlayClick = { playClicked = true },
+          onShuffleClick = { shuffleClicked = true },
+          onDeleteAlbum = { deletedConfirmed = true }
+        )
+      }
+    }
+
+    composeTestRule.waitForIdle()
+    composeTestRule.onNodeWithTag("album_more_button").assertIsDisplayed().performClick()
+    composeTestRule.waitForIdle()
+
+    composeTestRule.onNodeWithTag("album_more_glass_menu").assertIsDisplayed()
+    composeTestRule.onNodeWithTag("album_menu_play").assertIsDisplayed()
+    composeTestRule.onNodeWithTag("album_menu_shuffle").assertIsDisplayed()
+    composeTestRule.onNodeWithTag("album_menu_add_songs").assertIsDisplayed()
+    composeTestRule.onNodeWithTag("album_menu_import_audio").assertIsDisplayed()
+    composeTestRule.onNodeWithTag("album_menu_edit_cover").assertIsDisplayed()
+    composeTestRule.onNodeWithTag("album_menu_toggle_library").assertIsDisplayed()
+    composeTestRule.onNodeWithTag("album_menu_download").assertIsDisplayed()
+    composeTestRule.onNodeWithTag("album_menu_delete_album").assertIsDisplayed().performClick()
+    composeTestRule.waitForIdle()
+
+    // Confirm dialog must still appear before deleting
+    composeTestRule.onNodeWithTag("confirm_delete_album_button").assertIsDisplayed().performClick()
+    composeTestRule.waitForIdle()
+
+    assertTrue(deletedConfirmed)
+    assertFalse(playClicked)
+    assertFalse(shuffleClicked)
+  }
+
+  @Test
+  fun librarySongRowMenu_showsHintsAndRemoveConfirmDialog() {
+    val targetSong = sampleTracks.first()
+    var deletedSongId: String? = null
+    var addToAlbumSongId: String? = null
+
+    composeTestRule.setContent {
+      AurixTheme(darkTheme = true) {
+        LibraryScreen(
+          localSongs = listOf(targetSong),
+          favorites = emptyList(),
+          recentlyPlayed = emptyList(),
+          currentSong = null,
+          isPlaying = false,
+          darkTheme = true,
+          reducedMotion = true,
+          selectedTab = 0,
+          onAddLocalSong = {},
+          onCustomizeSongPhoto = { _, _ -> },
+          onDeleteLocalSong = { deletedSongId = it.id },
+          onAddSongToAlbumClick = { addToAlbumSongId = it.id },
+          onSongClick = {},
+          onFavoriteClick = {}
+        )
+      }
+    }
+
+    composeTestRule.waitForIdle()
+    composeTestRule.onNodeWithTag("song_row_${targetSong.id}")
+      .assertIsDisplayed()
+      .performTouchInput { longClick() }
+    composeTestRule.waitForIdle()
+
+    composeTestRule.onNodeWithTag("library_song_glass_menu").assertIsDisplayed()
+    composeTestRule.onNodeWithText("Pick or create an album").assertIsDisplayed()
+    composeTestRule.onNodeWithText("Choose a photo").assertIsDisplayed()
+    composeTestRule.onNodeWithText("Delete from library").assertIsDisplayed()
+
+    composeTestRule.onNodeWithTag("song_menu_remove").performClick()
+    composeTestRule.waitForIdle()
+
+    // Confirm dialog must still appear before deleting
+    composeTestRule.onNodeWithTag("confirm_delete_song_button").assertIsDisplayed().performClick()
+    composeTestRule.waitForIdle()
+
+    assertEquals(targetSong.id, deletedSongId)
+    assertEquals(null, addToAlbumSongId)
+  }
 }

@@ -1187,46 +1187,59 @@ private fun StandaloneSongCard(
           horizontalArrangement = Arrangement.spacedBy(12.dp)
         ) {
           // Cover art: rounded square, radius 16dp, 56dp, object-fit cover centered
-          Box(
-            modifier = Modifier
-              .size(56.dp)
-              .clip(RoundedCornerShape(16.dp))
-              .border(
-                1.dp,
-                Color.White.copy(alpha = if (darkTheme) 0.16f else 0.75f),
-                RoundedCornerShape(16.dp)
-              ),
-            contentAlignment = Alignment.Center
-          ) {
-            SongArtwork(song = song, modifier = Modifier.fillMaxSize(), cornerRadius = 16.dp)
-            if (isResolving) {
-              Box(
-                modifier = Modifier
-                  .fillMaxSize()
-                  .background(Color.Black.copy(alpha = 0.52f)),
-                contentAlignment = Alignment.Center
-              ) {
-                CircularProgressIndicator(
-                  modifier = Modifier.size(20.dp),
-                  strokeWidth = 2.dp,
-                  color = accentColor
-                )
+          Box {
+            Box(
+              modifier = Modifier
+                .size(56.dp)
+                .clip(RoundedCornerShape(16.dp))
+                .border(
+                  1.dp,
+                  Color.White.copy(alpha = if (darkTheme) 0.16f else 0.75f),
+                  RoundedCornerShape(16.dp)
+                ),
+              contentAlignment = Alignment.Center
+            ) {
+              SongArtwork(song = song, modifier = Modifier.fillMaxSize(), cornerRadius = 16.dp)
+              if (isResolving) {
+                Box(
+                  modifier = Modifier
+                    .fillMaxSize()
+                    .background(Color.Black.copy(alpha = 0.52f)),
+                  contentAlignment = Alignment.Center
+                ) {
+                  CircularProgressIndicator(
+                    modifier = Modifier.size(20.dp),
+                    strokeWidth = 2.dp,
+                    color = accentColor
+                  )
+                }
+              } else if (isCurrent) {
+                Box(
+                  modifier = Modifier
+                    .fillMaxSize()
+                    .background(Color.Black.copy(alpha = 0.42f)),
+                  contentAlignment = Alignment.Center
+                ) {
+                  EqualizerBars(
+                    isPlaying = isPlaying,
+                    color = accentColor,
+                    reducedMotion = reducedMotion,
+                    barWidth = 3.dp,
+                    maxHeight = 14.dp
+                  )
+                }
               }
-            } else if (isCurrent) {
-              Box(
-                modifier = Modifier
-                  .fillMaxSize()
-                  .background(Color.Black.copy(alpha = 0.42f)),
-                contentAlignment = Alignment.Center
-              ) {
-                EqualizerBars(
-                  isPlaying = isPlaying,
-                  color = accentColor,
-                  reducedMotion = reducedMotion,
-                  barWidth = 3.dp,
-                  maxHeight = 14.dp
-                )
-              }
+            }
+
+            if (hasMenuActions) {
+              LibrarySongGlassMenu(
+                expanded = showContextMenu,
+                reducedMotion = reducedMotion,
+                onDismissRequest = { showContextMenu = false },
+                onAddToAlbumClick = onAddToAlbumClick,
+                onEditPhotoClick = onEditPhotoClick,
+                onDeleteClick = onDeleteClick
+              )
             }
           }
 
@@ -1371,54 +1384,6 @@ private fun StandaloneSongCard(
             color = accentColor,
             trackColor = accentColor.copy(alpha = 0.18f)
           )
-        }
-      }
-
-      if (hasMenuActions) {
-        DropdownMenu(
-          expanded = showContextMenu,
-          onDismissRequest = { showContextMenu = false }
-        ) {
-          if (onAddToAlbumClick != null) {
-            DropdownMenuItem(
-              text = { Text("Add to Album") },
-              leadingIcon = {
-                Icon(imageVector = Icons.Rounded.PlaylistAdd, contentDescription = null)
-              },
-              onClick = {
-                showContextMenu = false
-                onAddToAlbumClick()
-              }
-            )
-          }
-          if (onEditPhotoClick != null) {
-            DropdownMenuItem(
-              text = { Text("Edit Cover") },
-              leadingIcon = {
-                Icon(imageVector = Icons.Rounded.AddPhotoAlternate, contentDescription = null)
-              },
-              onClick = {
-                showContextMenu = false
-                onEditPhotoClick()
-              }
-            )
-          }
-          if (onDeleteClick != null) {
-            DropdownMenuItem(
-              text = { Text("Remove", color = MaterialTheme.colorScheme.error) },
-              leadingIcon = {
-                Icon(
-                  imageVector = Icons.Rounded.DeleteOutline,
-                  contentDescription = null,
-                  tint = MaterialTheme.colorScheme.error
-                )
-              },
-              onClick = {
-                showContextMenu = false
-                onDeleteClick()
-              }
-            )
-          }
         }
       }
     }

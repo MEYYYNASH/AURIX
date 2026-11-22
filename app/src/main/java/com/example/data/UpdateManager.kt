@@ -162,9 +162,9 @@ class UpdateManager(
     private const val META_FILE_NAME = "aurix_update.apk.meta.json"
 
     val CURRENT_RELEASE_NOTES = listOf(
-      "Release v1.8.2 — Launch, Upgrade & Search Crash Fixes: Idempotent 1.7.8->1.8.2 Room migrations, resilient DataStore recovery, and foreground download service fail-safe",
-      "On-Screen Error Dialog: Non-fatal exceptions across startup, Search, Clipboard Paste, Audio Playback, and Share sheets are caught cleanly and displayed with Copy Details instead of closing the app",
-      "Extraction, Lyrics & Liquid-Glass Stability: Safe null/bounds checks in SyncedLyricsView, Tab Bars, TrackMetadataClassifier, and YouTube Search extraction"
+      "Release v1.8.3 — Dark Glass Popup Menus: Redesigned Album '...' and Library song-row popup menus with frosted 28dp glass cards, blue (#2F8BFF) and purple (#A78BFA) accents, and 220ms corner pop-in animations",
+      "Album Quick Actions: Added side-by-side Play gradient and Shuffle glass hero buttons at the top of the Album '...' menu, aligned cleanly under the three-dot button",
+      "Library Song-Row Menu & Safe Positioning: Added descriptive subtitle hints, colored icon tiles, consistent rounded icons, and automatic screen-edge flip/shift for small phones"
     )
 
     fun parseVersionJson(rawJson: String): RemoteVersionInfo {
