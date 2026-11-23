@@ -3,7 +3,7 @@
   "versionCode": 10890,
   "releaseDate": "2026-11-22",
   "apkUrl": "https://github.com/MEYYYNASH/AURIX/releases/download/v1.8.9/AURIX-v1.8.9.apk",
-  "sha256": "",
+  "sha256": "f7fbb987b4c82a185011b6409f1396d50075916ab81ef1e49fd88277471a32df",
   "mandatory": false,
   "notes": [
     "Create Album Button & Bottom Dock Fix (v1.8.9): Hid the floating bottom navigation bar and miniplayer when the Create Album sheet opens, pinned Cancel and Create album buttons in the sheet footer, and aligned all 5 color chips evenly",
