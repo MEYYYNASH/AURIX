@@ -162,8 +162,9 @@ class UpdateManager(
     private const val META_FILE_NAME = "aurix_update.apk.meta.json"
 
     val CURRENT_RELEASE_NOTES = listOf(
-      "Release v1.8.7 — Dark Glass Redesign: Restyled the App Update & Release card with frosted #0A0810 dark glass, violet/magenta radial glows, gradient version hero, status tiles, and shield indicator",
-      "Create Album Bottom Sheet & Shared-Element Transition: Live spinning vinyl cover preview, color chips (Violet, Ocean, Sunset, Mint, Night), floating-label inputs, and curved cover flight into the Library grid",
+      "App Update & Release Card: Restyled in #0A0810 dark glass with soft purple and magenta radial glows, gradient version hero, code chip, dual status tiles, and verified shield indicator",
+      "Release Notes & What's New Sheet: Redesigned with a dark glass hero version header, live status pill, date and highlight counters, and staggered glass changelog cards with category vector icons",
+      "Create Album Bottom Sheet: Frosted dark glass sheet with reactive preset glow, 108 dp spinning vinyl cover preview, glass color-chip selector rail, floating-label inputs with icon capsules, and curved shared-element cover flight",
       "Recent Play & Playlist Controls: Recent Play corner badge fix, YouTube Search ↔ YT Link transition, End Download, Live Download Queue, Beat Visualizer, and Auto-Clean YT Titles"
     )
 

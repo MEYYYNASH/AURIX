@@ -666,7 +666,8 @@ fun SettingsScreen(
       installedVersionCode = updateUiState.installed.versionCode,
       canDownloadUpdate = canDownloadUpdate,
       onDownloadAndInstall = { onDownloadOrInstallUpdate(context) },
-      onDismiss = { showReleaseNotesSheet = false }
+      onDismiss = { showReleaseNotesSheet = false },
+      reducedMotion = reducedMotion
     )
   }
 

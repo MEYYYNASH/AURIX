@@ -23,15 +23,11 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
-import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.lazy.itemsIndexed
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
-import androidx.compose.foundation.text.KeyboardActions
-import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.rounded.Add
-import androidx.compose.material.icons.rounded.Album
 import androidx.compose.material.icons.rounded.CheckCircle
 import androidx.compose.material.icons.rounded.Close
 import androidx.compose.material.icons.rounded.DeleteOutline
@@ -52,7 +48,6 @@ import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.ModalBottomSheet
 import androidx.compose.material3.OutlinedButton
-import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
@@ -68,16 +63,19 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.draw.drawBehind
+import androidx.compose.ui.draw.shadow
+import androidx.compose.ui.geometry.Offset
+import androidx.compose.ui.geometry.Size
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.layout.ContentScale
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
-import androidx.compose.ui.text.input.ImeAction
-import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
@@ -90,13 +88,111 @@ import com.example.model.AlbumInfo
 import com.example.model.Song
 import com.example.model.computeAlbumId
 
+private val PickerGlassBg = Color(0xFF0A0810)
+private val PickerGlassCard = Color(0xFF130F1F)
+private val PickerGlassText = Color(0xFFF4F2FB)
+private val PickerGlassMuted = Color(0xFF8F8AA6)
+private val PickerGlassViolet = Color(0xFF8B5CF6)
+private val PickerGlassLightViolet = Color(0xFFC084FC)
+private val PickerGlassMagenta = Color(0xFFD946EF)
+
+@Composable
+private fun Modifier.darkGlassBottomSheetSurface(shape: RoundedCornerShape): Modifier {
+  val borderBrush = Brush.linearGradient(
+    colors = listOf(
+      Color.White.copy(alpha = 0.16f),
+      PickerGlassViolet.copy(alpha = 0.34f),
+      PickerGlassLightViolet.copy(alpha = 0.16f),
+      Color.White.copy(alpha = 0.08f)
+    )
+  )
+  return this
+    .shadow(
+      elevation = 24.dp,
+      shape = shape,
+      ambientColor = PickerGlassViolet.copy(alpha = 0.30f),
+      spotColor = PickerGlassMagenta.copy(alpha = 0.24f)
+    )
+    .clip(shape)
+    .background(PickerGlassBg)
+    .drawBehind {
+      drawCircle(
+        brush = Brush.radialGradient(
+          colors = listOf(PickerGlassViolet.copy(alpha = 0.22f), Color.Transparent),
+          center = Offset(size.width * 0.16f, size.height * 0.14f),
+          radius = size.maxDimension * 0.65f
+        ),
+        radius = size.maxDimension * 0.65f,
+        center = Offset(size.width * 0.16f, size.height * 0.14f)
+      )
+      drawCircle(
+        brush = Brush.radialGradient(
+          colors = listOf(PickerGlassMagenta.copy(alpha = 0.14f), Color.Transparent),
+          center = Offset(size.width * 0.88f, size.height * 0.78f),
+          radius = size.maxDimension * 0.58f
+        ),
+        radius = size.maxDimension * 0.58f,
+        center = Offset(size.width * 0.88f, size.height * 0.78f)
+      )
+      drawRect(
+        brush = Brush.horizontalGradient(
+          colors = listOf(
+            Color.Transparent,
+            PickerGlassViolet.copy(alpha = 0.85f),
+            PickerGlassLightViolet,
+            PickerGlassViolet.copy(alpha = 0.85f),
+            Color.Transparent
+          )
+        ),
+        topLeft = Offset.Zero,
+        size = Size(size.width, 2.5.dp.toPx())
+      )
+      drawRect(
+        brush = Brush.verticalGradient(
+          colors = listOf(PickerGlassLightViolet.copy(alpha = 0.20f), Color.Transparent),
+          startY = 0f,
+          endY = 26.dp.toPx()
+        ),
+        topLeft = Offset.Zero,
+        size = Size(size.width, 26.dp.toPx())
+      )
+    }
+    .border(1.dp, borderBrush, shape)
+}
+
+@Composable
+private fun DarkGlassDragHandle() {
+  Box(
+    modifier = Modifier
+      .fillMaxWidth()
+      .padding(top = 2.dp, bottom = 2.dp),
+    contentAlignment = Alignment.Center
+  ) {
+    Box(
+      modifier = Modifier
+        .width(44.dp)
+        .height(4.5.dp)
+        .clip(CircleShape)
+        .background(
+          Brush.horizontalGradient(
+            colors = listOf(
+              PickerGlassViolet.copy(alpha = 0.45f),
+              PickerGlassLightViolet.copy(alpha = 0.92f),
+              PickerGlassViolet.copy(alpha = 0.45f)
+            )
+          )
+        )
+    )
+  }
+}
+
 @Composable
 fun CreateAlbumDialog(
   defaultArtist: String = "",
   onDismiss: () -> Unit,
   onCreate: (title: String, artist: String, year: String) -> Unit
 ) {
-  val context = androidx.compose.ui.platform.LocalContext.current
+  val context = LocalContext.current
   Dialog(
     onDismissRequest = onDismiss,
     properties = DialogProperties(
@@ -134,32 +230,26 @@ fun AlbumHoldOptionsSheet(
   onAddSongs: () -> Unit,
   onRequestDeleteAlbum: () -> Unit
 ) {
-  val sheetShape = RoundedCornerShape(topStart = 28.dp, topEnd = 28.dp)
+  val sheetShape = RoundedCornerShape(topStart = 32.dp, topEnd = 32.dp)
   ModalBottomSheet(
     onDismissRequest = onDismiss,
     sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true),
     shape = sheetShape,
-    containerColor = AlbumDesignTokens.Surface,
-    contentColor = AlbumDesignTokens.Text,
-    scrimColor = Color.Black.copy(alpha = 0.56f),
+    containerColor = Color.Transparent,
+    contentColor = PickerGlassText,
+    scrimColor = Color(0xFF05040A).copy(alpha = 0.70f),
+    tonalElevation = 0.dp,
     dragHandle = null
   ) {
     Column(
       modifier = Modifier
         .fillMaxWidth()
-        .border(1.dp, AlbumDesignTokens.Border, sheetShape)
+        .darkGlassBottomSheetSurface(sheetShape)
         .navigationBarsPadding()
         .padding(horizontal = 20.dp, vertical = 14.dp),
-      verticalArrangement = Arrangement.spacedBy(10.dp)
+      verticalArrangement = Arrangement.spacedBy(12.dp)
     ) {
-      Box(
-        modifier = Modifier
-          .align(Alignment.CenterHorizontally)
-          .width(40.dp)
-          .height(4.dp)
-          .clip(CircleShape)
-          .background(Color.White.copy(alpha = 0.25f))
-      )
+      DarkGlassDragHandle()
 
       Row(
         modifier = Modifier.fillMaxWidth(),
@@ -177,7 +267,7 @@ fun AlbumHoldOptionsSheet(
               fontFamily = AlbumDesignTokens.OutfitFontFamily,
               fontWeight = FontWeight.Bold
             ),
-            color = AlbumDesignTokens.Text,
+            color = PickerGlassText,
             maxLines = 1,
             overflow = TextOverflow.Ellipsis
           )
@@ -191,31 +281,39 @@ fun AlbumHoldOptionsSheet(
             style = MaterialTheme.typography.bodySmall.copy(
               fontFamily = AlbumDesignTokens.OutfitFontFamily
             ),
-            color = AlbumDesignTokens.DimText,
+            color = PickerGlassMuted,
             maxLines = 1,
             overflow = TextOverflow.Ellipsis
           )
         }
-        IconButton(
-          onClick = onDismiss,
+        Surface(
+          shape = CircleShape,
+          color = Color.White.copy(alpha = 0.06f),
+          border = BorderStroke(1.dp, Color.White.copy(alpha = 0.10f)),
           modifier = Modifier
             .minimumInteractiveComponentSize()
+            .size(38.dp)
+            .clip(CircleShape)
+            .clickable { onDismiss() }
             .testTag("album_hold_close_button")
         ) {
-          Icon(
-            imageVector = Icons.Rounded.Close,
-            contentDescription = stringResource(id = R.string.cd_close_sheet),
-            tint = AlbumDesignTokens.DimText
-          )
+          Box(contentAlignment = Alignment.Center) {
+            Icon(
+              imageVector = Icons.Rounded.Close,
+              contentDescription = stringResource(id = R.string.cd_close_sheet),
+              tint = PickerGlassMuted,
+              modifier = Modifier.size(18.dp)
+            )
+          }
         }
       }
 
-      HorizontalDivider(color = AlbumDesignTokens.Border)
+      HorizontalDivider(color = Color.White.copy(alpha = 0.08f))
 
       AlbumSheetActionRow(
         icon = Icons.Rounded.OpenInNew,
         label = stringResource(id = R.string.album_hold_open),
-        tint = AlbumDesignTokens.Text,
+        tint = PickerGlassText,
         testTag = "album_hold_open_button",
         onClick = {
           onDismiss()
@@ -226,7 +324,7 @@ fun AlbumHoldOptionsSheet(
       AlbumSheetActionRow(
         icon = Icons.Rounded.PlaylistAdd,
         label = stringResource(id = R.string.album_add_songs),
-        tint = AlbumDesignTokens.Accent,
+        tint = PickerGlassLightViolet,
         testTag = "album_hold_add_songs_button",
         onClick = {
           onDismiss()
@@ -237,7 +335,7 @@ fun AlbumHoldOptionsSheet(
       AlbumSheetActionRow(
         icon = Icons.Rounded.DeleteOutline,
         label = stringResource(id = R.string.album_delete),
-        tint = Color(0xFFFF6B6B),
+        tint = Color(0xFFFB7185),
         testTag = "album_hold_delete_button",
         onClick = {
           onDismiss()
@@ -259,22 +357,31 @@ private fun AlbumSheetActionRow(
   Row(
     modifier = Modifier
       .fillMaxWidth()
-      .defaultMinSize(minHeight = 48.dp)
-      .clip(RoundedCornerShape(16.dp))
-      .background(AlbumDesignTokens.RaisedSurface.copy(alpha = 0.72f))
-      .border(1.dp, AlbumDesignTokens.Border, RoundedCornerShape(16.dp))
+      .defaultMinSize(minHeight = 52.dp)
+      .clip(RoundedCornerShape(18.dp))
+      .background(PickerGlassCard.copy(alpha = 0.85f))
+      .border(1.dp, Color.White.copy(alpha = 0.08f), RoundedCornerShape(18.dp))
       .clickable(onClick = onClick)
       .padding(horizontal = 16.dp, vertical = 14.dp)
       .testTag(testTag),
     verticalAlignment = Alignment.CenterVertically,
     horizontalArrangement = Arrangement.spacedBy(12.dp)
   ) {
-    Icon(
-      imageVector = icon,
-      contentDescription = null,
-      tint = tint,
-      modifier = Modifier.size(22.dp)
-    )
+    Box(
+      modifier = Modifier
+        .size(34.dp)
+        .clip(RoundedCornerShape(10.dp))
+        .background(tint.copy(alpha = 0.14f))
+        .border(1.dp, tint.copy(alpha = 0.28f), RoundedCornerShape(10.dp)),
+      contentAlignment = Alignment.Center
+    ) {
+      Icon(
+        imageVector = icon,
+        contentDescription = null,
+        tint = tint,
+        modifier = Modifier.size(18.dp)
+      )
+    }
     Text(
       text = label,
       style = MaterialTheme.typography.bodyLarge.copy(
@@ -304,24 +411,29 @@ fun DeleteAlbumConfirmDialog(
 
   AlertDialog(
     onDismissRequest = onDismiss,
+    containerColor = PickerGlassCard,
+    titleContentColor = PickerGlassText,
+    textContentColor = PickerGlassMuted,
     icon = {
       Icon(
         imageVector = Icons.Rounded.DeleteOutline,
         contentDescription = null,
-        tint = MaterialTheme.colorScheme.error
+        tint = Color(0xFFFB7185)
       )
     },
     title = {
       Text(
         text = stringResource(id = R.string.album_delete_title),
-        style = MaterialTheme.typography.titleMedium.copy(fontWeight = FontWeight.Bold)
+        style = MaterialTheme.typography.titleMedium.copy(fontWeight = FontWeight.Bold),
+        color = PickerGlassText
       )
     },
     text = {
       Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
         Text(
           text = stringResource(id = R.string.album_delete_message, album.title, album.tracks.size),
-          style = MaterialTheme.typography.bodyMedium.copy(lineHeight = 22.sp)
+          style = MaterialTheme.typography.bodyMedium.copy(lineHeight = 22.sp),
+          color = PickerGlassMuted
         )
         if (localSongsCount > 0) {
           Row(
@@ -341,7 +453,7 @@ fun DeleteAlbumConfirmDialog(
             Text(
               text = stringResource(id = R.string.album_delete_also_local, localSongsCount),
               style = MaterialTheme.typography.bodySmall,
-              color = MaterialTheme.colorScheme.onSurfaceVariant
+              color = PickerGlassMuted
             )
           }
         }
@@ -350,7 +462,7 @@ fun DeleteAlbumConfirmDialog(
     confirmButton = {
       Button(
         onClick = { onConfirm(alsoDeleteLocal) },
-        colors = ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.error),
+        colors = ButtonDefaults.buttonColors(containerColor = Color(0xFFE11D48)),
         shape = CircleShape,
         modifier = Modifier.testTag("confirm_delete_album_button")
       ) {
@@ -366,7 +478,10 @@ fun DeleteAlbumConfirmDialog(
         onClick = onDismiss,
         modifier = Modifier.testTag("cancel_delete_album_button")
       ) {
-        Text(stringResource(id = R.string.action_cancel))
+        Text(
+          text = stringResource(id = R.string.action_cancel),
+          color = PickerGlassText
+        )
       }
     }
   )
@@ -402,33 +517,27 @@ fun AddSongsToAlbumSheet(
     }
   }
 
-  val sheetShape = RoundedCornerShape(topStart = 28.dp, topEnd = 28.dp)
+  val sheetShape = RoundedCornerShape(topStart = 32.dp, topEnd = 32.dp)
   ModalBottomSheet(
     onDismissRequest = onDismiss,
     sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true),
     shape = sheetShape,
-    containerColor = AlbumDesignTokens.Surface,
-    contentColor = AlbumDesignTokens.Text,
-    scrimColor = Color.Black.copy(alpha = 0.56f),
+    containerColor = Color.Transparent,
+    contentColor = PickerGlassText,
+    scrimColor = Color(0xFF05040A).copy(alpha = 0.70f),
+    tonalElevation = 0.dp,
     dragHandle = null
   ) {
     Column(
       modifier = Modifier
         .fillMaxWidth()
         .heightIn(max = 580.dp)
-        .border(1.dp, AlbumDesignTokens.Border, sheetShape)
+        .darkGlassBottomSheetSurface(sheetShape)
         .navigationBarsPadding()
         .padding(horizontal = 20.dp, vertical = 14.dp),
       verticalArrangement = Arrangement.spacedBy(12.dp)
     ) {
-      Box(
-        modifier = Modifier
-          .align(Alignment.CenterHorizontally)
-          .width(40.dp)
-          .height(4.dp)
-          .clip(CircleShape)
-          .background(Color.White.copy(alpha = 0.25f))
-      )
+      DarkGlassDragHandle()
 
       Row(
         modifier = Modifier.fillMaxWidth(),
@@ -441,23 +550,24 @@ fun AddSongsToAlbumSheet(
             fontFamily = AlbumDesignTokens.OutfitFontFamily,
             fontWeight = FontWeight.Bold
           ),
-          color = AlbumDesignTokens.Text,
+          color = PickerGlassText,
           maxLines = 1,
           overflow = TextOverflow.Ellipsis,
           modifier = Modifier.weight(1f)
         )
         IconButton(onClick = onDismiss) {
-          Icon(Icons.Rounded.Close, contentDescription = stringResource(id = R.string.action_cancel), tint = AlbumDesignTokens.DimText)
+          Icon(Icons.Rounded.Close, contentDescription = stringResource(id = R.string.action_cancel), tint = PickerGlassMuted)
         }
       }
 
       OutlinedButton(
         onClick = { importAudioLauncher.launch(arrayOf("audio/*")) },
-        shape = CircleShape,
-        border = BorderStroke(1.dp, AlbumDesignTokens.Accent.copy(alpha = 0.55f)),
-        colors = ButtonDefaults.outlinedButtonColors(contentColor = AlbumDesignTokens.Accent),
+        shape = RoundedCornerShape(16.dp),
+        border = BorderStroke(1.dp, PickerGlassLightViolet.copy(alpha = 0.45f)),
+        colors = ButtonDefaults.outlinedButtonColors(contentColor = PickerGlassLightViolet),
         modifier = Modifier
           .fillMaxWidth()
+          .height(48.dp)
           .testTag("add_songs_import_audio_button")
       ) {
         Icon(Icons.Rounded.FolderOpen, contentDescription = null, modifier = Modifier.size(18.dp))
@@ -476,33 +586,34 @@ fun AddSongsToAlbumSheet(
           Text(
             text = stringResource(id = R.string.album_add_songs_search_hint),
             fontFamily = AlbumDesignTokens.OutfitFontFamily,
+            color = PickerGlassMuted,
             maxLines = 1,
             overflow = TextOverflow.Ellipsis
           )
         },
         leadingIcon = {
-          Icon(Icons.Rounded.Search, contentDescription = null, tint = AlbumDesignTokens.DimText)
+          Icon(Icons.Rounded.Search, contentDescription = null, tint = PickerGlassLightViolet)
         },
         trailingIcon = {
           if (query.isNotEmpty()) {
             IconButton(onClick = { query = "" }) {
-              Icon(Icons.Rounded.Close, contentDescription = null, tint = AlbumDesignTokens.DimText)
+              Icon(Icons.Rounded.Close, contentDescription = null, tint = PickerGlassMuted)
             }
           }
         },
         singleLine = true,
-        shape = RoundedCornerShape(16.dp),
+        shape = RoundedCornerShape(18.dp),
         colors = TextFieldDefaults.colors(
-          focusedContainerColor = AlbumDesignTokens.RaisedSurface,
-          unfocusedContainerColor = AlbumDesignTokens.RaisedSurface,
+          focusedContainerColor = PickerGlassCard,
+          unfocusedContainerColor = PickerGlassCard,
           focusedIndicatorColor = Color.Transparent,
           unfocusedIndicatorColor = Color.Transparent,
-          focusedTextColor = AlbumDesignTokens.Text,
-          unfocusedTextColor = AlbumDesignTokens.Text
+          focusedTextColor = PickerGlassText,
+          unfocusedTextColor = PickerGlassText
         ),
         modifier = Modifier
           .fillMaxWidth()
-          .border(1.dp, AlbumDesignTokens.Border, RoundedCornerShape(16.dp))
+          .border(1.dp, Color.White.copy(alpha = 0.08f), RoundedCornerShape(18.dp))
           .testTag("add_songs_search_input")
       )
 
@@ -519,7 +630,7 @@ fun AddSongsToAlbumSheet(
             style = MaterialTheme.typography.bodyMedium.copy(
               fontFamily = AlbumDesignTokens.OutfitFontFamily
             ),
-            color = AlbumDesignTokens.DimText
+            color = PickerGlassMuted
           )
         }
       } else {
@@ -538,17 +649,17 @@ fun AddSongsToAlbumSheet(
             Row(
               modifier = Modifier
                 .fillMaxWidth()
-                .clip(RoundedCornerShape(16.dp))
+                .clip(RoundedCornerShape(18.dp))
                 .background(
                   when {
-                    isSelected -> AlbumDesignTokens.Accent.copy(alpha = 0.16f)
-                    else -> AlbumDesignTokens.RaisedSurface.copy(alpha = 0.65f)
+                    isSelected -> PickerGlassViolet.copy(alpha = 0.18f)
+                    else -> PickerGlassCard.copy(alpha = 0.78f)
                   }
                 )
                 .border(
                   width = 1.dp,
-                  color = if (isSelected) AlbumDesignTokens.Accent.copy(alpha = 0.55f) else AlbumDesignTokens.Border,
-                  shape = RoundedCornerShape(16.dp)
+                  color = if (isSelected) PickerGlassLightViolet.copy(alpha = 0.50f) else Color.White.copy(alpha = 0.08f),
+                  shape = RoundedCornerShape(18.dp)
                 )
                 .clickable(enabled = !alreadyIn) {
                   selectedIds = if (isSelected) selectedIds - song.id else selectedIds + song.id
@@ -561,7 +672,7 @@ fun AddSongsToAlbumSheet(
               SongArtwork(
                 song = song,
                 modifier = Modifier.size(44.dp),
-                cornerRadius = 11.dp,
+                cornerRadius = 12.dp,
                 iconSize = 20.dp
               )
               Column(modifier = Modifier.weight(1f)) {
@@ -571,7 +682,7 @@ fun AddSongsToAlbumSheet(
                     fontFamily = AlbumDesignTokens.OutfitFontFamily,
                     fontWeight = FontWeight.SemiBold
                   ),
-                  color = AlbumDesignTokens.Text,
+                  color = PickerGlassText,
                   maxLines = 1,
                   overflow = TextOverflow.Ellipsis
                 )
@@ -580,7 +691,7 @@ fun AddSongsToAlbumSheet(
                   style = MaterialTheme.typography.bodySmall.copy(
                     fontFamily = AlbumDesignTokens.OutfitFontFamily
                   ),
-                  color = AlbumDesignTokens.DimText,
+                  color = PickerGlassMuted,
                   maxLines = 1,
                   overflow = TextOverflow.Ellipsis
                 )
@@ -593,7 +704,7 @@ fun AddSongsToAlbumSheet(
                   Text(
                     text = stringResource(id = R.string.album_add_songs_already_in),
                     style = MaterialTheme.typography.labelSmall,
-                    color = AlbumDesignTokens.DimText,
+                    color = PickerGlassMuted,
                     modifier = Modifier.padding(horizontal = 10.dp, vertical = 5.dp)
                   )
                 }
@@ -601,7 +712,7 @@ fun AddSongsToAlbumSheet(
                 Icon(
                   imageVector = if (isSelected) Icons.Rounded.CheckCircle else Icons.Rounded.RadioButtonUnchecked,
                   contentDescription = null,
-                  tint = if (isSelected) AlbumDesignTokens.Accent else AlbumDesignTokens.DimText,
+                  tint = if (isSelected) PickerGlassLightViolet else PickerGlassMuted,
                   modifier = Modifier.size(22.dp)
                 )
               }
@@ -610,24 +721,33 @@ fun AddSongsToAlbumSheet(
         }
       }
 
-      Button(
-        onClick = {
-          val chosen = availableSongs.filter { it.id in selectedIds }
-          if (chosen.isNotEmpty()) {
-            onAddSongs(chosen)
-            onDismiss()
-          }
-        },
-        enabled = selectedIds.isNotEmpty(),
-        shape = CircleShape,
-        colors = ButtonDefaults.buttonColors(
-          containerColor = AlbumDesignTokens.Accent,
-          contentColor = AlbumDesignTokens.Background
-        ),
+      val confirmEnabled = selectedIds.isNotEmpty()
+      Box(
         modifier = Modifier
           .fillMaxWidth()
-          .height(50.dp)
-          .testTag("add_songs_confirm_button")
+          .height(52.dp)
+          .clip(RoundedCornerShape(18.dp))
+          .background(
+            if (confirmEnabled) {
+              Brush.horizontalGradient(listOf(PickerGlassViolet, PickerGlassLightViolet))
+            } else {
+              Brush.horizontalGradient(listOf(Color(0xFF272433), Color(0xFF211E2B)))
+            }
+          )
+          .border(
+            1.dp,
+            if (confirmEnabled) Color.White.copy(alpha = 0.22f) else Color.White.copy(alpha = 0.06f),
+            RoundedCornerShape(18.dp)
+          )
+          .clickable(enabled = confirmEnabled) {
+            val chosen = availableSongs.filter { it.id in selectedIds }
+            if (chosen.isNotEmpty()) {
+              onAddSongs(chosen)
+              onDismiss()
+            }
+          }
+          .testTag("add_songs_confirm_button"),
+        contentAlignment = Alignment.Center
       ) {
         Text(
           text = if (selectedIds.size == 1) {
@@ -636,7 +756,8 @@ fun AddSongsToAlbumSheet(
             stringResource(id = R.string.album_add_songs_confirm, selectedIds.size)
           },
           fontFamily = AlbumDesignTokens.OutfitFontFamily,
-          fontWeight = FontWeight.Bold
+          fontWeight = FontWeight.Bold,
+          color = if (confirmEnabled) Color.White else PickerGlassMuted
         )
       }
     }
@@ -653,34 +774,28 @@ fun AddSongToAlbumSheet(
   onCreateAlbumWithSong: (title: String, artist: String, year: String) -> Unit
 ) {
   var showCreateDialog by remember { mutableStateOf(false) }
-  val sheetShape = RoundedCornerShape(topStart = 28.dp, topEnd = 28.dp)
+  val sheetShape = RoundedCornerShape(topStart = 32.dp, topEnd = 32.dp)
 
   ModalBottomSheet(
     onDismissRequest = onDismiss,
     sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true),
     shape = sheetShape,
-    containerColor = AlbumDesignTokens.Surface,
-    contentColor = AlbumDesignTokens.Text,
-    scrimColor = Color.Black.copy(alpha = 0.56f),
+    containerColor = Color.Transparent,
+    contentColor = PickerGlassText,
+    scrimColor = Color(0xFF05040A).copy(alpha = 0.70f),
+    tonalElevation = 0.dp,
     dragHandle = null
   ) {
     Column(
       modifier = Modifier
         .fillMaxWidth()
         .heightIn(max = 540.dp)
-        .border(1.dp, AlbumDesignTokens.Border, sheetShape)
+        .darkGlassBottomSheetSurface(sheetShape)
         .navigationBarsPadding()
         .padding(horizontal = 20.dp, vertical = 14.dp),
       verticalArrangement = Arrangement.spacedBy(12.dp)
     ) {
-      Box(
-        modifier = Modifier
-          .align(Alignment.CenterHorizontally)
-          .width(40.dp)
-          .height(4.dp)
-          .clip(CircleShape)
-          .background(Color.White.copy(alpha = 0.25f))
-      )
+      DarkGlassDragHandle()
 
       Row(
         modifier = Modifier.fillMaxWidth(),
@@ -694,30 +809,31 @@ fun AddSongToAlbumSheet(
               fontFamily = AlbumDesignTokens.OutfitFontFamily,
               fontWeight = FontWeight.Bold
             ),
-            color = AlbumDesignTokens.Text
+            color = PickerGlassText
           )
           Text(
             text = "${song.title} · ${song.artist}",
             style = MaterialTheme.typography.bodySmall.copy(
               fontFamily = AlbumDesignTokens.OutfitFontFamily
             ),
-            color = AlbumDesignTokens.DimText,
+            color = PickerGlassMuted,
             maxLines = 1,
             overflow = TextOverflow.Ellipsis
           )
         }
         IconButton(onClick = onDismiss) {
-          Icon(Icons.Rounded.Close, contentDescription = stringResource(id = R.string.action_cancel), tint = AlbumDesignTokens.DimText)
+          Icon(Icons.Rounded.Close, contentDescription = stringResource(id = R.string.action_cancel), tint = PickerGlassMuted)
         }
       }
 
       OutlinedButton(
         onClick = { showCreateDialog = true },
-        shape = CircleShape,
-        border = BorderStroke(1.dp, AlbumDesignTokens.Accent.copy(alpha = 0.55f)),
-        colors = ButtonDefaults.outlinedButtonColors(contentColor = AlbumDesignTokens.Accent),
+        shape = RoundedCornerShape(16.dp),
+        border = BorderStroke(1.dp, PickerGlassLightViolet.copy(alpha = 0.45f)),
+        colors = ButtonDefaults.outlinedButtonColors(contentColor = PickerGlassLightViolet),
         modifier = Modifier
           .fillMaxWidth()
+          .height(48.dp)
           .testTag("pick_album_create_new_button")
       ) {
         Icon(Icons.Rounded.Add, contentDescription = null, modifier = Modifier.size(18.dp))
@@ -743,9 +859,9 @@ fun AddSongToAlbumSheet(
           Row(
             modifier = Modifier
               .fillMaxWidth()
-              .clip(RoundedCornerShape(16.dp))
-              .background(AlbumDesignTokens.RaisedSurface.copy(alpha = 0.72f))
-              .border(1.dp, AlbumDesignTokens.Border, RoundedCornerShape(16.dp))
+              .clip(RoundedCornerShape(18.dp))
+              .background(PickerGlassCard.copy(alpha = 0.80f))
+              .border(1.dp, Color.White.copy(alpha = 0.08f), RoundedCornerShape(18.dp))
               .clickable(enabled = !alreadyAdded) {
                 onSelectAlbum(album)
                 onDismiss()
@@ -766,7 +882,7 @@ fun AddSongToAlbumSheet(
                   fontFamily = AlbumDesignTokens.OutfitFontFamily,
                   fontWeight = FontWeight.SemiBold
                 ),
-                color = AlbumDesignTokens.Text,
+                color = PickerGlassText,
                 maxLines = 1,
                 overflow = TextOverflow.Ellipsis
               )
@@ -780,7 +896,7 @@ fun AddSongToAlbumSheet(
                 style = MaterialTheme.typography.bodySmall.copy(
                   fontFamily = AlbumDesignTokens.OutfitFontFamily
                 ),
-                color = AlbumDesignTokens.DimText,
+                color = PickerGlassMuted,
                 maxLines = 1,
                 overflow = TextOverflow.Ellipsis
               )
@@ -788,12 +904,13 @@ fun AddSongToAlbumSheet(
             if (alreadyAdded) {
               Surface(
                 shape = CircleShape,
-                color = AlbumDesignTokens.Accent.copy(alpha = 0.16f)
+                color = PickerGlassViolet.copy(alpha = 0.18f),
+                border = BorderStroke(1.dp, PickerGlassLightViolet.copy(alpha = 0.30f))
               ) {
                 Text(
                   text = stringResource(id = R.string.album_pick_already_added),
                   style = MaterialTheme.typography.labelSmall,
-                  color = AlbumDesignTokens.Accent,
+                  color = PickerGlassLightViolet,
                   modifier = Modifier.padding(horizontal = 10.dp, vertical = 5.dp)
                 )
               }
@@ -822,16 +939,24 @@ private fun AlbumMiniThumb(
   album: AlbumInfo,
   modifier: Modifier = Modifier
 ) {
-  val shape = RoundedCornerShape(12.dp)
+  val context = LocalContext.current
+  val shape = RoundedCornerShape(13.dp)
   val coverUrl = album.coverUrl
+  val savedPreset = remember(album.albumId) {
+    AlbumCoverPresetStore.getPresetOrNull(context, album.albumId)
+  }
+  val startColor = savedPreset?.startColor ?: PickerGlassViolet
+  val endColor = savedPreset?.endColor ?: Color(0xFF3B1B7A)
+
   Box(
     modifier = modifier
       .clip(shape)
       .background(
         Brush.linearGradient(
-          colors = listOf(AlbumDesignTokens.CoverGradientStart, AlbumDesignTokens.CoverGradientEnd)
+          colors = listOf(startColor, endColor)
         )
-      ),
+      )
+      .border(1.dp, Color.White.copy(alpha = 0.14f), shape),
     contentAlignment = Alignment.Center
   ) {
     when {
@@ -849,6 +974,14 @@ private fun AlbumMiniThumb(
           contentDescription = album.title,
           contentScale = ContentScale.Crop,
           modifier = Modifier.fillMaxSize()
+        )
+      }
+      savedPreset != null -> {
+        val letter = album.title.trim().firstOrNull()?.uppercaseChar()?.toString().orEmpty()
+        Text(
+          text = letter.ifEmpty { "A" },
+          style = MaterialTheme.typography.titleSmall.copy(fontWeight = FontWeight.ExtraBold),
+          color = PickerGlassText
         )
       }
       else -> {

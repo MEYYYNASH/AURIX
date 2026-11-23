@@ -98,9 +98,10 @@ jobs:
             "sha256": os.environ["APK_SHA256"],
             "mandatory": False,
             "notes": [
-              f"Release {tag} — Dark Glass Redesign: Restyled the App Update & Release card with frosted #0A0810 dark glass, violet/magenta radial glows, gradient version hero, and shield status indicator",
-              "Create Album Bottom Sheet & Shared-Element Transition: New dark glass Create Album sheet with live spinning vinyl cover preview, color chips, floating-label inputs, and curved cover flight into the Library grid",
-              "Recent Play & Playlist Controls: Includes Recent Play badge fix, YouTube Search ↔ YT Link transitions, End Download, Live Download Queue, Beat Visualizer, and Auto-Clean YT Titles"
+              f"App Update & Release Card ({tag}): Restyled in #0A0810 dark glass with soft purple and magenta radial glows, gradient version hero, code chip, dual status tiles, and verified shield indicator",
+              "Release Notes & What's New Sheet: Redesigned with a dark glass hero version header, live status pill, date and highlight counters, and staggered glass changelog cards with category vector icons",
+              "Create Album Bottom Sheet: Frosted dark glass sheet with reactive preset glow, 108 dp spinning vinyl cover preview, glass color-chip selector rail, floating-label inputs with icon capsules, and curved shared-element cover flight",
+              "Recent Play & Playlist Controls: Recent Play corner badge fix, YouTube Search ↔ YT Link transitions, End Download, Live Download Queue, Beat Visualizer, and Auto-Clean YT Titles"
             ],
             "releasePageUrl": f"https://github.com/{repo}/releases/tag/{tag}"
           }

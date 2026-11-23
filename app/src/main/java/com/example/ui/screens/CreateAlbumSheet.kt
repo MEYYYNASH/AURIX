@@ -56,6 +56,7 @@ import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.rounded.Album
 import androidx.compose.material.icons.rounded.CalendarToday
+import androidx.compose.material.icons.rounded.Close
 import androidx.compose.material.icons.rounded.Edit
 import androidx.compose.material.icons.rounded.Mic
 import androidx.compose.material3.CircularProgressIndicator
@@ -67,7 +68,6 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableFloatStateOf
-import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableLongStateOf
 import androidx.compose.runtime.mutableStateMapOf
 import androidx.compose.runtime.mutableStateOf
@@ -129,6 +129,7 @@ private val AurixSpringOut = CubicBezierEasing(0.34f, 1.56f, 0.64f, 1f)
 
 private val DarkGlassBg = Color(0xFF0A0810)
 private val DarkGlassSurface = Color(0xFF130F1F)
+private val DarkGlassDeepSurface = Color(0xFF0F0C1A)
 private val DarkGlassText = Color(0xFFF4F2FB)
 private val DarkGlassMuted = Color(0xFF8F8AA6)
 private val DarkGlassViolet = Color(0xFF8B5CF6)
@@ -285,6 +286,12 @@ fun CreateAlbumBottomSheetOverlay(
   val dismissThresholdPx = with(density) { 125.dp.toPx() }
   val maxSlideDistancePx = with(density) { 640.dp.toPx() }
 
+  val activeGlowColor by animateColorAsState(
+    targetValue = selectedPreset.glowColor,
+    animationSpec = if (isReduced) snap() else tween(360, easing = AurixEaseOut),
+    label = "sheet_active_glow"
+  )
+
   // Launch entrance spring
   LaunchedEffect(visible, isReduced) {
     if (visible) {
@@ -404,7 +411,15 @@ fun CreateAlbumBottomSheetOverlay(
     dismissWithAnimation()
   }
 
-  val sheetShape = RoundedCornerShape(topStart = 32.dp, topEnd = 32.dp)
+  val sheetShape = RoundedCornerShape(topStart = 34.dp, topEnd = 34.dp)
+  val sheetBorderBrush = Brush.linearGradient(
+    colors = listOf(
+      Color.White.copy(alpha = 0.16f),
+      DarkGlassViolet.copy(alpha = 0.34f),
+      activeGlowColor.copy(alpha = 0.20f),
+      Color.White.copy(alpha = 0.08f)
+    )
+  )
   val totalTranslationY = sheetOffsetFraction.value * maxSlideDistancePx + dragOffsetY.value.coerceAtLeast(-28f)
   val dragFadeAlpha = (1f - (dragOffsetY.value / (maxSlideDistancePx * 0.9f)).coerceIn(0f, 0.65f)) *
     (1f - sheetOffsetFraction.value * 0.45f)
@@ -437,41 +452,51 @@ fun CreateAlbumBottomSheetOverlay(
           alpha = dragFadeAlpha.coerceIn(0f, 1f)
         }
         .shadow(
-          elevation = 24.dp,
+          elevation = 26.dp,
           shape = sheetShape,
-          ambientColor = DarkGlassViolet.copy(alpha = 0.34f),
-          spotColor = DarkGlassMagenta.copy(alpha = 0.28f)
+          ambientColor = DarkGlassViolet.copy(alpha = 0.36f),
+          spotColor = DarkGlassMagenta.copy(alpha = 0.30f)
         )
         .clip(sheetShape)
         .background(DarkGlassBg)
         .drawBehind {
-          // Soft purple & magenta radial glows
+          // Soft purple & reactive preset radial glows
           drawCircle(
             brush = Brush.radialGradient(
-              colors = listOf(DarkGlassViolet.copy(alpha = 0.24f), Color.Transparent),
-              center = Offset(size.width * 0.18f, size.height * 0.14f),
+              colors = listOf(DarkGlassViolet.copy(alpha = 0.25f), Color.Transparent),
+              center = Offset(size.width * 0.16f, size.height * 0.12f),
               radius = size.maxDimension * 0.65f
             ),
             radius = size.maxDimension * 0.65f,
-            center = Offset(size.width * 0.18f, size.height * 0.14f)
+            center = Offset(size.width * 0.16f, size.height * 0.12f)
+          )
+          drawCircle(
+            brush = Brush.radialGradient(
+              colors = listOf(activeGlowColor.copy(alpha = 0.14f), Color.Transparent),
+              center = Offset(size.width * 0.85f, size.height * 0.30f),
+              radius = size.maxDimension * 0.48f
+            ),
+            radius = size.maxDimension * 0.48f,
+            center = Offset(size.width * 0.85f, size.height * 0.30f)
           )
           drawCircle(
             brush = Brush.radialGradient(
               colors = listOf(DarkGlassMagenta.copy(alpha = 0.15f), Color.Transparent),
-              center = Offset(size.width * 0.88f, size.height * 0.72f),
+              center = Offset(size.width * 0.88f, size.height * 0.78f),
               radius = size.maxDimension * 0.60f
             ),
             radius = size.maxDimension * 0.60f,
-            center = Offset(size.width * 0.88f, size.height * 0.72f)
+            center = Offset(size.width * 0.88f, size.height * 0.78f)
           )
           // Violet glow line along top edge
           drawRect(
             brush = Brush.horizontalGradient(
               colors = listOf(
                 Color.Transparent,
-                DarkGlassViolet.copy(alpha = 0.85f),
+                DarkGlassViolet.copy(alpha = 0.88f),
                 DarkGlassLightViolet,
-                DarkGlassViolet.copy(alpha = 0.85f),
+                activeGlowColor,
+                DarkGlassViolet.copy(alpha = 0.88f),
                 Color.Transparent
               )
             ),
@@ -480,17 +505,17 @@ fun CreateAlbumBottomSheetOverlay(
           )
           drawRect(
             brush = Brush.verticalGradient(
-              colors = listOf(DarkGlassLightViolet.copy(alpha = 0.20f), Color.Transparent),
+              colors = listOf(DarkGlassLightViolet.copy(alpha = 0.22f), Color.Transparent),
               startY = 0f,
-              endY = 26.dp.toPx()
+              endY = 30.dp.toPx()
             ),
             topLeft = Offset(0f, 0f),
-            size = Size(size.width, 26.dp.toPx())
+            size = Size(size.width, 30.dp.toPx())
           )
         }
         .border(
           width = 1.dp,
-          color = Color.White.copy(alpha = 0.08f),
+          brush = sheetBorderBrush,
           shape = sheetShape
         )
         .clickable(
@@ -506,7 +531,7 @@ fun CreateAlbumBottomSheetOverlay(
           .fillMaxWidth()
           .verticalScroll(rememberScrollState())
           .padding(horizontal = 20.dp, vertical = 12.dp),
-        verticalArrangement = Arrangement.spacedBy(16.dp)
+        verticalArrangement = Arrangement.spacedBy(15.dp)
       ) {
         // Drag handle area with spring-back vertical drag gesture
         Box(
@@ -557,19 +582,19 @@ fun CreateAlbumBottomSheetOverlay(
                 }
               )
             }
-            .padding(top = 4.dp, bottom = 6.dp),
+            .padding(top = 4.dp, bottom = 4.dp),
           contentAlignment = Alignment.Center
         ) {
           Box(
             modifier = Modifier
-              .width(44.dp)
+              .width(46.dp)
               .height(4.5.dp)
               .clip(CircleShape)
               .background(
                 Brush.horizontalGradient(
                   colors = listOf(
                     DarkGlassViolet.copy(alpha = 0.45f),
-                    DarkGlassLightViolet.copy(alpha = 0.90f),
+                    DarkGlassLightViolet.copy(alpha = 0.95f),
                     DarkGlassViolet.copy(alpha = 0.45f)
                   )
                 )
@@ -577,27 +602,84 @@ fun CreateAlbumBottomSheetOverlay(
           )
         }
 
-        // Item 1: Header ("Create album" + "Name it, pick a cover, add songs later")
+        // Item 1: Header ("Create album" + "Name it, pick a cover, add songs later") with glass icon badge & close button
         StaggeredSheetItem(
           visible = showStaggeredItems,
           delayMillis = 0,
           reducedMotion = isReduced
         ) {
-          Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
-            Text(
-              text = stringResource(id = R.string.album_create_title),
-              style = MaterialTheme.typography.headlineSmall.copy(
-                fontWeight = FontWeight.Bold,
-                fontSize = 23.sp,
-                lineHeight = 30.sp
-              ),
-              color = DarkGlassText
-            )
-            Text(
-              text = stringResource(id = R.string.album_create_subtitle),
-              style = MaterialTheme.typography.bodySmall.copy(lineHeight = 18.sp),
-              color = DarkGlassMuted
-            )
+          Row(
+            modifier = Modifier.fillMaxWidth(),
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.spacedBy(12.dp)
+          ) {
+            Box(
+              modifier = Modifier
+                .size(44.dp)
+                .clip(RoundedCornerShape(14.dp))
+                .background(
+                  Brush.linearGradient(
+                    colors = listOf(
+                      DarkGlassViolet.copy(alpha = 0.28f),
+                      activeGlowColor.copy(alpha = 0.14f)
+                    )
+                  )
+                )
+                .border(
+                  1.dp,
+                  DarkGlassLightViolet.copy(alpha = 0.34f),
+                  RoundedCornerShape(14.dp)
+                ),
+              contentAlignment = Alignment.Center
+            ) {
+              Icon(
+                imageVector = Icons.Rounded.Album,
+                contentDescription = null,
+                tint = DarkGlassLightViolet,
+                modifier = Modifier.size(22.dp)
+              )
+            }
+
+            Column(
+              modifier = Modifier.weight(1f),
+              verticalArrangement = Arrangement.spacedBy(2.dp)
+            ) {
+              Text(
+                text = stringResource(id = R.string.album_create_title),
+                style = MaterialTheme.typography.headlineSmall.copy(
+                  fontWeight = FontWeight.Bold,
+                  fontSize = 22.sp,
+                  lineHeight = 28.sp
+                ),
+                color = DarkGlassText
+              )
+              Text(
+                text = stringResource(id = R.string.album_create_subtitle),
+                style = MaterialTheme.typography.bodySmall.copy(lineHeight = 17.sp),
+                color = DarkGlassMuted
+              )
+            }
+
+            Surface(
+              shape = CircleShape,
+              color = Color.White.copy(alpha = 0.06f),
+              border = BorderStroke(1.dp, Color.White.copy(alpha = 0.10f)),
+              modifier = Modifier
+                .size(36.dp)
+                .clip(CircleShape)
+                .clickable(enabled = stage == CreateAlbumSheetStage.Idle) {
+                  dismissWithAnimation()
+                }
+            ) {
+              Box(contentAlignment = Alignment.Center) {
+                Icon(
+                  imageVector = Icons.Rounded.Close,
+                  contentDescription = stringResource(id = R.string.action_cancel),
+                  tint = DarkGlassMuted,
+                  modifier = Modifier.size(17.dp)
+                )
+              }
+            }
           }
         }
 
@@ -619,7 +701,7 @@ fun CreateAlbumBottomSheetOverlay(
           )
         }
 
-        // Item 3: Color Chips (Violet, Ocean, Sunset, Mint, Night) with sliding highlight
+        // Item 3: Color Chips (Violet, Ocean, Sunset, Mint, Night) with sliding highlight inside glass rail
         StaggeredSheetItem(
           visible = showStaggeredItems,
           delayMillis = 110,
@@ -699,6 +781,7 @@ fun CreateAlbumBottomSheetOverlay(
             enabled = stage == CreateAlbumSheetStage.Idle,
             imeAction = ImeAction.Done,
             keyboardType = KeyboardType.Number,
+            maxLengthHint = 4,
             onImeDone = { submitAlbumCreation() },
             modifier = Modifier.testTag("create_album_year_input")
           )
@@ -791,15 +874,54 @@ private fun CreateAlbumLivePreviewCard(
   val displayYear = year.trim().ifBlank { defaultYearText }
   val firstLetter = title.trim().firstOrNull()?.uppercaseChar()?.toString().orEmpty()
 
+  val animatedGlow by animateColorAsState(
+    targetValue = preset.glowColor,
+    animationSpec = if (reducedMotion) snap() else tween(360, easing = AurixEaseOut),
+    label = "preview_card_glow"
+  )
+  val animatedStart by animateColorAsState(
+    targetValue = preset.startColor,
+    animationSpec = if (reducedMotion) snap() else tween(360, easing = AurixEaseOut),
+    label = "preview_card_start"
+  )
+
+  val cardShape = RoundedCornerShape(26.dp)
+  val borderBrush = Brush.linearGradient(
+    colors = listOf(
+      animatedGlow.copy(alpha = 0.34f),
+      Color.White.copy(alpha = 0.10f),
+      animatedStart.copy(alpha = 0.18f),
+      Color.White.copy(alpha = 0.08f)
+    )
+  )
+
   Surface(
-    shape = RoundedCornerShape(24.dp),
-    color = DarkGlassSurface.copy(alpha = 0.80f),
-    border = BorderStroke(1.dp, Color.White.copy(alpha = 0.08f)),
-    modifier = Modifier.fillMaxWidth()
+    shape = cardShape,
+    color = DarkGlassSurface.copy(alpha = 0.86f),
+    border = BorderStroke(1.dp, borderBrush),
+    modifier = Modifier
+      .fillMaxWidth()
+      .shadow(
+        elevation = 14.dp,
+        shape = cardShape,
+        ambientColor = animatedGlow.copy(alpha = 0.22f),
+        spotColor = animatedStart.copy(alpha = 0.20f)
+      )
   ) {
     Row(
       modifier = Modifier
         .fillMaxWidth()
+        .drawBehind {
+          drawCircle(
+            brush = Brush.radialGradient(
+              colors = listOf(animatedGlow.copy(alpha = 0.18f), Color.Transparent),
+              center = Offset(72.dp.toPx(), size.height * 0.5f),
+              radius = size.maxDimension * 0.55f
+            ),
+            radius = size.maxDimension * 0.55f,
+            center = Offset(72.dp.toPx(), size.height * 0.5f)
+          )
+        }
         .padding(14.dp),
       verticalAlignment = Alignment.CenterVertically,
       horizontalArrangement = Arrangement.spacedBy(16.dp)
@@ -855,7 +977,42 @@ private fun CreateAlbumLivePreviewCard(
           overflow = TextOverflow.Ellipsis
         )
 
-        ZeroSongsEqualizerPill(reducedMotion = reducedMotion)
+        Row(
+          verticalAlignment = Alignment.CenterVertically,
+          horizontalArrangement = Arrangement.spacedBy(8.dp)
+        ) {
+          ZeroSongsEqualizerPill(reducedMotion = reducedMotion)
+
+          Surface(
+            shape = RoundedCornerShape(999.dp),
+            color = animatedGlow.copy(alpha = 0.12f),
+            border = BorderStroke(1.dp, animatedGlow.copy(alpha = 0.28f))
+          ) {
+            Row(
+              modifier = Modifier.padding(horizontal = 9.dp, vertical = 5.dp),
+              verticalAlignment = Alignment.CenterVertically,
+              horizontalArrangement = Arrangement.spacedBy(5.dp)
+            ) {
+              Box(
+                modifier = Modifier
+                  .size(7.dp)
+                  .clip(CircleShape)
+                  .background(
+                    Brush.linearGradient(colors = listOf(animatedGlow, animatedStart))
+                  )
+              )
+              Text(
+                text = stringResource(id = preset.labelRes),
+                style = MaterialTheme.typography.labelSmall.copy(
+                  fontWeight = FontWeight.SemiBold,
+                  fontSize = 10.sp
+                ),
+                color = lerp(animatedGlow, Color.White, 0.25f),
+                maxLines = 1
+              )
+            }
+          }
+        }
       }
     }
   }
@@ -901,7 +1058,7 @@ fun AlbumCoverArtBox(
       withFrameNanos { now ->
         val dt = ((now - lastNanos) / 1_000_000_000f).coerceIn(0f, 0.05f)
         lastNanos = now
-        val degPerSec = lerp(34f, 230f, typingWeight)
+        val degPerSec = lerp(34f, 235f, typingWeight)
         discAngle = (discAngle + dt * degPerSec) % 360f
       }
     }
@@ -916,7 +1073,7 @@ fun AlbumCoverArtBox(
       initialValue = -0.6f,
       targetValue = 1.6f,
       animationSpec = infiniteRepeatable(
-        animation = tween(durationMillis = 3400, easing = FastOutSlowInEasing),
+        animation = tween(durationMillis = 3200, easing = FastOutSlowInEasing),
         repeatMode = RepeatMode.Restart
       ),
       label = "cover_shine_pos"
@@ -959,67 +1116,94 @@ fun AlbumCoverArtBox(
       .shadow(
         elevation = 16.dp,
         shape = coverShape,
-        ambientColor = glowColor.copy(alpha = 0.48f),
+        ambientColor = glowColor.copy(alpha = 0.50f),
         spotColor = glowColor.copy(alpha = 0.45f)
       )
       .clip(coverShape)
       .background(Brush.linearGradient(colors = listOf(startColor, endColor)))
-      .border(1.dp, Color.White.copy(alpha = 0.16f), coverShape),
+      .border(
+        width = 1.dp,
+        brush = Brush.linearGradient(
+          colors = listOf(
+            Color.White.copy(alpha = 0.28f),
+            glowColor.copy(alpha = 0.30f),
+            Color.White.copy(alpha = 0.12f)
+          )
+        ),
+        shape = coverShape
+      ),
     contentAlignment = Alignment.Center
   ) {
     Canvas(modifier = Modifier.fillMaxSize()) {
       val c = center
-      val discRadius = size.minDimension * 0.37f
+      val discRadius = size.minDimension * 0.38f
 
-      // Ambient inner glow
+      // Ambient inner glow (brightens slightly while typing)
       drawCircle(
         brush = Brush.radialGradient(
-          colors = listOf(glowColor.copy(alpha = 0.32f), Color.Transparent),
+          colors = listOf(
+            glowColor.copy(alpha = 0.34f + typingWeight * 0.16f),
+            Color.Transparent
+          ),
           center = c,
-          radius = size.minDimension * 0.60f
+          radius = size.minDimension * 0.64f
         ),
-        radius = size.minDimension * 0.60f,
+        radius = size.minDimension * 0.64f,
         center = c
       )
 
       // Spinning vinyl disc
       rotate(degrees = discAngle, pivot = c) {
+        // Outer vinyl body
         drawCircle(
-          color = Color(0xFF0A0810).copy(alpha = 0.88f),
+          color = Color(0xFF0A0810).copy(alpha = 0.90f),
           radius = discRadius,
           center = c
         )
-        // Grooves
+        // Outer rim highlight
         drawCircle(
-          color = Color.White.copy(alpha = 0.10f),
-          radius = discRadius * 0.84f,
+          color = glowColor.copy(alpha = 0.25f + typingWeight * 0.20f),
+          radius = discRadius,
           center = c,
-          style = Stroke(width = 1.2.dp.toPx())
+          style = Stroke(width = 1.1.dp.toPx())
+        )
+        // Concentric vinyl micro-grooves
+        drawCircle(
+          color = Color.White.copy(alpha = 0.11f),
+          radius = discRadius * 0.86f,
+          center = c,
+          style = Stroke(width = 1.1.dp.toPx())
         )
         drawCircle(
-          color = Color.White.copy(alpha = 0.08f),
-          radius = discRadius * 0.64f,
+          color = Color.White.copy(alpha = 0.07f),
+          radius = discRadius * 0.74f,
+          center = c,
+          style = Stroke(width = 0.9.dp.toPx())
+        )
+        drawCircle(
+          color = Color.White.copy(alpha = 0.09f),
+          radius = discRadius * 0.61f,
           center = c,
           style = Stroke(width = 1.dp.toPx())
         )
-        // Specular wedge highlight showing spin speed
+        // Specular wedge highlights showing spin speed
         drawArc(
-          color = glowColor.copy(alpha = 0.55f),
-          startAngle = -38f,
-          sweepAngle = 52f,
+          color = glowColor.copy(alpha = 0.60f),
+          startAngle = -40f,
+          sweepAngle = 54f,
           useCenter = false,
           topLeft = Offset(c.x - discRadius * 0.82f, c.y - discRadius * 0.82f),
           size = Size(discRadius * 1.64f, discRadius * 1.64f),
-          style = Stroke(width = 2.dp.toPx(), cap = StrokeCap.Round)
+          style = Stroke(width = 2.2.dp.toPx(), cap = StrokeCap.Round)
         )
         drawArc(
-          color = Color.White.copy(alpha = 0.28f),
-          startAngle = 142f,
-          sweepAngle = 44f,
+          color = Color.White.copy(alpha = 0.30f),
+          startAngle = 140f,
+          sweepAngle = 48f,
           useCenter = false,
           topLeft = Offset(c.x - discRadius * 0.82f, c.y - discRadius * 0.82f),
           size = Size(discRadius * 1.64f, discRadius * 1.64f),
-          style = Stroke(width = 1.6.dp.toPx(), cap = StrokeCap.Round)
+          style = Stroke(width = 1.7.dp.toPx(), cap = StrokeCap.Round)
         )
         // Center vinyl label
         drawCircle(
@@ -1028,8 +1212,14 @@ fun AlbumCoverArtBox(
           center = c
         )
         drawCircle(
+          color = Color.White.copy(alpha = 0.25f),
+          radius = discRadius * 0.36f,
+          center = c,
+          style = Stroke(width = 0.8.dp.toPx())
+        )
+        drawCircle(
           color = DarkGlassBg,
-          radius = discRadius * 0.10f,
+          radius = discRadius * 0.11f,
           center = c
         )
       }
@@ -1041,7 +1231,7 @@ fun AlbumCoverArtBox(
           brush = Brush.linearGradient(
             colors = listOf(
               Color.Transparent,
-              Color.White.copy(alpha = 0.22f),
+              Color.White.copy(alpha = 0.24f),
               Color.Transparent
             ),
             start = Offset(xStart - size.width * 0.35f, 0f),
@@ -1055,7 +1245,7 @@ fun AlbumCoverArtBox(
     if (firstLetter.isNotEmpty()) {
       Box(
         modifier = Modifier
-          .size(44.dp)
+          .size(46.dp)
           .then(
             if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S && !reducedMotion && letterBlur.value > 0.2f) {
               Modifier.blur(letterBlur.value.dp)
@@ -1070,8 +1260,12 @@ fun AlbumCoverArtBox(
             alpha = letterAlpha.value
           }
           .clip(CircleShape)
-          .background(DarkGlassBg.copy(alpha = 0.72f))
-          .border(1.dp, glowColor.copy(alpha = 0.55f), CircleShape),
+          .background(DarkGlassBg.copy(alpha = 0.76f))
+          .border(
+            width = 1.2.dp,
+            brush = Brush.linearGradient(colors = listOf(Color.White.copy(alpha = 0.5f), glowColor)),
+            shape = CircleShape
+          ),
         contentAlignment = Alignment.Center
       ) {
         Text(
@@ -1088,12 +1282,15 @@ fun AlbumCoverArtBox(
     if (showEditBadge) {
       Surface(
         shape = CircleShape,
-        color = DarkGlassBg.copy(alpha = 0.84f),
-        border = BorderStroke(1.dp, Color.White.copy(alpha = 0.16f)),
+        color = DarkGlassBg.copy(alpha = 0.88f),
+        border = BorderStroke(
+          1.dp,
+          Brush.linearGradient(colors = listOf(DarkGlassLightViolet.copy(alpha = 0.55f), Color.White.copy(alpha = 0.16f)))
+        ),
         modifier = Modifier
           .align(Alignment.BottomEnd)
           .padding(7.dp)
-          .size(24.dp)
+          .size(25.dp)
       ) {
         Box(contentAlignment = Alignment.Center) {
           Icon(
@@ -1143,8 +1340,8 @@ private fun ZeroSongsEqualizerPill(reducedMotion: Boolean) {
 
   Surface(
     shape = RoundedCornerShape(999.dp),
-    color = Color.White.copy(alpha = 0.06f),
-    border = BorderStroke(1.dp, Color.White.copy(alpha = 0.08f))
+    color = DarkGlassViolet.copy(alpha = 0.14f),
+    border = BorderStroke(1.dp, DarkGlassLightViolet.copy(alpha = 0.26f))
   ) {
     Row(
       modifier = Modifier.padding(horizontal = 10.dp, vertical = 5.dp),
@@ -1213,65 +1410,90 @@ private fun AlbumColorChipRow(
     label = "chip_glow_color"
   )
 
-  Box(
-    modifier = Modifier
-      .fillMaxWidth()
-      .horizontalScroll(rememberScrollState())
+  Surface(
+    shape = RoundedCornerShape(20.dp),
+    color = DarkGlassDeepSurface.copy(alpha = 0.88f),
+    border = BorderStroke(1.dp, Color.White.copy(alpha = 0.08f)),
+    modifier = Modifier.fillMaxWidth()
   ) {
-    Box(modifier = Modifier.padding(vertical = 2.dp)) {
-      // Sliding highlight background
-      if (selectedRect != null && pillW > 0.dp && pillH > 0.dp) {
-        Box(
-          modifier = Modifier
-            .offset(x = pillX)
-            .size(width = pillW, height = pillH)
-            .clip(RoundedCornerShape(999.dp))
-            .background(chipGlow.copy(alpha = 0.16f))
-            .border(1.dp, chipGlow.copy(alpha = 0.50f), RoundedCornerShape(999.dp))
-        )
-      }
-
-      Row(
-        horizontalArrangement = Arrangement.spacedBy(8.dp),
-        verticalAlignment = Alignment.CenterVertically
-      ) {
-        AlbumCoverPreset.entries.forEach { preset ->
-          val isSelected = preset == selectedPreset
-          Row(
+    Box(
+      modifier = Modifier
+        .fillMaxWidth()
+        .horizontalScroll(rememberScrollState())
+        .padding(horizontal = 6.dp, vertical = 6.dp)
+    ) {
+      Box {
+        // Sliding highlight background
+        if (selectedRect != null && pillW > 0.dp && pillH > 0.dp) {
+          Box(
             modifier = Modifier
-              .onGloballyPositioned { coords ->
-                chipRects[preset] = coords.boundsInParent()
-              }
-              .clip(RoundedCornerShape(999.dp))
-              .background(if (isSelected) Color.Transparent else Color.White.copy(alpha = 0.05f))
-              .border(
-                width = 1.dp,
-                color = if (isSelected) Color.Transparent else Color.White.copy(alpha = 0.08f),
-                shape = RoundedCornerShape(999.dp)
+              .offset(x = pillX)
+              .size(width = pillW, height = pillH)
+              .shadow(
+                elevation = 8.dp,
+                shape = RoundedCornerShape(999.dp),
+                ambientColor = chipGlow.copy(alpha = 0.35f),
+                spotColor = chipGlow.copy(alpha = 0.30f)
               )
-              .clickable(enabled = enabled) { onSelect(preset) }
-              .padding(horizontal = 12.dp, vertical = 9.dp)
-              .testTag("create_album_color_${preset.id}"),
-            verticalAlignment = Alignment.CenterVertically,
-            horizontalArrangement = Arrangement.spacedBy(7.dp)
-          ) {
-            Box(
-              modifier = Modifier
-                .size(12.dp)
-                .clip(CircleShape)
-                .background(
-                  Brush.linearGradient(colors = listOf(preset.glowColor, preset.endColor))
+              .clip(RoundedCornerShape(999.dp))
+              .background(
+                Brush.horizontalGradient(
+                  colors = listOf(
+                    chipGlow.copy(alpha = 0.24f),
+                    selectedPreset.startColor.copy(alpha = 0.18f)
+                  )
                 )
-                .border(0.75.dp, Color.White.copy(alpha = 0.45f), CircleShape)
-            )
-            Text(
-              text = stringResource(id = preset.labelRes),
-              style = MaterialTheme.typography.labelMedium.copy(
-                fontWeight = if (isSelected) FontWeight.Bold else FontWeight.Medium
-              ),
-              color = if (isSelected) DarkGlassText else DarkGlassMuted,
-              maxLines = 1
-            )
+              )
+              .border(1.dp, chipGlow.copy(alpha = 0.55f), RoundedCornerShape(999.dp))
+          )
+        }
+
+        Row(
+          horizontalArrangement = Arrangement.spacedBy(6.dp),
+          verticalAlignment = Alignment.CenterVertically
+        ) {
+          AlbumCoverPreset.entries.forEach { preset ->
+            val isSelected = preset == selectedPreset
+            Row(
+              modifier = Modifier
+                .onGloballyPositioned { coords ->
+                  chipRects[preset] = coords.boundsInParent()
+                }
+                .clip(RoundedCornerShape(999.dp))
+                .background(if (isSelected) Color.Transparent else Color.White.copy(alpha = 0.03f))
+                .border(
+                  width = 1.dp,
+                  color = if (isSelected) Color.Transparent else Color.White.copy(alpha = 0.06f),
+                  shape = RoundedCornerShape(999.dp)
+                )
+                .clickable(enabled = enabled) { onSelect(preset) }
+                .padding(horizontal = 13.dp, vertical = 9.dp)
+                .testTag("create_album_color_${preset.id}"),
+              verticalAlignment = Alignment.CenterVertically,
+              horizontalArrangement = Arrangement.spacedBy(7.dp)
+            ) {
+              Box(
+                modifier = Modifier
+                  .size(13.dp)
+                  .clip(CircleShape)
+                  .background(
+                    Brush.linearGradient(colors = listOf(preset.glowColor, preset.endColor))
+                  )
+                  .border(
+                    width = if (isSelected) 1.2.dp else 0.75.dp,
+                    color = if (isSelected) Color.White.copy(alpha = 0.85f) else Color.White.copy(alpha = 0.40f),
+                    shape = CircleShape
+                  )
+              )
+              Text(
+                text = stringResource(id = preset.labelRes),
+                style = MaterialTheme.typography.labelMedium.copy(
+                  fontWeight = if (isSelected) FontWeight.Bold else FontWeight.Medium
+                ),
+                color = if (isSelected) DarkGlassText else DarkGlassMuted,
+                maxLines = 1
+              )
+            }
           }
         }
       }
@@ -1289,6 +1511,7 @@ private fun DarkGlassFloatingField(
   enabled: Boolean,
   imeAction: ImeAction,
   keyboardType: KeyboardType,
+  maxLengthHint: Int? = null,
   focusRequester: FocusRequester = remember { FocusRequester() },
   onImeDone: () -> Unit = {},
   modifier: Modifier = Modifier
@@ -1302,12 +1525,12 @@ private fun DarkGlassFloatingField(
     label = "floating_label_progress"
   )
   val borderColor by animateColorAsState(
-    targetValue = if (isFocused) DarkGlassViolet.copy(alpha = 0.85f) else Color.White.copy(alpha = 0.08f),
+    targetValue = if (isFocused) DarkGlassViolet.copy(alpha = 0.88f) else Color.White.copy(alpha = 0.08f),
     animationSpec = if (reducedMotion) snap() else tween(220, easing = AurixEaseOut),
     label = "field_border_color"
   )
   val glowAlpha by animateFloatAsState(
-    targetValue = if (isFocused) 0.24f else 0f,
+    targetValue = if (isFocused) 0.25f else 0f,
     animationSpec = if (reducedMotion) snap() else tween(240, easing = AurixEaseOut),
     label = "field_focus_glow"
   )
@@ -1325,15 +1548,28 @@ private fun DarkGlassFloatingField(
         spotColor = DarkGlassLightViolet.copy(alpha = glowAlpha)
       )
       .clip(shape)
-      .background(DarkGlassSurface.copy(alpha = 0.88f))
+      .background(DarkGlassSurface.copy(alpha = 0.90f))
       .drawBehind {
         if (glowAlpha > 0.01f) {
           drawRect(
             brush = Brush.radialGradient(
               colors = listOf(DarkGlassViolet.copy(alpha = glowAlpha), Color.Transparent),
-              center = Offset(size.width * 0.25f, size.height * 0.5f),
-              radius = size.width * 0.7f
+              center = Offset(size.width * 0.22f, size.height * 0.5f),
+              radius = size.width * 0.72f
             )
+          )
+          // Subtle glowing bottom focus accent line
+          drawRect(
+            brush = Brush.horizontalGradient(
+              colors = listOf(
+                Color.Transparent,
+                DarkGlassLightViolet.copy(alpha = glowAlpha * 2.5f),
+                DarkGlassViolet.copy(alpha = glowAlpha * 2.5f),
+                Color.Transparent
+              )
+            ),
+            topLeft = Offset(size.width * 0.12f, size.height - 2.dp.toPx()),
+            size = Size(size.width * 0.76f, 2.dp.toPx())
           )
         }
       }
@@ -1345,7 +1581,7 @@ private fun DarkGlassFloatingField(
       ) {
         focusRequester.requestFocus()
       }
-      .padding(horizontal = 16.dp),
+      .padding(horizontal = 14.dp),
     contentAlignment = Alignment.CenterStart
   ) {
     Row(
@@ -1353,12 +1589,32 @@ private fun DarkGlassFloatingField(
       verticalAlignment = Alignment.CenterVertically,
       horizontalArrangement = Arrangement.spacedBy(12.dp)
     ) {
-      Icon(
-        imageVector = leadingIcon,
-        contentDescription = null,
-        tint = if (isFocused) DarkGlassLightViolet else DarkGlassMuted,
-        modifier = Modifier.size(20.dp)
-      )
+      // Frosted icon capsule
+      Box(
+        modifier = Modifier
+          .size(36.dp)
+          .clip(RoundedCornerShape(11.dp))
+          .background(
+            if (isFocused) {
+              DarkGlassViolet.copy(alpha = 0.20f)
+            } else {
+              Color.White.copy(alpha = 0.04f)
+            }
+          )
+          .border(
+            width = 1.dp,
+            color = if (isFocused) DarkGlassLightViolet.copy(alpha = 0.36f) else Color.White.copy(alpha = 0.07f),
+            shape = RoundedCornerShape(11.dp)
+          ),
+        contentAlignment = Alignment.Center
+      ) {
+        Icon(
+          imageVector = leadingIcon,
+          contentDescription = null,
+          tint = if (isFocused) DarkGlassLightViolet else DarkGlassMuted,
+          modifier = Modifier.size(18.dp)
+        )
+      }
 
       Box(
         modifier = Modifier
@@ -1404,6 +1660,35 @@ private fun DarkGlassFloatingField(
             .focusRequester(focusRequester)
             .onFocusChanged { isFocused = it.isFocused }
         )
+      }
+
+      if (maxLengthHint != null && (isFocused || value.isNotEmpty())) {
+        Surface(
+          shape = RoundedCornerShape(999.dp),
+          color = if (value.length == maxLengthHint) {
+            DarkGlassViolet.copy(alpha = 0.18f)
+          } else {
+            Color.White.copy(alpha = 0.05f)
+          },
+          border = BorderStroke(
+            1.dp,
+            if (value.length == maxLengthHint) {
+              DarkGlassLightViolet.copy(alpha = 0.34f)
+            } else {
+              Color.White.copy(alpha = 0.08f)
+            }
+          )
+        ) {
+          Text(
+            text = "${value.length}/$maxLengthHint",
+            style = MaterialTheme.typography.labelSmall.copy(
+              fontWeight = FontWeight.SemiBold,
+              fontSize = 10.sp
+            ),
+            color = if (value.length == maxLengthHint) DarkGlassLightViolet else DarkGlassMuted,
+            modifier = Modifier.padding(horizontal = 8.dp, vertical = 3.dp)
+          )
+        }
       }
     }
   }
@@ -1473,10 +1758,10 @@ private fun CreateAlbumActionButtonRow(
       Surface(
         shape = buttonShape,
         color = Color.White.copy(alpha = 0.06f),
-        border = BorderStroke(1.dp, Color.White.copy(alpha = 0.08f)),
+        border = BorderStroke(1.dp, Color.White.copy(alpha = 0.09f)),
         modifier = Modifier
           .weight(cancelWeight)
-          .height(52.dp)
+          .height(54.dp)
           .alpha(cancelAlpha)
           .clip(buttonShape)
           .clickable(enabled = isIdle) { onCancel() }
@@ -1501,7 +1786,7 @@ private fun CreateAlbumActionButtonRow(
     Box(
       modifier = Modifier
         .weight(1.35f)
-        .height(52.dp)
+        .height(54.dp)
         .shadow(
           elevation = if (canCreate || !isIdle) 16.dp else 0.dp,
           shape = buttonShape,
@@ -1516,7 +1801,7 @@ private fun CreateAlbumActionButtonRow(
         .background(createBrush)
         .border(
           width = 1.dp,
-          color = if (canCreate || !isIdle) Color.White.copy(alpha = 0.22f) else Color.White.copy(alpha = 0.06f),
+          color = if (canCreate || !isIdle) Color.White.copy(alpha = 0.24f) else Color.White.copy(alpha = 0.06f),
           shape = buttonShape
         )
         .clickable(enabled = isIdle) { onCreateClick() }
