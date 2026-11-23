@@ -3,12 +3,12 @@
   "versionCode": 10870,
   "releaseDate": "2026-11-22",
   "apkUrl": "https://github.com/MEYYYNASH/AURIX/releases/download/v1.8.7/AURIX-v1.8.7.apk",
-  "sha256": "",
+  "sha256": "7d350cceb69467f965c931131a02fcf44d95a38f7ef12b321a8dbc04e93f7817",
   "mandatory": false,
   "notes": [
-    "Release v1.8.7 — Dark Glass Redesign: Restyled the App Update & Release card with frosted #0A0810 dark glass, violet/magenta radial glows, gradient version hero, status tiles, and shield status indicator",
-    "Create Album Bottom Sheet & Shared-Element Transition: New dark glass Create Album sheet with live spinning vinyl cover preview, color chips (Violet, Ocean, Sunset, Mint, Night), floating-label inputs, and curved cover flight into the Library grid",
-    "Recent Play & Playlist Controls: Includes Recent Play badge alignment fix, YouTube Search ↔ YT Link fluid transitions, End Download, Live Download Queue, Beat Visualizer, and Auto-Clean YT Titles"
+    "Release v1.8.7 \u2014 Dark Glass Redesign: Restyled the App Update & Release card with frosted #0A0810 dark glass, violet/magenta radial glows, gradient version hero, and shield status indicator",
+    "Create Album Bottom Sheet & Shared-Element Transition: New dark glass Create Album sheet with live spinning vinyl cover preview, color chips, floating-label inputs, and curved cover flight into the Library grid",
+    "Recent Play & Playlist Controls: Includes Recent Play badge fix, YouTube Search \u2194 YT Link transitions, End Download, Live Download Queue, Beat Visualizer, and Auto-Clean YT Titles"
   ],
   "releasePageUrl": "https://github.com/MEYYYNASH/AURIX/releases/tag/v1.8.7"
 }
