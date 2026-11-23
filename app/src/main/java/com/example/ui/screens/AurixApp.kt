@@ -985,10 +985,7 @@ private fun AurixMainShell(
                 currentScreen = Screen.Album
               },
               onCreateAlbum = { title, artist, year ->
-                val createdId = viewModel.createAlbum(title, artist, year)
-                if (createdId != null) {
-                  currentScreen = Screen.Album
-                }
+                viewModel.createAlbum(title, artist, year)
               },
               onAddSongsToAlbum = { album, songs ->
                 viewModel.addSongsToAlbum(album.albumId, songs)

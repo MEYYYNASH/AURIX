@@ -81,11 +81,14 @@ import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import androidx.compose.ui.window.Dialog
+import androidx.compose.ui.window.DialogProperties
 import coil.compose.AsyncImage
 import com.example.R
 import com.example.model.APP_ICON_ARTWORK
 import com.example.model.AlbumInfo
 import com.example.model.Song
+import com.example.model.computeAlbumId
 
 @Composable
 fun CreateAlbumDialog(
@@ -93,93 +96,33 @@ fun CreateAlbumDialog(
   onDismiss: () -> Unit,
   onCreate: (title: String, artist: String, year: String) -> Unit
 ) {
-  var title by remember { mutableStateOf("") }
-  var artist by remember { mutableStateOf(defaultArtist) }
-  var year by remember { mutableStateOf("") }
-
-  AlertDialog(
+  val context = androidx.compose.ui.platform.LocalContext.current
+  Dialog(
     onDismissRequest = onDismiss,
-    icon = {
-      Icon(
-        imageVector = Icons.Rounded.Album,
-        contentDescription = null,
-        tint = MaterialTheme.colorScheme.primary
+    properties = DialogProperties(
+      usePlatformDefaultWidth = false,
+      decorFitsSystemWindows = false
+    )
+  ) {
+    Box(
+      modifier = Modifier
+        .fillMaxSize()
+        .background(Color(0xFF0A0810).copy(alpha = 0.64f))
+    ) {
+      CreateAlbumBottomSheetOverlay(
+        visible = true,
+        defaultArtist = defaultArtist,
+        reducedMotion = false,
+        onDismiss = onDismiss,
+        onCommitAndFly = { title, artist, year, preset, _ ->
+          val resolvedArtist = artist.ifBlank { "Unknown Artist" }
+          val albumId = computeAlbumId(title, resolvedArtist)
+          AlbumCoverPresetStore.savePreset(context, albumId, preset)
+          onCreate(title, artist, year)
+        }
       )
-    },
-    title = {
-      Text(
-        text = stringResource(id = R.string.album_create_title),
-        style = MaterialTheme.typography.titleMedium.copy(fontWeight = FontWeight.Bold)
-      )
-    },
-    text = {
-      Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
-        OutlinedTextField(
-          value = title,
-          onValueChange = { title = it },
-          label = { Text(stringResource(id = R.string.album_create_name_label)) },
-          placeholder = { Text(stringResource(id = R.string.album_create_name_hint)) },
-          singleLine = true,
-          keyboardOptions = KeyboardOptions(imeAction = ImeAction.Next),
-          modifier = Modifier
-            .fillMaxWidth()
-            .testTag("create_album_title_input")
-        )
-        OutlinedTextField(
-          value = artist,
-          onValueChange = { artist = it },
-          label = { Text(stringResource(id = R.string.album_create_artist_label)) },
-          placeholder = { Text(stringResource(id = R.string.album_create_artist_hint)) },
-          singleLine = true,
-          keyboardOptions = KeyboardOptions(imeAction = ImeAction.Next),
-          modifier = Modifier
-            .fillMaxWidth()
-            .testTag("create_album_artist_input")
-        )
-        OutlinedTextField(
-          value = year,
-          onValueChange = { input ->
-            year = input.filter { it.isDigit() }.take(4)
-          },
-          label = { Text(stringResource(id = R.string.album_create_year_label)) },
-          singleLine = true,
-          keyboardOptions = KeyboardOptions(
-            keyboardType = KeyboardType.Number,
-            imeAction = ImeAction.Done
-          ),
-          keyboardActions = KeyboardActions(onDone = {
-            if (title.trim().isNotEmpty()) {
-              onCreate(title.trim(), artist.trim(), year.trim())
-            }
-          }),
-          modifier = Modifier
-            .fillMaxWidth()
-            .testTag("create_album_year_input")
-        )
-      }
-    },
-    confirmButton = {
-      Button(
-        onClick = { onCreate(title.trim(), artist.trim(), year.trim()) },
-        enabled = title.trim().isNotEmpty(),
-        shape = CircleShape,
-        modifier = Modifier.testTag("create_album_confirm_button")
-      ) {
-        Text(
-          text = stringResource(id = R.string.album_create_confirm),
-          fontWeight = FontWeight.Bold
-        )
-      }
-    },
-    dismissButton = {
-      TextButton(
-        onClick = onDismiss,
-        modifier = Modifier.testTag("create_album_cancel_button")
-      ) {
-        Text(stringResource(id = R.string.action_cancel))
-      }
     }
-  )
+  }
 }
 
 @OptIn(ExperimentalMaterial3Api::class)

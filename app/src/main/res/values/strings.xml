@@ -538,4 +538,18 @@
     <string name="settings_visualizer_desc">Show live beat-reactive audio spectrum bars in Now Playing</string>
     <string name="settings_clean_yt_titles_title">Auto-Clean YouTube Titles</string>
     <string name="settings_clean_yt_titles_desc">Remove [Official Video], (Lyrics), (4K), and channel tags automatically</string>
+    <string name="settings_release_page">Release Page</string>
+    <string name="settings_released_label">Released</string>
+    <string name="album_create_subtitle">Name it, pick a cover, add songs later</string>
+    <string name="album_create_untitled_preview">Untitled album</string>
+    <string name="album_create_unknown_artist_preview">Unknown artist</string>
+    <string name="album_create_default_year">2026</string>
+    <string name="album_create_songs_zero">0 SONGS</string>
+    <string name="album_create_year_short">Year</string>
+    <string name="album_create_confirm_full">Create album</string>
+    <string name="album_color_violet">Violet</string>
+    <string name="album_color_ocean">Ocean</string>
+    <string name="album_color_sunset">Sunset</string>
+    <string name="album_color_mint">Mint</string>
+    <string name="album_color_night">Night</string>
 </resources>

@@ -162,9 +162,9 @@ class UpdateManager(
     private const val META_FILE_NAME = "aurix_update.apk.meta.json"
 
     val CURRENT_RELEASE_NOTES = listOf(
-      "Release v1.8.6 — Recent Play UI Fix: Fixed the oversized close circle on Recent Play cards so the remove badge sits cleanly inside the artwork corner",
-      "Fluid Search Mode Transition: Spring-gliding liquid glass pill and directional parallax animation between YouTube Search and YT Link",
-      "Playlist Controls & Visualizer: End Download, Live Download Queue with cancel & retry, Playlist Multi-Select, Beat Visualizer, and Auto-Clean YT Titles"
+      "Release v1.8.7 — Dark Glass Redesign: Restyled the App Update & Release card with frosted #0A0810 dark glass, violet/magenta radial glows, gradient version hero, status tiles, and shield indicator",
+      "Create Album Bottom Sheet & Shared-Element Transition: Live spinning vinyl cover preview, color chips (Violet, Ocean, Sunset, Mint, Night), floating-label inputs, and curved cover flight into the Library grid",
+      "Recent Play & Playlist Controls: Recent Play corner badge fix, YouTube Search ↔ YT Link transition, End Download, Live Download Queue, Beat Visualizer, and Auto-Clean YT Titles"
     )
 
     fun parseVersionJson(rawJson: String): RemoteVersionInfo {

@@ -10,9 +10,9 @@ on:
   workflow_dispatch:
     inputs:
       tag:
-        description: 'Release tag (e.g. v1.8.6)'
+        description: 'Release tag (e.g. v1.8.7)'
         required: false
-        default: 'v1.8.6'
+        default: 'v1.8.7'
 
 permissions:
   contents: write
@@ -52,13 +52,13 @@ jobs:
             RELEASE_TAG="${{ github.ref_name }}"
           else
             VERSION=$(grep -m1 'versionName' app/build.gradle.kts | sed -E 's/.*"([^"]+)".*/\1/')
-            RELEASE_TAG="v${VERSION:-1.8.6}"
+            RELEASE_TAG="v${VERSION:-1.8.7}"
           fi
           VCODE=$(grep -m1 'versionCode' app/build.gradle.kts | sed -E 's/[^0-9]*([0-9]+).*/\1/')
           RDATE=$(grep -m1 'RELEASE_DATE' app/build.gradle.kts | sed -E 's/.*\\"([^\\"]+)\\".*/\1/')
           echo "RELEASE_TAG=${RELEASE_TAG}" >> "$GITHUB_ENV"
           echo "RELEASE_VERSION=${RELEASE_TAG#v}" >> "$GITHUB_ENV"
-          echo "RELEASE_VERSION_CODE=${VCODE:-10860}" >> "$GITHUB_ENV"
+          echo "RELEASE_VERSION_CODE=${VCODE:-10870}" >> "$GITHUB_ENV"
           echo "RELEASE_DATE=${RDATE:-$(date -u +%Y-%m-%d)}" >> "$GITHUB_ENV"
 
       - name: Ensure keystores exist
@@ -98,9 +98,9 @@ jobs:
             "sha256": os.environ["APK_SHA256"],
             "mandatory": False,
             "notes": [
-              f"Release {tag} — Recent Play UI Fix: Fixed the oversized dark close circle on Recent Play cards so the remove badge stays crisp and aligned inside the artwork corner",
-              "Fluid Search Mode Transition: Added a spring-gliding liquid glass pill and directional parallax transition when switching between YouTube Search and YT Link",
-              "Playlist Controls & Visualizer: Includes End Download, Live Download Queue with cancel & retry, Playlist Multi-Select, Beat Visualizer in Now Playing, and Auto-Clean YT Titles"
+              f"Release {tag} — Dark Glass Redesign: Restyled the App Update & Release card with frosted #0A0810 dark glass, violet/magenta radial glows, gradient version hero, and shield status indicator",
+              "Create Album Bottom Sheet & Shared-Element Transition: New dark glass Create Album sheet with live spinning vinyl cover preview, color chips, floating-label inputs, and curved cover flight into the Library grid",
+              "Recent Play & Playlist Controls: Includes Recent Play badge fix, YouTube Search ↔ YT Link transitions, End Download, Live Download Queue, Beat Visualizer, and Auto-Clean YT Titles"
             ],
             "releasePageUrl": f"https://github.com/{repo}/releases/tag/{tag}"
           }
@@ -126,9 +126,9 @@ jobs:
             mandatory: false
 
             What's New in AURIX ${{ env.RELEASE_TAG }}:
-            - Recent Play UI Fix: Fixed the oversized close button backdrop on Recent Play cards for a clean, balanced corner badge
-            - Fluid Search Mode Transition: Spring-gliding liquid glass pill and directional parallax animation between YouTube Search and YT Link
-            - Playlist Controls & Visualizer: End Download, Live Download Queue (Cancel & Retry), Playlist Multi-Select, Beat Visualizer in Now Playing, and Auto-Clean YT Titles
+            - Dark Glass Redesign: Restyled App Update & Release card with #0A0810 glass surface, violet/magenta glows, gradient version hero, status tiles, and shield status row
+            - Create Album Bottom Sheet: Live spinning vinyl cover preview, Violet/Ocean/Sunset/Mint/Night color chips, floating-label inputs, and curved cover flight into the Library grid
+            - Recent Play & Playlist Controls: Recent Play close badge alignment fix, YouTube Search ↔ YT Link transition, End Download, Live Download Queue, Beat Visualizer, and Auto-Clean YT Titles
           files: |
             app/build/outputs/apk/release/app-release.apk
             AURIX-${{ env.RELEASE_TAG }}.apk

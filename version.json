@@ -1,14 +1,14 @@
 {
-  "versionName": "1.8.6",
-  "versionCode": 10860,
+  "versionName": "1.8.7",
+  "versionCode": 10870,
   "releaseDate": "2026-11-22",
-  "apkUrl": "https://github.com/MEYYYNASH/AURIX/releases/download/v1.8.6/AURIX-v1.8.6.apk",
-  "sha256": "e60e2bf6053dbfc6568b380de189cefd121801e08a3d8fdb5b9789b0d022ebbf",
+  "apkUrl": "https://github.com/MEYYYNASH/AURIX/releases/download/v1.8.7/AURIX-v1.8.7.apk",
+  "sha256": "",
   "mandatory": false,
   "notes": [
-    "Release v1.8.6 \u2014 Recent Play UI Fix: Fixed the oversized dark close circle on Recent Play cards so the remove badge stays crisp and aligned inside the artwork corner",
-    "Fluid Search Mode Transition: Added a spring-gliding liquid glass pill and directional parallax transition when switching between YouTube Search and YT Link",
-    "Playlist Controls & Visualizer: Includes End Download, Live Download Queue with cancel & retry, Playlist Multi-Select, Beat Visualizer in Now Playing, and Auto-Clean YT Titles"
+    "Release v1.8.7 — Dark Glass Redesign: Restyled the App Update & Release card with frosted #0A0810 dark glass, violet/magenta radial glows, gradient version hero, status tiles, and shield status indicator",
+    "Create Album Bottom Sheet & Shared-Element Transition: New dark glass Create Album sheet with live spinning vinyl cover preview, color chips (Violet, Ocean, Sunset, Mint, Night), floating-label inputs, and curved cover flight into the Library grid",
+    "Recent Play & Playlist Controls: Includes Recent Play badge alignment fix, YouTube Search ↔ YT Link fluid transitions, End Download, Live Download Queue, Beat Visualizer, and Auto-Clean YT Titles"
   ],
-  "releasePageUrl": "https://github.com/MEYYYNASH/AURIX/releases/tag/v1.8.6"
+  "releasePageUrl": "https://github.com/MEYYYNASH/AURIX/releases/tag/v1.8.7"
 }

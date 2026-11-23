@@ -34,6 +34,8 @@ import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.draw.drawBehind
+import androidx.compose.ui.draw.shadow
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
@@ -61,6 +63,8 @@ import com.example.playback.CrossfadeSettings
 import com.example.playback.EqPreset
 import com.example.playback.EqualizerUiState
 import com.example.ui.theme.*
+import java.text.SimpleDateFormat
+import java.util.Locale
 import kotlin.math.roundToInt
 
 @OptIn(ExperimentalMaterial3Api::class)
@@ -729,8 +733,11 @@ fun AppUpdateReleaseCard(
     }
   }
 
-  val baseTitleColor = MaterialTheme.colorScheme.onSurface
-  val shineAccentColor = lerp(MaterialTheme.colorScheme.primary, Color.White, if (darkTheme) 0.55f else 0.35f)
+  val baseTitleColor = Color(0xFFF4F2FB)
+  val mutedGlassText = Color(0xFF8F8AA6)
+  val violetAccent = Color(0xFF8B5CF6)
+  val lightVioletAccent = Color(0xFFC084FC)
+  val shineAccentColor = lerp(violetAccent, Color.White, if (darkTheme) 0.55f else 0.45f)
   val titleBrush = remember(shinePhase, baseTitleColor, shineAccentColor, reducedMotion) {
     if (reducedMotion) {
       null
@@ -760,7 +767,7 @@ fun AppUpdateReleaseCard(
   // Pulsing status pill configuration
   val (pillLabelRes, pillColor) = when (updateUiState.stage) {
     UpdateStage.Idle, UpdateStage.UpToDate -> R.string.settings_status_pill_up_to_date to AccentGreen
-    UpdateStage.Checking -> R.string.settings_status_pill_checking to MaterialTheme.colorScheme.primary
+    UpdateStage.Checking -> R.string.settings_status_pill_checking to lightVioletAccent
     UpdateStage.Available -> R.string.settings_status_pill_available to AccentAmber
     UpdateStage.Downloading -> if (updateUiState.isPaused) {
       R.string.settings_status_pill_available to AccentAmber
@@ -787,25 +794,74 @@ fun AppUpdateReleaseCard(
     )
   }
 
-  GlassCard(
-    darkTheme = darkTheme,
-    cornerRadius = 26.dp,
+  val cardShape = RoundedCornerShape(28.dp)
+  val cardBorderBrush = Brush.linearGradient(
+    colors = listOf(
+      Color.White.copy(alpha = 0.16f),
+      violetAccent.copy(alpha = 0.36f),
+      lightVioletAccent.copy(alpha = 0.18f),
+      Color.White.copy(alpha = 0.08f)
+    )
+  )
+  val rawReleaseDate = updateUiState.latestRelease?.releaseDate?.ifBlank { updateUiState.installedReleaseDate }
+    ?: updateUiState.installedReleaseDate
+  val formattedReleaseDate = remember(rawReleaseDate) {
+    formatUpdateReleaseDate(rawReleaseDate)
+  }
+  val stageStatusColor = when (updateUiState.stage) {
+    UpdateStage.Error -> Color(0xFFFB7185)
+    UpdateStage.UpToDate, UpdateStage.Done -> AccentGreen
+    UpdateStage.Available -> if (isMandatory) Color(0xFFFB7185) else AccentAmber
+    UpdateStage.Installing, UpdateStage.Verifying -> Color(0xFF10B981)
+    else -> lightVioletAccent
+  }
+
+  Box(
     modifier = modifier
       .fillMaxWidth()
+      .shadow(
+        elevation = 18.dp,
+        shape = cardShape,
+        ambientColor = violetAccent.copy(alpha = 0.24f),
+        spotColor = Color(0xFFD946EF).copy(alpha = 0.22f)
+      )
+      .clip(cardShape)
+      .background(Color(0xFF0A0810))
+      .drawBehind {
+        drawCircle(
+          brush = Brush.radialGradient(
+            colors = listOf(violetAccent.copy(alpha = 0.22f), Color.Transparent),
+            center = Offset(size.width * 0.14f, size.height * 0.12f),
+            radius = size.maxDimension * 0.65f
+          ),
+          radius = size.maxDimension * 0.65f,
+          center = Offset(size.width * 0.14f, size.height * 0.12f)
+        )
+        drawCircle(
+          brush = Brush.radialGradient(
+            colors = listOf(Color(0xFFD946EF).copy(alpha = 0.14f), Color.Transparent),
+            center = Offset(size.width * 0.90f, size.height * 0.85f),
+            radius = size.maxDimension * 0.58f
+          ),
+          radius = size.maxDimension * 0.58f,
+          center = Offset(size.width * 0.90f, size.height * 0.85f)
+        )
+      }
+      .border(width = 1.dp, brush = cardBorderBrush, shape = cardShape)
       .animateContentSize(animationSpec = if (reducedMotion) snap() else tween(280))
   ) {
     Column(
       modifier = Modifier.padding(18.dp),
       verticalArrangement = Arrangement.spacedBy(14.dp)
     ) {
-      // Card Top Header: 84.dp animated UpdateLogo on left, sweeping title, sliding subtitle & status pill on right
+      // Card Top Header: 88.dp animated UpdateLogo on left, sweeping title, sliding subtitle & status pill on right
       Row(
         modifier = Modifier.fillMaxWidth(),
         verticalAlignment = Alignment.CenterVertically
       ) {
         UpdateLogo(
           state = logoState,
-          size = 84.dp,
+          size = 88.dp,
           downloadProgress = updateUiState.progress,
           reducedMotion = reducedMotion,
           modifier = Modifier.testTag("settings_update_logo")
@@ -813,7 +869,7 @@ fun AppUpdateReleaseCard(
         Spacer(modifier = Modifier.width(14.dp))
         Column(
           modifier = Modifier.weight(1f),
-          verticalArrangement = Arrangement.spacedBy(5.dp)
+          verticalArrangement = Arrangement.spacedBy(6.dp)
         ) {
           Text(
             text = stringResource(id = R.string.settings_update_title),
@@ -842,7 +898,7 @@ fun AppUpdateReleaseCard(
             Text(
               text = subtitle,
               style = MaterialTheme.typography.bodySmall.copy(lineHeight = 17.sp),
-              color = MaterialTheme.colorScheme.primary,
+              color = lightVioletAccent,
               maxLines = 2,
               overflow = TextOverflow.Ellipsis
             )
@@ -850,7 +906,8 @@ fun AppUpdateReleaseCard(
 
           Surface(
             shape = RoundedCornerShape(999.dp),
-            color = pillColor.copy(alpha = if (darkTheme) 0.16f else 0.12f),
+            color = pillColor.copy(alpha = 0.14f),
+            border = androidx.compose.foundation.BorderStroke(1.dp, pillColor.copy(alpha = 0.28f)),
             modifier = Modifier.testTag("settings_update_status_pill")
           ) {
             Row(
@@ -878,44 +935,121 @@ fun AppUpdateReleaseCard(
         }
       }
 
-      // Inner Key-Value Status Summary Panel (4 rows)
+      // Dark Inner Panel: large gradient installed version + code chip, two tiles, shield status row
       Surface(
-        shape = RoundedCornerShape(18.dp),
-        color = if (darkTheme) Color.Black.copy(alpha = 0.24f) else MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.55f),
+        shape = RoundedCornerShape(22.dp),
+        color = Color(0xFF120E1D).copy(alpha = 0.84f),
+        border = androidx.compose.foundation.BorderStroke(1.dp, Color.White.copy(alpha = 0.08f)),
         modifier = Modifier.fillMaxWidth()
       ) {
         Column(
           modifier = Modifier.padding(14.dp),
-          verticalArrangement = Arrangement.spacedBy(9.dp)
+          verticalArrangement = Arrangement.spacedBy(12.dp)
         ) {
-          UpdateSummaryRow(
-            label = stringResource(id = R.string.settings_installed_version),
-            value = "v${updateUiState.installed.versionName} (code ${updateUiState.installed.versionCode})"
-          )
-          UpdateSummaryRow(
-            label = stringResource(id = R.string.settings_latest_release),
-            value = updateUiState.latestRelease?.let { "v${it.versionName} (code ${it.versionCode})" }
-              ?: stringResource(id = R.string.settings_not_checked)
-          )
-          UpdateSummaryRow(
-            label = stringResource(id = R.string.settings_release_date),
-            value = updateUiState.latestRelease?.releaseDate?.ifBlank { updateUiState.installedReleaseDate }
-              ?: updateUiState.installedReleaseDate
-          )
-          UpdateSummaryRow(
-            label = stringResource(id = R.string.settings_update_status),
-            value = updateUiState.statusMessage,
-            valueColor = when (updateUiState.stage) {
-              UpdateStage.Error -> MaterialTheme.colorScheme.error
-              UpdateStage.UpToDate, UpdateStage.Done -> AccentGreen
-              UpdateStage.Available -> if (isMandatory) MaterialTheme.colorScheme.error else AccentAmber
-              UpdateStage.Installing, UpdateStage.Verifying -> Color(0xFF10B981)
-              else -> MaterialTheme.colorScheme.primary
-            },
-            valueModifier = Modifier
-              .semantics { liveRegion = LiveRegionMode.Polite }
-              .testTag("settings_update_status_text")
-          )
+          Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
+            Text(
+              text = stringResource(id = R.string.settings_installed_version),
+              style = MaterialTheme.typography.labelSmall.copy(fontWeight = FontWeight.SemiBold),
+              color = mutedGlassText
+            )
+            Row(
+              modifier = Modifier.fillMaxWidth(),
+              verticalAlignment = Alignment.CenterVertically,
+              horizontalArrangement = Arrangement.SpaceBetween
+            ) {
+              Text(
+                text = "v${updateUiState.installed.versionName}",
+                style = MaterialTheme.typography.headlineMedium.copy(
+                  fontWeight = FontWeight.ExtraBold,
+                  fontSize = 28.sp,
+                  lineHeight = 34.sp,
+                  brush = Brush.linearGradient(
+                    colors = listOf(baseTitleColor, lightVioletAccent, violetAccent)
+                  )
+                ),
+                maxLines = 1,
+                overflow = TextOverflow.Ellipsis
+              )
+              Surface(
+                shape = RoundedCornerShape(999.dp),
+                color = violetAccent.copy(alpha = 0.16f),
+                border = androidx.compose.foundation.BorderStroke(
+                  1.dp,
+                  lightVioletAccent.copy(alpha = 0.28f)
+                )
+              ) {
+                Text(
+                  text = "code ${updateUiState.installed.versionCode}",
+                  style = MaterialTheme.typography.labelSmall.copy(
+                    fontWeight = FontWeight.Bold,
+                    fontSize = 11.sp
+                  ),
+                  color = lightVioletAccent,
+                  modifier = Modifier.padding(horizontal = 10.dp, vertical = 5.dp),
+                  maxLines = 1
+                )
+              }
+            }
+          }
+
+          // Two tiles: Latest release & Released date
+          Row(
+            modifier = Modifier.fillMaxWidth(),
+            horizontalArrangement = Arrangement.spacedBy(10.dp)
+          ) {
+            UpdateGlassInfoTile(
+              label = stringResource(id = R.string.settings_latest_release),
+              value = updateUiState.latestRelease?.let { "v${it.versionName} (code ${it.versionCode})" }
+                ?: stringResource(id = R.string.settings_not_checked),
+              mutedColor = mutedGlassText,
+              textColor = baseTitleColor,
+              modifier = Modifier.weight(1f)
+            )
+            UpdateGlassInfoTile(
+              label = stringResource(id = R.string.settings_released_label),
+              value = formattedReleaseDate,
+              mutedColor = mutedGlassText,
+              textColor = baseTitleColor,
+              modifier = Modifier.weight(1f)
+            )
+          }
+
+          // Status row with vector shield icon
+          Surface(
+            shape = RoundedCornerShape(14.dp),
+            color = Color.White.copy(alpha = 0.04f),
+            border = androidx.compose.foundation.BorderStroke(1.dp, Color.White.copy(alpha = 0.08f)),
+            modifier = Modifier.fillMaxWidth()
+          ) {
+            Row(
+              modifier = Modifier
+                .fillMaxWidth()
+                .padding(horizontal = 12.dp, vertical = 10.dp),
+              verticalAlignment = Alignment.CenterVertically,
+              horizontalArrangement = Arrangement.spacedBy(9.dp)
+            ) {
+              Icon(
+                imageVector = Icons.Rounded.VerifiedUser,
+                contentDescription = stringResource(id = R.string.settings_update_status),
+                tint = stageStatusColor,
+                modifier = Modifier.size(18.dp)
+              )
+              Text(
+                text = updateUiState.statusMessage,
+                style = MaterialTheme.typography.bodySmall.copy(
+                  fontWeight = FontWeight.SemiBold,
+                  lineHeight = 18.sp
+                ),
+                color = stageStatusColor,
+                maxLines = 2,
+                overflow = TextOverflow.Ellipsis,
+                modifier = Modifier
+                  .weight(1f)
+                  .semantics { liveRegion = LiveRegionMode.Polite }
+                  .testTag("settings_update_status_text")
+              )
+            }
+          }
         }
       }
 
@@ -923,6 +1057,7 @@ fun AppUpdateReleaseCard(
         Surface(
           shape = RoundedCornerShape(14.dp),
           color = MaterialTheme.colorScheme.error.copy(alpha = 0.14f),
+          border = androidx.compose.foundation.BorderStroke(1.dp, MaterialTheme.colorScheme.error.copy(alpha = 0.30f)),
           modifier = Modifier.fillMaxWidth()
         ) {
           Row(
@@ -933,13 +1068,13 @@ fun AppUpdateReleaseCard(
             Icon(
               imageVector = Icons.Rounded.WarningAmber,
               contentDescription = null,
-              tint = MaterialTheme.colorScheme.error,
+              tint = Color(0xFFFB7185),
               modifier = Modifier.size(18.dp)
             )
             Text(
               text = stringResource(id = R.string.settings_critical_release),
               style = MaterialTheme.typography.bodySmall.copy(fontWeight = FontWeight.SemiBold, lineHeight = 18.sp),
-              color = MaterialTheme.colorScheme.error
+              color = Color(0xFFFB7185)
             )
           }
         }
@@ -983,7 +1118,7 @@ fun AppUpdateReleaseCard(
             Text(
               text = leftLabel,
               style = MaterialTheme.typography.bodySmall.copy(fontWeight = FontWeight.SemiBold, lineHeight = 18.sp),
-              color = if (isVerifyingOrInstalling) Color(0xFF10B981) else MaterialTheme.colorScheme.primary,
+              color = if (isVerifyingOrInstalling) Color(0xFF10B981) else lightVioletAccent,
               maxLines = 1,
               overflow = TextOverflow.Ellipsis,
               modifier = Modifier.weight(1f)
@@ -993,7 +1128,7 @@ fun AppUpdateReleaseCard(
               Text(
                 text = dlText,
                 style = MaterialTheme.typography.bodySmall,
-                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                color = mutedGlassText,
                 maxLines = 1
               )
             }
@@ -1006,7 +1141,7 @@ fun AppUpdateReleaseCard(
                 .height(7.dp)
                 .clip(RoundedCornerShape(999.dp)),
               color = Color(0xFF10B981),
-              trackColor = MaterialTheme.colorScheme.surfaceVariant
+              trackColor = Color.White.copy(alpha = 0.08f)
             )
           } else {
             LinearProgressIndicator(
@@ -1015,8 +1150,8 @@ fun AppUpdateReleaseCard(
                 .fillMaxWidth()
                 .height(7.dp)
                 .clip(RoundedCornerShape(999.dp)),
-              color = if (isPausedPartial) AccentAmber else Color(0xFF1F7AFF),
-              trackColor = MaterialTheme.colorScheme.surfaceVariant
+              color = if (isPausedPartial) AccentAmber else violetAccent,
+              trackColor = Color.White.copy(alpha = 0.08f)
             )
           }
 
@@ -1064,7 +1199,7 @@ fun AppUpdateReleaseCard(
           UpdateMainAction.DownloadAndInstall -> Triple(
             stringResource(id = R.string.settings_download_install),
             Icons.Rounded.SystemUpdate,
-            MaterialTheme.colorScheme.primary
+            violetAccent
           )
           UpdateMainAction.ResumeDownload -> Triple(
             stringResource(id = R.string.settings_resume_download),
@@ -1074,7 +1209,7 @@ fun AppUpdateReleaseCard(
           UpdateMainAction.InstallVerifiedApk -> Triple(
             stringResource(id = R.string.settings_download_install),
             Icons.Rounded.InstallMobile,
-            MaterialTheme.colorScheme.primary
+            violetAccent
           )
           UpdateMainAction.OpenInstallSettings -> Triple(
             stringResource(id = R.string.settings_open_install_settings),
@@ -1089,9 +1224,9 @@ fun AppUpdateReleaseCard(
           UpdateMainAction.Retry -> Triple(
             stringResource(id = R.string.settings_retry_update),
             Icons.Rounded.Refresh,
-            MaterialTheme.colorScheme.error
+            Color(0xFFEF4444)
           )
-          UpdateMainAction.None -> Triple("", Icons.Rounded.SystemUpdate, MaterialTheme.colorScheme.primary)
+          UpdateMainAction.None -> Triple("", Icons.Rounded.SystemUpdate, violetAccent)
         }
 
         Box(
@@ -1101,9 +1236,10 @@ fun AppUpdateReleaseCard(
             .clip(RoundedCornerShape(18.dp))
             .background(
               Brush.horizontalGradient(
-                colors = listOf(ctaColor, ctaColor.copy(alpha = 0.80f))
+                colors = listOf(ctaColor, lerp(ctaColor, Color.White, 0.16f))
               )
             )
+            .border(1.dp, Color.White.copy(alpha = 0.16f), RoundedCornerShape(18.dp))
             .clickable { onMainAction() }
             .testTag("update_now_button"),
           contentAlignment = Alignment.Center
@@ -1129,25 +1265,69 @@ fun AppUpdateReleaseCard(
         }
       }
 
-      // Secondary Action Pills: Check Updates, Release Notes, Open Release Page
+      // Check Updates wide violet-gradient button
+      val checkEnabled = !isDownloading && !isChecking && !isVerifyingOrInstalling
+      Box(
+        modifier = Modifier
+          .fillMaxWidth()
+          .height(50.dp)
+          .shadow(
+            elevation = if (checkEnabled) 12.dp else 0.dp,
+            shape = RoundedCornerShape(18.dp),
+            ambientColor = violetAccent.copy(alpha = 0.40f),
+            spotColor = lightVioletAccent.copy(alpha = 0.36f)
+          )
+          .clip(RoundedCornerShape(18.dp))
+          .background(
+            brush = if (checkEnabled) {
+              Brush.horizontalGradient(colors = listOf(violetAccent, lightVioletAccent))
+            } else {
+              Brush.horizontalGradient(
+                colors = listOf(
+                  Color.White.copy(alpha = 0.08f),
+                  Color.White.copy(alpha = 0.06f)
+                )
+              )
+            }
+          )
+          .border(
+            width = 1.dp,
+            color = if (checkEnabled) Color.White.copy(alpha = 0.20f) else Color.White.copy(alpha = 0.08f),
+            shape = RoundedCornerShape(18.dp)
+          )
+          .clickable(enabled = checkEnabled) { if (!isChecking) onCheckUpdate() }
+          .testTag("check_update_button"),
+        contentAlignment = Alignment.Center
+      ) {
+        Row(
+          verticalAlignment = Alignment.CenterVertically,
+          horizontalArrangement = Arrangement.spacedBy(8.dp)
+        ) {
+          Icon(
+            imageVector = Icons.Rounded.Refresh,
+            contentDescription = null,
+            tint = if (checkEnabled) Color.White else mutedGlassText,
+            modifier = Modifier.size(19.dp)
+          )
+          Text(
+            text = if (isChecking) {
+              stringResource(id = R.string.settings_checking)
+            } else {
+              stringResource(id = R.string.settings_check_updates)
+            },
+            style = MaterialTheme.typography.bodyMedium.copy(fontWeight = FontWeight.Bold, lineHeight = 20.sp),
+            color = if (checkEnabled) Color.White else mutedGlassText,
+            maxLines = 1,
+            overflow = TextOverflow.Ellipsis
+          )
+        }
+      }
+
+      // Side-by-side glass buttons: Release Notes & Release Page
       Row(
         modifier = Modifier.fillMaxWidth(),
         horizontalArrangement = Arrangement.spacedBy(10.dp)
       ) {
-        GlassActionPill(
-          text = if (isChecking) {
-            stringResource(id = R.string.settings_checking)
-          } else {
-            stringResource(id = R.string.settings_check_updates)
-          },
-          icon = Icons.Rounded.Refresh,
-          darkTheme = darkTheme,
-          enabled = !isDownloading && !isChecking && !isVerifyingOrInstalling,
-          modifier = Modifier
-            .weight(1f)
-            .testTag("check_update_button"),
-          onClick = { if (!isChecking) onCheckUpdate() }
-        )
         GlassActionPill(
           text = stringResource(id = R.string.settings_release_notes),
           icon = Icons.Rounded.Description,
@@ -1158,14 +1338,8 @@ fun AppUpdateReleaseCard(
             .testTag("release_notes_button"),
           onClick = onOpenReleaseNotes
         )
-      }
-
-      Row(
-        modifier = Modifier.fillMaxWidth(),
-        horizontalArrangement = Arrangement.spacedBy(10.dp)
-      ) {
         GlassActionPill(
-          text = stringResource(id = R.string.settings_open_release_page),
+          text = stringResource(id = R.string.settings_release_page),
           icon = Icons.AutoMirrored.Rounded.OpenInNew,
           darkTheme = darkTheme,
           enabled = true,
@@ -1179,32 +1353,49 @@ fun AppUpdateReleaseCard(
   }
 }
 
+private fun formatUpdateReleaseDate(rawDate: String): String {
+  val trimmed = rawDate.trim()
+  if (trimmed.isBlank()) return trimmed
+  return runCatching {
+    val parser = SimpleDateFormat("yyyy-MM-dd", Locale.US)
+    val parsed = parser.parse(trimmed) ?: return@runCatching trimmed
+    SimpleDateFormat("MMM d, yyyy", Locale.US).format(parsed)
+  }.getOrDefault(trimmed)
+}
+
 @Composable
-private fun UpdateSummaryRow(
+private fun UpdateGlassInfoTile(
   label: String,
   value: String,
-  valueColor: Color = MaterialTheme.colorScheme.onSurface,
-  valueModifier: Modifier = Modifier
+  mutedColor: Color,
+  textColor: Color,
+  modifier: Modifier = Modifier
 ) {
-  Row(
-    modifier = Modifier.fillMaxWidth(),
-    horizontalArrangement = Arrangement.SpaceBetween,
-    verticalAlignment = Alignment.CenterVertically
+  Surface(
+    shape = RoundedCornerShape(16.dp),
+    color = Color.White.copy(alpha = 0.04f),
+    border = androidx.compose.foundation.BorderStroke(1.dp, Color.White.copy(alpha = 0.08f)),
+    modifier = modifier
   ) {
-    Text(
-      text = label,
-      style = MaterialTheme.typography.bodySmall.copy(fontWeight = FontWeight.SemiBold),
-      color = MaterialTheme.colorScheme.onSurfaceVariant
-    )
-    Spacer(modifier = Modifier.width(12.dp))
-    Text(
-      text = value,
-      style = MaterialTheme.typography.bodySmall.copy(fontWeight = FontWeight.SemiBold),
-      color = valueColor,
-      maxLines = 1,
-      overflow = TextOverflow.Ellipsis,
-      modifier = valueModifier
-    )
+    Column(
+      modifier = Modifier.padding(horizontal = 12.dp, vertical = 10.dp),
+      verticalArrangement = Arrangement.spacedBy(3.dp)
+    ) {
+      Text(
+        text = label,
+        style = MaterialTheme.typography.labelSmall.copy(fontWeight = FontWeight.Medium, fontSize = 11.sp),
+        color = mutedColor,
+        maxLines = 1,
+        overflow = TextOverflow.Ellipsis
+      )
+      Text(
+        text = value,
+        style = MaterialTheme.typography.bodySmall.copy(fontWeight = FontWeight.Bold, lineHeight = 17.sp),
+        color = textColor,
+        maxLines = 1,
+        overflow = TextOverflow.Ellipsis
+      )
+    }
   }
 }
 
@@ -1217,9 +1408,9 @@ private fun GlassActionPill(
   modifier: Modifier = Modifier,
   onClick: () -> Unit
 ) {
-  val bg = if (darkTheme) Color.White.copy(alpha = if (enabled) 0.08f else 0.04f) else Color.White.copy(alpha = if (enabled) 0.88f else 0.45f)
-  val borderColor = if (darkTheme) Color.White.copy(alpha = 0.14f) else Color.Black.copy(alpha = 0.08f)
-  val contentColor = if (enabled) MaterialTheme.colorScheme.onSurface else MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.5f)
+  val bg = Color.White.copy(alpha = if (enabled) 0.06f else 0.03f)
+  val borderColor = Color.White.copy(alpha = if (enabled) 0.08f else 0.05f)
+  val contentColor = if (enabled) Color(0xFFF4F2FB) else Color(0xFF8F8AA6).copy(alpha = 0.6f)
 
   Surface(
     shape = RoundedCornerShape(16.dp),
