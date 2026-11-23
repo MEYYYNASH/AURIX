@@ -11,10 +11,10 @@ import org.junit.Test
 class CrashFixStabilityTest {
 
   @Test
-  fun release189_metadataAndVersionCodeAreConsistent() {
-    assertEquals("1.8.9", BuildConfig.VERSION_NAME)
-    assertEquals(10890, BuildConfig.VERSION_CODE)
-    assertTrue("Release 1.8.9 versionCode must exceed 1.8.8 (10880)", BuildConfig.VERSION_CODE > 10880)
+  fun release190_metadataAndVersionCodeAreConsistent() {
+    assertEquals("1.9.0", BuildConfig.VERSION_NAME)
+    assertEquals(10900, BuildConfig.VERSION_CODE)
+    assertTrue("Release 1.9.0 versionCode must exceed 1.8.9 (10890)", BuildConfig.VERSION_CODE > 10890)
   }
 
   @Test

@@ -787,6 +787,9 @@ private fun LibraryAlbumGridCard(
     }
   }
 
+  val primaryAccent = MaterialTheme.colorScheme.primary
+  val lightAccent = androidx.compose.ui.graphics.lerp(primaryAccent, Color.White, 0.32f)
+
   Column(
     modifier = modifier
       .scale(pressScale)
@@ -798,7 +801,7 @@ private fun LibraryAlbumGridCard(
           val corner = 24.dp.toPx() + expand * 0.4f
           drawRoundRect(
             brush = Brush.linearGradient(
-              colors = listOf(Color(0xFF8B5CF6), Color(0xFFC084FC))
+              colors = listOf(primaryAccent, lightAccent)
             ),
             topLeft = Offset(-expand, -expand),
             size = androidx.compose.ui.geometry.Size(
@@ -819,7 +822,7 @@ private fun LibraryAlbumGridCard(
       .border(
         width = if (pulseRing && ringProgress.value > 0.01f) 1.5.dp else 1.dp,
         color = if (pulseRing && ringProgress.value > 0.01f) {
-          Color(0xFFC084FC).copy(alpha = (1f - ringProgress.value * 0.6f).coerceIn(0.2f, 1f))
+          lightAccent.copy(alpha = (1f - ringProgress.value * 0.6f).coerceIn(0.2f, 1f))
         } else {
           Color.White.copy(alpha = if (darkTheme) 0.16f else 0.90f)
         },
@@ -851,9 +854,15 @@ private fun LibraryAlbumGridCard(
         .background(
           Brush.linearGradient(
             colors = if (savedPreset != null) {
-              listOf(savedPreset.startColor, savedPreset.endColor)
+              listOf(
+                savedPreset.resolveStartColor(primaryAccent),
+                savedPreset.resolveEndColor(primaryAccent)
+              )
             } else {
-              listOf(Color(0xFF7B61FF), Color(0xFF2D1E69))
+              listOf(
+                primaryAccent,
+                androidx.compose.ui.graphics.lerp(primaryAccent, Color(0xFF090710), 0.65f)
+              )
             }
           )
         ),

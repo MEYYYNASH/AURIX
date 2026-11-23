@@ -91,9 +91,6 @@ private val SheetGlassInner = Color(0xFF120E1D)
 private val SheetGlassCard = Color(0xFF161124)
 private val SheetGlassText = Color(0xFFF4F2FB)
 private val SheetGlassMuted = Color(0xFF8F8AA6)
-private val SheetViolet = Color(0xFF8B5CF6)
-private val SheetLightViolet = Color(0xFFC084FC)
-private val SheetMagenta = Color(0xFFD946EF)
 private val SheetEmerald = Color(0xFF10B981)
 
 private data class ParsedReleaseNote(
@@ -104,13 +101,17 @@ private data class ParsedReleaseNote(
   val accentColor: Color
 )
 
-private fun parseReleaseNotes(notes: List<String>): List<ParsedReleaseNote> {
+private fun parseReleaseNotes(
+  notes: List<String>,
+  primaryAccent: Color,
+  lightAccent: Color
+): List<ParsedReleaseNote> {
   val palette = listOf(
-    SheetViolet,
-    SheetLightViolet,
+    primaryAccent,
+    lightAccent,
     Color(0xFF38BDF8),
     SheetEmerald,
-    Color(0xFFF472B6)
+    lerp(primaryAccent, Color(0xFFF472B6), 0.45f)
   )
   return notes.mapIndexed { idx, raw ->
     val clean = raw.trim().removePrefix("•").removePrefix("-").trim()
@@ -166,6 +167,10 @@ fun ReleaseNotesBottomSheet(
   onDismiss: () -> Unit,
   reducedMotion: Boolean = false
 ) {
+  val sheetViolet = MaterialTheme.colorScheme.primary
+  val sheetLightViolet = lerp(sheetViolet, Color.White, 0.32f)
+  val sheetMagenta = lerp(sheetViolet, Color(0xFFD946EF), 0.28f)
+
   val versionNameClean = (latestRelease?.versionName ?: installedVersionName)
     .trim()
     .removePrefix("v")
@@ -175,7 +180,9 @@ fun ReleaseNotesBottomSheet(
   val rawReleaseDate = latestRelease?.releaseDate?.ifBlank { APP_RELEASE_DATE } ?: APP_RELEASE_DATE
   val formattedDate = remember(rawReleaseDate) { formatReleaseSheetDate(rawReleaseDate) }
   val notesList = latestRelease?.notes?.takeIf { it.isNotEmpty() } ?: UpdateManager.CURRENT_RELEASE_NOTES
-  val parsedNotes = remember(notesList) { parseReleaseNotes(notesList) }
+  val parsedNotes = remember(notesList, sheetViolet, sheetLightViolet) {
+    parseReleaseNotes(notesList, sheetViolet, sheetLightViolet)
+  }
 
   val sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true)
   val sheetShape = RoundedCornerShape(topStart = 32.dp, topEnd = 32.dp)
@@ -183,8 +190,8 @@ fun ReleaseNotesBottomSheet(
   val borderBrush = Brush.linearGradient(
     colors = listOf(
       Color.White.copy(alpha = 0.18f),
-      SheetViolet.copy(alpha = 0.38f),
-      SheetLightViolet.copy(alpha = 0.16f),
+      sheetViolet.copy(alpha = 0.38f),
+      sheetLightViolet.copy(alpha = 0.16f),
       Color.White.copy(alpha = 0.08f)
     )
   )
@@ -220,15 +227,15 @@ fun ReleaseNotesBottomSheet(
         .shadow(
           elevation = 24.dp,
           shape = sheetShape,
-          ambientColor = SheetViolet.copy(alpha = 0.32f),
-          spotColor = SheetMagenta.copy(alpha = 0.26f)
+          ambientColor = sheetViolet.copy(alpha = 0.32f),
+          spotColor = sheetMagenta.copy(alpha = 0.26f)
         )
         .clip(sheetShape)
         .background(SheetGlassBg)
         .drawBehind {
           drawCircle(
             brush = Brush.radialGradient(
-              colors = listOf(SheetViolet.copy(alpha = 0.24f), Color.Transparent),
+              colors = listOf(sheetViolet.copy(alpha = 0.24f), Color.Transparent),
               center = Offset(size.width * 0.16f, size.height * 0.12f),
               radius = size.maxDimension * 0.65f
             ),
@@ -237,21 +244,21 @@ fun ReleaseNotesBottomSheet(
           )
           drawCircle(
             brush = Brush.radialGradient(
-              colors = listOf(SheetMagenta.copy(alpha = 0.15f), Color.Transparent),
+              colors = listOf(sheetMagenta.copy(alpha = 0.15f), Color.Transparent),
               center = Offset(size.width * 0.88f, size.height * 0.78f),
               radius = size.maxDimension * 0.60f
             ),
             radius = size.maxDimension * 0.60f,
             center = Offset(size.width * 0.88f, size.height * 0.78f)
           )
-          // Top edge violet glow line
+          // Top edge accent glow line
           drawRect(
             brush = Brush.horizontalGradient(
               colors = listOf(
                 Color.Transparent,
-                SheetViolet.copy(alpha = 0.85f),
-                SheetLightViolet,
-                SheetViolet.copy(alpha = 0.85f),
+                sheetViolet.copy(alpha = 0.85f),
+                sheetLightViolet,
+                sheetViolet.copy(alpha = 0.85f),
                 Color.Transparent
               )
             ),
@@ -260,7 +267,7 @@ fun ReleaseNotesBottomSheet(
           )
           drawRect(
             brush = Brush.verticalGradient(
-              colors = listOf(SheetLightViolet.copy(alpha = 0.20f), Color.Transparent),
+              colors = listOf(sheetLightViolet.copy(alpha = 0.20f), Color.Transparent),
               startY = 0f,
               endY = 28.dp.toPx()
             ),
@@ -292,9 +299,9 @@ fun ReleaseNotesBottomSheet(
               .background(
                 Brush.horizontalGradient(
                   colors = listOf(
-                    SheetViolet.copy(alpha = 0.45f),
-                    SheetLightViolet.copy(alpha = 0.92f),
-                    SheetViolet.copy(alpha = 0.45f)
+                    sheetViolet.copy(alpha = 0.45f),
+                    sheetLightViolet.copy(alpha = 0.92f),
+                    sheetViolet.copy(alpha = 0.45f)
                   )
                 )
               )
@@ -315,14 +322,14 @@ fun ReleaseNotesBottomSheet(
                 .background(
                   Brush.linearGradient(
                     colors = listOf(
-                      SheetViolet.copy(alpha = 0.28f),
-                      SheetMagenta.copy(alpha = 0.14f)
+                      sheetViolet.copy(alpha = 0.28f),
+                      sheetMagenta.copy(alpha = 0.14f)
                     )
                   )
                 )
                 .border(
                   1.dp,
-                  SheetLightViolet.copy(alpha = 0.36f),
+                  sheetLightViolet.copy(alpha = 0.36f),
                   RoundedCornerShape(15.dp)
                 ),
               contentAlignment = Alignment.Center
@@ -330,7 +337,7 @@ fun ReleaseNotesBottomSheet(
               Icon(
                 imageVector = Icons.Rounded.NewReleases,
                 contentDescription = null,
-                tint = SheetLightViolet,
+                tint = sheetLightViolet,
                 modifier = Modifier.size(22.dp)
               )
             }
@@ -357,7 +364,7 @@ fun ReleaseNotesBottomSheet(
                   versionCode
                 ),
                 style = MaterialTheme.typography.bodySmall.copy(lineHeight = 17.sp),
-                color = SheetLightViolet,
+                color = sheetLightViolet,
                 maxLines = 1,
                 overflow = TextOverflow.Ellipsis
               )
@@ -421,14 +428,14 @@ fun ReleaseNotesBottomSheet(
                       fontSize = 27.sp,
                       lineHeight = 32.sp,
                       brush = Brush.linearGradient(
-                        colors = listOf(SheetGlassText, SheetLightViolet, SheetViolet)
+                        colors = listOf(SheetGlassText, sheetLightViolet, sheetViolet)
                       )
                     )
                   )
                   Surface(
                     shape = RoundedCornerShape(999.dp),
-                    color = SheetViolet.copy(alpha = 0.16f),
-                    border = BorderStroke(1.dp, SheetLightViolet.copy(alpha = 0.28f))
+                    color = sheetViolet.copy(alpha = 0.16f),
+                    border = BorderStroke(1.dp, sheetLightViolet.copy(alpha = 0.28f))
                   ) {
                     Text(
                       text = "code $versionCode",
@@ -436,7 +443,7 @@ fun ReleaseNotesBottomSheet(
                         fontWeight = FontWeight.Bold,
                         fontSize = 11.sp
                       ),
-                      color = SheetLightViolet,
+                      color = sheetLightViolet,
                       modifier = Modifier.padding(horizontal = 10.dp, vertical = 4.dp)
                     )
                   }
@@ -489,7 +496,7 @@ fun ReleaseNotesBottomSheet(
                     Icon(
                       imageVector = Icons.Rounded.CalendarToday,
                       contentDescription = null,
-                      tint = SheetLightViolet,
+                      tint = sheetLightViolet,
                       modifier = Modifier.size(14.dp)
                     )
                     Text(
@@ -606,13 +613,13 @@ fun ReleaseNotesBottomSheet(
                   .shadow(
                     elevation = 14.dp,
                     shape = RoundedCornerShape(18.dp),
-                    ambientColor = SheetViolet.copy(alpha = 0.44f),
-                    spotColor = SheetLightViolet.copy(alpha = 0.38f)
+                    ambientColor = sheetViolet.copy(alpha = 0.44f),
+                    spotColor = sheetLightViolet.copy(alpha = 0.38f)
                   )
                   .clip(RoundedCornerShape(18.dp))
                   .background(
                     Brush.horizontalGradient(
-                      colors = listOf(SheetViolet, SheetLightViolet)
+                      colors = listOf(sheetViolet, sheetLightViolet)
                     )
                   )
                   .border(1.dp, Color.White.copy(alpha = 0.22f), RoundedCornerShape(18.dp))
@@ -651,13 +658,13 @@ fun ReleaseNotesBottomSheet(
                 .shadow(
                   elevation = 12.dp,
                   shape = RoundedCornerShape(18.dp),
-                  ambientColor = SheetViolet.copy(alpha = 0.40f),
-                  spotColor = SheetLightViolet.copy(alpha = 0.32f)
+                  ambientColor = sheetViolet.copy(alpha = 0.40f),
+                  spotColor = sheetLightViolet.copy(alpha = 0.32f)
                 )
                 .clip(RoundedCornerShape(18.dp))
                 .background(
                   Brush.horizontalGradient(
-                    colors = listOf(SheetViolet, SheetLightViolet)
+                    colors = listOf(sheetViolet, sheetLightViolet)
                   )
                 )
                 .border(1.dp, Color.White.copy(alpha = 0.20f), RoundedCornerShape(18.dp))
@@ -698,7 +705,13 @@ fun WhatsNewBottomSheet(
   onPreviewNavigation: (() -> Unit)? = null,
   onDismiss: () -> Unit
 ) {
-  val parsedNotes = remember { parseReleaseNotes(UpdateManager.CURRENT_RELEASE_NOTES) }
+  val sheetViolet = MaterialTheme.colorScheme.primary
+  val sheetLightViolet = lerp(sheetViolet, Color.White, 0.32f)
+  val sheetMagenta = lerp(sheetViolet, Color(0xFFD946EF), 0.28f)
+
+  val parsedNotes = remember(sheetViolet, sheetLightViolet) {
+    parseReleaseNotes(UpdateManager.CURRENT_RELEASE_NOTES, sheetViolet, sheetLightViolet)
+  }
   val formattedDate = remember { formatReleaseSheetDate(APP_RELEASE_DATE) }
   val sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true)
   val sheetShape = RoundedCornerShape(topStart = 32.dp, topEnd = 32.dp)
@@ -706,8 +719,8 @@ fun WhatsNewBottomSheet(
   val borderBrush = Brush.linearGradient(
     colors = listOf(
       Color.White.copy(alpha = 0.18f),
-      SheetViolet.copy(alpha = 0.38f),
-      SheetLightViolet.copy(alpha = 0.16f),
+      sheetViolet.copy(alpha = 0.38f),
+      sheetLightViolet.copy(alpha = 0.16f),
       Color.White.copy(alpha = 0.08f)
     )
   )
@@ -728,15 +741,15 @@ fun WhatsNewBottomSheet(
         .shadow(
           elevation = 24.dp,
           shape = sheetShape,
-          ambientColor = SheetViolet.copy(alpha = 0.32f),
-          spotColor = SheetMagenta.copy(alpha = 0.26f)
+          ambientColor = sheetViolet.copy(alpha = 0.32f),
+          spotColor = sheetMagenta.copy(alpha = 0.26f)
         )
         .clip(sheetShape)
         .background(SheetGlassBg)
         .drawBehind {
           drawCircle(
             brush = Brush.radialGradient(
-              colors = listOf(SheetViolet.copy(alpha = 0.24f), Color.Transparent),
+              colors = listOf(sheetViolet.copy(alpha = 0.24f), Color.Transparent),
               center = Offset(size.width * 0.18f, size.height * 0.14f),
               radius = size.maxDimension * 0.65f
             ),
@@ -745,7 +758,7 @@ fun WhatsNewBottomSheet(
           )
           drawCircle(
             brush = Brush.radialGradient(
-              colors = listOf(SheetMagenta.copy(alpha = 0.15f), Color.Transparent),
+              colors = listOf(sheetMagenta.copy(alpha = 0.15f), Color.Transparent),
               center = Offset(size.width * 0.88f, size.height * 0.78f),
               radius = size.maxDimension * 0.60f
             ),
@@ -756,9 +769,9 @@ fun WhatsNewBottomSheet(
             brush = Brush.horizontalGradient(
               colors = listOf(
                 Color.Transparent,
-                SheetViolet.copy(alpha = 0.85f),
-                SheetLightViolet,
-                SheetViolet.copy(alpha = 0.85f),
+                sheetViolet.copy(alpha = 0.85f),
+                sheetLightViolet,
+                sheetViolet.copy(alpha = 0.85f),
                 Color.Transparent
               )
             ),
@@ -767,7 +780,7 @@ fun WhatsNewBottomSheet(
           )
           drawRect(
             brush = Brush.verticalGradient(
-              colors = listOf(SheetLightViolet.copy(alpha = 0.20f), Color.Transparent),
+              colors = listOf(sheetLightViolet.copy(alpha = 0.20f), Color.Transparent),
               startY = 0f,
               endY = 28.dp.toPx()
             ),
@@ -799,9 +812,9 @@ fun WhatsNewBottomSheet(
               .background(
                 Brush.horizontalGradient(
                   colors = listOf(
-                    SheetViolet.copy(alpha = 0.45f),
-                    SheetLightViolet.copy(alpha = 0.92f),
-                    SheetViolet.copy(alpha = 0.45f)
+                    sheetViolet.copy(alpha = 0.45f),
+                    sheetLightViolet.copy(alpha = 0.92f),
+                    sheetViolet.copy(alpha = 0.45f)
                   )
                 )
               )
@@ -830,8 +843,8 @@ fun WhatsNewBottomSheet(
               ) {
                 Surface(
                   shape = RoundedCornerShape(999.dp),
-                  color = SheetViolet.copy(alpha = 0.18f),
-                  border = BorderStroke(1.dp, SheetLightViolet.copy(alpha = 0.34f))
+                  color = sheetViolet.copy(alpha = 0.18f),
+                  border = BorderStroke(1.dp, sheetLightViolet.copy(alpha = 0.34f))
                 ) {
                   Row(
                     modifier = Modifier.padding(horizontal = 10.dp, vertical = 3.dp),
@@ -841,13 +854,13 @@ fun WhatsNewBottomSheet(
                     Icon(
                       imageVector = Icons.Rounded.AutoAwesome,
                       contentDescription = null,
-                      tint = SheetLightViolet,
+                      tint = sheetLightViolet,
                       modifier = Modifier.size(13.dp)
                     )
                     Text(
                       text = "v${BuildConfig.VERSION_NAME}",
                       style = MaterialTheme.typography.labelSmall.copy(fontWeight = FontWeight.Bold),
-                      color = SheetLightViolet
+                      color = sheetLightViolet
                     )
                   }
                 }
@@ -913,8 +926,8 @@ fun WhatsNewBottomSheet(
           ReleaseSheetStaggeredItem(delayMillis = 180, reducedMotion = reducedMotion) {
             Surface(
               shape = RoundedCornerShape(18.dp),
-              color = SheetViolet.copy(alpha = 0.14f),
-              border = BorderStroke(1.dp, SheetLightViolet.copy(alpha = 0.34f)),
+              color = sheetViolet.copy(alpha = 0.14f),
+              border = BorderStroke(1.dp, sheetLightViolet.copy(alpha = 0.34f)),
               modifier = Modifier
                 .fillMaxWidth()
                 .height(48.dp)
@@ -932,7 +945,7 @@ fun WhatsNewBottomSheet(
                 Icon(
                   imageVector = Icons.Rounded.AutoAwesome,
                   contentDescription = null,
-                  tint = SheetLightViolet,
+                  tint = sheetLightViolet,
                   modifier = Modifier.size(17.dp)
                 )
                 Spacer(modifier = Modifier.width(8.dp))
@@ -981,13 +994,13 @@ fun WhatsNewBottomSheet(
                 .shadow(
                   elevation = 14.dp,
                   shape = RoundedCornerShape(18.dp),
-                  ambientColor = SheetViolet.copy(alpha = 0.42f),
-                  spotColor = SheetLightViolet.copy(alpha = 0.36f)
+                  ambientColor = sheetViolet.copy(alpha = 0.42f),
+                  spotColor = sheetLightViolet.copy(alpha = 0.36f)
                 )
                 .clip(RoundedCornerShape(18.dp))
                 .background(
                   Brush.horizontalGradient(
-                    colors = listOf(SheetViolet, SheetLightViolet)
+                    colors = listOf(sheetViolet, sheetLightViolet)
                   )
                 )
                 .border(1.dp, Color.White.copy(alpha = 0.22f), RoundedCornerShape(18.dp))

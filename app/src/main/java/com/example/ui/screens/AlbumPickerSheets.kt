@@ -92,17 +92,18 @@ private val PickerGlassBg = Color(0xFF0A0810)
 private val PickerGlassCard = Color(0xFF130F1F)
 private val PickerGlassText = Color(0xFFF4F2FB)
 private val PickerGlassMuted = Color(0xFF8F8AA6)
-private val PickerGlassViolet = Color(0xFF8B5CF6)
-private val PickerGlassLightViolet = Color(0xFFC084FC)
 private val PickerGlassMagenta = Color(0xFFD946EF)
 
 @Composable
 private fun Modifier.darkGlassBottomSheetSurface(shape: RoundedCornerShape): Modifier {
+  val pickerViolet = MaterialTheme.colorScheme.primary
+  val pickerLightViolet = androidx.compose.ui.graphics.lerp(pickerViolet, Color.White, 0.32f)
+  val pickerSecondaryGlow = androidx.compose.ui.graphics.lerp(pickerViolet, PickerGlassMagenta, 0.28f)
   val borderBrush = Brush.linearGradient(
     colors = listOf(
       Color.White.copy(alpha = 0.16f),
-      PickerGlassViolet.copy(alpha = 0.34f),
-      PickerGlassLightViolet.copy(alpha = 0.16f),
+      pickerViolet.copy(alpha = 0.34f),
+      pickerLightViolet.copy(alpha = 0.16f),
       Color.White.copy(alpha = 0.08f)
     )
   )
@@ -110,15 +111,15 @@ private fun Modifier.darkGlassBottomSheetSurface(shape: RoundedCornerShape): Mod
     .shadow(
       elevation = 24.dp,
       shape = shape,
-      ambientColor = PickerGlassViolet.copy(alpha = 0.30f),
-      spotColor = PickerGlassMagenta.copy(alpha = 0.24f)
+      ambientColor = pickerViolet.copy(alpha = 0.30f),
+      spotColor = pickerSecondaryGlow.copy(alpha = 0.24f)
     )
     .clip(shape)
     .background(PickerGlassBg)
     .drawBehind {
       drawCircle(
         brush = Brush.radialGradient(
-          colors = listOf(PickerGlassViolet.copy(alpha = 0.22f), Color.Transparent),
+          colors = listOf(pickerViolet.copy(alpha = 0.22f), Color.Transparent),
           center = Offset(size.width * 0.16f, size.height * 0.14f),
           radius = size.maxDimension * 0.65f
         ),
@@ -127,7 +128,7 @@ private fun Modifier.darkGlassBottomSheetSurface(shape: RoundedCornerShape): Mod
       )
       drawCircle(
         brush = Brush.radialGradient(
-          colors = listOf(PickerGlassMagenta.copy(alpha = 0.14f), Color.Transparent),
+          colors = listOf(pickerSecondaryGlow.copy(alpha = 0.14f), Color.Transparent),
           center = Offset(size.width * 0.88f, size.height * 0.78f),
           radius = size.maxDimension * 0.58f
         ),
@@ -138,9 +139,9 @@ private fun Modifier.darkGlassBottomSheetSurface(shape: RoundedCornerShape): Mod
         brush = Brush.horizontalGradient(
           colors = listOf(
             Color.Transparent,
-            PickerGlassViolet.copy(alpha = 0.85f),
-            PickerGlassLightViolet,
-            PickerGlassViolet.copy(alpha = 0.85f),
+            pickerViolet.copy(alpha = 0.85f),
+            pickerLightViolet,
+            pickerViolet.copy(alpha = 0.85f),
             Color.Transparent
           )
         ),
@@ -149,7 +150,7 @@ private fun Modifier.darkGlassBottomSheetSurface(shape: RoundedCornerShape): Mod
       )
       drawRect(
         brush = Brush.verticalGradient(
-          colors = listOf(PickerGlassLightViolet.copy(alpha = 0.20f), Color.Transparent),
+          colors = listOf(pickerLightViolet.copy(alpha = 0.20f), Color.Transparent),
           startY = 0f,
           endY = 26.dp.toPx()
         ),
@@ -162,6 +163,8 @@ private fun Modifier.darkGlassBottomSheetSurface(shape: RoundedCornerShape): Mod
 
 @Composable
 private fun DarkGlassDragHandle() {
+  val pickerViolet = MaterialTheme.colorScheme.primary
+  val pickerLightViolet = androidx.compose.ui.graphics.lerp(pickerViolet, Color.White, 0.32f)
   Box(
     modifier = Modifier
       .fillMaxWidth()
@@ -176,9 +179,9 @@ private fun DarkGlassDragHandle() {
         .background(
           Brush.horizontalGradient(
             colors = listOf(
-              PickerGlassViolet.copy(alpha = 0.45f),
-              PickerGlassLightViolet.copy(alpha = 0.92f),
-              PickerGlassViolet.copy(alpha = 0.45f)
+              pickerViolet.copy(alpha = 0.45f),
+              pickerLightViolet.copy(alpha = 0.92f),
+              pickerViolet.copy(alpha = 0.45f)
             )
           )
         )
@@ -230,6 +233,7 @@ fun AlbumHoldOptionsSheet(
   onAddSongs: () -> Unit,
   onRequestDeleteAlbum: () -> Unit
 ) {
+  val pickerLightViolet = androidx.compose.ui.graphics.lerp(MaterialTheme.colorScheme.primary, Color.White, 0.32f)
   val sheetShape = RoundedCornerShape(topStart = 32.dp, topEnd = 32.dp)
   ModalBottomSheet(
     onDismissRequest = onDismiss,
@@ -324,7 +328,7 @@ fun AlbumHoldOptionsSheet(
       AlbumSheetActionRow(
         icon = Icons.Rounded.PlaylistAdd,
         label = stringResource(id = R.string.album_add_songs),
-        tint = PickerGlassLightViolet,
+        tint = pickerLightViolet,
         testTag = "album_hold_add_songs_button",
         onClick = {
           onDismiss()
@@ -496,6 +500,8 @@ fun AddSongsToAlbumSheet(
   onAddSongs: (List<Song>) -> Unit,
   onImportAudioFiles: (List<Uri>) -> Unit
 ) {
+  val pickerViolet = MaterialTheme.colorScheme.primary
+  val pickerLightViolet = androidx.compose.ui.graphics.lerp(pickerViolet, Color.White, 0.32f)
   var query by remember { mutableStateOf("") }
   val existingIds = remember(album.tracks) { album.tracks.map { it.id }.toSet() }
   var selectedIds by remember(album.albumId) { mutableStateOf<Set<String>>(emptySet()) }
@@ -563,8 +569,8 @@ fun AddSongsToAlbumSheet(
       OutlinedButton(
         onClick = { importAudioLauncher.launch(arrayOf("audio/*")) },
         shape = RoundedCornerShape(16.dp),
-        border = BorderStroke(1.dp, PickerGlassLightViolet.copy(alpha = 0.45f)),
-        colors = ButtonDefaults.outlinedButtonColors(contentColor = PickerGlassLightViolet),
+        border = BorderStroke(1.dp, pickerLightViolet.copy(alpha = 0.45f)),
+        colors = ButtonDefaults.outlinedButtonColors(contentColor = pickerLightViolet),
         modifier = Modifier
           .fillMaxWidth()
           .height(48.dp)
@@ -592,7 +598,7 @@ fun AddSongsToAlbumSheet(
           )
         },
         leadingIcon = {
-          Icon(Icons.Rounded.Search, contentDescription = null, tint = PickerGlassLightViolet)
+          Icon(Icons.Rounded.Search, contentDescription = null, tint = pickerLightViolet)
         },
         trailingIcon = {
           if (query.isNotEmpty()) {
@@ -652,13 +658,13 @@ fun AddSongsToAlbumSheet(
                 .clip(RoundedCornerShape(18.dp))
                 .background(
                   when {
-                    isSelected -> PickerGlassViolet.copy(alpha = 0.18f)
+                    isSelected -> pickerViolet.copy(alpha = 0.18f)
                     else -> PickerGlassCard.copy(alpha = 0.78f)
                   }
                 )
                 .border(
                   width = 1.dp,
-                  color = if (isSelected) PickerGlassLightViolet.copy(alpha = 0.50f) else Color.White.copy(alpha = 0.08f),
+                  color = if (isSelected) pickerLightViolet.copy(alpha = 0.50f) else Color.White.copy(alpha = 0.08f),
                   shape = RoundedCornerShape(18.dp)
                 )
                 .clickable(enabled = !alreadyIn) {
@@ -712,7 +718,7 @@ fun AddSongsToAlbumSheet(
                 Icon(
                   imageVector = if (isSelected) Icons.Rounded.CheckCircle else Icons.Rounded.RadioButtonUnchecked,
                   contentDescription = null,
-                  tint = if (isSelected) PickerGlassLightViolet else PickerGlassMuted,
+                  tint = if (isSelected) pickerLightViolet else PickerGlassMuted,
                   modifier = Modifier.size(22.dp)
                 )
               }
@@ -729,7 +735,7 @@ fun AddSongsToAlbumSheet(
           .clip(RoundedCornerShape(18.dp))
           .background(
             if (confirmEnabled) {
-              Brush.horizontalGradient(listOf(PickerGlassViolet, PickerGlassLightViolet))
+              Brush.horizontalGradient(listOf(pickerViolet, pickerLightViolet))
             } else {
               Brush.horizontalGradient(listOf(Color(0xFF272433), Color(0xFF211E2B)))
             }
@@ -773,6 +779,8 @@ fun AddSongToAlbumSheet(
   onSelectAlbum: (AlbumInfo) -> Unit,
   onCreateAlbumWithSong: (title: String, artist: String, year: String) -> Unit
 ) {
+  val pickerViolet = MaterialTheme.colorScheme.primary
+  val pickerLightViolet = androidx.compose.ui.graphics.lerp(pickerViolet, Color.White, 0.32f)
   var showCreateDialog by remember { mutableStateOf(false) }
   val sheetShape = RoundedCornerShape(topStart = 32.dp, topEnd = 32.dp)
 
@@ -829,8 +837,8 @@ fun AddSongToAlbumSheet(
       OutlinedButton(
         onClick = { showCreateDialog = true },
         shape = RoundedCornerShape(16.dp),
-        border = BorderStroke(1.dp, PickerGlassLightViolet.copy(alpha = 0.45f)),
-        colors = ButtonDefaults.outlinedButtonColors(contentColor = PickerGlassLightViolet),
+        border = BorderStroke(1.dp, pickerLightViolet.copy(alpha = 0.45f)),
+        colors = ButtonDefaults.outlinedButtonColors(contentColor = pickerLightViolet),
         modifier = Modifier
           .fillMaxWidth()
           .height(48.dp)
@@ -904,13 +912,13 @@ fun AddSongToAlbumSheet(
             if (alreadyAdded) {
               Surface(
                 shape = CircleShape,
-                color = PickerGlassViolet.copy(alpha = 0.18f),
-                border = BorderStroke(1.dp, PickerGlassLightViolet.copy(alpha = 0.30f))
+                color = pickerViolet.copy(alpha = 0.18f),
+                border = BorderStroke(1.dp, pickerLightViolet.copy(alpha = 0.30f))
               ) {
                 Text(
                   text = stringResource(id = R.string.album_pick_already_added),
                   style = MaterialTheme.typography.labelSmall,
-                  color = PickerGlassLightViolet,
+                  color = pickerLightViolet,
                   modifier = Modifier.padding(horizontal = 10.dp, vertical = 5.dp)
                 )
               }
@@ -940,13 +948,15 @@ private fun AlbumMiniThumb(
   modifier: Modifier = Modifier
 ) {
   val context = LocalContext.current
+  val themeAccent = MaterialTheme.colorScheme.primary
   val shape = RoundedCornerShape(13.dp)
   val coverUrl = album.coverUrl
   val savedPreset = remember(album.albumId) {
     AlbumCoverPresetStore.getPresetOrNull(context, album.albumId)
   }
-  val startColor = savedPreset?.startColor ?: PickerGlassViolet
-  val endColor = savedPreset?.endColor ?: Color(0xFF3B1B7A)
+  val startColor = savedPreset?.resolveStartColor(themeAccent) ?: themeAccent
+  val endColor = savedPreset?.resolveEndColor(themeAccent)
+    ?: androidx.compose.ui.graphics.lerp(themeAccent, Color(0xFF090710), 0.65f)
 
   Box(
     modifier = modifier

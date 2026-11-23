@@ -1,15 +1,15 @@
 {
-  "versionName": "1.8.9",
-  "versionCode": 10890,
+  "versionName": "1.9.0",
+  "versionCode": 10900,
   "releaseDate": "2026-11-22",
-  "apkUrl": "https://github.com/MEYYYNASH/AURIX/releases/download/v1.8.9/AURIX-v1.8.9.apk",
-  "sha256": "f7fbb987b4c82a185011b6409f1396d50075916ab81ef1e49fd88277471a32df",
+  "apkUrl": "https://github.com/MEYYYNASH/AURIX/releases/download/v1.9.0/AURIX-v1.9.0.apk",
+  "sha256": "",
   "mandatory": false,
   "notes": [
-    "Create Album Button & Bottom Dock Fix (v1.8.9): Hid the floating bottom navigation bar and miniplayer when the Create Album sheet opens, pinned Cancel and Create album buttons in the sheet footer, and aligned all 5 color chips evenly",
-    "App Update & Release Card: Restyled in #0A0810 dark glass with soft purple and magenta radial glows, gradient version hero, code chip, dual status tiles, and verified shield indicator",
-    "Release Notes & Whats New Sheet: Redesigned with a dark glass hero version header, live status pill, date and highlight counters, and staggered glass changelog cards with category vector icons",
-    "Create Album Shared-Element Transition: Frosted dark glass sheet with reactive preset glow, 108 dp spinning vinyl cover preview, floating-label inputs with icon capsules, and curved cover flight into the Library grid"
+    "Custom Accent Color Picker & Dynamic Dark Glass Accents (v1.9.0): Choose any custom accent color in Settings via interactive HSV sliders, hex code entry, or 16 curated swatches, and watch all Dark Glass glows, borders, top lines, chips, and gradient buttons adapt live",
+    "Create Album Button & Bottom Dock Fix: Hid the floating bottom navigation bar and miniplayer when the Create Album sheet opens, pinned Cancel and Create album buttons in the sheet footer, and aligned all 5 color chips evenly",
+    "App Update & Release Card: Restyled in #0A0810 dark glass with dynamic accent radial glows, gradient version hero, code chip, dual status tiles, and verified shield indicator",
+    "Release Notes & Whats New Sheet: Redesigned with a dark glass hero version header, live status pill, date and highlight counters, and staggered glass changelog cards with category vector icons"
   ],
-  "releasePageUrl": "https://github.com/MEYYYNASH/AURIX/releases/tag/v1.8.9"
+  "releasePageUrl": "https://github.com/MEYYYNASH/AURIX/releases/tag/v1.9.0"
 }

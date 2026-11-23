@@ -132,8 +132,6 @@ private val DarkGlassSurface = Color(0xFF130F1F)
 private val DarkGlassDeepSurface = Color(0xFF0F0C1A)
 private val DarkGlassText = Color(0xFFF4F2FB)
 private val DarkGlassMuted = Color(0xFF8F8AA6)
-private val DarkGlassViolet = Color(0xFF8B5CF6)
-private val DarkGlassLightViolet = Color(0xFFC084FC)
 private val DarkGlassMagenta = Color(0xFFD946EF)
 
 enum class AlbumCoverPreset(
@@ -178,6 +176,15 @@ enum class AlbumCoverPreset(
     endColor = Color(0xFF090710),
     glowColor = Color(0xFF94A3B8)
   );
+
+  fun resolveStartColor(themeAccent: Color): Color =
+    if (this == Violet) themeAccent else startColor
+
+  fun resolveEndColor(themeAccent: Color): Color =
+    if (this == Violet) lerp(themeAccent, Color(0xFF090710), 0.65f) else endColor
+
+  fun resolveGlowColor(themeAccent: Color): Color =
+    if (this == Violet) lerp(themeAccent, Color.White, 0.32f) else glowColor
 
   companion object {
     fun fromId(id: String?): AlbumCoverPreset {
@@ -267,6 +274,10 @@ fun CreateAlbumBottomSheetOverlay(
     return
   }
 
+  val darkGlassViolet = MaterialTheme.colorScheme.primary
+  val darkGlassLightViolet = lerp(darkGlassViolet, Color.White, 0.32f)
+  val darkGlassSecondaryGlow = lerp(darkGlassViolet, DarkGlassMagenta, 0.28f)
+
   var title by remember { mutableStateOf("") }
   var artist by remember { mutableStateOf(defaultArtist) }
   var year by remember { mutableStateOf("") }
@@ -287,7 +298,7 @@ fun CreateAlbumBottomSheetOverlay(
   val maxSlideDistancePx = with(density) { 640.dp.toPx() }
 
   val activeGlowColor by animateColorAsState(
-    targetValue = selectedPreset.glowColor,
+    targetValue = selectedPreset.resolveGlowColor(darkGlassViolet),
     animationSpec = if (isReduced) snap() else tween(360, easing = AurixEaseOut),
     label = "sheet_active_glow"
   )
@@ -415,7 +426,7 @@ fun CreateAlbumBottomSheetOverlay(
   val sheetBorderBrush = Brush.linearGradient(
     colors = listOf(
       Color.White.copy(alpha = 0.16f),
-      DarkGlassViolet.copy(alpha = 0.34f),
+      darkGlassViolet.copy(alpha = 0.34f),
       activeGlowColor.copy(alpha = 0.20f),
       Color.White.copy(alpha = 0.08f)
     )
@@ -454,16 +465,16 @@ fun CreateAlbumBottomSheetOverlay(
         .shadow(
           elevation = 26.dp,
           shape = sheetShape,
-          ambientColor = DarkGlassViolet.copy(alpha = 0.36f),
-          spotColor = DarkGlassMagenta.copy(alpha = 0.30f)
+          ambientColor = darkGlassViolet.copy(alpha = 0.36f),
+          spotColor = darkGlassSecondaryGlow.copy(alpha = 0.30f)
         )
         .clip(sheetShape)
         .background(DarkGlassBg)
         .drawBehind {
-          // Soft purple & reactive preset radial glows
+          // User accent & reactive preset radial glows
           drawCircle(
             brush = Brush.radialGradient(
-              colors = listOf(DarkGlassViolet.copy(alpha = 0.25f), Color.Transparent),
+              colors = listOf(darkGlassViolet.copy(alpha = 0.25f), Color.Transparent),
               center = Offset(size.width * 0.16f, size.height * 0.12f),
               radius = size.maxDimension * 0.65f
             ),
@@ -481,22 +492,22 @@ fun CreateAlbumBottomSheetOverlay(
           )
           drawCircle(
             brush = Brush.radialGradient(
-              colors = listOf(DarkGlassMagenta.copy(alpha = 0.15f), Color.Transparent),
+              colors = listOf(darkGlassSecondaryGlow.copy(alpha = 0.15f), Color.Transparent),
               center = Offset(size.width * 0.88f, size.height * 0.78f),
               radius = size.maxDimension * 0.60f
             ),
             radius = size.maxDimension * 0.60f,
             center = Offset(size.width * 0.88f, size.height * 0.78f)
           )
-          // Violet glow line along top edge
+          // Accent glow line along top edge
           drawRect(
             brush = Brush.horizontalGradient(
               colors = listOf(
                 Color.Transparent,
-                DarkGlassViolet.copy(alpha = 0.88f),
-                DarkGlassLightViolet,
+                darkGlassViolet.copy(alpha = 0.88f),
+                darkGlassLightViolet,
                 activeGlowColor,
-                DarkGlassViolet.copy(alpha = 0.88f),
+                darkGlassViolet.copy(alpha = 0.88f),
                 Color.Transparent
               )
             ),
@@ -505,7 +516,7 @@ fun CreateAlbumBottomSheetOverlay(
           )
           drawRect(
             brush = Brush.verticalGradient(
-              colors = listOf(DarkGlassLightViolet.copy(alpha = 0.22f), Color.Transparent),
+              colors = listOf(darkGlassLightViolet.copy(alpha = 0.22f), Color.Transparent),
               startY = 0f,
               endY = 30.dp.toPx()
             ),
@@ -592,9 +603,9 @@ fun CreateAlbumBottomSheetOverlay(
               .background(
                 Brush.horizontalGradient(
                   colors = listOf(
-                    DarkGlassViolet.copy(alpha = 0.45f),
-                    DarkGlassLightViolet.copy(alpha = 0.95f),
-                    DarkGlassViolet.copy(alpha = 0.45f)
+                    darkGlassViolet.copy(alpha = 0.45f),
+                    darkGlassLightViolet.copy(alpha = 0.95f),
+                    darkGlassViolet.copy(alpha = 0.45f)
                   )
                 )
               )
@@ -627,14 +638,14 @@ fun CreateAlbumBottomSheetOverlay(
                   .background(
                     Brush.linearGradient(
                       colors = listOf(
-                        DarkGlassViolet.copy(alpha = 0.28f),
+                        darkGlassViolet.copy(alpha = 0.28f),
                         activeGlowColor.copy(alpha = 0.14f)
                       )
                     )
                   )
                   .border(
                     1.dp,
-                    DarkGlassLightViolet.copy(alpha = 0.34f),
+                    darkGlassLightViolet.copy(alpha = 0.34f),
                     RoundedCornerShape(14.dp)
                   ),
                 contentAlignment = Alignment.Center
@@ -642,7 +653,7 @@ fun CreateAlbumBottomSheetOverlay(
                 Icon(
                   imageVector = Icons.Rounded.Album,
                   contentDescription = null,
-                  tint = DarkGlassLightViolet,
+                  tint = darkGlassLightViolet,
                   modifier = Modifier.size(22.dp)
                 )
               }
@@ -873,6 +884,7 @@ private fun CreateAlbumLivePreviewCard(
   hideCoverForFlight: Boolean,
   onCoverBoundsChanged: (Rect) -> Unit
 ) {
+  val themeAccent = MaterialTheme.colorScheme.primary
   val untitledText = stringResource(id = R.string.album_create_untitled_preview)
   val unknownArtistText = stringResource(id = R.string.album_create_unknown_artist_preview)
   val defaultYearText = stringResource(id = R.string.album_create_default_year)
@@ -883,12 +895,12 @@ private fun CreateAlbumLivePreviewCard(
   val firstLetter = title.trim().firstOrNull()?.uppercaseChar()?.toString().orEmpty()
 
   val animatedGlow by animateColorAsState(
-    targetValue = preset.glowColor,
+    targetValue = preset.resolveGlowColor(themeAccent),
     animationSpec = if (reducedMotion) snap() else tween(360, easing = AurixEaseOut),
     label = "preview_card_glow"
   )
   val animatedStart by animateColorAsState(
-    targetValue = preset.startColor,
+    targetValue = preset.resolveStartColor(themeAccent),
     animationSpec = if (reducedMotion) snap() else tween(360, easing = AurixEaseOut),
     label = "preview_card_start"
   )
@@ -1035,18 +1047,20 @@ fun AlbumCoverArtBox(
   showEditBadge: Boolean = false,
   modifier: Modifier = Modifier
 ) {
+  val themeAccent = MaterialTheme.colorScheme.primary
+  val darkGlassLightViolet = lerp(themeAccent, Color.White, 0.32f)
   val startColor by animateColorAsState(
-    targetValue = preset.startColor,
+    targetValue = preset.resolveStartColor(themeAccent),
     animationSpec = if (reducedMotion) snap() else tween(360, easing = AurixEaseOut),
     label = "cover_start_color"
   )
   val endColor by animateColorAsState(
-    targetValue = preset.endColor,
+    targetValue = preset.resolveEndColor(themeAccent),
     animationSpec = if (reducedMotion) snap() else tween(360, easing = AurixEaseOut),
     label = "cover_end_color"
   )
   val glowColor by animateColorAsState(
-    targetValue = preset.glowColor,
+    targetValue = preset.resolveGlowColor(themeAccent),
     animationSpec = if (reducedMotion) snap() else tween(360, easing = AurixEaseOut),
     label = "cover_glow_color"
   )
@@ -1293,7 +1307,7 @@ fun AlbumCoverArtBox(
         color = DarkGlassBg.copy(alpha = 0.88f),
         border = BorderStroke(
           1.dp,
-          Brush.linearGradient(colors = listOf(DarkGlassLightViolet.copy(alpha = 0.55f), Color.White.copy(alpha = 0.16f)))
+          Brush.linearGradient(colors = listOf(darkGlassLightViolet.copy(alpha = 0.55f), Color.White.copy(alpha = 0.16f)))
         ),
         modifier = Modifier
           .align(Alignment.BottomEnd)
@@ -1304,7 +1318,7 @@ fun AlbumCoverArtBox(
           Icon(
             imageVector = Icons.Rounded.Edit,
             contentDescription = null,
-            tint = DarkGlassLightViolet,
+            tint = darkGlassLightViolet,
             modifier = Modifier.size(13.dp)
           )
         }
@@ -1315,6 +1329,8 @@ fun AlbumCoverArtBox(
 
 @Composable
 private fun ZeroSongsEqualizerPill(reducedMotion: Boolean) {
+  val darkGlassViolet = MaterialTheme.colorScheme.primary
+  val darkGlassLightViolet = lerp(darkGlassViolet, Color.White, 0.32f)
   val barScales = if (reducedMotion) {
     listOf(0.55f, 0.90f, 0.45f, 0.75f)
   } else {
@@ -1348,8 +1364,8 @@ private fun ZeroSongsEqualizerPill(reducedMotion: Boolean) {
 
   Surface(
     shape = RoundedCornerShape(999.dp),
-    color = DarkGlassViolet.copy(alpha = 0.14f),
-    border = BorderStroke(1.dp, DarkGlassLightViolet.copy(alpha = 0.26f))
+    color = darkGlassViolet.copy(alpha = 0.14f),
+    border = BorderStroke(1.dp, darkGlassLightViolet.copy(alpha = 0.26f))
   ) {
     Row(
       modifier = Modifier.padding(horizontal = 10.dp, vertical = 5.dp),
@@ -1364,7 +1380,7 @@ private fun ZeroSongsEqualizerPill(reducedMotion: Boolean) {
           val x = idx * (barWidth + gap)
           val top = size.height - barH
           drawRoundRect(
-            brush = Brush.verticalGradient(listOf(DarkGlassLightViolet, DarkGlassViolet)),
+            brush = Brush.verticalGradient(listOf(darkGlassLightViolet, darkGlassViolet)),
             topLeft = Offset(x, top),
             size = Size(barWidth, barH),
             cornerRadius = CornerRadius(barWidth / 2f, barWidth / 2f)
@@ -1378,7 +1394,7 @@ private fun ZeroSongsEqualizerPill(reducedMotion: Boolean) {
           letterSpacing = 0.8.sp,
           fontSize = 10.sp
         ),
-        color = DarkGlassLightViolet,
+        color = darkGlassLightViolet,
         maxLines = 1
       )
     }
@@ -1392,6 +1408,7 @@ private fun AlbumColorChipRow(
   enabled: Boolean,
   onSelect: (AlbumCoverPreset) -> Unit
 ) {
+  val themeAccent = MaterialTheme.colorScheme.primary
   val density = LocalDensity.current
   val chipRects = remember { mutableStateMapOf<AlbumCoverPreset, Rect>() }
   val selectedRect = chipRects[selectedPreset]
@@ -1413,7 +1430,7 @@ private fun AlbumColorChipRow(
   )
 
   val chipGlow by animateColorAsState(
-    targetValue = selectedPreset.glowColor,
+    targetValue = selectedPreset.resolveGlowColor(themeAccent),
     animationSpec = if (reducedMotion) snap() else tween(300, easing = AurixEaseOut),
     label = "chip_glow_color"
   )
@@ -1446,7 +1463,7 @@ private fun AlbumColorChipRow(
               Brush.horizontalGradient(
                 colors = listOf(
                   chipGlow.copy(alpha = 0.24f),
-                  selectedPreset.startColor.copy(alpha = 0.18f)
+                  selectedPreset.resolveStartColor(themeAccent).copy(alpha = 0.18f)
                 )
               )
             )
@@ -1485,7 +1502,12 @@ private fun AlbumColorChipRow(
                 .size(10.dp)
                 .clip(CircleShape)
                 .background(
-                  Brush.linearGradient(colors = listOf(preset.glowColor, preset.endColor))
+                  Brush.linearGradient(
+                    colors = listOf(
+                      preset.resolveGlowColor(themeAccent),
+                      preset.resolveEndColor(themeAccent)
+                    )
+                  )
                 )
                 .border(
                   width = if (isSelected) 1.1.dp else 0.75.dp,
@@ -1526,6 +1548,8 @@ private fun DarkGlassFloatingField(
   onImeDone: () -> Unit = {},
   modifier: Modifier = Modifier
 ) {
+  val darkGlassViolet = MaterialTheme.colorScheme.primary
+  val darkGlassLightViolet = lerp(darkGlassViolet, Color.White, 0.32f)
   var isFocused by remember { mutableStateOf(false) }
   val isFloating = isFocused || value.isNotEmpty()
 
@@ -1535,7 +1559,7 @@ private fun DarkGlassFloatingField(
     label = "floating_label_progress"
   )
   val borderColor by animateColorAsState(
-    targetValue = if (isFocused) DarkGlassViolet.copy(alpha = 0.88f) else Color.White.copy(alpha = 0.08f),
+    targetValue = if (isFocused) darkGlassViolet.copy(alpha = 0.88f) else Color.White.copy(alpha = 0.08f),
     animationSpec = if (reducedMotion) snap() else tween(220, easing = AurixEaseOut),
     label = "field_border_color"
   )
@@ -1554,8 +1578,8 @@ private fun DarkGlassFloatingField(
       .shadow(
         elevation = if (isFocused) 12.dp else 0.dp,
         shape = shape,
-        ambientColor = DarkGlassViolet.copy(alpha = glowAlpha),
-        spotColor = DarkGlassLightViolet.copy(alpha = glowAlpha)
+        ambientColor = darkGlassViolet.copy(alpha = glowAlpha),
+        spotColor = darkGlassLightViolet.copy(alpha = glowAlpha)
       )
       .clip(shape)
       .background(DarkGlassSurface.copy(alpha = 0.90f))
@@ -1563,7 +1587,7 @@ private fun DarkGlassFloatingField(
         if (glowAlpha > 0.01f) {
           drawRect(
             brush = Brush.radialGradient(
-              colors = listOf(DarkGlassViolet.copy(alpha = glowAlpha), Color.Transparent),
+              colors = listOf(darkGlassViolet.copy(alpha = glowAlpha), Color.Transparent),
               center = Offset(size.width * 0.22f, size.height * 0.5f),
               radius = size.width * 0.72f
             )
@@ -1573,8 +1597,8 @@ private fun DarkGlassFloatingField(
             brush = Brush.horizontalGradient(
               colors = listOf(
                 Color.Transparent,
-                DarkGlassLightViolet.copy(alpha = glowAlpha * 2.5f),
-                DarkGlassViolet.copy(alpha = glowAlpha * 2.5f),
+                darkGlassLightViolet.copy(alpha = glowAlpha * 2.5f),
+                darkGlassViolet.copy(alpha = glowAlpha * 2.5f),
                 Color.Transparent
               )
             ),
@@ -1606,14 +1630,14 @@ private fun DarkGlassFloatingField(
           .clip(RoundedCornerShape(11.dp))
           .background(
             if (isFocused) {
-              DarkGlassViolet.copy(alpha = 0.20f)
+              darkGlassViolet.copy(alpha = 0.20f)
             } else {
               Color.White.copy(alpha = 0.04f)
             }
           )
           .border(
             width = 1.dp,
-            color = if (isFocused) DarkGlassLightViolet.copy(alpha = 0.36f) else Color.White.copy(alpha = 0.07f),
+            color = if (isFocused) darkGlassLightViolet.copy(alpha = 0.36f) else Color.White.copy(alpha = 0.07f),
             shape = RoundedCornerShape(11.dp)
           ),
         contentAlignment = Alignment.Center
@@ -1621,7 +1645,7 @@ private fun DarkGlassFloatingField(
         Icon(
           imageVector = leadingIcon,
           contentDescription = null,
-          tint = if (isFocused) DarkGlassLightViolet else DarkGlassMuted,
+          tint = if (isFocused) darkGlassLightViolet else DarkGlassMuted,
           modifier = Modifier.size(18.dp)
         )
       }
@@ -1639,7 +1663,7 @@ private fun DarkGlassFloatingField(
             fontSize = lerp(14f, 11f, labelFloat).sp,
             fontWeight = if (isFocused) FontWeight.SemiBold else FontWeight.Medium
           ),
-          color = if (isFocused) DarkGlassLightViolet else DarkGlassMuted,
+          color = if (isFocused) darkGlassLightViolet else DarkGlassMuted,
           maxLines = 1,
           overflow = TextOverflow.Ellipsis,
           modifier = Modifier.graphicsLayer {
@@ -1657,7 +1681,7 @@ private fun DarkGlassFloatingField(
             fontWeight = FontWeight.Medium,
             fontSize = 15.sp
           ),
-          cursorBrush = SolidColor(DarkGlassLightViolet),
+          cursorBrush = SolidColor(darkGlassLightViolet),
           keyboardOptions = KeyboardOptions(
             keyboardType = keyboardType,
             imeAction = imeAction
@@ -1676,14 +1700,14 @@ private fun DarkGlassFloatingField(
         Surface(
           shape = RoundedCornerShape(999.dp),
           color = if (value.length == maxLengthHint) {
-            DarkGlassViolet.copy(alpha = 0.18f)
+            darkGlassViolet.copy(alpha = 0.18f)
           } else {
             Color.White.copy(alpha = 0.05f)
           },
           border = BorderStroke(
             1.dp,
             if (value.length == maxLengthHint) {
-              DarkGlassLightViolet.copy(alpha = 0.34f)
+              darkGlassLightViolet.copy(alpha = 0.34f)
             } else {
               Color.White.copy(alpha = 0.08f)
             }
@@ -1695,7 +1719,7 @@ private fun DarkGlassFloatingField(
               fontWeight = FontWeight.SemiBold,
               fontSize = 10.sp
             ),
-            color = if (value.length == maxLengthHint) DarkGlassLightViolet else DarkGlassMuted,
+            color = if (value.length == maxLengthHint) darkGlassLightViolet else DarkGlassMuted,
             modifier = Modifier.padding(horizontal = 8.dp, vertical = 3.dp)
           )
         }
@@ -1713,6 +1737,9 @@ private fun CreateAlbumActionButtonRow(
   onCancel: () -> Unit,
   onCreateClick: () -> Unit
 ) {
+  val darkGlassViolet = MaterialTheme.colorScheme.primary
+  val darkGlassLightViolet = lerp(darkGlassViolet, Color.White, 0.32f)
+  val darkGlassSecondaryGlow = lerp(darkGlassViolet, DarkGlassMagenta, 0.28f)
   val isIdle = stage == CreateAlbumSheetStage.Idle
   val cancelWeight by animateFloatAsState(
     targetValue = if (isIdle) 1f else 0.0001f,
@@ -1730,7 +1757,7 @@ private fun CreateAlbumActionButtonRow(
     label = "button_gap"
   )
 
-  // Flowing violet gradient animation when enabled
+  // Flowing accent gradient animation when enabled
   val gradientPhase = if (!canCreate || reducedMotion) {
     0f
   } else {
@@ -1751,8 +1778,8 @@ private fun CreateAlbumActionButtonRow(
   val createBrush = if (stage == CreateAlbumSheetStage.SuccessCheck) {
     Brush.horizontalGradient(colors = listOf(Color(0xFF16A34A), Color(0xFF22C55E)))
   } else if (canCreate || !isIdle) {
-    val c1 = lerp(DarkGlassViolet, Color(0xFF7C3AED), gradientPhase)
-    val c2 = lerp(DarkGlassLightViolet, DarkGlassMagenta, gradientPhase * 0.45f)
+    val c1 = lerp(darkGlassViolet, lerp(darkGlassViolet, Color.Black, 0.18f), gradientPhase)
+    val c2 = lerp(darkGlassLightViolet, darkGlassSecondaryGlow, gradientPhase * 0.45f)
     Brush.horizontalGradient(colors = listOf(c1, c2, c1))
   } else {
     Brush.horizontalGradient(
@@ -1803,9 +1830,9 @@ private fun CreateAlbumActionButtonRow(
           ambientColor = if (stage == CreateAlbumSheetStage.SuccessCheck) {
             Color(0xFF22C55E).copy(alpha = 0.45f)
           } else {
-            DarkGlassViolet.copy(alpha = 0.48f)
+            darkGlassViolet.copy(alpha = 0.48f)
           },
-          spotColor = DarkGlassLightViolet.copy(alpha = 0.45f)
+          spotColor = darkGlassLightViolet.copy(alpha = 0.45f)
         )
         .clip(buttonShape)
         .background(createBrush)

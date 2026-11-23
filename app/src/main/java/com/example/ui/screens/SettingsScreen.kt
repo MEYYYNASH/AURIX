@@ -134,6 +134,15 @@ fun SettingsScreen(
   var showReleaseNotesSheet by remember { mutableStateOf(false) }
   var showEqualizerSheet by remember { mutableStateOf(false) }
   var showCrossfadeSheet by remember { mutableStateOf(false) }
+  var showCustomAccentSheet by remember { mutableStateOf(false) }
+
+  val isPresetAccent = remember(currentAccentHex) {
+    accents.any { (hex, _) ->
+      currentAccentHex.equals(hex, ignoreCase = true) ||
+        (hex == "#007AFF" && currentAccentHex.equals("#3B77F5", ignoreCase = true))
+    }
+  }
+  val activeAccentColor = MaterialTheme.colorScheme.primary
 
   val animatedProgress by animateFloatAsState(
     targetValue = when (updateUiState.stage) {
@@ -273,22 +282,60 @@ fun SettingsScreen(
             }
           }
 
-          Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
-            Text(
-              text = stringResource(id = R.string.settings_accent),
-              style = MaterialTheme.typography.titleMedium.copy(fontWeight = FontWeight.Bold, lineHeight = 24.sp),
-              color = MaterialTheme.colorScheme.onSurface
-            )
+          Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
             Row(
               modifier = Modifier.fillMaxWidth(),
+              verticalAlignment = Alignment.CenterVertically,
               horizontalArrangement = Arrangement.SpaceBetween
+            ) {
+              Text(
+                text = stringResource(id = R.string.settings_accent),
+                style = MaterialTheme.typography.titleMedium.copy(fontWeight = FontWeight.Bold, lineHeight = 24.sp),
+                color = MaterialTheme.colorScheme.onSurface
+              )
+              Surface(
+                shape = RoundedCornerShape(999.dp),
+                color = activeAccentColor.copy(alpha = 0.16f),
+                border = androidx.compose.foundation.BorderStroke(1.dp, activeAccentColor.copy(alpha = 0.38f)),
+                modifier = Modifier
+                  .clip(RoundedCornerShape(999.dp))
+                  .clickable { showCustomAccentSheet = true }
+                  .testTag("open_custom_accent_picker_button")
+              ) {
+                Row(
+                  modifier = Modifier.padding(horizontal = 11.dp, vertical = 5.dp),
+                  verticalAlignment = Alignment.CenterVertically,
+                  horizontalArrangement = Arrangement.spacedBy(6.dp)
+                ) {
+                  Icon(
+                    imageVector = Icons.Rounded.Palette,
+                    contentDescription = null,
+                    tint = lerp(activeAccentColor, Color.White, 0.25f),
+                    modifier = Modifier.size(14.dp)
+                  )
+                  Text(
+                    text = "Custom · ${currentAccentHex.uppercase(Locale.US)}",
+                    style = MaterialTheme.typography.labelSmall.copy(
+                      fontWeight = FontWeight.Bold,
+                      fontSize = 11.sp
+                    ),
+                    color = lerp(activeAccentColor, Color.White, 0.25f)
+                  )
+                }
+              }
+            }
+
+            Row(
+              modifier = Modifier.fillMaxWidth(),
+              horizontalArrangement = Arrangement.SpaceBetween,
+              verticalAlignment = Alignment.CenterVertically
             ) {
               accents.forEach { (hex, color) ->
                 val selected = currentAccentHex.equals(hex, ignoreCase = true) ||
                   (hex == "#007AFF" && currentAccentHex.equals("#3B77F5", ignoreCase = true))
                 Box(
                   modifier = Modifier
-                    .size(36.dp)
+                    .size(34.dp)
                     .clip(CircleShape)
                     .then(
                       if (selected) Modifier.border(2.5.dp, MaterialTheme.colorScheme.onSurface, CircleShape).padding(3.dp)
@@ -298,6 +345,50 @@ fun SettingsScreen(
                     .background(color)
                     .clickable { onAccentChanged(hex) }
                     .testTag("accent_dot_$hex")
+                )
+              }
+
+              // Custom color wheel / palette dot
+              Box(
+                modifier = Modifier
+                  .size(34.dp)
+                  .clip(CircleShape)
+                  .then(
+                    if (!isPresetAccent) {
+                      Modifier.border(2.5.dp, MaterialTheme.colorScheme.onSurface, CircleShape).padding(3.dp)
+                    } else {
+                      Modifier.border(1.dp, Color.White.copy(alpha = 0.22f), CircleShape)
+                    }
+                  )
+                  .clip(CircleShape)
+                  .background(
+                    if (!isPresetAccent) {
+                      Brush.linearGradient(
+                        colors = listOf(activeAccentColor, lerp(activeAccentColor, Color.White, 0.30f))
+                      )
+                    } else {
+                      Brush.sweepGradient(
+                        colors = listOf(
+                          Color(0xFFEF4444),
+                          Color(0xFFF59E0B),
+                          Color(0xFF22C55E),
+                          Color(0xFF007AFF),
+                          Color(0xFF8B5CF6),
+                          Color(0xFFEC4899),
+                          Color(0xFFEF4444)
+                        )
+                      )
+                    }
+                  )
+                  .clickable { showCustomAccentSheet = true }
+                  .testTag("accent_dot_custom"),
+                contentAlignment = Alignment.Center
+              ) {
+                Icon(
+                  imageVector = Icons.Rounded.Colorize,
+                  contentDescription = "Custom accent color",
+                  tint = Color.White,
+                  modifier = Modifier.size(16.dp)
                 )
               }
             }
@@ -693,6 +784,17 @@ fun SettingsScreen(
       onDismiss = { showCrossfadeSheet = false }
     )
   }
+
+  if (showCustomAccentSheet) {
+    CustomAccentColorPickerSheet(
+      currentAccentHex = currentAccentHex,
+      onApplyAccent = { hex ->
+        onAccentChanged(hex)
+        showCustomAccentSheet = false
+      },
+      onDismiss = { showCustomAccentSheet = false }
+    )
+  }
 }
 
 @Composable
@@ -736,8 +838,9 @@ fun AppUpdateReleaseCard(
 
   val baseTitleColor = Color(0xFFF4F2FB)
   val mutedGlassText = Color(0xFF8F8AA6)
-  val violetAccent = Color(0xFF8B5CF6)
-  val lightVioletAccent = Color(0xFFC084FC)
+  val violetAccent = MaterialTheme.colorScheme.primary
+  val lightVioletAccent = lerp(violetAccent, Color.White, 0.32f)
+  val secondaryGlowAccent = lerp(violetAccent, Color(0xFFD946EF), 0.28f)
   val shineAccentColor = lerp(violetAccent, Color.White, if (darkTheme) 0.55f else 0.45f)
   val titleBrush = remember(shinePhase, baseTitleColor, shineAccentColor, reducedMotion) {
     if (reducedMotion) {
@@ -824,7 +927,7 @@ fun AppUpdateReleaseCard(
         elevation = 18.dp,
         shape = cardShape,
         ambientColor = violetAccent.copy(alpha = 0.24f),
-        spotColor = Color(0xFFD946EF).copy(alpha = 0.22f)
+        spotColor = secondaryGlowAccent.copy(alpha = 0.22f)
       )
       .clip(cardShape)
       .background(Color(0xFF0A0810))
@@ -840,7 +943,7 @@ fun AppUpdateReleaseCard(
         )
         drawCircle(
           brush = Brush.radialGradient(
-            colors = listOf(Color(0xFFD946EF).copy(alpha = 0.14f), Color.Transparent),
+            colors = listOf(secondaryGlowAccent.copy(alpha = 0.14f), Color.Transparent),
             center = Offset(size.width * 0.90f, size.height * 0.85f),
             radius = size.maxDimension * 0.58f
           ),
@@ -1537,3 +1640,511 @@ private fun UpdateCardDonePreview() {
     progress = 1f
   )
 }
+
+@OptIn(ExperimentalMaterial3Api::class)
+@Composable
+private fun CustomAccentColorPickerSheet(
+  currentAccentHex: String,
+  onApplyAccent: (String) -> Unit,
+  onDismiss: () -> Unit
+) {
+  val initialHsv = remember(currentAccentHex) {
+    val hsv = FloatArray(3)
+    val parsedInt = runCatching {
+      android.graphics.Color.parseColor(currentAccentHex)
+    }.getOrDefault(android.graphics.Color.parseColor("#8B5CF6"))
+    android.graphics.Color.colorToHSV(parsedInt, hsv)
+    hsv
+  }
+
+  var hue by remember { mutableFloatStateOf(initialHsv[0].coerceIn(0f, 360f)) }
+  var saturation by remember { mutableFloatStateOf(initialHsv[1].coerceIn(0.20f, 1f)) }
+  var brightness by remember { mutableFloatStateOf(initialHsv[2].coerceIn(0.35f, 1f)) }
+
+  val currentIntColor = remember(hue, saturation, brightness) {
+    android.graphics.Color.HSVToColor(floatArrayOf(hue, saturation, brightness))
+  }
+  val previewAccent = remember(currentIntColor) { Color(currentIntColor) }
+  val previewLightAccent = remember(previewAccent) { lerp(previewAccent, Color.White, 0.32f) }
+  val previewSecondaryGlow = remember(previewAccent) { lerp(previewAccent, Color(0xFFD946EF), 0.28f) }
+  val computedHex = remember(currentIntColor) {
+    String.format(Locale.US, "#%06X", 0xFFFFFF and currentIntColor)
+  }
+
+  var hexInput by remember(computedHex) { mutableStateOf(computedHex.removePrefix("#")) }
+
+  fun updateFromHex(rawHex: String) {
+    val clean = rawHex.uppercase(Locale.US).filter { it in '0'..'9' || it in 'A'..'F' }.take(6)
+    hexInput = clean
+    if (clean.length == 6) {
+      runCatching {
+        val colorInt = android.graphics.Color.parseColor("#$clean")
+        val hsv = FloatArray(3)
+        android.graphics.Color.colorToHSV(colorInt, hsv)
+        hue = hsv[0].coerceIn(0f, 360f)
+        saturation = hsv[1].coerceIn(0.10f, 1f)
+        brightness = hsv[2].coerceIn(0.25f, 1f)
+      }
+    }
+  }
+
+  val curatedSwatches = remember {
+    listOf(
+      "#8B5CF6", "#A855F7", "#D946EF", "#EC4899",
+      "#F43F5E", "#EF4444", "#F97316", "#F59E0B",
+      "#22C55E", "#10B981", "#14B8A6", "#06B6D4",
+      "#0EA5E9", "#007AFF", "#6366F1", "#818CF8"
+    )
+  }
+
+  val sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true)
+  val sheetShape = RoundedCornerShape(topStart = 32.dp, topEnd = 32.dp)
+  val borderBrush = Brush.linearGradient(
+    colors = listOf(
+      Color.White.copy(alpha = 0.18f),
+      previewAccent.copy(alpha = 0.42f),
+      previewLightAccent.copy(alpha = 0.18f),
+      Color.White.copy(alpha = 0.08f)
+    )
+  )
+
+  ModalBottomSheet(
+    onDismissRequest = onDismiss,
+    sheetState = sheetState,
+    shape = sheetShape,
+    containerColor = Color.Transparent,
+    contentColor = Color(0xFFF4F2FB),
+    scrimColor = Color(0xFF05040A).copy(alpha = 0.74f),
+    tonalElevation = 0.dp,
+    dragHandle = null
+  ) {
+    Box(
+      modifier = Modifier
+        .fillMaxWidth()
+        .shadow(
+          elevation = 24.dp,
+          shape = sheetShape,
+          ambientColor = previewAccent.copy(alpha = 0.36f),
+          spotColor = previewSecondaryGlow.copy(alpha = 0.28f)
+        )
+        .clip(sheetShape)
+        .background(Color(0xFF0A0810))
+        .drawBehind {
+          drawCircle(
+            brush = Brush.radialGradient(
+              colors = listOf(previewAccent.copy(alpha = 0.26f), Color.Transparent),
+              center = Offset(size.width * 0.16f, size.height * 0.14f),
+              radius = size.maxDimension * 0.65f
+            ),
+            radius = size.maxDimension * 0.65f,
+            center = Offset(size.width * 0.16f, size.height * 0.14f)
+          )
+          drawCircle(
+            brush = Brush.radialGradient(
+              colors = listOf(previewSecondaryGlow.copy(alpha = 0.16f), Color.Transparent),
+              center = Offset(size.width * 0.88f, size.height * 0.78f),
+              radius = size.maxDimension * 0.60f
+            ),
+            radius = size.maxDimension * 0.60f,
+            center = Offset(size.width * 0.88f, size.height * 0.78f)
+          )
+          drawRect(
+            brush = Brush.horizontalGradient(
+              colors = listOf(
+                Color.Transparent,
+                previewAccent.copy(alpha = 0.88f),
+                previewLightAccent,
+                previewAccent.copy(alpha = 0.88f),
+                Color.Transparent
+              )
+            ),
+            topLeft = Offset.Zero,
+            size = androidx.compose.ui.geometry.Size(size.width, 2.5.dp.toPx())
+          )
+        }
+        .border(1.dp, borderBrush, sheetShape)
+    ) {
+      Column(
+        modifier = Modifier
+          .fillMaxWidth()
+          .padding(horizontal = 20.dp, vertical = 12.dp)
+          .windowInsetsPadding(WindowInsets.navigationBars),
+        verticalArrangement = Arrangement.spacedBy(14.dp)
+      ) {
+        // Glowing drag handle
+        Box(
+          modifier = Modifier
+            .fillMaxWidth()
+            .padding(vertical = 2.dp),
+          contentAlignment = Alignment.Center
+        ) {
+          Box(
+            modifier = Modifier
+              .width(44.dp)
+              .height(4.5.dp)
+              .clip(CircleShape)
+              .background(
+                Brush.horizontalGradient(
+                  colors = listOf(
+                    previewAccent.copy(alpha = 0.45f),
+                    previewLightAccent.copy(alpha = 0.94f),
+                    previewAccent.copy(alpha = 0.45f)
+                  )
+                )
+              )
+          )
+        }
+
+        // Top Header
+        Row(
+          modifier = Modifier.fillMaxWidth(),
+          verticalAlignment = Alignment.CenterVertically,
+          horizontalArrangement = Arrangement.spacedBy(12.dp)
+        ) {
+          Box(
+            modifier = Modifier
+              .size(44.dp)
+              .clip(RoundedCornerShape(14.dp))
+              .background(
+                Brush.linearGradient(
+                  colors = listOf(
+                    previewAccent.copy(alpha = 0.30f),
+                    previewSecondaryGlow.copy(alpha = 0.16f)
+                  )
+                )
+              )
+              .border(1.dp, previewLightAccent.copy(alpha = 0.40f), RoundedCornerShape(14.dp)),
+            contentAlignment = Alignment.Center
+          ) {
+            Icon(
+              imageVector = Icons.Rounded.Palette,
+              contentDescription = null,
+              tint = previewLightAccent,
+              modifier = Modifier.size(22.dp)
+            )
+          }
+
+          Column(modifier = Modifier.weight(1f)) {
+            Text(
+              text = stringResource(id = R.string.settings_accent),
+              style = MaterialTheme.typography.titleLarge.copy(
+                fontWeight = FontWeight.Bold,
+                fontSize = 20.sp
+              ),
+              color = Color(0xFFF4F2FB)
+            )
+            Text(
+              text = "Customize dark glass glow, buttons & highlights",
+              style = MaterialTheme.typography.bodySmall,
+              color = previewLightAccent
+            )
+          }
+
+          Surface(
+            shape = CircleShape,
+            color = Color.White.copy(alpha = 0.06f),
+            border = androidx.compose.foundation.BorderStroke(1.dp, Color.White.copy(alpha = 0.10f)),
+            modifier = Modifier
+              .size(36.dp)
+              .clip(CircleShape)
+              .clickable { onDismiss() }
+          ) {
+            Box(contentAlignment = Alignment.Center) {
+              Icon(
+                imageVector = Icons.Rounded.Close,
+                contentDescription = stringResource(id = R.string.action_cancel),
+                tint = Color(0xFF8F8AA6),
+                modifier = Modifier.size(18.dp)
+              )
+            }
+          }
+        }
+
+        // Live Dark Glass Accent Preview Card
+        Surface(
+          shape = RoundedCornerShape(22.dp),
+          color = Color(0xFF120E1D).copy(alpha = 0.90f),
+          border = androidx.compose.foundation.BorderStroke(1.dp, previewLightAccent.copy(alpha = 0.26f)),
+          modifier = Modifier.fillMaxWidth()
+        ) {
+          Row(
+            modifier = Modifier
+              .fillMaxWidth()
+              .padding(14.dp),
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.spacedBy(14.dp)
+          ) {
+            Box(
+              modifier = Modifier
+                .size(54.dp)
+                .shadow(
+                  elevation = 12.dp,
+                  shape = RoundedCornerShape(16.dp),
+                  ambientColor = previewAccent.copy(alpha = 0.55f),
+                  spotColor = previewLightAccent.copy(alpha = 0.45f)
+                )
+                .clip(RoundedCornerShape(16.dp))
+                .background(
+                  Brush.linearGradient(
+                    colors = listOf(previewLightAccent, previewAccent)
+                  )
+                )
+                .border(1.dp, Color.White.copy(alpha = 0.28f), RoundedCornerShape(16.dp)),
+              contentAlignment = Alignment.Center
+            ) {
+              Icon(
+                imageVector = Icons.Rounded.AutoAwesome,
+                contentDescription = null,
+                tint = Color.White,
+                modifier = Modifier.size(24.dp)
+              )
+            }
+
+            Column(
+              modifier = Modifier.weight(1f),
+              verticalArrangement = Arrangement.spacedBy(4.dp)
+            ) {
+              Text(
+                text = "AURIX Dark Glass Accent",
+                style = MaterialTheme.typography.titleSmall.copy(
+                  fontWeight = FontWeight.Bold,
+                  brush = Brush.linearGradient(
+                    colors = listOf(Color(0xFFF4F2FB), previewLightAccent, previewAccent)
+                  )
+                )
+              )
+              Row(
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.spacedBy(8.dp)
+              ) {
+                Surface(
+                  shape = RoundedCornerShape(999.dp),
+                  color = previewAccent.copy(alpha = 0.18f),
+                  border = androidx.compose.foundation.BorderStroke(1.dp, previewLightAccent.copy(alpha = 0.34f))
+                ) {
+                  Text(
+                    text = computedHex,
+                    style = MaterialTheme.typography.labelSmall.copy(fontWeight = FontWeight.Bold),
+                    color = previewLightAccent,
+                    modifier = Modifier.padding(horizontal = 10.dp, vertical = 4.dp)
+                  )
+                }
+                Text(
+                  text = "Live Glow Preview",
+                  style = MaterialTheme.typography.labelSmall,
+                  color = Color(0xFF8F8AA6)
+                )
+              }
+            }
+          }
+        }
+
+        // Hex Code Input Row
+        OutlinedTextField(
+          value = hexInput,
+          onValueChange = { updateFromHex(it) },
+          singleLine = true,
+          label = { Text("HEX Color Code") },
+          prefix = {
+            Text(
+              text = "#",
+              color = previewLightAccent,
+              fontWeight = FontWeight.Bold
+            )
+          },
+          shape = RoundedCornerShape(16.dp),
+          colors = OutlinedTextFieldDefaults.colors(
+            focusedBorderColor = previewAccent,
+            unfocusedBorderColor = Color.White.copy(alpha = 0.12f),
+            focusedLabelColor = previewLightAccent,
+            unfocusedLabelColor = Color(0xFF8F8AA6),
+            focusedTextColor = Color(0xFFF4F2FB),
+            unfocusedTextColor = Color(0xFFF4F2FB),
+            cursorColor = previewLightAccent
+          ),
+          modifier = Modifier
+            .fillMaxWidth()
+            .testTag("custom_accent_hex_input")
+        )
+
+        // Hue, Saturation, Brightness Sliders
+        Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
+          Row(
+            modifier = Modifier.fillMaxWidth(),
+            horizontalArrangement = Arrangement.SpaceBetween
+          ) {
+            Text(
+              text = "Hue",
+              style = MaterialTheme.typography.labelSmall.copy(fontWeight = FontWeight.SemiBold),
+              color = Color(0xFF8F8AA6)
+            )
+            Text(
+              text = "${hue.roundToInt()}°",
+              style = MaterialTheme.typography.labelSmall.copy(fontWeight = FontWeight.Bold),
+              color = previewLightAccent
+            )
+          }
+          Slider(
+            value = hue,
+            onValueChange = { hue = it },
+            valueRange = 0f..360f,
+            colors = SliderDefaults.colors(
+              thumbColor = previewLightAccent,
+              activeTrackColor = previewAccent,
+              inactiveTrackColor = Color.White.copy(alpha = 0.12f)
+            ),
+            modifier = Modifier.fillMaxWidth()
+          )
+
+          Row(
+            modifier = Modifier.fillMaxWidth(),
+            horizontalArrangement = Arrangement.SpaceBetween
+          ) {
+            Text(
+              text = "Saturation",
+              style = MaterialTheme.typography.labelSmall.copy(fontWeight = FontWeight.SemiBold),
+              color = Color(0xFF8F8AA6)
+            )
+            Text(
+              text = "${(saturation * 100).roundToInt()}%",
+              style = MaterialTheme.typography.labelSmall.copy(fontWeight = FontWeight.Bold),
+              color = previewLightAccent
+            )
+          }
+          Slider(
+            value = saturation,
+            onValueChange = { saturation = it },
+            valueRange = 0.15f..1f,
+            colors = SliderDefaults.colors(
+              thumbColor = previewLightAccent,
+              activeTrackColor = previewAccent,
+              inactiveTrackColor = Color.White.copy(alpha = 0.12f)
+            ),
+            modifier = Modifier.fillMaxWidth()
+          )
+
+          Row(
+            modifier = Modifier.fillMaxWidth(),
+            horizontalArrangement = Arrangement.SpaceBetween
+          ) {
+            Text(
+              text = "Brightness",
+              style = MaterialTheme.typography.labelSmall.copy(fontWeight = FontWeight.SemiBold),
+              color = Color(0xFF8F8AA6)
+            )
+            Text(
+              text = "${(brightness * 100).roundToInt()}%",
+              style = MaterialTheme.typography.labelSmall.copy(fontWeight = FontWeight.Bold),
+              color = previewLightAccent
+            )
+          }
+          Slider(
+            value = brightness,
+            onValueChange = { brightness = it },
+            valueRange = 0.35f..1f,
+            colors = SliderDefaults.colors(
+              thumbColor = previewLightAccent,
+              activeTrackColor = previewAccent,
+              inactiveTrackColor = Color.White.copy(alpha = 0.12f)
+            ),
+            modifier = Modifier.fillMaxWidth()
+          )
+        }
+
+        // Quick Swatches Grid (2 rows of 8)
+        Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+          curatedSwatches.chunked(8).forEach { rowHexes ->
+            Row(
+              modifier = Modifier.fillMaxWidth(),
+              horizontalArrangement = Arrangement.SpaceBetween
+            ) {
+              rowHexes.forEach { swatchHex ->
+                val swatchColor = remember(swatchHex) {
+                  Color(android.graphics.Color.parseColor(swatchHex))
+                }
+                val isSelected = computedHex.equals(swatchHex, ignoreCase = true)
+                Box(
+                  modifier = Modifier
+                    .size(30.dp)
+                    .clip(CircleShape)
+                    .then(
+                      if (isSelected) Modifier.border(2.dp, Color.White, CircleShape).padding(2.5.dp)
+                      else Modifier.border(1.dp, Color.White.copy(alpha = 0.18f), CircleShape)
+                    )
+                    .clip(CircleShape)
+                    .background(swatchColor)
+                    .clickable { updateFromHex(swatchHex.removePrefix("#")) }
+                )
+              }
+            }
+          }
+        }
+
+        // Action Buttons: Cancel & Apply Accent Color
+        Row(
+          modifier = Modifier.fillMaxWidth(),
+          horizontalArrangement = Arrangement.spacedBy(10.dp)
+        ) {
+          Surface(
+            shape = RoundedCornerShape(18.dp),
+            color = Color.White.copy(alpha = 0.06f),
+            border = androidx.compose.foundation.BorderStroke(1.dp, Color.White.copy(alpha = 0.09f)),
+            modifier = Modifier
+              .weight(1f)
+              .height(50.dp)
+              .clip(RoundedCornerShape(18.dp))
+              .clickable { onDismiss() }
+          ) {
+            Box(contentAlignment = Alignment.Center) {
+              Text(
+                text = stringResource(id = R.string.action_cancel),
+                style = MaterialTheme.typography.bodyMedium.copy(fontWeight = FontWeight.SemiBold),
+                color = Color(0xFFF4F2FB)
+              )
+            }
+          }
+
+          Box(
+            modifier = Modifier
+              .weight(1.35f)
+              .height(50.dp)
+              .shadow(
+                elevation = 14.dp,
+                shape = RoundedCornerShape(18.dp),
+                ambientColor = previewAccent.copy(alpha = 0.45f),
+                spotColor = previewLightAccent.copy(alpha = 0.38f)
+              )
+              .clip(RoundedCornerShape(18.dp))
+              .background(
+                Brush.horizontalGradient(
+                  colors = listOf(previewAccent, previewLightAccent)
+                )
+              )
+              .border(1.dp, Color.White.copy(alpha = 0.22f), RoundedCornerShape(18.dp))
+              .clickable { onApplyAccent(computedHex) }
+              .testTag("apply_custom_accent_button"),
+            contentAlignment = Alignment.Center
+          ) {
+            Row(
+              verticalAlignment = Alignment.CenterVertically,
+              horizontalArrangement = Arrangement.spacedBy(8.dp)
+            ) {
+              Icon(
+                imageVector = Icons.Rounded.CheckCircle,
+                contentDescription = null,
+                tint = Color.White,
+                modifier = Modifier.size(18.dp)
+              )
+              Text(
+                text = "Apply Color",
+                style = MaterialTheme.typography.bodyMedium.copy(fontWeight = FontWeight.Bold),
+                color = Color.White
+              )
+            }
+          }
+        }
+      }
+    }
+  }
+}
+
