@@ -22,15 +22,18 @@ import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.combinedClickable
 import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.interaction.collectIsPressedAsState
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.lazy.LazyRow
 import androidx.compose.foundation.lazy.grid.GridCells
 import androidx.compose.foundation.lazy.grid.GridItemSpan
 import androidx.compose.foundation.lazy.grid.LazyVerticalGrid
 import androidx.compose.foundation.lazy.grid.items
+import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.lazy.itemsIndexed
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
@@ -38,15 +41,26 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.rounded.Add
 import androidx.compose.material.icons.rounded.AddPhotoAlternate
 import androidx.compose.material.icons.rounded.Album
+import androidx.compose.material.icons.rounded.AutoAwesome
+import androidx.compose.material.icons.rounded.Bolt
+import androidx.compose.material.icons.rounded.Category
+import androidx.compose.material.icons.rounded.Close
 import androidx.compose.material.icons.rounded.DeleteOutline
 import androidx.compose.material.icons.rounded.DeleteSweep
 import androidx.compose.material.icons.rounded.FavoriteBorder
+import androidx.compose.material.icons.rounded.GraphicEq
+import androidx.compose.material.icons.rounded.Headphones
 import androidx.compose.material.icons.rounded.History
 import androidx.compose.material.icons.rounded.LibraryMusic
 import androidx.compose.material.icons.rounded.MusicNote
+import androidx.compose.material.icons.rounded.NightlightRound
+import androidx.compose.material.icons.rounded.Piano
+import androidx.compose.material.icons.rounded.PlayArrow
 import androidx.compose.material.icons.rounded.TouchApp
+import androidx.compose.material.icons.rounded.Whatshot
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
+import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.alpha
@@ -60,6 +74,7 @@ import androidx.compose.ui.geometry.Rect
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.drawscope.Stroke
+import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.hapticfeedback.HapticFeedbackType
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.layout.boundsInRoot
@@ -83,7 +98,65 @@ import com.example.model.APP_ICON_ARTWORK
 import com.example.model.AlbumInfo
 import com.example.model.Song
 import com.example.model.computeAlbumId
+import com.example.recommendation.TrackMetadataClassifier
+import java.util.Locale
 import kotlinx.coroutines.launch
+
+internal const val GENRE_FILTER_ALL = "ALL"
+
+internal val CANONICAL_LIBRARY_GENRES = listOf(
+  "Pop",
+  "Lo-fi",
+  "Phonk",
+  "R&B",
+  "Hip-Hop",
+  "Electronic",
+  "Indie",
+  "Rock",
+  "Instrumental"
+)
+
+internal fun resolveLibraryTrackGenre(song: Song): String {
+  val raw = song.genre.trim().ifBlank { TrackMetadataClassifier.enrich(song).genre.trim() }
+  val lower = raw.lowercase(Locale.ROOT)
+  return when {
+    lower.contains("lo-fi") || lower.contains("lofi") || lower.contains("chillhop") || lower.contains("ambient") -> "Lo-fi"
+    lower.contains("phonk") || lower.contains("drift") || lower.contains("montagem") -> "Phonk"
+    lower.contains("r&b") || lower.contains("rnb") || lower.contains("soul") -> "R&B"
+    lower.contains("hip-hop") || lower.contains("hip hop") || lower.contains("rap") || lower.contains("drill") -> "Hip-Hop"
+    lower.contains("electronic") || lower.contains("edm") || lower.contains("dance") || lower.contains("house") || lower.contains("techno") -> "Electronic"
+    lower.contains("indie") || lower.contains("acoustic") || lower.contains("folk") -> "Indie"
+    lower.contains("rock") || lower.contains("metal") || lower.contains("punk") || lower.contains("alternative") -> "Rock"
+    lower.contains("instrumental") || lower.contains("classical") || lower.contains("jazz") || lower.contains("piano") -> "Instrumental"
+    lower.contains("pop") -> "Pop"
+    raw.isNotBlank() -> raw.replaceFirstChar { if (it.isLowerCase()) it.titlecase(Locale.ROOT) else it.toString() }
+    else -> "Pop"
+  }
+}
+
+internal fun libraryGenreTagKey(genre: String): String {
+  return genre.trim()
+    .lowercase(Locale.ROOT)
+    .replace(Regex("[^a-z0-9]+"), "_")
+    .trim('_')
+    .ifBlank { "other" }
+}
+
+internal fun libraryGenreIcon(genre: String): ImageVector {
+  return when (genre.lowercase(Locale.ROOT)) {
+    "all" -> Icons.Rounded.LibraryMusic
+    "pop" -> Icons.Rounded.AutoAwesome
+    "lo-fi", "lofi" -> Icons.Rounded.Headphones
+    "phonk" -> Icons.Rounded.Bolt
+    "r&b", "rnb" -> Icons.Rounded.NightlightRound
+    "hip-hop", "hip hop" -> Icons.Rounded.GraphicEq
+    "electronic" -> Icons.Rounded.Album
+    "indie" -> Icons.Rounded.MusicNote
+    "rock" -> Icons.Rounded.Whatshot
+    "instrumental" -> Icons.Rounded.Piano
+    else -> Icons.Rounded.MusicNote
+  }
+}
 
 @Composable
 fun LibraryScreen(
@@ -450,6 +523,45 @@ fun LibraryScreen(
         else -> recentlyPlayed
       }
 
+      var selectedGenre by rememberSaveable(activeTab) { mutableStateOf(GENRE_FILTER_ALL) }
+      var groupByGenre by rememberSaveable(activeTab) { mutableStateOf(false) }
+
+      val resolvedGenresBySong = remember(currentList) {
+        currentList.map { song -> song to resolveLibraryTrackGenre(song) }
+      }
+      val genreCounts = remember(resolvedGenresBySong) {
+        val counts = LinkedHashMap<String, Int>()
+        resolvedGenresBySong.forEach { (_, genre) ->
+          counts[genre] = (counts[genre] ?: 0) + 1
+        }
+        counts
+      }
+      val orderedGenres = remember(genreCounts) {
+        val presentGenres = genreCounts.entries
+          .sortedWith(compareByDescending<Map.Entry<String, Int>> { it.value }.thenBy { it.key })
+          .map { it.key }
+        val extras = CANONICAL_LIBRARY_GENRES.filter { it !in presentGenres }
+        presentGenres + extras
+      }
+      val filteredPairs = remember(resolvedGenresBySong, selectedGenre) {
+        if (selectedGenre == GENRE_FILTER_ALL) {
+          resolvedGenresBySong
+        } else {
+          resolvedGenresBySong.filter { (_, genre) -> genre.equals(selectedGenre, ignoreCase = true) }
+        }
+      }
+      val groupedPairs = remember(filteredPairs, groupByGenre) {
+        if (!groupByGenre) {
+          emptyList()
+        } else {
+          filteredPairs
+            .groupBy({ it.second }, { it.first })
+            .entries
+            .sortedWith(compareByDescending<Map.Entry<String, List<Song>>> { it.value.size }.thenBy { it.key })
+            .map { it.key to it.value }
+        }
+      }
+
       if (currentList.isEmpty()) {
         Box(
           modifier = Modifier
@@ -529,70 +641,227 @@ fun LibraryScreen(
           }
         }
       } else {
-        LazyColumn(
-          modifier = Modifier.fillMaxSize(),
-          verticalArrangement = Arrangement.spacedBy(8.dp),
-          contentPadding = PaddingValues(bottom = if (currentSong != null) 195.dp else 125.dp)
-        ) {
-          if (activeTab == 0) {
-            item(key = "local_cover_tip") {
-              Row(
+        Column(modifier = Modifier.fillMaxSize()) {
+          LibraryGenreFilterBar(
+            totalCount = currentList.size,
+            orderedGenres = orderedGenres,
+            genreCounts = genreCounts,
+            selectedGenre = selectedGenre,
+            groupByGenre = groupByGenre,
+            filteredCount = filteredPairs.size,
+            darkTheme = darkTheme,
+            onSelectGenre = { chosen ->
+              selectedGenre = if (chosen == GENRE_FILTER_ALL || selectedGenre != chosen) {
+                chosen
+              } else {
+                GENRE_FILTER_ALL
+              }
+            },
+            onToggleGroupByGenre = { groupByGenre = !groupByGenre },
+            onPlayFilteredGenre = {
+              filteredPairs.firstOrNull()?.first?.let(onSongClick)
+            },
+            onClearGenreFilter = { selectedGenre = GENRE_FILTER_ALL }
+          )
+
+          Spacer(modifier = Modifier.height(8.dp))
+
+          if (filteredPairs.isEmpty()) {
+            Box(
+              modifier = Modifier
+                .fillMaxSize()
+                .padding(bottom = 110.dp),
+              contentAlignment = Alignment.Center
+            ) {
+              GlassCard(
+                darkTheme = darkTheme,
+                cornerRadius = 26.dp,
                 modifier = Modifier
                   .fillMaxWidth()
-                  .padding(bottom = 8.dp)
-                  .clip(RoundedCornerShape(14.dp))
-                  .background(MaterialTheme.colorScheme.primary.copy(alpha = if (darkTheme) 0.14f else 0.10f))
-                  .border(1.dp, Color.White.copy(alpha = if (darkTheme) 0.16f else 0.70f), RoundedCornerShape(14.dp))
-                  .padding(horizontal = 12.dp, vertical = 9.dp),
-                verticalAlignment = Alignment.CenterVertically,
-                horizontalArrangement = Arrangement.spacedBy(8.dp)
+                  .testTag("library_genre_empty_card")
               ) {
-                Icon(
-                  imageVector = Icons.Rounded.AddPhotoAlternate,
-                  contentDescription = null,
-                  tint = MaterialTheme.colorScheme.primary,
-                  modifier = Modifier.size(18.dp)
-                )
-                Text(
-                  text = stringResource(id = R.string.library_cover_tip),
-                  style = MaterialTheme.typography.bodySmall.copy(fontWeight = FontWeight.Medium, lineHeight = 18.sp),
-                  color = MaterialTheme.colorScheme.onSurface
-                )
+                Column(
+                  modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(horizontal = 24.dp, vertical = 26.dp),
+                  horizontalAlignment = Alignment.CenterHorizontally,
+                  verticalArrangement = Arrangement.spacedBy(12.dp)
+                ) {
+                  Box(
+                    modifier = Modifier
+                      .size(54.dp)
+                      .clip(CircleShape)
+                      .background(MaterialTheme.colorScheme.primary.copy(alpha = 0.16f)),
+                    contentAlignment = Alignment.Center
+                  ) {
+                    Icon(
+                      imageVector = libraryGenreIcon(selectedGenre),
+                      contentDescription = null,
+                      tint = MaterialTheme.colorScheme.primary,
+                      modifier = Modifier.size(26.dp)
+                    )
+                  }
+                  Text(
+                    text = stringResource(id = R.string.library_genre_empty_title, selectedGenre),
+                    style = MaterialTheme.typography.titleMedium.copy(fontWeight = FontWeight.Bold, lineHeight = 24.sp),
+                    color = MaterialTheme.colorScheme.onSurface
+                  )
+                  Text(
+                    text = stringResource(id = R.string.library_genre_empty_sub, selectedGenre),
+                    style = MaterialTheme.typography.bodySmall.copy(lineHeight = 19.sp),
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    textAlign = TextAlign.Center
+                  )
+                  OutlinedButton(
+                    onClick = { selectedGenre = GENRE_FILTER_ALL },
+                    shape = CircleShape,
+                    modifier = Modifier.testTag("library_reset_genre_filter_button")
+                  ) {
+                    Text(stringResource(id = R.string.library_genre_clear_filter), fontWeight = FontWeight.SemiBold)
+                  }
+                }
               }
             }
-          }
+          } else {
+            LazyColumn(
+              modifier = Modifier.fillMaxSize(),
+              verticalArrangement = Arrangement.spacedBy(8.dp),
+              contentPadding = PaddingValues(bottom = if (currentSong != null) 195.dp else 125.dp)
+            ) {
+              if (activeTab == 0) {
+                item(key = "local_cover_tip") {
+                  Row(
+                    modifier = Modifier
+                      .fillMaxWidth()
+                      .padding(bottom = 4.dp)
+                      .clip(RoundedCornerShape(14.dp))
+                      .background(MaterialTheme.colorScheme.primary.copy(alpha = if (darkTheme) 0.14f else 0.10f))
+                      .border(1.dp, Color.White.copy(alpha = if (darkTheme) 0.16f else 0.70f), RoundedCornerShape(14.dp))
+                      .padding(horizontal = 12.dp, vertical = 9.dp),
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.spacedBy(8.dp)
+                  ) {
+                    Icon(
+                      imageVector = Icons.Rounded.AddPhotoAlternate,
+                      contentDescription = null,
+                      tint = MaterialTheme.colorScheme.primary,
+                      modifier = Modifier.size(18.dp)
+                    )
+                    Text(
+                      text = stringResource(id = R.string.library_cover_tip),
+                      style = MaterialTheme.typography.bodySmall.copy(fontWeight = FontWeight.Medium, lineHeight = 18.sp),
+                      color = MaterialTheme.colorScheme.onSurface
+                    )
+                  }
+                }
+              }
 
-          itemsIndexed(
-            items = currentList,
-            key = { idx, song -> "${activeTab}_${idx}_${song.id}_${song.artworkUrl}" }
-          ) { _, song ->
-            SongRow(
-              song = song,
-              isPlaying = isPlaying,
-              isCurrent = currentSong?.id == song.id,
-              reducedMotion = reducedMotion,
-              darkTheme = darkTheme,
-              hasLyrics = song.id in verifiedLyricsIds,
-              onCheckLyrics = onCheckLyrics,
-              onSongClick = { onSongClick(song) },
-              onFavoriteClick = { onFavoriteClick(song) },
-              onAddToAlbumClick = onAddSongToAlbumClick?.let { callback -> { callback(song) } },
-              onEditPhotoClick = if (activeTab == 0) {
-                {
-                  pendingPhotoSongId = song.id
-                  photoPickerLauncher.launch(
-                    PickVisualMediaRequest(ActivityResultContracts.PickVisualMedia.ImageOnly)
-                  )
+              if (groupByGenre) {
+                groupedPairs.forEach { (genreName, genreSongs) ->
+                  val genreKey = libraryGenreTagKey(genreName)
+                  item(key = "genre_header_${activeTab}_$genreKey") {
+                    LibraryGenreCategoryHeader(
+                      genre = genreName,
+                      trackCount = genreSongs.size,
+                      isFocused = selectedGenre.equals(genreName, ignoreCase = true),
+                      darkTheme = darkTheme,
+                      onFilterToggle = {
+                        selectedGenre = if (selectedGenre.equals(genreName, ignoreCase = true)) {
+                          GENRE_FILTER_ALL
+                        } else {
+                          genreName
+                        }
+                      },
+                      onPlayCategory = {
+                        genreSongs.firstOrNull()?.let(onSongClick)
+                      },
+                      modifier = Modifier.testTag("library_genre_header_$genreKey")
+                    )
+                  }
+                  itemsIndexed(
+                    items = genreSongs,
+                    key = { idx, song -> "${activeTab}_grp_${genreKey}_${idx}_${song.id}_${song.artworkUrl}" }
+                  ) { _, song ->
+                    SongRow(
+                      song = song,
+                      isPlaying = isPlaying,
+                      isCurrent = currentSong?.id == song.id,
+                      reducedMotion = reducedMotion,
+                      darkTheme = darkTheme,
+                      hasLyrics = song.id in verifiedLyricsIds,
+                      genreBadge = genreName,
+                      onGenreBadgeClick = {
+                        selectedGenre = if (selectedGenre.equals(genreName, ignoreCase = true)) {
+                          GENRE_FILTER_ALL
+                        } else {
+                          genreName
+                        }
+                      },
+                      onCheckLyrics = onCheckLyrics,
+                      onSongClick = { onSongClick(song) },
+                      onFavoriteClick = { onFavoriteClick(song) },
+                      onAddToAlbumClick = onAddSongToAlbumClick?.let { callback -> { callback(song) } },
+                      onEditPhotoClick = if (activeTab == 0) {
+                        {
+                          pendingPhotoSongId = song.id
+                          photoPickerLauncher.launch(
+                            PickVisualMediaRequest(ActivityResultContracts.PickVisualMedia.ImageOnly)
+                          )
+                        }
+                      } else {
+                        null
+                      },
+                      onDeleteClick = when (activeTab) {
+                        0 -> { { songPendingDelete = song } }
+                        1 -> { { onFavoriteClick(song) } }
+                        else -> { { onRemoveRecentSong(song) } }
+                      }
+                    )
+                  }
                 }
               } else {
-                null
-              },
-              onDeleteClick = when (activeTab) {
-                0 -> { { songPendingDelete = song } }
-                1 -> { { onFavoriteClick(song) } }
-                else -> { { onRemoveRecentSong(song) } }
+                itemsIndexed(
+                  items = filteredPairs,
+                  key = { idx, pair -> "${activeTab}_${idx}_${pair.first.id}_${pair.first.artworkUrl}" }
+                ) { _, (song, songGenre) ->
+                  SongRow(
+                    song = song,
+                    isPlaying = isPlaying,
+                    isCurrent = currentSong?.id == song.id,
+                    reducedMotion = reducedMotion,
+                    darkTheme = darkTheme,
+                    hasLyrics = song.id in verifiedLyricsIds,
+                    genreBadge = songGenre,
+                    onGenreBadgeClick = {
+                      selectedGenre = if (selectedGenre.equals(songGenre, ignoreCase = true)) {
+                        GENRE_FILTER_ALL
+                      } else {
+                        songGenre
+                      }
+                    },
+                    onCheckLyrics = onCheckLyrics,
+                    onSongClick = { onSongClick(song) },
+                    onFavoriteClick = { onFavoriteClick(song) },
+                    onAddToAlbumClick = onAddSongToAlbumClick?.let { callback -> { callback(song) } },
+                    onEditPhotoClick = if (activeTab == 0) {
+                      {
+                        pendingPhotoSongId = song.id
+                        photoPickerLauncher.launch(
+                          PickVisualMediaRequest(ActivityResultContracts.PickVisualMedia.ImageOnly)
+                        )
+                      }
+                    } else {
+                      null
+                    },
+                    onDeleteClick = when (activeTab) {
+                      0 -> { { songPendingDelete = song } }
+                      1 -> { { onFavoriteClick(song) } }
+                      else -> { { onRemoveRecentSong(song) } }
+                    }
+                  )
+                }
               }
-            )
+            }
           }
         }
       }
@@ -942,4 +1211,436 @@ private fun LibraryAlbumGridCard(
     }
   }
 }
+
+@Composable
+private fun LibraryGenreFilterBar(
+  totalCount: Int,
+  orderedGenres: List<String>,
+  genreCounts: Map<String, Int>,
+  selectedGenre: String,
+  groupByGenre: Boolean,
+  filteredCount: Int,
+  darkTheme: Boolean,
+  onSelectGenre: (String) -> Unit,
+  onToggleGroupByGenre: () -> Unit,
+  onPlayFilteredGenre: () -> Unit,
+  onClearGenreFilter: () -> Unit
+) {
+  val primaryAccent = MaterialTheme.colorScheme.primary
+  val lightAccent = androidx.compose.ui.graphics.lerp(primaryAccent, Color.White, 0.32f)
+  val isAllSelected = selectedGenre == GENRE_FILTER_ALL
+
+  Column(
+    modifier = Modifier
+      .fillMaxWidth()
+      .testTag("library_genre_filter_bar"),
+    verticalArrangement = Arrangement.spacedBy(6.dp)
+  ) {
+    LazyRow(
+      modifier = Modifier
+        .fillMaxWidth()
+        .testTag("library_genre_filter_row"),
+      horizontalArrangement = Arrangement.spacedBy(8.dp),
+      verticalAlignment = Alignment.CenterVertically
+    ) {
+      item(key = "genre_group_toggle") {
+        val groupActive = groupByGenre
+        val chipShape = CircleShape
+        val bgBrush = if (groupActive) {
+          Brush.horizontalGradient(
+            listOf(
+              primaryAccent.copy(alpha = 0.28f),
+              lightAccent.copy(alpha = 0.18f)
+            )
+          )
+        } else {
+          Brush.horizontalGradient(
+            listOf(
+              if (darkTheme) Color(0xFF151221).copy(alpha = 0.86f) else Color.White.copy(alpha = 0.82f),
+              if (darkTheme) Color(0xFF100E1A).copy(alpha = 0.86f) else Color(0xFFF3F6FF).copy(alpha = 0.82f)
+            )
+          )
+        }
+        val borderColor = if (groupActive) {
+          lightAccent.copy(alpha = 0.72f)
+        } else {
+          Color.White.copy(alpha = if (darkTheme) 0.10f else 0.75f)
+        }
+        val contentColor = if (groupActive) {
+          if (darkTheme) Color(0xFFF4F2FB) else primaryAccent
+        } else {
+          if (darkTheme) Color(0xFF8F8AA6) else MaterialTheme.colorScheme.onSurfaceVariant
+        }
+
+        Row(
+          modifier = Modifier
+            .clip(chipShape)
+            .background(bgBrush)
+            .border(1.dp, borderColor, chipShape)
+            .clickable { onToggleGroupByGenre() }
+            .padding(horizontal = 11.dp, vertical = 7.dp)
+            .testTag("library_genre_group_toggle"),
+          verticalAlignment = Alignment.CenterVertically,
+          horizontalArrangement = Arrangement.spacedBy(5.dp)
+        ) {
+          Icon(
+            imageVector = Icons.Rounded.Category,
+            contentDescription = null,
+            tint = if (groupActive) lightAccent else contentColor,
+            modifier = Modifier.size(14.dp)
+          )
+          Text(
+            text = stringResource(id = R.string.library_genre_group_by),
+            style = MaterialTheme.typography.labelMedium.copy(
+              fontSize = 12.sp,
+              fontWeight = if (groupActive) FontWeight.Bold else FontWeight.Medium
+            ),
+            color = contentColor
+          )
+        }
+      }
+
+      item(key = "genre_chip_all") {
+        LibraryGenreFilterChip(
+          label = stringResource(id = R.string.library_genre_all),
+          count = totalCount,
+          icon = Icons.Rounded.LibraryMusic,
+          selected = isAllSelected,
+          darkTheme = darkTheme,
+          primaryAccent = primaryAccent,
+          lightAccent = lightAccent,
+          onClick = { onSelectGenre(GENRE_FILTER_ALL) },
+          modifier = Modifier.testTag("library_genre_chip_all")
+        )
+      }
+
+      items(
+        items = orderedGenres,
+        key = { "genre_chip_${libraryGenreTagKey(it)}" }
+      ) { genreName ->
+        val count = genreCounts[genreName] ?: 0
+        val isSelected = !isAllSelected && selectedGenre.equals(genreName, ignoreCase = true)
+        val tagKey = libraryGenreTagKey(genreName)
+        LibraryGenreFilterChip(
+          label = genreName,
+          count = count,
+          icon = libraryGenreIcon(genreName),
+          selected = isSelected,
+          darkTheme = darkTheme,
+          primaryAccent = primaryAccent,
+          lightAccent = lightAccent,
+          onClick = { onSelectGenre(genreName) },
+          modifier = Modifier.testTag("library_genre_chip_$tagKey")
+        )
+      }
+    }
+
+    if (!isAllSelected) {
+      Row(
+        modifier = Modifier
+          .fillMaxWidth()
+          .clip(RoundedCornerShape(14.dp))
+          .background(
+            if (darkTheme) Color(0xFF13101E).copy(alpha = 0.88f)
+            else primaryAccent.copy(alpha = 0.08f)
+          )
+          .border(
+            1.dp,
+            primaryAccent.copy(alpha = if (darkTheme) 0.36f else 0.24f),
+            RoundedCornerShape(14.dp)
+          )
+          .padding(horizontal = 11.dp, vertical = 6.dp)
+          .testTag("library_active_genre_banner"),
+        verticalAlignment = Alignment.CenterVertically,
+        horizontalArrangement = Arrangement.SpaceBetween
+      ) {
+        Row(
+          verticalAlignment = Alignment.CenterVertically,
+          horizontalArrangement = Arrangement.spacedBy(7.dp),
+          modifier = Modifier.weight(1f)
+        ) {
+          Icon(
+            imageVector = libraryGenreIcon(selectedGenre),
+            contentDescription = null,
+            tint = if (darkTheme) lightAccent else primaryAccent,
+            modifier = Modifier.size(16.dp)
+          )
+          Text(
+            text = stringResource(id = R.string.library_genre_filter_active, selectedGenre, filteredCount),
+            style = MaterialTheme.typography.labelMedium.copy(
+              fontWeight = FontWeight.SemiBold,
+              fontSize = 12.sp
+            ),
+            color = if (darkTheme) Color(0xFFF4F2FB) else MaterialTheme.colorScheme.onSurface,
+            maxLines = 1,
+            overflow = TextOverflow.Ellipsis
+          )
+        }
+
+        Row(
+          verticalAlignment = Alignment.CenterVertically,
+          horizontalArrangement = Arrangement.spacedBy(6.dp)
+        ) {
+          if (filteredCount > 0) {
+            Row(
+              modifier = Modifier
+                .clip(CircleShape)
+                .background(primaryAccent.copy(alpha = 0.22f))
+                .border(0.8.dp, lightAccent.copy(alpha = 0.55f), CircleShape)
+                .clickable { onPlayFilteredGenre() }
+                .padding(horizontal = 9.dp, vertical = 4.dp)
+                .testTag("library_genre_play_all_button"),
+              verticalAlignment = Alignment.CenterVertically,
+              horizontalArrangement = Arrangement.spacedBy(3.dp)
+            ) {
+              Icon(
+                imageVector = Icons.Rounded.PlayArrow,
+                contentDescription = null,
+                tint = if (darkTheme) Color(0xFFF4F2FB) else primaryAccent,
+                modifier = Modifier.size(14.dp)
+              )
+              Text(
+                text = stringResource(id = R.string.album_action_play),
+                style = MaterialTheme.typography.labelSmall.copy(fontWeight = FontWeight.Bold),
+                color = if (darkTheme) Color(0xFFF4F2FB) else primaryAccent
+              )
+            }
+          }
+
+          Row(
+            modifier = Modifier
+              .clip(CircleShape)
+              .background(Color.White.copy(alpha = if (darkTheme) 0.08f else 0.72f))
+              .border(0.8.dp, Color.White.copy(alpha = if (darkTheme) 0.14f else 0.9f), CircleShape)
+              .clickable { onClearGenreFilter() }
+              .padding(horizontal = 8.dp, vertical = 4.dp)
+              .testTag("library_genre_clear_filter_button"),
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.spacedBy(3.dp)
+          ) {
+            Icon(
+              imageVector = Icons.Rounded.Close,
+              contentDescription = stringResource(id = R.string.library_genre_clear_filter),
+              tint = if (darkTheme) Color(0xFF8F8AA6) else MaterialTheme.colorScheme.onSurfaceVariant,
+              modifier = Modifier.size(13.dp)
+            )
+            Text(
+              text = stringResource(id = R.string.library_genre_all),
+              style = MaterialTheme.typography.labelSmall.copy(fontWeight = FontWeight.Medium),
+              color = if (darkTheme) Color(0xFF8F8AA6) else MaterialTheme.colorScheme.onSurfaceVariant
+            )
+          }
+        }
+      }
+    }
+  }
+}
+
+@Composable
+private fun LibraryGenreFilterChip(
+  label: String,
+  count: Int,
+  icon: ImageVector,
+  selected: Boolean,
+  darkTheme: Boolean,
+  primaryAccent: Color,
+  lightAccent: Color,
+  onClick: () -> Unit,
+  modifier: Modifier = Modifier
+) {
+  val chipShape = CircleShape
+  val bgBrush = if (selected) {
+    Brush.horizontalGradient(
+      colors = listOf(
+        primaryAccent,
+        androidx.compose.ui.graphics.lerp(primaryAccent, lightAccent, 0.55f)
+      )
+    )
+  } else {
+    Brush.horizontalGradient(
+      colors = listOf(
+        if (darkTheme) Color(0xFF141120).copy(alpha = 0.84f) else Color.White.copy(alpha = 0.84f),
+        if (darkTheme) Color(0xFF0E0C17).copy(alpha = 0.84f) else Color(0xFFF3F6FF).copy(alpha = 0.84f)
+      )
+    )
+  }
+  val borderColor = if (selected) {
+    lightAccent.copy(alpha = 0.82f)
+  } else {
+    Color.White.copy(alpha = if (darkTheme) 0.08f else 0.78f)
+  }
+  val textColor = if (selected) {
+    Color.White
+  } else if (darkTheme) {
+    if (count > 0) Color(0xFFF4F2FB) else Color(0xFF8F8AA6)
+  } else {
+    if (count > 0) MaterialTheme.colorScheme.onSurface else MaterialTheme.colorScheme.onSurfaceVariant
+  }
+
+  Row(
+    modifier = modifier
+      .clip(chipShape)
+      .background(bgBrush)
+      .border(1.dp, borderColor, chipShape)
+      .clickable { onClick() }
+      .padding(horizontal = 11.dp, vertical = 7.dp),
+    verticalAlignment = Alignment.CenterVertically,
+    horizontalArrangement = Arrangement.spacedBy(5.dp)
+  ) {
+    Icon(
+      imageVector = icon,
+      contentDescription = null,
+      tint = if (selected) Color.White else if (count > 0) primaryAccent else textColor.copy(alpha = 0.7f),
+      modifier = Modifier.size(14.dp)
+    )
+    Text(
+      text = label,
+      style = MaterialTheme.typography.labelMedium.copy(
+        fontSize = 12.sp,
+        fontWeight = if (selected) FontWeight.Bold else FontWeight.SemiBold
+      ),
+      color = textColor,
+      maxLines = 1
+    )
+    if (count > 0 || selected) {
+      Box(
+        modifier = Modifier
+          .clip(CircleShape)
+          .background(
+            if (selected) Color.Black.copy(alpha = 0.24f)
+            else primaryAccent.copy(alpha = if (darkTheme) 0.18f else 0.12f)
+          )
+          .padding(horizontal = 6.dp, vertical = 1.dp),
+        contentAlignment = Alignment.Center
+      ) {
+        Text(
+          text = count.toString(),
+          style = MaterialTheme.typography.labelSmall.copy(
+            fontSize = 10.sp,
+            fontWeight = FontWeight.Bold
+          ),
+          color = if (selected) Color.White else if (darkTheme) lightAccent else primaryAccent
+        )
+      }
+    }
+  }
+}
+
+@Composable
+private fun LibraryGenreCategoryHeader(
+  genre: String,
+  trackCount: Int,
+  isFocused: Boolean,
+  darkTheme: Boolean,
+  onFilterToggle: () -> Unit,
+  onPlayCategory: () -> Unit,
+  modifier: Modifier = Modifier
+) {
+  val primaryAccent = MaterialTheme.colorScheme.primary
+  val lightAccent = androidx.compose.ui.graphics.lerp(primaryAccent, Color.White, 0.32f)
+  val headerShape = RoundedCornerShape(18.dp)
+
+  Row(
+    modifier = modifier
+      .fillMaxWidth()
+      .padding(top = 4.dp, bottom = 2.dp)
+      .clip(headerShape)
+      .background(
+        Brush.horizontalGradient(
+          colors = if (darkTheme) {
+            listOf(
+              Color(0xFF151223).copy(alpha = 0.90f),
+              Color(0xFF0E0B18).copy(alpha = 0.86f)
+            )
+          } else {
+            listOf(
+              Color.White.copy(alpha = 0.90f),
+              primaryAccent.copy(alpha = 0.08f)
+            )
+          }
+        )
+      )
+      .border(
+        width = 1.dp,
+        color = if (isFocused) lightAccent.copy(alpha = 0.55f)
+        else Color.White.copy(alpha = if (darkTheme) 0.09f else 0.78f),
+        shape = headerShape
+      )
+      .clickable { onFilterToggle() }
+      .padding(horizontal = 12.dp, vertical = 9.dp),
+    verticalAlignment = Alignment.CenterVertically,
+    horizontalArrangement = Arrangement.SpaceBetween
+  ) {
+    Row(
+      verticalAlignment = Alignment.CenterVertically,
+      horizontalArrangement = Arrangement.spacedBy(10.dp),
+      modifier = Modifier.weight(1f)
+    ) {
+      Box(
+        modifier = Modifier
+          .size(32.dp)
+          .clip(RoundedCornerShape(10.dp))
+          .background(primaryAccent.copy(alpha = if (darkTheme) 0.22f else 0.14f))
+          .border(0.8.dp, lightAccent.copy(alpha = 0.45f), RoundedCornerShape(10.dp)),
+        contentAlignment = Alignment.Center
+      ) {
+        Icon(
+          imageVector = libraryGenreIcon(genre),
+          contentDescription = null,
+          tint = if (darkTheme) lightAccent else primaryAccent,
+          modifier = Modifier.size(17.dp)
+        )
+      }
+
+      Column(verticalArrangement = Arrangement.spacedBy(1.dp)) {
+        Text(
+          text = genre,
+          style = MaterialTheme.typography.titleSmall.copy(
+            fontWeight = FontWeight.Bold,
+            fontSize = 14.sp
+          ),
+          color = if (darkTheme) Color(0xFFF4F2FB) else MaterialTheme.colorScheme.onSurface
+        )
+        Text(
+          text = stringResource(id = R.string.mix_tracks_count, trackCount),
+          style = MaterialTheme.typography.labelSmall.copy(fontSize = 11.sp),
+          color = if (darkTheme) Color(0xFF8F8AA6) else MaterialTheme.colorScheme.onSurfaceVariant
+        )
+      }
+    }
+
+    Row(
+      verticalAlignment = Alignment.CenterVertically,
+      horizontalArrangement = Arrangement.spacedBy(6.dp)
+    ) {
+      Box(
+        modifier = Modifier
+          .clip(CircleShape)
+          .background(primaryAccent.copy(alpha = if (darkTheme) 0.22f else 0.14f))
+          .border(0.8.dp, lightAccent.copy(alpha = 0.45f), CircleShape)
+          .clickable { onPlayCategory() }
+          .padding(horizontal = 10.dp, vertical = 5.dp),
+        contentAlignment = Alignment.Center
+      ) {
+        Row(
+          verticalAlignment = Alignment.CenterVertically,
+          horizontalArrangement = Arrangement.spacedBy(3.dp)
+        ) {
+          Icon(
+            imageVector = Icons.Rounded.PlayArrow,
+            contentDescription = stringResource(id = R.string.album_action_play),
+            tint = if (darkTheme) Color(0xFFF4F2FB) else primaryAccent,
+            modifier = Modifier.size(14.dp)
+          )
+          Text(
+            text = stringResource(id = R.string.album_action_play),
+            style = MaterialTheme.typography.labelSmall.copy(fontWeight = FontWeight.Bold),
+            color = if (darkTheme) Color(0xFFF4F2FB) else primaryAccent
+          )
+        }
+      }
+    }
+  }
+}
+
 

@@ -552,4 +552,10 @@
     <string name="album_color_sunset">Sunset</string>
     <string name="album_color_mint">Mint</string>
     <string name="album_color_night">Night</string>
+    <string name="library_genre_all">All</string>
+    <string name="library_genre_group_by">By Genre</string>
+    <string name="library_genre_filter_active">%1$s · %2$d tracks</string>
+    <string name="library_genre_clear_filter">All genres</string>
+    <string name="library_genre_empty_title">No %1$s tracks yet</string>
+    <string name="library_genre_empty_sub">No tracks in this tab match the %1$s genre filter. Try another genre or reset the filter.</string>
 </resources>

@@ -1,15 +1,15 @@
 {
-  "versionName": "1.9.0",
-  "versionCode": 10900,
+  "versionName": "1.9.1",
+  "versionCode": 10910,
   "releaseDate": "2026-11-22",
-  "apkUrl": "https://github.com/MEYYYNASH/AURIX/releases/download/v1.9.0/AURIX-v1.9.0.apk",
-  "sha256": "509af25b21de803e0aeb7e040675991fbd36060c4b7f7cdcd077b2ae3fbd214d",
+  "apkUrl": "https://github.com/MEYYYNASH/AURIX/releases/download/v1.9.1/AURIX-v1.9.1.apk",
+  "sha256": "",
   "mandatory": false,
   "notes": [
-    "Custom Accent Color Picker & Dynamic Dark Glass Accents (v1.9.0): Choose any custom accent color in Settings via interactive HSV sliders, hex code entry, or 16 curated swatches, and watch all Dark Glass glows, borders, top lines, chips, and gradient buttons adapt live",
+    "Library Genre Filtering & Categorization (v1.9.1): Filter and browse tracks in My songs, Favorites, and Recent by genre chips with live track counts, toggle By Genre grouped category headers, or tap any track's inline genre pill",
+    "Custom Accent Color Picker & Dynamic Dark Glass Accents: Choose any custom accent color in Settings via interactive HSV sliders, hex code entry, or 16 curated swatches, and watch all Dark Glass glows, borders, top lines, chips, and gradient buttons adapt live",
     "Create Album Button & Bottom Dock Fix: Hid the floating bottom navigation bar and miniplayer when the Create Album sheet opens, pinned Cancel and Create album buttons in the sheet footer, and aligned all 5 color chips evenly",
-    "App Update & Release Card: Restyled in #0A0810 dark glass with dynamic accent radial glows, gradient version hero, code chip, dual status tiles, and verified shield indicator",
-    "Release Notes & Whats New Sheet: Redesigned with a dark glass hero version header, live status pill, date and highlight counters, and staggered glass changelog cards with category vector icons"
+    "App Update & Release Card: Restyled in #0A0810 dark glass with dynamic accent radial glows, gradient version hero, code chip, dual status tiles, and verified shield indicator"
   ],
-  "releasePageUrl": "https://github.com/MEYYYNASH/AURIX/releases/tag/v1.9.0"
+  "releasePageUrl": "https://github.com/MEYYYNASH/AURIX/releases/tag/v1.9.1"
 }

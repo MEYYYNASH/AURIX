@@ -11,10 +11,34 @@ import org.junit.Test
 class CrashFixStabilityTest {
 
   @Test
-  fun release190_metadataAndVersionCodeAreConsistent() {
-    assertEquals("1.9.0", BuildConfig.VERSION_NAME)
-    assertEquals(10900, BuildConfig.VERSION_CODE)
-    assertTrue("Release 1.9.0 versionCode must exceed 1.8.9 (10890)", BuildConfig.VERSION_CODE > 10890)
+  fun release191_metadataAndVersionCodeAreConsistent() {
+    assertEquals("1.9.1", BuildConfig.VERSION_NAME)
+    assertEquals(10910, BuildConfig.VERSION_CODE)
+    assertTrue("Release 1.9.1 versionCode must exceed 1.9.0 (10900)", BuildConfig.VERSION_CODE > 10900)
+  }
+
+  @Test
+  fun libraryGenreClassifier_resolvesAndNormalizesGenresDeterministically() {
+    val lofiTrack = Song(
+      id = "t_lofi",
+      title = "Late Night Lo-Fi Chillhop Study",
+      artist = "Aura Beats",
+      artworkUrl = "",
+      durationSeconds = 140L,
+      streamUrl = ""
+    )
+    val phonkTrack = Song(
+      id = "t_phonk",
+      title = "Midnight Drift Phonk",
+      artist = "Kord",
+      artworkUrl = "",
+      durationSeconds = 135L,
+      streamUrl = ""
+    )
+    assertEquals("Lo-fi", com.example.ui.screens.resolveLibraryTrackGenre(lofiTrack))
+    assertEquals("Phonk", com.example.ui.screens.resolveLibraryTrackGenre(phonkTrack))
+    assertEquals("lo_fi", com.example.ui.screens.libraryGenreTagKey("Lo-fi"))
+    assertEquals("r_b", com.example.ui.screens.libraryGenreTagKey("R&B"))
   }
 
   @Test

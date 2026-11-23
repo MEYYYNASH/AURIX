@@ -1026,6 +1026,8 @@ fun SongRow(
   hasLyrics: Boolean = false,
   rank: Int? = null,
   showSourceBadge: Boolean = true,
+  genreBadge: String? = null,
+  onGenreBadgeClick: (() -> Unit)? = null,
   onCheckLyrics: ((Song) -> Unit)? = null,
   onSongClick: () -> Unit,
   onFavoriteClick: () -> Unit,
@@ -1043,6 +1045,8 @@ fun SongRow(
     darkTheme = darkTheme,
     downloadProgress = null,
     isDownloaded = false,
+    genreBadge = genreBadge,
+    onGenreBadgeClick = onGenreBadgeClick,
     onCheckLyrics = onCheckLyrics,
     onSongClick = onSongClick,
     onFavoriteClick = onFavoriteClick,
@@ -1192,6 +1196,8 @@ private fun StandaloneSongCard(
   darkTheme: Boolean,
   downloadProgress: Float?,
   isDownloaded: Boolean,
+  genreBadge: String? = null,
+  onGenreBadgeClick: (() -> Unit)? = null,
   onCheckLyrics: ((Song) -> Unit)?,
   onSongClick: () -> Unit,
   onFavoriteClick: () -> Unit,
@@ -1306,7 +1312,7 @@ private fun StandaloneSongCard(
             }
           }
 
-          // Two lines: Title + "artist · duration" (ellipsis if too long)
+          // Two lines: Title + "artist · duration" + optional genre pill
           Column(
             modifier = Modifier.weight(1f),
             verticalArrangement = Arrangement.spacedBy(4.dp)
@@ -1329,13 +1335,56 @@ private fun StandaloneSongCard(
               else -> baseMeta
             }
 
-            Text(
-              text = subtitleText,
-              style = MaterialTheme.typography.bodySmall,
-              maxLines = 1,
-              overflow = TextOverflow.Ellipsis,
-              color = if (downloadProgress != null) accentColor else MaterialTheme.colorScheme.onSurfaceVariant
-            )
+            Row(
+              verticalAlignment = Alignment.CenterVertically,
+              horizontalArrangement = Arrangement.spacedBy(6.dp)
+            ) {
+              if (!genreBadge.isNullOrBlank()) {
+                val pillModifier = Modifier
+                  .clip(CircleShape)
+                  .background(accentColor.copy(alpha = if (darkTheme) 0.16f else 0.12f))
+                  .border(
+                    width = 0.8.dp,
+                    color = accentColor.copy(alpha = if (darkTheme) 0.42f else 0.32f),
+                    shape = CircleShape
+                  )
+                  .then(
+                    if (onGenreBadgeClick != null) {
+                      Modifier.clickable { onGenreBadgeClick() }
+                    } else {
+                      Modifier
+                    }
+                  )
+                  .padding(horizontal = 7.dp, vertical = 1.5.dp)
+                  .testTag("song_genre_badge_${song.id}")
+
+                Box(modifier = pillModifier, contentAlignment = Alignment.Center) {
+                  Text(
+                    text = genreBadge,
+                    style = MaterialTheme.typography.labelSmall.copy(
+                      fontSize = 10.sp,
+                      lineHeight = 13.sp,
+                      fontWeight = FontWeight.SemiBold
+                    ),
+                    color = if (darkTheme) {
+                      androidx.compose.ui.graphics.lerp(accentColor, Color.White, 0.28f)
+                    } else {
+                      accentColor
+                    },
+                    maxLines = 1
+                  )
+                }
+              }
+
+              Text(
+                text = subtitleText,
+                style = MaterialTheme.typography.bodySmall,
+                maxLines = 1,
+                overflow = TextOverflow.Ellipsis,
+                color = if (downloadProgress != null) accentColor else MaterialTheme.colorScheme.onSurfaceVariant,
+                modifier = Modifier.weight(1f, fill = false)
+              )
+            }
           }
 
           // Right-side action cluster: Download (when available), Love, and circular Play

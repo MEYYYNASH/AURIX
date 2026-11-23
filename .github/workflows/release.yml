@@ -10,9 +10,9 @@ on:
   workflow_dispatch:
     inputs:
       tag:
-        description: 'Release tag (e.g. v1.9.0)'
+        description: 'Release tag (e.g. v1.9.1)'
         required: false
-        default: 'v1.9.0'
+        default: 'v1.9.1'
 
 permissions:
   contents: write
@@ -52,13 +52,13 @@ jobs:
             RELEASE_TAG="${{ github.ref_name }}"
           else
             VERSION=$(grep -m1 'versionName' app/build.gradle.kts | sed -E 's/.*"([^"]+)".*/\1/')
-            RELEASE_TAG="v${VERSION:-1.9.0}"
+            RELEASE_TAG="v${VERSION:-1.9.1}"
           fi
           VCODE=$(grep -m1 'versionCode' app/build.gradle.kts | sed -E 's/[^0-9]*([0-9]+).*/\1/')
           RDATE=$(grep -m1 'RELEASE_DATE' app/build.gradle.kts | sed -E 's/.*\\"([^\\"]+)\\".*/\1/')
           echo "RELEASE_TAG=${RELEASE_TAG}" >> "$GITHUB_ENV"
           echo "RELEASE_VERSION=${RELEASE_TAG#v}" >> "$GITHUB_ENV"
-          echo "RELEASE_VERSION_CODE=${VCODE:-10900}" >> "$GITHUB_ENV"
+          echo "RELEASE_VERSION_CODE=${VCODE:-10910}" >> "$GITHUB_ENV"
           echo "RELEASE_DATE=${RDATE:-$(date -u +%Y-%m-%d)}" >> "$GITHUB_ENV"
 
       - name: Ensure keystores exist
@@ -98,10 +98,10 @@ jobs:
             "sha256": os.environ["APK_SHA256"],
             "mandatory": False,
             "notes": [
-              f"Custom Accent Color Picker & Dynamic Dark Glass Accents ({tag}): Choose any custom accent color in Settings via interactive HSV sliders, hex code entry, or 16 curated swatches, and watch all Dark Glass glows, borders, top lines, chips, and gradient buttons adapt live",
+              f"Library Genre Filtering & Categorization ({tag}): Filter and browse tracks in My songs, Favorites, and Recent by genre chips with live track counts, toggle By Genre grouped category headers, or tap any track's inline genre pill",
+              "Custom Accent Color Picker & Dynamic Dark Glass Accents: Choose any custom accent color in Settings via interactive HSV sliders, hex code entry, or 16 curated swatches, and watch all Dark Glass glows, borders, top lines, chips, and gradient buttons adapt live",
               "Create Album Button & Bottom Dock Fix: Hid the floating bottom navigation bar and miniplayer when the Create Album sheet opens, pinned Cancel and Create album buttons in the sheet footer, and aligned all 5 color chips evenly",
-              "App Update & Release Card: Restyled in #0A0810 dark glass with dynamic accent radial glows, gradient version hero, code chip, dual status tiles, and verified shield indicator",
-              "Release Notes & Whats New Sheet: Redesigned with a dark glass hero version header, live status pill, date and highlight counters, and staggered glass changelog cards with category vector icons"
+              "App Update & Release Card: Restyled in #0A0810 dark glass with dynamic accent radial glows, gradient version hero, code chip, dual status tiles, and verified shield indicator"
             ],
             "releasePageUrl": f"https://github.com/{repo}/releases/tag/{tag}"
           }
@@ -127,9 +127,9 @@ jobs:
             mandatory: false
 
             What's New in AURIX ${{ env.RELEASE_TAG }}:
+            - Library Genre Filtering & Categorization: Filter and browse tracks in My songs, Favorites, and Recent by genre chips with live track counts, toggle By Genre grouped category headers, or tap any track's inline genre pill
             - Custom Accent Color Picker & Dynamic Dark Glass Accents: Choose any custom accent color in Settings via HSV sliders, hex input, or 16 curated swatches, and watch all Dark Glass cards, sheets, borders, top glow lines, and gradient buttons adapt live
             - App Update & Release Card: Restyled in #0A0810 dark glass with dynamic accent radial glows, gradient version hero, code chip, dual status tiles, and verified shield indicator
-            - Release Notes & What's New Sheet: Dark glass hero version header, live status pill, date and highlight counters, and staggered glass changelog cards with category vector icons
             - Create Album Bottom Sheet: Frosted dark glass sheet with reactive preset glow, 108 dp spinning vinyl cover preview, glass color-chip selector rail, floating-label inputs with icon capsules, and curved cover flight
           files: |
             app/build/outputs/apk/release/app-release.apk

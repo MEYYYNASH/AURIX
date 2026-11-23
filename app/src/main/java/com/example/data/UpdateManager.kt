@@ -162,10 +162,10 @@ class UpdateManager(
     private const val META_FILE_NAME = "aurix_update.apk.meta.json"
 
     val CURRENT_RELEASE_NOTES = listOf(
-      "Custom Accent Color Picker & Dynamic Dark Glass Accents (v1.9.0): Choose any custom accent color in Settings via interactive HSV sliders, hex code entry, or 16 curated swatches, and watch all Dark Glass glows, borders, top lines, chips, and gradient buttons adapt live",
+      "Library Genre Filtering & Categorization (v1.9.1): Filter and browse tracks in My songs, Favorites, and Recent by genre chips with live track counts, toggle By Genre grouped category headers, or tap any track's inline genre pill",
+      "Custom Accent Color Picker & Dynamic Dark Glass Accents: Choose any custom accent color in Settings via interactive HSV sliders, hex code entry, or 16 curated swatches, and watch all Dark Glass glows, borders, top lines, chips, and gradient buttons adapt live",
       "Create Album Button & Bottom Dock Fix: Hid the floating bottom navigation bar and miniplayer when the Create Album sheet opens, pinned Cancel and Create album buttons in the sheet footer, and aligned all 5 color chips evenly",
-      "App Update & Release Card: Restyled in #0A0810 dark glass with dynamic accent radial glows, gradient version hero, code chip, dual status tiles, and verified shield indicator",
-      "Release Notes & Whats New Sheet: Redesigned with a dark glass hero version header, live status pill, date and highlight counters, and staggered glass changelog cards with category vector icons"
+      "App Update & Release Card: Restyled in #0A0810 dark glass with dynamic accent radial glows, gradient version hero, code chip, dual status tiles, and verified shield indicator"
     )
 
     fun parseVersionJson(rawJson: String): RemoteVersionInfo {
