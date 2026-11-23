@@ -1,6 +1,5 @@
 package com.example.ui.screens
 
-import android.os.Build
 import androidx.activity.compose.BackHandler
 import androidx.compose.animation.animateColorAsState
 import androidx.compose.animation.core.Animatable
@@ -21,11 +20,9 @@ import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.ColumnScope
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
-import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.heightIn
-import androidx.compose.foundation.layout.offset
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
@@ -44,10 +41,16 @@ import androidx.compose.material.icons.rounded.Edit
 import androidx.compose.material.icons.rounded.Favorite
 import androidx.compose.material.icons.rounded.FavoriteBorder
 import androidx.compose.material.icons.rounded.FolderOpen
+import androidx.compose.material.icons.rounded.GraphicEq
+import androidx.compose.material.icons.rounded.Info
+import androidx.compose.material.icons.rounded.MusicNote
+import androidx.compose.material.icons.rounded.Pause
 import androidx.compose.material.icons.rounded.PlayArrow
 import androidx.compose.material.icons.rounded.Refresh
+import androidx.compose.material.icons.rounded.RemoveCircleOutline
 import androidx.compose.material.icons.rounded.Shuffle
 import androidx.compose.material3.Icon
+import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.material3.ripple
 import androidx.compose.runtime.Composable
@@ -58,14 +61,18 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.draw.blur
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.draw.drawBehind
 import androidx.compose.ui.draw.scale
-import androidx.compose.ui.draw.shadow
+import androidx.compose.ui.geometry.CornerRadius
+import androidx.compose.ui.geometry.Offset
+import androidx.compose.ui.geometry.Size
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.TransformOrigin
+import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.graphics.graphicsLayer
+import androidx.compose.ui.graphics.lerp
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.platform.testTag
@@ -85,23 +92,24 @@ import androidx.compose.ui.window.Popup
 import androidx.compose.ui.window.PopupPositionProvider
 import androidx.compose.ui.window.PopupProperties
 import com.example.R
+import com.example.model.Song
 import kotlinx.coroutines.launch
 
 object GlassMenuTokens {
-  val CardBackground = Color(24, 30, 58).copy(alpha = 0.72f)
+  val CardBackground = Color(0xFF0B0914).copy(alpha = 0.97f)
   val CardBorder = Color.White.copy(alpha = 0.10f)
   val CardCornerRadius = 26.dp
-  val CardPadding = 8.dp
-  val BlueAccent = Color(0xFF2F8BFF)
-  val IndigoAccent = Color(0xFF4F46E5)
-  val PurpleAccent = Color(0xFFA78BFA)
-  val DestructiveRed = Color(0xFFFF6B6B)
-  val TextPrimary = Color(0xFFF4F3FF)
-  val HintGray = Color(0xFF94A3B8)
-  val DividerColor = Color.White.copy(alpha = 0.09f)
-  val PressHighlight = Color.White.copy(alpha = 0.09f)
-  val IconTileSize = 34.dp
-  val IconTileRadius = 11.dp
+  val CardPadding = 10.dp
+  val BlueAccent = Color(0xFF38BDF8)
+  val IndigoAccent = Color(0xFF6366F1)
+  val PurpleAccent = Color(0xFFC084FC)
+  val DestructiveRed = Color(0xFFFB7185)
+  val TextPrimary = Color(0xFFF4F2FB)
+  val HintGray = Color(0xFF8F8AA6)
+  val DividerColor = Color.White.copy(alpha = 0.08f)
+  val PressHighlight = Color.White.copy(alpha = 0.10f)
+  val IconTileSize = 36.dp
+  val IconTileRadius = 12.dp
 }
 
 private class GlassMenuPositionProvider(
@@ -174,8 +182,12 @@ fun GlassPopupMenuContainer(
 ) {
   if (!expanded) return
 
+  val primaryAccent = MaterialTheme.colorScheme.primary
+  val lightAccent = lerp(primaryAccent, Color.White, 0.34f)
+  val secondaryGlow = lerp(primaryAccent, Color(0xFFD946EF), 0.28f)
+
   val density = LocalDensity.current
-  val shadowPad = 16.dp
+  val shadowPad = 14.dp
   val shadowPadPx = with(density) { shadowPad.roundToPx() }
   val anchorMarginPx = with(density) { 8.dp.roundToPx() }
   val screenMarginPx = with(density) { 12.dp.roundToPx() }
@@ -204,7 +216,7 @@ fun GlassPopupMenuContainer(
     )
   }
 
-  val scaleAnim = remember { Animatable(if (reducedMotion) 1f else 0.88f) }
+  val scaleAnim = remember { Animatable(if (reducedMotion) 1f else 0.90f) }
   val alphaAnim = remember { Animatable(if (reducedMotion) 1f else 0f) }
 
   LaunchedEffect(expanded, reducedMotion) {
@@ -212,9 +224,9 @@ fun GlassPopupMenuContainer(
       scaleAnim.snapTo(1f)
       alphaAnim.snapTo(1f)
     } else {
-      scaleAnim.snapTo(0.88f)
+      scaleAnim.snapTo(0.90f)
       alphaAnim.snapTo(0f)
-      val overshootEasing = CubicBezierEasing(0.34f, 1.38f, 0.64f, 1f)
+      val overshootEasing = CubicBezierEasing(0.34f, 1.42f, 0.64f, 1f)
       launch {
         scaleAnim.animateTo(
           targetValue = 1f,
@@ -224,7 +236,7 @@ fun GlassPopupMenuContainer(
       launch {
         alphaAnim.animateTo(
           targetValue = 1f,
-          animationSpec = tween(durationMillis = 220, easing = LinearOutSlowInEasing)
+          animationSpec = tween(durationMillis = 200, easing = LinearOutSlowInEasing)
         )
       }
     }
@@ -259,7 +271,7 @@ fun GlassPopupMenuContainer(
     ) {
       Box(
         modifier = Modifier
-          .widthIn(min = 216.dp, max = menuWidth)
+          .widthIn(min = 228.dp, max = menuWidth)
           .fillMaxWidth()
           .graphicsLayer {
             scaleX = scaleAnim.value
@@ -267,14 +279,78 @@ fun GlassPopupMenuContainer(
             alpha = alphaAnim.value
             this.transformOrigin = transformOrigin
           }
-          .shadow(
-            elevation = 24.dp,
-            shape = cardShape,
-            ambientColor = Color(0xFF03050F).copy(alpha = 0.88f),
-            spotColor = Color(0xFF05081A).copy(alpha = 0.92f)
-          )
+          .drawBehind {
+            val cornerPx = GlassMenuTokens.CardCornerRadius.toPx()
+            // Soft outer ambient shadow drawn cleanly outside the card without inner RenderNode bleed
+            drawRoundRect(
+              color = Color(0xFF030208).copy(alpha = 0.56f),
+              topLeft = Offset(0f, 6.dp.toPx()),
+              size = size,
+              cornerRadius = CornerRadius(cornerPx, cornerPx)
+            )
+            drawRoundRect(
+              color = primaryAccent.copy(alpha = 0.12f),
+              topLeft = Offset(0f, 3.dp.toPx()),
+              size = size,
+              cornerRadius = CornerRadius(cornerPx, cornerPx)
+            )
+          }
           .clip(cardShape)
           .background(GlassMenuTokens.CardBackground)
+          .drawBehind {
+            // Smooth Dark Glass radial glows (artifact-free, no inner blur rectangle)
+            drawCircle(
+              brush = Brush.radialGradient(
+                colors = listOf(
+                  primaryAccent.copy(alpha = 0.24f),
+                  Color.Transparent
+                ),
+                center = Offset(size.width * 0.16f, size.height * 0.12f),
+                radius = size.minDimension * 0.85f
+              ),
+              radius = size.minDimension * 0.85f,
+              center = Offset(size.width * 0.16f, size.height * 0.12f)
+            )
+            drawCircle(
+              brush = Brush.radialGradient(
+                colors = listOf(
+                  secondaryGlow.copy(alpha = 0.16f),
+                  Color.Transparent
+                ),
+                center = Offset(size.width * 0.88f, size.height * 0.86f),
+                radius = size.minDimension * 0.78f
+              ),
+              radius = size.minDimension * 0.78f,
+              center = Offset(size.width * 0.88f, size.height * 0.86f)
+            )
+            // Subtle top specular highlight glow line
+            val lineInset = size.width * 0.18f
+            drawLine(
+              brush = Brush.horizontalGradient(
+                colors = listOf(
+                  Color.Transparent,
+                  lightAccent.copy(alpha = 0.72f),
+                  Color.Transparent
+                ),
+                startX = lineInset,
+                endX = size.width - lineInset
+              ),
+              start = Offset(lineInset, 1.dp.toPx()),
+              end = Offset(size.width - lineInset, 1.dp.toPx()),
+              strokeWidth = 1.6.dp.toPx()
+            )
+          }
+          .border(
+            width = 1.dp,
+            brush = Brush.linearGradient(
+              colors = listOf(
+                lightAccent.copy(alpha = 0.42f),
+                Color.White.copy(alpha = 0.10f),
+                primaryAccent.copy(alpha = 0.26f)
+              )
+            ),
+            shape = cardShape
+          )
           .clickable(
             interactionSource = cardInteraction,
             indication = null,
@@ -282,53 +358,12 @@ fun GlassPopupMenuContainer(
           )
           .testTag(testTag)
       ) {
-        // Internal 28dp frosted glass refraction layer
-        Box(
-          modifier = Modifier
-            .matchParentSize()
-            .then(if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) Modifier.blur(28.dp) else Modifier)
-        ) {
-          Box(
-            modifier = Modifier
-              .size(136.dp)
-              .offset(x = (-24).dp, y = (-24).dp)
-              .clip(CircleShape)
-              .background(GlassMenuTokens.BlueAccent.copy(alpha = 0.14f))
-          )
-          Box(
-            modifier = Modifier
-              .size(128.dp)
-              .align(Alignment.BottomEnd)
-              .offset(x = 26.dp, y = 24.dp)
-              .clip(CircleShape)
-              .background(GlassMenuTokens.PurpleAccent.copy(alpha = 0.13f))
-          )
-        }
-
-        // Subtle glass specular rim & sheen overlay
-        Box(
-          modifier = Modifier
-            .matchParentSize()
-            .background(
-              Brush.verticalGradient(
-                0.0f to Color.White.copy(alpha = 0.08f),
-                0.30f to Color.Transparent,
-                1.0f to Color.Black.copy(alpha = 0.10f)
-              )
-            )
-            .border(
-              width = 1.dp,
-              color = GlassMenuTokens.CardBorder,
-              shape = cardShape
-            )
-        )
-
         Column(
           modifier = Modifier
             .fillMaxWidth()
             .verticalScroll(rememberScrollState())
             .padding(GlassMenuTokens.CardPadding),
-          verticalArrangement = Arrangement.spacedBy(2.dp),
+          verticalArrangement = Arrangement.spacedBy(5.dp),
           content = content
         )
       }
@@ -341,9 +376,18 @@ fun GlassMenuDivider(modifier: Modifier = Modifier) {
   Box(
     modifier = modifier
       .fillMaxWidth()
-      .padding(horizontal = 8.dp, vertical = 4.dp)
+      .padding(horizontal = 8.dp, vertical = 3.dp)
       .height(1.dp)
-      .background(GlassMenuTokens.DividerColor)
+      .background(
+        Brush.horizontalGradient(
+          colors = listOf(
+            Color.Transparent,
+            GlassMenuTokens.DividerColor,
+            GlassMenuTokens.DividerColor,
+            Color.Transparent
+          )
+        )
+      )
   )
 }
 
@@ -361,47 +405,62 @@ fun GlassMenuRow(
   val interactionSource = remember { MutableInteractionSource() }
   val isPressed by interactionSource.collectIsPressedAsState()
   val rowBg by animateColorAsState(
-    targetValue = if (isPressed) {
-      if (isDestructive) GlassMenuTokens.DestructiveRed.copy(alpha = 0.12f)
-      else GlassMenuTokens.PressHighlight
-    } else {
-      Color.Transparent
+    targetValue = when {
+      isPressed && isDestructive -> GlassMenuTokens.DestructiveRed.copy(alpha = 0.16f)
+      isPressed -> GlassMenuTokens.PressHighlight
+      isDestructive -> GlassMenuTokens.DestructiveRed.copy(alpha = 0.06f)
+      else -> Color.White.copy(alpha = 0.035f)
     },
     animationSpec = tween(durationMillis = 120),
     label = "glass_menu_row_bg"
   )
 
-  val rowShape = RoundedCornerShape(16.dp)
+  val rowShape = RoundedCornerShape(18.dp)
   val tileShape = RoundedCornerShape(GlassMenuTokens.IconTileRadius)
   val labelColor = if (isDestructive) GlassMenuTokens.DestructiveRed else GlassMenuTokens.TextPrimary
+  val borderColor = if (isDestructive) {
+    GlassMenuTokens.DestructiveRed.copy(alpha = 0.20f)
+  } else {
+    Color.White.copy(alpha = 0.065f)
+  }
 
   Row(
     modifier = modifier
       .fillMaxWidth()
-      .heightIn(min = if (hint != null) 52.dp else 50.dp)
+      .heightIn(min = if (hint != null) 54.dp else 48.dp)
       .clip(rowShape)
       .background(rowBg)
+      .border(0.8.dp, borderColor, rowShape)
       .clickable(
         interactionSource = interactionSource,
-        indication = ripple(color = if (isDestructive) GlassMenuTokens.DestructiveRed else Color.White.copy(alpha = 0.24f)),
+        indication = ripple(
+          color = if (isDestructive) GlassMenuTokens.DestructiveRed else tileColor.copy(alpha = 0.30f)
+        ),
         role = Role.Button,
         onClick = onClick
       )
-      .padding(horizontal = 8.dp, vertical = if (hint != null) 8.dp else 7.dp),
+      .padding(horizontal = 10.dp, vertical = if (hint != null) 8.dp else 7.dp),
     verticalAlignment = Alignment.CenterVertically
   ) {
     Box(
       modifier = Modifier
         .size(GlassMenuTokens.IconTileSize)
         .clip(tileShape)
-        .background(tileColor.copy(alpha = 0.17f))
-        .border(0.75.dp, tileColor.copy(alpha = 0.24f), tileShape),
+        .background(
+          Brush.linearGradient(
+            colors = listOf(
+              tileColor.copy(alpha = 0.24f),
+              tileColor.copy(alpha = 0.10f)
+            )
+          )
+        )
+        .border(0.9.dp, tileColor.copy(alpha = 0.36f), tileShape),
       contentAlignment = Alignment.Center
     ) {
       Icon(
         imageVector = icon,
         contentDescription = null,
-        tint = tileColor,
+        tint = lerp(tileColor, Color.White, 0.18f),
         modifier = Modifier.size(18.dp)
       )
     }
@@ -415,9 +474,9 @@ fun GlassMenuRow(
       Text(
         text = label,
         fontFamily = fontFamily,
-        fontSize = 15.sp,
-        fontWeight = FontWeight.Medium,
-        lineHeight = 19.sp,
+        fontSize = 14.5.sp,
+        fontWeight = FontWeight.SemiBold,
+        lineHeight = 18.sp,
         color = labelColor,
         maxLines = 1,
         overflow = TextOverflow.Ellipsis
@@ -427,10 +486,10 @@ fun GlassMenuRow(
         Text(
           text = hint,
           fontFamily = fontFamily,
-          fontSize = 12.sp,
+          fontSize = 11.5.sp,
           fontWeight = FontWeight.Normal,
           lineHeight = 15.sp,
-          color = GlassMenuTokens.HintGray,
+          color = if (isDestructive) GlassMenuTokens.DestructiveRed.copy(alpha = 0.76f) else GlassMenuTokens.HintGray,
           maxLines = 1,
           overflow = TextOverflow.Ellipsis
         )
@@ -450,6 +509,9 @@ private fun AlbumHeroActionButton(
   onClick: () -> Unit,
   modifier: Modifier = Modifier
 ) {
+  val primaryAccent = MaterialTheme.colorScheme.primary
+  val lightAccent = lerp(primaryAccent, Color.White, 0.30f)
+
   val interactionSource = remember { MutableInteractionSource() }
   val isPressed by interactionSource.collectIsPressedAsState()
   val scale by animateFloatAsState(
@@ -463,28 +525,28 @@ private fun AlbumHeroActionButton(
     Modifier.background(
       Brush.linearGradient(
         colors = listOf(
-          GlassMenuTokens.BlueAccent,
-          GlassMenuTokens.IndigoAccent
+          primaryAccent,
+          lerp(primaryAccent, Color(0xFF4F46E5), 0.35f)
         )
       )
     )
   } else {
     Modifier.background(
-      if (isActive) GlassMenuTokens.PurpleAccent.copy(alpha = 0.20f)
-      else Color.White.copy(alpha = 0.08f)
+      if (isActive) primaryAccent.copy(alpha = 0.22f)
+      else Color.White.copy(alpha = 0.06f)
     )
   }
 
   val borderColor = when {
-    isPrimaryGradient -> Color.White.copy(alpha = 0.22f)
-    isActive -> GlassMenuTokens.PurpleAccent.copy(alpha = 0.45f)
-    else -> Color.White.copy(alpha = 0.12f)
+    isPrimaryGradient -> lightAccent.copy(alpha = 0.50f)
+    isActive -> lightAccent.copy(alpha = 0.45f)
+    else -> Color.White.copy(alpha = 0.10f)
   }
 
   Box(
     modifier = modifier
       .scale(scale)
-      .height(68.dp)
+      .height(64.dp)
       .clip(buttonShape)
       .then(backgroundModifier)
       .border(BorderStroke(1.dp, borderColor), buttonShape)
@@ -506,16 +568,16 @@ private fun AlbumHeroActionButton(
         contentDescription = null,
         tint = when {
           isPrimaryGradient -> Color.White
-          isActive -> GlassMenuTokens.PurpleAccent
+          isActive -> lightAccent
           else -> GlassMenuTokens.TextPrimary
         },
-        modifier = Modifier.size(22.dp)
+        modifier = Modifier.size(21.dp)
       )
-      Spacer(modifier = Modifier.height(4.dp))
+      Spacer(modifier = Modifier.height(3.dp))
       Text(
         text = label,
         fontFamily = fontFamily,
-        fontSize = 13.sp,
+        fontSize = 12.5.sp,
         fontWeight = FontWeight.SemiBold,
         lineHeight = 16.sp,
         color = Color.White,
@@ -550,20 +612,21 @@ fun AlbumMoreGlassMenu(
   onDeleteAlbumClick: (() -> Unit)? = null
 ) {
   val fontFamily = AlbumDesignTokens.OutfitFontFamily
+  val primaryAccent = MaterialTheme.colorScheme.primary
+  val lightAccent = lerp(primaryAccent, Color.White, 0.30f)
 
   GlassPopupMenuContainer(
     expanded = expanded,
     onDismissRequest = onDismissRequest,
     horizontalAlignment = Alignment.End,
-    menuWidth = 264.dp,
+    menuWidth = 268.dp,
     reducedMotion = reducedMotion,
     testTag = "album_more_glass_menu"
   ) {
-    // 1. Top: Play (blue->indigo gradient, filled) & Shuffle (glass) side-by-side
     Row(
       modifier = Modifier
         .fillMaxWidth()
-        .padding(bottom = 6.dp),
+        .padding(bottom = 4.dp),
       horizontalArrangement = Arrangement.spacedBy(8.dp)
     ) {
       AlbumHeroActionButton(
@@ -597,11 +660,10 @@ fun AlbumMoreGlassMenu(
       )
     }
 
-    // 2. Rows: Add songs, Import audio files, Edit cover, (Reset cover if customized), Add to library, Download album
     GlassMenuRow(
       icon = Icons.AutoMirrored.Rounded.PlaylistAdd,
       label = stringResource(id = R.string.album_add_songs),
-      tileColor = GlassMenuTokens.BlueAccent,
+      tileColor = primaryAccent,
       fontFamily = fontFamily,
       onClick = {
         onDismissRequest()
@@ -613,7 +675,7 @@ fun AlbumMoreGlassMenu(
     GlassMenuRow(
       icon = Icons.Rounded.FolderOpen,
       label = stringResource(id = R.string.album_import_audio),
-      tileColor = GlassMenuTokens.BlueAccent,
+      tileColor = primaryAccent,
       fontFamily = fontFamily,
       onClick = {
         onDismissRequest()
@@ -625,7 +687,7 @@ fun AlbumMoreGlassMenu(
     GlassMenuRow(
       icon = Icons.Rounded.Edit,
       label = stringResource(id = R.string.album_edit_cover),
-      tileColor = GlassMenuTokens.PurpleAccent,
+      tileColor = lightAccent,
       fontFamily = fontFamily,
       onClick = {
         onDismissRequest()
@@ -638,7 +700,7 @@ fun AlbumMoreGlassMenu(
       GlassMenuRow(
         icon = Icons.Rounded.Refresh,
         label = stringResource(id = R.string.album_reset_cover),
-        tileColor = GlassMenuTokens.PurpleAccent,
+        tileColor = lightAccent,
         fontFamily = fontFamily,
         onClick = {
           onDismissRequest()
@@ -655,7 +717,7 @@ fun AlbumMoreGlassMenu(
       } else {
         stringResource(id = R.string.album_add_to_library)
       },
-      tileColor = GlassMenuTokens.BlueAccent,
+      tileColor = if (isAddedToLibrary) Color(0xFFFB7185) else primaryAccent,
       fontFamily = fontFamily,
       onClick = {
         onDismissRequest()
@@ -667,7 +729,7 @@ fun AlbumMoreGlassMenu(
     GlassMenuRow(
       icon = if (isAlbumDownloaded) Icons.Rounded.DownloadDone else Icons.Rounded.Download,
       label = stringResource(id = R.string.album_download),
-      tileColor = GlassMenuTokens.BlueAccent,
+      tileColor = primaryAccent,
       fontFamily = fontFamily,
       onClick = {
         onDismissRequest()
@@ -676,7 +738,6 @@ fun AlbumMoreGlassMenu(
       modifier = Modifier.testTag("album_menu_download")
     )
 
-    // 3. Divider + 4. Last row alone: Delete album
     if (onDeleteAlbumClick != null) {
       GlassMenuDivider()
       GlassMenuRow(
@@ -697,7 +758,7 @@ fun AlbumMoreGlassMenu(
 
 /**
  * Menu 2: Library Song-Row Popup Menu
- * Opens from the song's cover image.
+ * Opens from the song's cover image or long-press on a song row.
  */
 @Composable
 fun LibrarySongGlassMenu(
@@ -709,12 +770,14 @@ fun LibrarySongGlassMenu(
   onDeleteClick: (() -> Unit)?
 ) {
   val hasUpperItems = onAddToAlbumClick != null || onEditPhotoClick != null
+  val primaryAccent = MaterialTheme.colorScheme.primary
+  val lightAccent = lerp(primaryAccent, Color.White, 0.30f)
 
   GlassPopupMenuContainer(
     expanded = expanded,
     onDismissRequest = onDismissRequest,
     horizontalAlignment = Alignment.Start,
-    menuWidth = 248.dp,
+    menuWidth = 258.dp,
     reducedMotion = reducedMotion,
     testTag = "library_song_glass_menu"
   ) {
@@ -723,7 +786,7 @@ fun LibrarySongGlassMenu(
         icon = Icons.AutoMirrored.Rounded.PlaylistAdd,
         label = stringResource(id = R.string.song_menu_add_to_album),
         hint = stringResource(id = R.string.song_menu_add_to_album_hint),
-        tileColor = GlassMenuTokens.BlueAccent,
+        tileColor = primaryAccent,
         onClick = {
           onDismissRequest()
           onAddToAlbumClick()
@@ -737,7 +800,7 @@ fun LibrarySongGlassMenu(
         icon = Icons.Rounded.AddPhotoAlternate,
         label = stringResource(id = R.string.song_menu_edit_cover),
         hint = stringResource(id = R.string.song_menu_edit_cover_hint),
-        tileColor = GlassMenuTokens.PurpleAccent,
+        tileColor = lightAccent,
         onClick = {
           onDismissRequest()
           onEditPhotoClick()
@@ -761,6 +824,163 @@ fun LibrarySongGlassMenu(
           onDeleteClick()
         },
         modifier = Modifier.testTag("song_menu_remove")
+      )
+    }
+  }
+}
+
+/**
+ * Menu 3: Album Track 3-Dots Dark Glass Popup Menu
+ * Replaces the unstyled DropdownMenu on each track row in Album view.
+ */
+@Composable
+fun AlbumTrackGlassMenu(
+  expanded: Boolean,
+  track: Song,
+  isCurrentTrack: Boolean,
+  isPlaying: Boolean,
+  reducedMotion: Boolean,
+  onDismissRequest: () -> Unit,
+  onPlayPauseClick: () -> Unit,
+  onToggleFavoriteClick: () -> Unit,
+  onDownloadTrackClick: () -> Unit,
+  onTrackDetailsClick: () -> Unit,
+  onRemoveFromAlbumClick: (() -> Unit)? = null
+) {
+  val fontFamily = AlbumDesignTokens.OutfitFontFamily
+  val primaryAccent = MaterialTheme.colorScheme.primary
+  val lightAccent = lerp(primaryAccent, Color.White, 0.30f)
+  val durationText = formatTrackDuration(track.durationSeconds)
+  val artistText = track.artist.ifBlank { stringResource(id = R.string.album_unknown_artist) }
+
+  GlassPopupMenuContainer(
+    expanded = expanded,
+    onDismissRequest = onDismissRequest,
+    horizontalAlignment = Alignment.End,
+    menuWidth = 262.dp,
+    reducedMotion = reducedMotion,
+    testTag = "album_track_glass_menu_${track.id}"
+  ) {
+    // Compact track header pill inside the popup
+    Row(
+      modifier = Modifier
+        .fillMaxWidth()
+        .clip(RoundedCornerShape(16.dp))
+        .background(primaryAccent.copy(alpha = 0.12f))
+        .border(0.8.dp, lightAccent.copy(alpha = 0.26f), RoundedCornerShape(16.dp))
+        .padding(horizontal = 10.dp, vertical = 8.dp),
+      verticalAlignment = Alignment.CenterVertically,
+      horizontalArrangement = Arrangement.spacedBy(10.dp)
+    ) {
+      Box(
+        modifier = Modifier
+          .size(32.dp)
+          .clip(RoundedCornerShape(10.dp))
+          .background(primaryAccent.copy(alpha = 0.24f))
+          .border(0.8.dp, lightAccent.copy(alpha = 0.42f), RoundedCornerShape(10.dp)),
+        contentAlignment = Alignment.Center
+      ) {
+        Icon(
+          imageVector = if (isCurrentTrack && isPlaying) Icons.Rounded.GraphicEq else Icons.Rounded.MusicNote,
+          contentDescription = null,
+          tint = lightAccent,
+          modifier = Modifier.size(17.dp)
+        )
+      }
+      Column(modifier = Modifier.weight(1f)) {
+        Text(
+          text = track.title,
+          fontFamily = fontFamily,
+          fontSize = 13.5.sp,
+          fontWeight = FontWeight.Bold,
+          lineHeight = 17.sp,
+          color = GlassMenuTokens.TextPrimary,
+          maxLines = 1,
+          overflow = TextOverflow.Ellipsis
+        )
+        Text(
+          text = "$artistText · $durationText",
+          fontFamily = fontFamily,
+          fontSize = 11.sp,
+          lineHeight = 14.sp,
+          color = GlassMenuTokens.HintGray,
+          maxLines = 1,
+          overflow = TextOverflow.Ellipsis
+        )
+      }
+    }
+
+    GlassMenuDivider()
+
+    GlassMenuRow(
+      icon = if (isCurrentTrack && isPlaying) Icons.Rounded.Pause else Icons.Rounded.PlayArrow,
+      label = if (isCurrentTrack && isPlaying) {
+        stringResource(id = R.string.album_track_pause)
+      } else {
+        stringResource(id = R.string.album_action_play)
+      },
+      tileColor = primaryAccent,
+      fontFamily = fontFamily,
+      onClick = {
+        onDismissRequest()
+        onPlayPauseClick()
+      },
+      modifier = Modifier.testTag("album_track_play_${track.id}")
+    )
+
+    GlassMenuRow(
+      icon = if (track.isFavorite) Icons.Rounded.Favorite else Icons.Rounded.FavoriteBorder,
+      label = if (track.isFavorite) {
+        stringResource(id = R.string.album_track_unfavorite)
+      } else {
+        stringResource(id = R.string.album_track_favorite)
+      },
+      tileColor = if (track.isFavorite) Color(0xFFFB7185) else lightAccent,
+      fontFamily = fontFamily,
+      onClick = {
+        onDismissRequest()
+        onToggleFavoriteClick()
+      },
+      modifier = Modifier.testTag("album_track_favorite_${track.id}")
+    )
+
+    GlassMenuRow(
+      icon = Icons.Rounded.Download,
+      label = stringResource(id = R.string.album_track_download),
+      tileColor = GlassMenuTokens.BlueAccent,
+      fontFamily = fontFamily,
+      onClick = {
+        onDismissRequest()
+        onDownloadTrackClick()
+      },
+      modifier = Modifier.testTag("album_track_download_${track.id}")
+    )
+
+    GlassMenuRow(
+      icon = Icons.Rounded.Info,
+      label = stringResource(id = R.string.album_track_details),
+      tileColor = lightAccent,
+      fontFamily = fontFamily,
+      onClick = {
+        onDismissRequest()
+        onTrackDetailsClick()
+      },
+      modifier = Modifier.testTag("album_track_details_${track.id}")
+    )
+
+    if (onRemoveFromAlbumClick != null) {
+      GlassMenuDivider()
+      GlassMenuRow(
+        icon = Icons.Rounded.RemoveCircleOutline,
+        label = stringResource(id = R.string.album_track_remove),
+        tileColor = GlassMenuTokens.DestructiveRed,
+        isDestructive = true,
+        fontFamily = fontFamily,
+        onClick = {
+          onDismissRequest()
+          onRemoveFromAlbumClick()
+        },
+        modifier = Modifier.testTag("album_track_remove_${track.id}")
       )
     }
   }

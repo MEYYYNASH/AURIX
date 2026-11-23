@@ -413,82 +413,506 @@ fun DeleteAlbumConfirmDialog(
   }
   var alsoDeleteLocal by remember(album.albumId) { mutableStateOf(false) }
 
-  AlertDialog(
+  val primaryAccent = MaterialTheme.colorScheme.primary
+  val dangerRose = Color(0xFFFB7185)
+  val dangerCrimson = Color(0xFFE11D48)
+  val cardShape = RoundedCornerShape(30.dp)
+  val countLabel = when (album.tracks.size) {
+    0 -> stringResource(id = R.string.album_meta_empty)
+    1 -> stringResource(id = R.string.album_meta_single)
+    else -> stringResource(id = R.string.album_meta_plural, album.tracks.size)
+  }
+
+  Dialog(
     onDismissRequest = onDismiss,
-    containerColor = PickerGlassCard,
-    titleContentColor = PickerGlassText,
-    textContentColor = PickerGlassMuted,
-    icon = {
-      Icon(
-        imageVector = Icons.Rounded.DeleteOutline,
-        contentDescription = null,
-        tint = Color(0xFFFB7185)
-      )
-    },
-    title = {
-      Text(
-        text = stringResource(id = R.string.album_delete_title),
-        style = MaterialTheme.typography.titleMedium.copy(fontWeight = FontWeight.Bold),
-        color = PickerGlassText
-      )
-    },
-    text = {
-      Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
-        Text(
-          text = stringResource(id = R.string.album_delete_message, album.title, album.tracks.size),
-          style = MaterialTheme.typography.bodyMedium.copy(lineHeight = 22.sp),
-          color = PickerGlassMuted
-        )
-        if (localSongsCount > 0) {
-          Row(
-            modifier = Modifier
-              .fillMaxWidth()
-              .clip(RoundedCornerShape(12.dp))
-              .clickable { alsoDeleteLocal = !alsoDeleteLocal }
-              .padding(vertical = 4.dp)
-              .testTag("delete_album_also_local_toggle"),
-            verticalAlignment = Alignment.CenterVertically
-          ) {
-            Checkbox(
-              checked = alsoDeleteLocal,
-              onCheckedChange = { alsoDeleteLocal = it }
+    properties = DialogProperties(usePlatformDefaultWidth = false)
+  ) {
+    Box(
+      modifier = Modifier
+        .fillMaxWidth()
+        .padding(horizontal = 22.dp)
+        .clip(cardShape)
+        .background(Color(0xFF0A0810).copy(alpha = 0.98f))
+        .drawBehind {
+          drawCircle(
+            brush = Brush.radialGradient(
+              colors = listOf(
+                dangerRose.copy(alpha = 0.22f),
+                Color.Transparent
+              ),
+              center = Offset(size.width * 0.22f, size.height * 0.12f),
+              radius = size.minDimension * 0.85f
+            ),
+            radius = size.minDimension * 0.85f,
+            center = Offset(size.width * 0.22f, size.height * 0.12f)
+          )
+          drawCircle(
+            brush = Brush.radialGradient(
+              colors = listOf(
+                primaryAccent.copy(alpha = 0.15f),
+                Color.Transparent
+              ),
+              center = Offset(size.width * 0.86f, size.height * 0.88f),
+              radius = size.minDimension * 0.78f
+            ),
+            radius = size.minDimension * 0.78f,
+            center = Offset(size.width * 0.86f, size.height * 0.88f)
+          )
+          val lineInset = size.width * 0.18f
+          drawLine(
+            brush = Brush.horizontalGradient(
+              colors = listOf(
+                Color.Transparent,
+                dangerRose.copy(alpha = 0.85f),
+                Color.Transparent
+              ),
+              startX = lineInset,
+              endX = size.width - lineInset
+            ),
+            start = Offset(lineInset, 1.dp.toPx()),
+            end = Offset(size.width - lineInset, 1.dp.toPx()),
+            strokeWidth = 2.dp.toPx()
+          )
+        }
+        .border(
+          width = 1.dp,
+          brush = Brush.linearGradient(
+            colors = listOf(
+              dangerRose.copy(alpha = 0.42f),
+              Color.White.copy(alpha = 0.10f),
+              primaryAccent.copy(alpha = 0.24f)
             )
-            Spacer(modifier = Modifier.width(6.dp))
+          ),
+          shape = cardShape
+        )
+        .padding(horizontal = 22.dp, vertical = 22.dp)
+    ) {
+      Column(
+        modifier = Modifier.fillMaxWidth(),
+        verticalArrangement = Arrangement.spacedBy(16.dp)
+      ) {
+        // Header row: Crimson glass trash icon capsule + Title & subtitle
+        Row(
+          modifier = Modifier.fillMaxWidth(),
+          verticalAlignment = Alignment.CenterVertically,
+          horizontalArrangement = Arrangement.spacedBy(14.dp)
+        ) {
+          Box(
+            modifier = Modifier
+              .size(50.dp)
+              .clip(RoundedCornerShape(16.dp))
+              .background(
+                Brush.linearGradient(
+                  colors = listOf(
+                    dangerRose.copy(alpha = 0.24f),
+                    dangerCrimson.copy(alpha = 0.12f)
+                  )
+                )
+              )
+              .border(1.dp, dangerRose.copy(alpha = 0.44f), RoundedCornerShape(16.dp)),
+            contentAlignment = Alignment.Center
+          ) {
+            Icon(
+              imageVector = Icons.Rounded.DeleteOutline,
+              contentDescription = null,
+              tint = dangerRose,
+              modifier = Modifier.size(24.dp)
+            )
+          }
+
+          Column(modifier = Modifier.weight(1f)) {
             Text(
-              text = stringResource(id = R.string.album_delete_also_local, localSongsCount),
-              style = MaterialTheme.typography.bodySmall,
-              color = PickerGlassMuted
+              text = stringResource(id = R.string.album_delete_title),
+              style = MaterialTheme.typography.titleLarge.copy(
+                fontFamily = AlbumDesignTokens.OutfitFontFamily,
+                fontWeight = FontWeight.Bold,
+                fontSize = 20.sp
+              ),
+              color = PickerGlassText
+            )
+            Text(
+              text = countLabel,
+              style = MaterialTheme.typography.labelMedium.copy(
+                fontFamily = AlbumDesignTokens.OutfitFontFamily,
+                color = dangerRose.copy(alpha = 0.88f),
+                fontWeight = FontWeight.SemiBold
+              )
             )
           }
         }
-      }
-    },
-    confirmButton = {
-      Button(
-        onClick = { onConfirm(alsoDeleteLocal) },
-        colors = ButtonDefaults.buttonColors(containerColor = Color(0xFFE11D48)),
-        shape = CircleShape,
-        modifier = Modifier.testTag("confirm_delete_album_button")
-      ) {
+
+        // Embedded Album Mini-Preview Card
+        Row(
+          modifier = Modifier
+            .fillMaxWidth()
+            .clip(RoundedCornerShape(18.dp))
+            .background(Color(0xFF141122).copy(alpha = 0.90f))
+            .border(1.dp, Color.White.copy(alpha = 0.08f), RoundedCornerShape(18.dp))
+            .padding(12.dp),
+          verticalAlignment = Alignment.CenterVertically,
+          horizontalArrangement = Arrangement.spacedBy(12.dp)
+        ) {
+          AlbumMiniThumb(
+            album = album,
+            modifier = Modifier.size(48.dp)
+          )
+          Column(modifier = Modifier.weight(1f)) {
+            Text(
+              text = album.title,
+              style = MaterialTheme.typography.bodyLarge.copy(
+                fontFamily = AlbumDesignTokens.OutfitFontFamily,
+                fontWeight = FontWeight.Bold,
+                fontSize = 15.sp
+              ),
+              color = PickerGlassText,
+              maxLines = 1,
+              overflow = TextOverflow.Ellipsis
+            )
+            Text(
+              text = "${album.artist} · $countLabel",
+              style = MaterialTheme.typography.bodySmall.copy(
+                fontFamily = AlbumDesignTokens.OutfitFontFamily,
+                fontSize = 12.sp
+              ),
+              color = PickerGlassMuted,
+              maxLines = 1,
+              overflow = TextOverflow.Ellipsis
+            )
+          }
+        }
+
         Text(
-          text = stringResource(id = R.string.action_delete),
-          color = Color.White,
-          fontWeight = FontWeight.Bold
+          text = stringResource(id = R.string.album_delete_message, album.title, album.tracks.size),
+          style = MaterialTheme.typography.bodyMedium.copy(
+            fontFamily = AlbumDesignTokens.OutfitFontFamily,
+            lineHeight = 20.sp,
+            fontSize = 13.5.sp
+          ),
+          color = PickerGlassMuted
         )
-      }
-    },
-    dismissButton = {
-      TextButton(
-        onClick = onDismiss,
-        modifier = Modifier.testTag("cancel_delete_album_button")
-      ) {
-        Text(
-          text = stringResource(id = R.string.action_cancel),
-          color = PickerGlassText
-        )
+
+        if (localSongsCount > 0) {
+          val toggleShape = RoundedCornerShape(18.dp)
+          val toggleBg = if (alsoDeleteLocal) {
+            dangerRose.copy(alpha = 0.14f)
+          } else {
+            Color(0xFF131020).copy(alpha = 0.82f)
+          }
+          val toggleBorder = if (alsoDeleteLocal) {
+            dangerRose.copy(alpha = 0.48f)
+          } else {
+            Color.White.copy(alpha = 0.09f)
+          }
+
+          Row(
+            modifier = Modifier
+              .fillMaxWidth()
+              .clip(toggleShape)
+              .background(toggleBg)
+              .border(1.dp, toggleBorder, toggleShape)
+              .clickable { alsoDeleteLocal = !alsoDeleteLocal }
+              .padding(horizontal = 14.dp, vertical = 12.dp)
+              .testTag("delete_album_also_local_toggle"),
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.spacedBy(12.dp)
+          ) {
+            Icon(
+              imageVector = if (alsoDeleteLocal) Icons.Rounded.CheckCircle else Icons.Rounded.RadioButtonUnchecked,
+              contentDescription = null,
+              tint = if (alsoDeleteLocal) dangerRose else PickerGlassMuted,
+              modifier = Modifier.size(22.dp)
+            )
+            Text(
+              text = stringResource(id = R.string.album_delete_also_local, localSongsCount),
+              style = MaterialTheme.typography.bodySmall.copy(
+                fontFamily = AlbumDesignTokens.OutfitFontFamily,
+                fontWeight = if (alsoDeleteLocal) FontWeight.SemiBold else FontWeight.Medium,
+                fontSize = 13.sp,
+                lineHeight = 18.sp
+              ),
+              color = if (alsoDeleteLocal) PickerGlassText else PickerGlassMuted,
+              modifier = Modifier.weight(1f)
+            )
+          }
+        }
+
+        // Side-by-side Dark Glass Cancel & Crimson Gradient Delete buttons
+        Row(
+          modifier = Modifier.fillMaxWidth(),
+          horizontalArrangement = Arrangement.spacedBy(12.dp),
+          verticalAlignment = Alignment.CenterVertically
+        ) {
+          Box(
+            modifier = Modifier
+              .weight(1f)
+              .height(50.dp)
+              .clip(RoundedCornerShape(16.dp))
+              .background(Color.White.copy(alpha = 0.06f))
+              .border(1.dp, Color.White.copy(alpha = 0.12f), RoundedCornerShape(16.dp))
+              .clickable { onDismiss() }
+              .testTag("cancel_delete_album_button"),
+            contentAlignment = Alignment.Center
+          ) {
+            Text(
+              text = stringResource(id = R.string.action_cancel),
+              style = MaterialTheme.typography.bodyMedium.copy(
+                fontFamily = AlbumDesignTokens.OutfitFontFamily,
+                fontWeight = FontWeight.SemiBold,
+                fontSize = 14.5.sp
+              ),
+              color = PickerGlassText
+            )
+          }
+
+          Box(
+            modifier = Modifier
+              .weight(1f)
+              .height(50.dp)
+              .clip(RoundedCornerShape(16.dp))
+              .background(
+                Brush.horizontalGradient(
+                  colors = listOf(dangerCrimson, dangerRose)
+                )
+              )
+              .border(1.dp, Color.White.copy(alpha = 0.24f), RoundedCornerShape(16.dp))
+              .clickable { onConfirm(alsoDeleteLocal) }
+              .testTag("confirm_delete_album_button"),
+            contentAlignment = Alignment.Center
+          ) {
+            Row(
+              verticalAlignment = Alignment.CenterVertically,
+              horizontalArrangement = Arrangement.spacedBy(6.dp)
+            ) {
+              Icon(
+                imageVector = Icons.Rounded.DeleteOutline,
+                contentDescription = null,
+                tint = Color.White,
+                modifier = Modifier.size(18.dp)
+              )
+              Text(
+                text = stringResource(id = R.string.action_delete),
+                style = MaterialTheme.typography.bodyMedium.copy(
+                  fontFamily = AlbumDesignTokens.OutfitFontFamily,
+                  fontWeight = FontWeight.Bold,
+                  fontSize = 14.5.sp
+                ),
+                color = Color.White
+              )
+            }
+          }
+        }
       }
     }
-  )
+  }
+}
+
+@Composable
+fun DeleteSongConfirmDialog(
+  song: Song,
+  onDismiss: () -> Unit,
+  onConfirm: () -> Unit
+) {
+  val primaryAccent = MaterialTheme.colorScheme.primary
+  val dangerRose = Color(0xFFFB7185)
+  val dangerCrimson = Color(0xFFE11D48)
+  val cardShape = RoundedCornerShape(30.dp)
+
+  Dialog(
+    onDismissRequest = onDismiss,
+    properties = DialogProperties(usePlatformDefaultWidth = false)
+  ) {
+    Box(
+      modifier = Modifier
+        .fillMaxWidth()
+        .padding(horizontal = 22.dp)
+        .clip(cardShape)
+        .background(Color(0xFF0A0810).copy(alpha = 0.98f))
+        .drawBehind {
+          drawCircle(
+            brush = Brush.radialGradient(
+              colors = listOf(
+                dangerRose.copy(alpha = 0.22f),
+                Color.Transparent
+              ),
+              center = Offset(size.width * 0.22f, size.height * 0.12f),
+              radius = size.minDimension * 0.85f
+            ),
+            radius = size.minDimension * 0.85f,
+            center = Offset(size.width * 0.22f, size.height * 0.12f)
+          )
+          drawCircle(
+            brush = Brush.radialGradient(
+              colors = listOf(
+                primaryAccent.copy(alpha = 0.15f),
+                Color.Transparent
+              ),
+              center = Offset(size.width * 0.86f, size.height * 0.88f),
+              radius = size.minDimension * 0.78f
+            ),
+            radius = size.minDimension * 0.78f,
+            center = Offset(size.width * 0.86f, size.height * 0.88f)
+          )
+          val lineInset = size.width * 0.18f
+          drawLine(
+            brush = Brush.horizontalGradient(
+              colors = listOf(
+                Color.Transparent,
+                dangerRose.copy(alpha = 0.85f),
+                Color.Transparent
+              ),
+              startX = lineInset,
+              endX = size.width - lineInset
+            ),
+            start = Offset(lineInset, 1.dp.toPx()),
+            end = Offset(size.width - lineInset, 1.dp.toPx()),
+            strokeWidth = 2.dp.toPx()
+          )
+        }
+        .border(
+          width = 1.dp,
+          brush = Brush.linearGradient(
+            colors = listOf(
+              dangerRose.copy(alpha = 0.42f),
+              Color.White.copy(alpha = 0.10f),
+              primaryAccent.copy(alpha = 0.24f)
+            )
+          ),
+          shape = cardShape
+        )
+        .padding(horizontal = 22.dp, vertical = 22.dp)
+    ) {
+      Column(
+        modifier = Modifier.fillMaxWidth(),
+        verticalArrangement = Arrangement.spacedBy(16.dp)
+      ) {
+        Row(
+          modifier = Modifier.fillMaxWidth(),
+          verticalAlignment = Alignment.CenterVertically,
+          horizontalArrangement = Arrangement.spacedBy(14.dp)
+        ) {
+          Box(
+            modifier = Modifier
+              .size(50.dp)
+              .clip(RoundedCornerShape(16.dp))
+              .background(
+                Brush.linearGradient(
+                  colors = listOf(
+                    dangerRose.copy(alpha = 0.24f),
+                    dangerCrimson.copy(alpha = 0.12f)
+                  )
+                )
+              )
+              .border(1.dp, dangerRose.copy(alpha = 0.44f), RoundedCornerShape(16.dp)),
+            contentAlignment = Alignment.Center
+          ) {
+            Icon(
+              imageVector = Icons.Rounded.DeleteOutline,
+              contentDescription = null,
+              tint = dangerRose,
+              modifier = Modifier.size(24.dp)
+            )
+          }
+
+          Column(modifier = Modifier.weight(1f)) {
+            Text(
+              text = stringResource(id = R.string.details_delete_title),
+              style = MaterialTheme.typography.titleLarge.copy(
+                fontFamily = AlbumDesignTokens.OutfitFontFamily,
+                fontWeight = FontWeight.Bold,
+                fontSize = 20.sp
+              ),
+              color = PickerGlassText
+            )
+            Text(
+              text = song.artist,
+              style = MaterialTheme.typography.labelMedium.copy(
+                fontFamily = AlbumDesignTokens.OutfitFontFamily,
+                color = dangerRose.copy(alpha = 0.88f),
+                fontWeight = FontWeight.SemiBold
+              ),
+              maxLines = 1,
+              overflow = TextOverflow.Ellipsis
+            )
+          }
+        }
+
+        Text(
+          text = stringResource(id = R.string.library_delete_confirm_msg, song.title, song.artist),
+          style = MaterialTheme.typography.bodyMedium.copy(
+            fontFamily = AlbumDesignTokens.OutfitFontFamily,
+            lineHeight = 20.sp,
+            fontSize = 13.5.sp
+          ),
+          color = PickerGlassMuted
+        )
+
+        Row(
+          modifier = Modifier.fillMaxWidth(),
+          horizontalArrangement = Arrangement.spacedBy(12.dp),
+          verticalAlignment = Alignment.CenterVertically
+        ) {
+          Box(
+            modifier = Modifier
+              .weight(1f)
+              .height(50.dp)
+              .clip(RoundedCornerShape(16.dp))
+              .background(Color.White.copy(alpha = 0.06f))
+              .border(1.dp, Color.White.copy(alpha = 0.12f), RoundedCornerShape(16.dp))
+              .clickable { onDismiss() }
+              .testTag("cancel_delete_song_button"),
+            contentAlignment = Alignment.Center
+          ) {
+            Text(
+              text = stringResource(id = R.string.action_cancel),
+              style = MaterialTheme.typography.bodyMedium.copy(
+                fontFamily = AlbumDesignTokens.OutfitFontFamily,
+                fontWeight = FontWeight.SemiBold,
+                fontSize = 14.5.sp
+              ),
+              color = PickerGlassText
+            )
+          }
+
+          Box(
+            modifier = Modifier
+              .weight(1f)
+              .height(50.dp)
+              .clip(RoundedCornerShape(16.dp))
+              .background(
+                Brush.horizontalGradient(
+                  colors = listOf(dangerCrimson, dangerRose)
+                )
+              )
+              .border(1.dp, Color.White.copy(alpha = 0.24f), RoundedCornerShape(16.dp))
+              .clickable { onConfirm() }
+              .testTag("confirm_delete_song_button"),
+            contentAlignment = Alignment.Center
+          ) {
+            Row(
+              verticalAlignment = Alignment.CenterVertically,
+              horizontalArrangement = Arrangement.spacedBy(6.dp)
+            ) {
+              Icon(
+                imageVector = Icons.Rounded.DeleteOutline,
+                contentDescription = null,
+                tint = Color.White,
+                modifier = Modifier.size(18.dp)
+              )
+              Text(
+                text = stringResource(id = R.string.action_delete),
+                style = MaterialTheme.typography.bodyMedium.copy(
+                  fontFamily = AlbumDesignTokens.OutfitFontFamily,
+                  fontWeight = FontWeight.Bold,
+                  fontSize = 14.5.sp
+                ),
+                color = Color.White
+              )
+            }
+          }
+        }
+      }
+    }
+  }
 }
 
 @OptIn(ExperimentalMaterial3Api::class)

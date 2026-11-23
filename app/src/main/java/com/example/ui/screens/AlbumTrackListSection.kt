@@ -1259,91 +1259,19 @@ fun TrackRow(
         )
       }
 
-      DropdownMenu(
+      AlbumTrackGlassMenu(
         expanded = menuExpanded,
+        track = track,
+        isCurrentTrack = isCurrentTrack,
+        isPlaying = isPlaying,
+        reducedMotion = reducedMotion,
         onDismissRequest = { menuExpanded = false },
-        containerColor = AlbumDesignTokens.RaisedSurface
-      ) {
-        DropdownMenuItem(
-          text = {
-            Text(
-              text = if (isCurrentTrack && isPlaying) {
-                stringResource(id = R.string.album_track_pause)
-              } else {
-                stringResource(id = R.string.album_action_play)
-              },
-              color = AlbumDesignTokens.Text,
-              fontFamily = AlbumDesignTokens.OutfitFontFamily
-            )
-          },
-          onClick = {
-            menuExpanded = false
-            onClick()
-          }
-        )
-        DropdownMenuItem(
-          text = {
-            Text(
-              text = if (track.isFavorite) {
-                stringResource(id = R.string.album_track_unfavorite)
-              } else {
-                stringResource(id = R.string.album_track_favorite)
-              },
-              color = AlbumDesignTokens.Text,
-              fontFamily = AlbumDesignTokens.OutfitFontFamily
-            )
-          },
-          onClick = {
-            menuExpanded = false
-            onToggleFavorite()
-          }
-        )
-        DropdownMenuItem(
-          text = {
-            Text(
-              text = stringResource(id = R.string.album_track_download),
-              color = AlbumDesignTokens.Text,
-              fontFamily = AlbumDesignTokens.OutfitFontFamily
-            )
-          },
-          onClick = {
-            menuExpanded = false
-            onDownloadTrack()
-          }
-        )
-        DropdownMenuItem(
-          text = {
-            Text(
-              text = stringResource(id = R.string.album_track_details),
-              color = AlbumDesignTokens.Text,
-              fontFamily = AlbumDesignTokens.OutfitFontFamily
-            )
-          },
-          onClick = {
-            menuExpanded = false
-            onTrackDetails()
-          }
-        )
-        if (onRemoveFromAlbum != null) {
-          DropdownMenuItem(
-            leadingIcon = {
-              Icon(Icons.Rounded.RemoveCircleOutline, contentDescription = null, tint = Color(0xFFFF6B6B))
-            },
-            text = {
-              Text(
-                text = stringResource(id = R.string.album_track_remove),
-                color = Color(0xFFFF6B6B),
-                fontFamily = AlbumDesignTokens.OutfitFontFamily
-              )
-            },
-            onClick = {
-              menuExpanded = false
-              onRemoveFromAlbum()
-            },
-            modifier = Modifier.testTag("album_track_remove_${track.id}")
-          )
-        }
-      }
+        onPlayPauseClick = onClick,
+        onToggleFavoriteClick = onToggleFavorite,
+        onDownloadTrackClick = onDownloadTrack,
+        onTrackDetailsClick = onTrackDetails,
+        onRemoveFromAlbumClick = onRemoveFromAlbum
+      )
     }
   }
 }

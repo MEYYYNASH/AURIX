@@ -926,47 +926,12 @@ fun LibraryScreen(
   } // End root Box
 
   songPendingDelete?.let { target ->
-    AlertDialog(
-      onDismissRequest = { songPendingDelete = null },
-      icon = {
-        Icon(
-          imageVector = Icons.Rounded.DeleteOutline,
-          contentDescription = null,
-          tint = MaterialTheme.colorScheme.error
-        )
-      },
-      title = {
-        Text(
-          text = stringResource(id = R.string.details_delete_title),
-          style = MaterialTheme.typography.titleMedium.copy(fontWeight = FontWeight.Bold, lineHeight = 24.sp)
-        )
-      },
-      text = {
-        Text(
-          text = stringResource(id = R.string.library_delete_confirm_msg, target.title, target.artist),
-          style = MaterialTheme.typography.bodyMedium.copy(lineHeight = 22.sp)
-        )
-      },
-      confirmButton = {
-        Button(
-          onClick = {
-            songPendingDelete = null
-            onDeleteLocalSong(target)
-          },
-          colors = ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.error),
-          shape = CircleShape,
-          modifier = Modifier.testTag("confirm_delete_song_button")
-        ) {
-          Text(stringResource(id = R.string.action_delete), color = Color.White, fontWeight = FontWeight.Bold)
-        }
-      },
-      dismissButton = {
-        TextButton(
-          onClick = { songPendingDelete = null },
-          modifier = Modifier.testTag("cancel_delete_song_button")
-        ) {
-          Text(stringResource(id = R.string.action_cancel))
-        }
+    DeleteSongConfirmDialog(
+      song = target,
+      onDismiss = { songPendingDelete = null },
+      onConfirm = {
+        songPendingDelete = null
+        onDeleteLocalSong(target)
       }
     )
   }
