@@ -3,7 +3,7 @@
   "versionCode": 10910,
   "releaseDate": "2026-11-22",
   "apkUrl": "https://github.com/MEYYYNASH/AURIX/releases/download/v1.9.1/AURIX-v1.9.1.apk",
-  "sha256": "",
+  "sha256": "7ecbec018ceebf36957d22d270ef9e490a17a57e25e13cddcf2306064e7e73c2",
   "mandatory": false,
   "notes": [
     "Library Genre Filtering & Categorization (v1.9.1): Filter and browse tracks in My songs, Favorites, and Recent by genre chips with live track counts, toggle By Genre grouped category headers, or tap any track's inline genre pill",
