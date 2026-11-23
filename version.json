@@ -3,7 +3,7 @@
   "versionCode": 10920,
   "releaseDate": "2026-11-22",
   "apkUrl": "https://github.com/MEYYYNASH/AURIX/releases/download/v1.9.2/AURIX-v1.9.2.apk",
-  "sha256": "",
+  "sha256": "904fdc9f1c82812e74c7f4da826bb524b33e60f37653cca78b107a3d643af274",
   "mandatory": false,
   "notes": [
     "Dark Glass Popup Menus & Delete Confirmation Redesign (v1.9.2): Eliminated inner blur rectangle artifacts on song & album popup menus, redesigned the Album Track 3-dots menu with glass icon capsules and track header, and redesigned Delete Album / Song confirmation dialogs in Dark Glass",
