@@ -162,10 +162,10 @@ class UpdateManager(
     private const val META_FILE_NAME = "aurix_update.apk.meta.json"
 
     val CURRENT_RELEASE_NOTES = listOf(
-      "App Update & Release Card: Restyled in #0A0810 dark glass with soft purple and magenta radial glows, gradient version hero, code chip, dual status tiles, and verified shield indicator",
-      "Release Notes & What's New Sheet: Redesigned with a dark glass hero version header, live status pill, date and highlight counters, and staggered glass changelog cards with category vector icons",
+      "App Update & Release Card (v1.8.8): Restyled in #0A0810 dark glass with soft purple and magenta radial glows, gradient version hero, code chip, dual status tiles, and verified shield indicator",
+      "Release Notes & Whats New Sheet: Redesigned with a dark glass hero version header, live status pill, date and highlight counters, and staggered glass changelog cards with category vector icons",
       "Create Album Bottom Sheet: Frosted dark glass sheet with reactive preset glow, 108 dp spinning vinyl cover preview, glass color-chip selector rail, floating-label inputs with icon capsules, and curved shared-element cover flight",
-      "Recent Play & Playlist Controls: Recent Play corner badge fix, YouTube Search ↔ YT Link transition, End Download, Live Download Queue, Beat Visualizer, and Auto-Clean YT Titles"
+      "CI Release Pipeline & Playlist Controls: Fixed GitHub Actions version.json heredoc packaging, upgraded setup-java to v5, Recent Play corner badge fix, YouTube Search ↔ YT Link transition, and Live Download Queue"
     )
 
     fun parseVersionJson(rawJson: String): RemoteVersionInfo {

@@ -17,8 +17,8 @@ android {
     applicationId = "com.aurix.music"
     minSdk = 24
     targetSdk = 36
-    versionCode = 10870
-    versionName = "1.8.7"
+    versionCode = 10880
+    versionName = "1.8.8"
     buildConfigField("String", "RELEASE_DATE", "\"2026-11-22\"")
 
     testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
