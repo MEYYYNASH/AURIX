@@ -113,6 +113,7 @@ fun LibraryScreen(
   onImportAudioToAlbum: (List<Uri>, AlbumInfo) -> Unit = { _, _ -> },
   onDeleteAlbum: (AlbumInfo, Boolean) -> Unit = { _, _ -> },
   onAddSongToAlbumClick: ((Song) -> Unit)? = null,
+  onCreateSheetVisibilityChanged: (Boolean) -> Unit = {},
   onSongClick: (Song) -> Unit,
   onFavoriteClick: (Song) -> Unit
 ) {
@@ -137,6 +138,15 @@ fun LibraryScreen(
   var flyingCoverPayload by remember { mutableStateOf<FlyingAlbumCoverPayload?>(null) }
   var pulsingAlbumId by remember { mutableStateOf<String?>(null) }
   val albumCoverBoundsMap = remember { mutableStateMapOf<String, Rect>() }
+
+  LaunchedEffect(showCreateAlbumDialog) {
+    onCreateSheetVisibilityChanged(showCreateAlbumDialog)
+  }
+  androidx.compose.runtime.DisposableEffect(Unit) {
+    onDispose {
+      onCreateSheetVisibilityChanged(false)
+    }
+  }
 
   var albumPendingHoldOptions by remember { mutableStateOf<AlbumInfo?>(null) }
   var albumPendingDelete by remember { mutableStateOf<AlbumInfo?>(null) }

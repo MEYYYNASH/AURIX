@@ -529,9 +529,8 @@ fun CreateAlbumBottomSheetOverlay(
       Column(
         modifier = Modifier
           .fillMaxWidth()
-          .verticalScroll(rememberScrollState())
-          .padding(horizontal = 20.dp, vertical = 12.dp),
-        verticalArrangement = Arrangement.spacedBy(15.dp)
+          .padding(horizontal = 20.dp, vertical = 10.dp),
+        verticalArrangement = Arrangement.spacedBy(11.dp)
       ) {
         // Drag handle area with spring-back vertical drag gesture
         Box(
@@ -582,7 +581,7 @@ fun CreateAlbumBottomSheetOverlay(
                 }
               )
             }
-            .padding(top = 4.dp, bottom = 4.dp),
+            .padding(top = 2.dp, bottom = 2.dp),
           contentAlignment = Alignment.Center
         ) {
           Box(
@@ -602,192 +601,201 @@ fun CreateAlbumBottomSheetOverlay(
           )
         }
 
-        // Item 1: Header ("Create album" + "Name it, pick a cover, add songs later") with glass icon badge & close button
-        StaggeredSheetItem(
-          visible = showStaggeredItems,
-          delayMillis = 0,
-          reducedMotion = isReduced
+        // Scrollable body (Header, Live Preview, Color Chips, Form Fields)
+        Column(
+          modifier = Modifier
+            .fillMaxWidth()
+            .weight(1f, fill = false)
+            .verticalScroll(rememberScrollState()),
+          verticalArrangement = Arrangement.spacedBy(12.dp)
         ) {
-          Row(
-            modifier = Modifier.fillMaxWidth(),
-            verticalAlignment = Alignment.CenterVertically,
-            horizontalArrangement = Arrangement.spacedBy(12.dp)
+          // Item 1: Header ("Create album" + "Name it, pick a cover, add songs later") with glass icon badge & close button
+          StaggeredSheetItem(
+            visible = showStaggeredItems,
+            delayMillis = 0,
+            reducedMotion = isReduced
           ) {
-            Box(
-              modifier = Modifier
-                .size(44.dp)
-                .clip(RoundedCornerShape(14.dp))
-                .background(
-                  Brush.linearGradient(
-                    colors = listOf(
-                      DarkGlassViolet.copy(alpha = 0.28f),
-                      activeGlowColor.copy(alpha = 0.14f)
+            Row(
+              modifier = Modifier.fillMaxWidth(),
+              verticalAlignment = Alignment.CenterVertically,
+              horizontalArrangement = Arrangement.spacedBy(12.dp)
+            ) {
+              Box(
+                modifier = Modifier
+                  .size(44.dp)
+                  .clip(RoundedCornerShape(14.dp))
+                  .background(
+                    Brush.linearGradient(
+                      colors = listOf(
+                        DarkGlassViolet.copy(alpha = 0.28f),
+                        activeGlowColor.copy(alpha = 0.14f)
+                      )
                     )
                   )
-                )
-                .border(
-                  1.dp,
-                  DarkGlassLightViolet.copy(alpha = 0.34f),
-                  RoundedCornerShape(14.dp)
-                ),
-              contentAlignment = Alignment.Center
-            ) {
-              Icon(
-                imageVector = Icons.Rounded.Album,
-                contentDescription = null,
-                tint = DarkGlassLightViolet,
-                modifier = Modifier.size(22.dp)
-              )
-            }
-
-            Column(
-              modifier = Modifier.weight(1f),
-              verticalArrangement = Arrangement.spacedBy(2.dp)
-            ) {
-              Text(
-                text = stringResource(id = R.string.album_create_title),
-                style = MaterialTheme.typography.headlineSmall.copy(
-                  fontWeight = FontWeight.Bold,
-                  fontSize = 22.sp,
-                  lineHeight = 28.sp
-                ),
-                color = DarkGlassText
-              )
-              Text(
-                text = stringResource(id = R.string.album_create_subtitle),
-                style = MaterialTheme.typography.bodySmall.copy(lineHeight = 17.sp),
-                color = DarkGlassMuted
-              )
-            }
-
-            Surface(
-              shape = CircleShape,
-              color = Color.White.copy(alpha = 0.06f),
-              border = BorderStroke(1.dp, Color.White.copy(alpha = 0.10f)),
-              modifier = Modifier
-                .size(36.dp)
-                .clip(CircleShape)
-                .clickable(enabled = stage == CreateAlbumSheetStage.Idle) {
-                  dismissWithAnimation()
-                }
-            ) {
-              Box(contentAlignment = Alignment.Center) {
+                  .border(
+                    1.dp,
+                    DarkGlassLightViolet.copy(alpha = 0.34f),
+                    RoundedCornerShape(14.dp)
+                  ),
+                contentAlignment = Alignment.Center
+              ) {
                 Icon(
-                  imageVector = Icons.Rounded.Close,
-                  contentDescription = stringResource(id = R.string.action_cancel),
-                  tint = DarkGlassMuted,
-                  modifier = Modifier.size(17.dp)
+                  imageVector = Icons.Rounded.Album,
+                  contentDescription = null,
+                  tint = DarkGlassLightViolet,
+                  modifier = Modifier.size(22.dp)
                 )
+              }
+
+              Column(
+                modifier = Modifier.weight(1f),
+                verticalArrangement = Arrangement.spacedBy(2.dp)
+              ) {
+                Text(
+                  text = stringResource(id = R.string.album_create_title),
+                  style = MaterialTheme.typography.headlineSmall.copy(
+                    fontWeight = FontWeight.Bold,
+                    fontSize = 22.sp,
+                    lineHeight = 28.sp
+                  ),
+                  color = DarkGlassText
+                )
+                Text(
+                  text = stringResource(id = R.string.album_create_subtitle),
+                  style = MaterialTheme.typography.bodySmall.copy(lineHeight = 17.sp),
+                  color = DarkGlassMuted
+                )
+              }
+
+              Surface(
+                shape = CircleShape,
+                color = Color.White.copy(alpha = 0.06f),
+                border = BorderStroke(1.dp, Color.White.copy(alpha = 0.10f)),
+                modifier = Modifier
+                  .size(36.dp)
+                  .clip(CircleShape)
+                  .clickable(enabled = stage == CreateAlbumSheetStage.Idle) {
+                    dismissWithAnimation()
+                  }
+              ) {
+                Box(contentAlignment = Alignment.Center) {
+                  Icon(
+                    imageVector = Icons.Rounded.Close,
+                    contentDescription = stringResource(id = R.string.action_cancel),
+                    tint = DarkGlassMuted,
+                    modifier = Modifier.size(17.dp)
+                  )
+                }
               }
             }
           }
+
+          // Item 2: Live Preview (108.dp cover + spinning disc + shine + first-letter pop + equalizer pill)
+          StaggeredSheetItem(
+            visible = showStaggeredItems,
+            delayMillis = 55,
+            reducedMotion = isReduced
+          ) {
+            CreateAlbumLivePreviewCard(
+              title = title,
+              artist = artist,
+              year = year,
+              preset = selectedPreset,
+              isTypingBoosted = isTypingBoosted,
+              reducedMotion = isReduced,
+              hideCoverForFlight = hideInlineCoverForFlight,
+              onCoverBoundsChanged = { coverBoundsInRoot = it }
+            )
+          }
+
+          // Item 3: Color Chips (Violet, Ocean, Sunset, Mint, Night) with sliding highlight inside glass rail
+          StaggeredSheetItem(
+            visible = showStaggeredItems,
+            delayMillis = 110,
+            reducedMotion = isReduced
+          ) {
+            AlbumColorChipRow(
+              selectedPreset = selectedPreset,
+              reducedMotion = isReduced,
+              enabled = stage == CreateAlbumSheetStage.Idle,
+              onSelect = { selectedPreset = it }
+            )
+          }
+
+          // Item 4: Album Title field (shakes if Create tapped when empty)
+          StaggeredSheetItem(
+            visible = showStaggeredItems,
+            delayMillis = 165,
+            reducedMotion = isReduced
+          ) {
+            DarkGlassFloatingField(
+              value = title,
+              onValueChange = {
+                title = it
+                lastKeystrokeAtMs = System.currentTimeMillis()
+              },
+              label = stringResource(id = R.string.album_create_name_label),
+              leadingIcon = Icons.Rounded.Album,
+              reducedMotion = isReduced,
+              enabled = stage == CreateAlbumSheetStage.Idle,
+              imeAction = ImeAction.Next,
+              keyboardType = KeyboardType.Text,
+              focusRequester = titleFocusRequester,
+              modifier = Modifier
+                .offset { IntOffset(titleShakeX.value.roundToInt(), 0) }
+                .testTag("create_album_title_input")
+            )
+          }
+
+          // Item 5: Artist (optional) field
+          StaggeredSheetItem(
+            visible = showStaggeredItems,
+            delayMillis = 215,
+            reducedMotion = isReduced
+          ) {
+            DarkGlassFloatingField(
+              value = artist,
+              onValueChange = {
+                artist = it
+                lastKeystrokeAtMs = System.currentTimeMillis()
+              },
+              label = stringResource(id = R.string.album_create_artist_label),
+              leadingIcon = Icons.Rounded.Mic,
+              reducedMotion = isReduced,
+              enabled = stage == CreateAlbumSheetStage.Idle,
+              imeAction = ImeAction.Next,
+              keyboardType = KeyboardType.Text,
+              modifier = Modifier.testTag("create_album_artist_input")
+            )
+          }
+
+          // Item 6: Year field (digits only, max 4)
+          StaggeredSheetItem(
+            visible = showStaggeredItems,
+            delayMillis = 265,
+            reducedMotion = isReduced
+          ) {
+            DarkGlassFloatingField(
+              value = year,
+              onValueChange = { raw ->
+                val digits = raw.filter { it.isDigit() }.take(4)
+                year = digits
+                lastKeystrokeAtMs = System.currentTimeMillis()
+              },
+              label = stringResource(id = R.string.album_create_year_short),
+              leadingIcon = Icons.Rounded.CalendarToday,
+              reducedMotion = isReduced,
+              enabled = stage == CreateAlbumSheetStage.Idle,
+              imeAction = ImeAction.Done,
+              keyboardType = KeyboardType.Number,
+              maxLengthHint = 4,
+              onImeDone = { submitAlbumCreation() },
+              modifier = Modifier.testTag("create_album_year_input")
+            )
+          }
         }
 
-        // Item 2: Live Preview (108.dp cover + spinning disc + shine + first-letter pop + equalizer pill)
-        StaggeredSheetItem(
-          visible = showStaggeredItems,
-          delayMillis = 55,
-          reducedMotion = isReduced
-        ) {
-          CreateAlbumLivePreviewCard(
-            title = title,
-            artist = artist,
-            year = year,
-            preset = selectedPreset,
-            isTypingBoosted = isTypingBoosted,
-            reducedMotion = isReduced,
-            hideCoverForFlight = hideInlineCoverForFlight,
-            onCoverBoundsChanged = { coverBoundsInRoot = it }
-          )
-        }
-
-        // Item 3: Color Chips (Violet, Ocean, Sunset, Mint, Night) with sliding highlight inside glass rail
-        StaggeredSheetItem(
-          visible = showStaggeredItems,
-          delayMillis = 110,
-          reducedMotion = isReduced
-        ) {
-          AlbumColorChipRow(
-            selectedPreset = selectedPreset,
-            reducedMotion = isReduced,
-            enabled = stage == CreateAlbumSheetStage.Idle,
-            onSelect = { selectedPreset = it }
-          )
-        }
-
-        // Item 4: Album Title field (shakes if Create tapped when empty)
-        StaggeredSheetItem(
-          visible = showStaggeredItems,
-          delayMillis = 165,
-          reducedMotion = isReduced
-        ) {
-          DarkGlassFloatingField(
-            value = title,
-            onValueChange = {
-              title = it
-              lastKeystrokeAtMs = System.currentTimeMillis()
-            },
-            label = stringResource(id = R.string.album_create_name_label),
-            leadingIcon = Icons.Rounded.Album,
-            reducedMotion = isReduced,
-            enabled = stage == CreateAlbumSheetStage.Idle,
-            imeAction = ImeAction.Next,
-            keyboardType = KeyboardType.Text,
-            focusRequester = titleFocusRequester,
-            modifier = Modifier
-              .offset { IntOffset(titleShakeX.value.roundToInt(), 0) }
-              .testTag("create_album_title_input")
-          )
-        }
-
-        // Item 5: Artist (optional) field
-        StaggeredSheetItem(
-          visible = showStaggeredItems,
-          delayMillis = 215,
-          reducedMotion = isReduced
-        ) {
-          DarkGlassFloatingField(
-            value = artist,
-            onValueChange = {
-              artist = it
-              lastKeystrokeAtMs = System.currentTimeMillis()
-            },
-            label = stringResource(id = R.string.album_create_artist_label),
-            leadingIcon = Icons.Rounded.Mic,
-            reducedMotion = isReduced,
-            enabled = stage == CreateAlbumSheetStage.Idle,
-            imeAction = ImeAction.Next,
-            keyboardType = KeyboardType.Text,
-            modifier = Modifier.testTag("create_album_artist_input")
-          )
-        }
-
-        // Item 6: Year field (digits only, max 4)
-        StaggeredSheetItem(
-          visible = showStaggeredItems,
-          delayMillis = 265,
-          reducedMotion = isReduced
-        ) {
-          DarkGlassFloatingField(
-            value = year,
-            onValueChange = { raw ->
-              val digits = raw.filter { it.isDigit() }.take(4)
-              year = digits
-              lastKeystrokeAtMs = System.currentTimeMillis()
-            },
-            label = stringResource(id = R.string.album_create_year_short),
-            leadingIcon = Icons.Rounded.CalendarToday,
-            reducedMotion = isReduced,
-            enabled = stage == CreateAlbumSheetStage.Idle,
-            imeAction = ImeAction.Done,
-            keyboardType = KeyboardType.Number,
-            maxLengthHint = 4,
-            onImeDone = { submitAlbumCreation() },
-            modifier = Modifier.testTag("create_album_year_input")
-          )
-        }
-
-        // Item 7: Action buttons (Cancel collapses, Create album expands + spinner + self-drawing check)
+        // Item 7: Pinned bottom Action buttons (Cancel collapses, Create album expands + spinner + self-drawing check)
         StaggeredSheetItem(
           visible = showStaggeredItems,
           delayMillis = 315,
@@ -1419,81 +1427,83 @@ private fun AlbumColorChipRow(
     Box(
       modifier = Modifier
         .fillMaxWidth()
-        .horizontalScroll(rememberScrollState())
-        .padding(horizontal = 6.dp, vertical = 6.dp)
+        .padding(horizontal = 5.dp, vertical = 5.dp)
     ) {
-      Box {
-        // Sliding highlight background
-        if (selectedRect != null && pillW > 0.dp && pillH > 0.dp) {
-          Box(
-            modifier = Modifier
-              .offset(x = pillX)
-              .size(width = pillW, height = pillH)
-              .shadow(
-                elevation = 8.dp,
-                shape = RoundedCornerShape(999.dp),
-                ambientColor = chipGlow.copy(alpha = 0.35f),
-                spotColor = chipGlow.copy(alpha = 0.30f)
-              )
-              .clip(RoundedCornerShape(999.dp))
-              .background(
-                Brush.horizontalGradient(
-                  colors = listOf(
-                    chipGlow.copy(alpha = 0.24f),
-                    selectedPreset.startColor.copy(alpha = 0.18f)
-                  )
+      // Sliding highlight background
+      if (selectedRect != null && pillW > 0.dp && pillH > 0.dp) {
+        Box(
+          modifier = Modifier
+            .offset(x = pillX)
+            .size(width = pillW, height = pillH)
+            .shadow(
+              elevation = 8.dp,
+              shape = RoundedCornerShape(999.dp),
+              ambientColor = chipGlow.copy(alpha = 0.35f),
+              spotColor = chipGlow.copy(alpha = 0.30f)
+            )
+            .clip(RoundedCornerShape(999.dp))
+            .background(
+              Brush.horizontalGradient(
+                colors = listOf(
+                  chipGlow.copy(alpha = 0.24f),
+                  selectedPreset.startColor.copy(alpha = 0.18f)
                 )
               )
-              .border(1.dp, chipGlow.copy(alpha = 0.55f), RoundedCornerShape(999.dp))
-          )
-        }
+            )
+            .border(1.dp, chipGlow.copy(alpha = 0.55f), RoundedCornerShape(999.dp))
+        )
+      }
 
-        Row(
-          horizontalArrangement = Arrangement.spacedBy(6.dp),
-          verticalAlignment = Alignment.CenterVertically
-        ) {
-          AlbumCoverPreset.entries.forEach { preset ->
-            val isSelected = preset == selectedPreset
-            Row(
+      Row(
+        modifier = Modifier.fillMaxWidth(),
+        horizontalArrangement = Arrangement.spacedBy(4.dp),
+        verticalAlignment = Alignment.CenterVertically
+      ) {
+        AlbumCoverPreset.entries.forEach { preset ->
+          val isSelected = preset == selectedPreset
+          Row(
+            modifier = Modifier
+              .weight(1f)
+              .onGloballyPositioned { coords ->
+                chipRects[preset] = coords.boundsInParent()
+              }
+              .clip(RoundedCornerShape(999.dp))
+              .background(if (isSelected) Color.Transparent else Color.White.copy(alpha = 0.03f))
+              .border(
+                width = 1.dp,
+                color = if (isSelected) Color.Transparent else Color.White.copy(alpha = 0.06f),
+                shape = RoundedCornerShape(999.dp)
+              )
+              .clickable(enabled = enabled) { onSelect(preset) }
+              .padding(horizontal = 4.dp, vertical = 9.dp)
+              .testTag("create_album_color_${preset.id}"),
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.Center
+          ) {
+            Box(
               modifier = Modifier
-                .onGloballyPositioned { coords ->
-                  chipRects[preset] = coords.boundsInParent()
-                }
-                .clip(RoundedCornerShape(999.dp))
-                .background(if (isSelected) Color.Transparent else Color.White.copy(alpha = 0.03f))
-                .border(
-                  width = 1.dp,
-                  color = if (isSelected) Color.Transparent else Color.White.copy(alpha = 0.06f),
-                  shape = RoundedCornerShape(999.dp)
+                .size(10.dp)
+                .clip(CircleShape)
+                .background(
+                  Brush.linearGradient(colors = listOf(preset.glowColor, preset.endColor))
                 )
-                .clickable(enabled = enabled) { onSelect(preset) }
-                .padding(horizontal = 13.dp, vertical = 9.dp)
-                .testTag("create_album_color_${preset.id}"),
-              verticalAlignment = Alignment.CenterVertically,
-              horizontalArrangement = Arrangement.spacedBy(7.dp)
-            ) {
-              Box(
-                modifier = Modifier
-                  .size(13.dp)
-                  .clip(CircleShape)
-                  .background(
-                    Brush.linearGradient(colors = listOf(preset.glowColor, preset.endColor))
-                  )
-                  .border(
-                    width = if (isSelected) 1.2.dp else 0.75.dp,
-                    color = if (isSelected) Color.White.copy(alpha = 0.85f) else Color.White.copy(alpha = 0.40f),
-                    shape = CircleShape
-                  )
-              )
-              Text(
-                text = stringResource(id = preset.labelRes),
-                style = MaterialTheme.typography.labelMedium.copy(
-                  fontWeight = if (isSelected) FontWeight.Bold else FontWeight.Medium
-                ),
-                color = if (isSelected) DarkGlassText else DarkGlassMuted,
-                maxLines = 1
-              )
-            }
+                .border(
+                  width = if (isSelected) 1.1.dp else 0.75.dp,
+                  color = if (isSelected) Color.White.copy(alpha = 0.85f) else Color.White.copy(alpha = 0.40f),
+                  shape = CircleShape
+                )
+            )
+            Spacer(modifier = Modifier.width(5.dp))
+            Text(
+              text = stringResource(id = preset.labelRes),
+              style = MaterialTheme.typography.labelSmall.copy(
+                fontWeight = if (isSelected) FontWeight.Bold else FontWeight.Medium,
+                fontSize = 11.5.sp
+              ),
+              color = if (isSelected) DarkGlassText else DarkGlassMuted,
+              maxLines = 1,
+              overflow = TextOverflow.Ellipsis
+            )
           }
         }
       }

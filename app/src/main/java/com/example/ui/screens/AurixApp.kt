@@ -324,6 +324,7 @@ private fun AurixMainShell(
   var songForAlbumPicker by remember { mutableStateOf<com.example.model.Song?>(null) }
   var showNavPreviewSheet by remember { mutableStateOf(false) }
   var showDownloadQueueSheet by remember { mutableStateOf(false) }
+  var isLibraryCreateAlbumOpen by remember { mutableStateOf(false) }
   val downloadQueueItems by viewModel.downloadQueueItems.collectAsStateWithLifecycle()
   val playlistSelectionMode by viewModel.playlistSelectionMode.collectAsStateWithLifecycle()
   val selectedPlaylistTrackIds by viewModel.selectedPlaylistTrackIds.collectAsStateWithLifecycle()
@@ -997,6 +998,7 @@ private fun AurixMainShell(
                 viewModel.deleteAlbum(album, alsoDeleteLocal)
               },
               onAddSongToAlbumClick = { song -> songForAlbumPicker = song },
+              onCreateSheetVisibilityChanged = { isLibraryCreateAlbumOpen = it },
               onSongClick = { song ->
                 val listQueue = when (libraryTab) {
                   0 -> localSongs
@@ -1058,6 +1060,8 @@ private fun AurixMainShell(
           }
         }
 
+        val hideBottomDockForSheet = currentScreen is Screen.Library && isLibraryCreateAlbumOpen
+
         // Subtle atmospheric gradient scrim so scrolling list rows fade gracefully behind the floating dock
         val targetScrimBase = when {
           currentScreen is Screen.Album -> Color(0xFF0E1120)
@@ -1074,23 +1078,25 @@ private fun AurixMainShell(
           animationSpec = if (reducedMotion) snap() else tween(300, easing = AurixEase),
           label = "dock_scrim_height"
         )
-        Box(
-          modifier = Modifier
-            .align(Alignment.BottomCenter)
-            .fillMaxWidth()
-            .height(dockScrimHeight)
-            .background(
-              Brush.verticalGradient(
-                colors = listOf(
-                  Color.Transparent,
-                  dockScrimBase.copy(alpha = 0.68f),
-                  dockScrimBase.copy(alpha = 0.94f)
+        if (!hideBottomDockForSheet) {
+          Box(
+            modifier = Modifier
+              .align(Alignment.BottomCenter)
+              .fillMaxWidth()
+              .height(dockScrimHeight)
+              .background(
+                Brush.verticalGradient(
+                  colors = listOf(
+                    Color.Transparent,
+                    dockScrimBase.copy(alpha = 0.68f),
+                    dockScrimBase.copy(alpha = 0.94f)
+                  )
                 )
               )
-            )
-        )
+          )
+        }
 
-        // Bottom Floating MiniPlayer + Liquid Glass Navigation Bar (steady during NowPlaying sheet slide)
+        // Bottom Floating MiniPlayer + Liquid Glass Navigation Bar (hidden when Create Album sheet is open)
         val screens = remember { listOf(Screen.Home, Screen.Search, Screen.Library, Screen.Settings) }
         val navTabs = listOf(
           TabItem(stringResource(id = R.string.nav_home), Screen.Home.icon),
@@ -1100,60 +1106,66 @@ private fun AurixMainShell(
         )
         val selectedIndex = screens.indexOf(currentScreen).coerceAtLeast(0)
 
-        Column(
-          modifier = Modifier
-            .align(Alignment.BottomCenter)
-            .navigationBarsPadding()
-            .padding(bottom = 14.dp),
-          horizontalAlignment = Alignment.CenterHorizontally
+        AnimatedVisibility(
+          visible = !hideBottomDockForSheet,
+          modifier = Modifier.align(Alignment.BottomCenter),
+          enter = if (reducedMotion) fadeIn(snap()) else slideInVertically(tween(260, easing = AurixEase)) { it } + fadeIn(tween(200)),
+          exit = if (reducedMotion) fadeOut(snap()) else slideOutVertically(tween(220, easing = AurixEase)) { it } + fadeOut(tween(160))
         ) {
-          AnimatedVisibility(
-            visible = currentSong != null,
-            enter = if (reducedMotion) fadeIn(snap()) else slideInVertically(tween(340, easing = AurixEase)) { it / 2 } + fadeIn(tween(240)),
-            exit = if (reducedMotion) fadeOut(snap()) else slideOutVertically(tween(260, easing = AurixEase)) { it / 2 } + fadeOut(tween(180))
+          Column(
+            modifier = Modifier
+              .navigationBarsPadding()
+              .padding(bottom = 14.dp),
+            horizontalAlignment = Alignment.CenterHorizontally
           ) {
-            Column(horizontalAlignment = Alignment.CenterHorizontally) {
-              MiniPlayer(
-                song = currentSong,
-                isPlaying = isPlaying,
-                currentPositionMs = currentPosition,
-                durationMs = durationMs,
-                darkTheme = darkTheme,
-                reducedMotion = reducedMotion,
-                hasLyrics = currentSong?.id?.let { it in verifiedLyricsIds } == true,
-                onCheckLyrics = { viewModel.ensureLyricsVerified(it) },
-                onPlayPauseClick = { viewModel.togglePlayPause() },
-                onFavoriteClick = { currentSong?.let { viewModel.toggleFavorite(it) } },
-                onSwipeNext = { viewModel.nextTrack() },
-                onSwipePrevious = { viewModel.previousTrack() },
-                onClick = { showNowPlaying = true }
-              )
-              Spacer(modifier = Modifier.height(10.dp))
+            AnimatedVisibility(
+              visible = currentSong != null,
+              enter = if (reducedMotion) fadeIn(snap()) else slideInVertically(tween(340, easing = AurixEase)) { it / 2 } + fadeIn(tween(240)),
+              exit = if (reducedMotion) fadeOut(snap()) else slideOutVertically(tween(260, easing = AurixEase)) { it / 2 } + fadeOut(tween(180))
+            ) {
+              Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                MiniPlayer(
+                  song = currentSong,
+                  isPlaying = isPlaying,
+                  currentPositionMs = currentPosition,
+                  durationMs = durationMs,
+                  darkTheme = darkTheme,
+                  reducedMotion = reducedMotion,
+                  hasLyrics = currentSong?.id?.let { it in verifiedLyricsIds } == true,
+                  onCheckLyrics = { viewModel.ensureLyricsVerified(it) },
+                  onPlayPauseClick = { viewModel.togglePlayPause() },
+                  onFavoriteClick = { currentSong?.let { viewModel.toggleFavorite(it) } },
+                  onSwipeNext = { viewModel.nextTrack() },
+                  onSwipePrevious = { viewModel.previousTrack() },
+                  onClick = { showNowPlaying = true }
+                )
+                Spacer(modifier = Modifier.height(10.dp))
+              }
             }
-          }
 
-          val sampledSongArtColors = rememberArtworkColors(
-            artworkUrl = currentSong?.artworkUrl.orEmpty(),
-            fallbackTitle = currentSong?.title.orEmpty()
-          )
-          val songArtColors = if (currentSong != null) sampledSongArtColors else null
-          val tabBarAmbient = if (dynamicBg && !amoledTheme) songArtColors else null
-          if (AurixNavStyle.fromId(navStyle) == AurixNavStyle.BLUR) {
-            LiquidBlurSplitTabBar(
-              tabs = navTabs,
-              selectedIndex = selectedIndex,
-              onSelect = { index -> currentScreen = screens[index] },
-              reducedMotion = reducedMotion,
-              ambientColors = tabBarAmbient
+            val sampledSongArtColors = rememberArtworkColors(
+              artworkUrl = currentSong?.artworkUrl.orEmpty(),
+              fallbackTitle = currentSong?.title.orEmpty()
             )
-          } else {
-            LiquidGlassTabBar(
-              tabs = navTabs,
-              selectedIndex = selectedIndex,
-              onSelect = { index -> currentScreen = screens[index] },
-              reducedMotion = reducedMotion,
-              ambientColors = tabBarAmbient
-            )
+            val songArtColors = if (currentSong != null) sampledSongArtColors else null
+            val tabBarAmbient = if (dynamicBg && !amoledTheme) songArtColors else null
+            if (AurixNavStyle.fromId(navStyle) == AurixNavStyle.BLUR) {
+              LiquidBlurSplitTabBar(
+                tabs = navTabs,
+                selectedIndex = selectedIndex,
+                onSelect = { index -> currentScreen = screens[index] },
+                reducedMotion = reducedMotion,
+                ambientColors = tabBarAmbient
+              )
+            } else {
+              LiquidGlassTabBar(
+                tabs = navTabs,
+                selectedIndex = selectedIndex,
+                onSelect = { index -> currentScreen = screens[index] },
+                reducedMotion = reducedMotion,
+                ambientColors = tabBarAmbient
+              )
+            }
           }
         }
       }

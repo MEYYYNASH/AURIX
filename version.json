@@ -1,15 +1,15 @@
 {
-  "versionName": "1.8.8",
-  "versionCode": 10880,
+  "versionName": "1.8.9",
+  "versionCode": 10890,
   "releaseDate": "2026-11-22",
-  "apkUrl": "https://github.com/MEYYYNASH/AURIX/releases/download/v1.8.8/AURIX-v1.8.8.apk",
-  "sha256": "c98ba6b30211d500f7a651e7bd3ce09be8c55e1893a29e60ae5df98c8dfcb173",
+  "apkUrl": "https://github.com/MEYYYNASH/AURIX/releases/download/v1.8.9/AURIX-v1.8.9.apk",
+  "sha256": "",
   "mandatory": false,
   "notes": [
-    "App Update & Release Card (v1.8.8): Restyled in #0A0810 dark glass with soft purple and magenta radial glows, gradient version hero, code chip, dual status tiles, and verified shield indicator",
+    "Create Album Button & Bottom Dock Fix (v1.8.9): Hid the floating bottom navigation bar and miniplayer when the Create Album sheet opens, pinned Cancel and Create album buttons in the sheet footer, and aligned all 5 color chips evenly",
+    "App Update & Release Card: Restyled in #0A0810 dark glass with soft purple and magenta radial glows, gradient version hero, code chip, dual status tiles, and verified shield indicator",
     "Release Notes & Whats New Sheet: Redesigned with a dark glass hero version header, live status pill, date and highlight counters, and staggered glass changelog cards with category vector icons",
-    "Create Album Bottom Sheet: Frosted dark glass sheet with reactive preset glow, 108 dp spinning vinyl cover preview, glass color-chip selector rail, floating-label inputs with icon capsules, and curved shared-element cover flight",
-    "Recent Play & Playlist Controls: Recent Play corner badge fix, YouTube Search \u2194 YT Link transitions, End Download, Live Download Queue, Beat Visualizer, and Auto-Clean YT Titles"
+    "Create Album Shared-Element Transition: Frosted dark glass sheet with reactive preset glow, 108 dp spinning vinyl cover preview, floating-label inputs with icon capsules, and curved cover flight into the Library grid"
   ],
-  "releasePageUrl": "https://github.com/MEYYYNASH/AURIX/releases/tag/v1.8.8"
+  "releasePageUrl": "https://github.com/MEYYYNASH/AURIX/releases/tag/v1.8.9"
 }
