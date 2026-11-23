@@ -3,7 +3,7 @@
   "versionCode": 10900,
   "releaseDate": "2026-11-22",
   "apkUrl": "https://github.com/MEYYYNASH/AURIX/releases/download/v1.9.0/AURIX-v1.9.0.apk",
-  "sha256": "",
+  "sha256": "509af25b21de803e0aeb7e040675991fbd36060c4b7f7cdcd077b2ae3fbd214d",
   "mandatory": false,
   "notes": [
     "Custom Accent Color Picker & Dynamic Dark Glass Accents (v1.9.0): Choose any custom accent color in Settings via interactive HSV sliders, hex code entry, or 16 curated swatches, and watch all Dark Glass glows, borders, top lines, chips, and gradient buttons adapt live",
