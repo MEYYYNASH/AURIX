@@ -26,7 +26,7 @@ jobs:
         uses: actions/checkout@v4
 
       - name: Set up JDK 17
-        uses: actions/setup-java@v4
+        uses: actions/setup-java@v5
         with:
           distribution: 'temurin'
           java-version: '17'
@@ -86,7 +86,7 @@ jobs:
           test -f app/build/outputs/apk/release/output-metadata.json
           cp app/build/outputs/apk/release/app-release.apk "AURIX-${RELEASE_TAG}.apk"
           export APK_SHA256=$(sha256sum "AURIX-${RELEASE_TAG}.apk" | awk '{print $1}')
-          python3 -c '
+          python3 - <<'PYEOF'
           import json, os
           tag = os.environ["RELEASE_TAG"]
           repo = os.environ["GITHUB_REPOSITORY"]
@@ -99,7 +99,7 @@ jobs:
             "mandatory": False,
             "notes": [
               f"App Update & Release Card ({tag}): Restyled in #0A0810 dark glass with soft purple and magenta radial glows, gradient version hero, code chip, dual status tiles, and verified shield indicator",
-              "Release Notes & What's New Sheet: Redesigned with a dark glass hero version header, live status pill, date and highlight counters, and staggered glass changelog cards with category vector icons",
+              "Release Notes & Whats New Sheet: Redesigned with a dark glass hero version header, live status pill, date and highlight counters, and staggered glass changelog cards with category vector icons",
               "Create Album Bottom Sheet: Frosted dark glass sheet with reactive preset glow, 108 dp spinning vinyl cover preview, glass color-chip selector rail, floating-label inputs with icon capsules, and curved shared-element cover flight",
               "Recent Play & Playlist Controls: Recent Play corner badge fix, YouTube Search ↔ YT Link transitions, End Download, Live Download Queue, Beat Visualizer, and Auto-Clean YT Titles"
             ],
@@ -108,7 +108,7 @@ jobs:
           with open("version.json", "w", encoding="utf-8") as f:
             json.dump(data, f, indent=2)
             f.write("\n")
-          '
+          PYEOF
 
       - name: Upload APK Artifact
         uses: actions/upload-artifact@v4
@@ -127,8 +127,9 @@ jobs:
             mandatory: false
 
             What's New in AURIX ${{ env.RELEASE_TAG }}:
-            - Dark Glass Redesign: Restyled App Update & Release card with #0A0810 glass surface, violet/magenta glows, gradient version hero, status tiles, and shield status row
-            - Create Album Bottom Sheet: Live spinning vinyl cover preview, Violet/Ocean/Sunset/Mint/Night color chips, floating-label inputs, and curved cover flight into the Library grid
+            - App Update & Release Card: Restyled in #0A0810 dark glass with soft purple and magenta radial glows, gradient version hero, code chip, dual status tiles, and verified shield indicator
+            - Release Notes & What's New Sheet: Dark glass hero version header, live status pill, date and highlight counters, and staggered glass changelog cards with category vector icons
+            - Create Album Bottom Sheet: Frosted dark glass sheet with reactive preset glow, 108 dp spinning vinyl cover preview, glass color-chip selector rail, floating-label inputs with icon capsules, and curved cover flight
             - Recent Play & Playlist Controls: Recent Play close badge alignment fix, YouTube Search ↔ YT Link transition, End Download, Live Download Queue, Beat Visualizer, and Auto-Clean YT Titles
           files: |
             app/build/outputs/apk/release/app-release.apk
