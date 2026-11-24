@@ -1412,25 +1412,34 @@ class AurixViewModel(application: Application) : AndroidViewModel(application) {
       combine(
         themeMode,
         language,
-        dynamicBg
-      ) { theme, lang, glowEnabled ->
-        Triple(theme, lang, glowEnabled)
-      }.collectLatest { (theme, lang, glowEnabled) ->
+        dynamicBg,
+        reducedMotion
+      ) { theme, lang, glowEnabled, reduced ->
+        QuadWidgetSettingsState(theme, lang, glowEnabled, reduced)
+      }.collectLatest { settings ->
         runCatching {
           AurixWidgetController.syncAmbientGlowAndSettings(
             context = appCtx,
-            ambientGlowEnabled = glowEnabled,
+            ambientGlowEnabled = settings.glowEnabled,
             dimLevel = dynamicBgDim.value,
             glassLevel = dynamicBgGlass.value,
             blurLevel = dynamicBgBlur.value,
-            themeMode = theme,
-            language = lang,
+            themeMode = settings.theme,
+            language = settings.lang,
+            reducedMotion = settings.reducedMotion,
             refreshWidgetsNow = true
           )
         }
       }
     }
   }
+
+  private data class QuadWidgetSettingsState(
+    val theme: String,
+    val lang: String,
+    val glowEnabled: Boolean,
+    val reducedMotion: Boolean
+  )
 
   private data class QuadWidgetPlayerState(
     val song: Song?,

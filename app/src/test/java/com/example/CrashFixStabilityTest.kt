@@ -11,10 +11,10 @@ import org.junit.Test
 class CrashFixStabilityTest {
 
   @Test
-  fun release199_metadataAndVersionCodeAreConsistent() {
-    assertEquals("1.9.9", BuildConfig.VERSION_NAME)
-    assertEquals(10990, BuildConfig.VERSION_CODE)
-    assertTrue("Release 1.9.9 versionCode must exceed 1.9.8 (10980)", BuildConfig.VERSION_CODE > 10980)
+  fun release200_metadataAndVersionCodeAreConsistent() {
+    assertEquals("2.0.0", BuildConfig.VERSION_NAME)
+    assertEquals(20000, BuildConfig.VERSION_CODE)
+    assertTrue("Release 2.0.0 versionCode must exceed 1.9.9 (10990)", BuildConfig.VERSION_CODE > 10990)
     assertEquals(420, com.example.ui.screens.SELECT_BAR_OPEN_DURATION_MS)
     assertEquals(600, com.example.ui.screens.SELECT_CIRCLE_OPEN_DURATION_MS)
     assertEquals(380L, com.example.ui.screens.SELECT_CLOSE_CLEAR_DELAY_MS)
@@ -85,6 +85,14 @@ class CrashFixStabilityTest {
     org.junit.Assert.assertFalse(com.example.widget.AurixWidgetController.shouldShowLikeButton(179))
     assertTrue(com.example.widget.AurixWidgetController.shouldShowLikeButton(180))
     assertTrue(com.example.widget.AurixWidgetController.shouldShowLikeButton(250))
+
+    // Smooth ViewFlipper ping-pong slot alternation when animating, and static slot on Reduced Motion
+    assertEquals(1, com.example.widget.AurixWidgetController.nextLyricFlipperSlot(0, animateTransition = true, reducedMotion = false))
+    assertEquals(0, com.example.widget.AurixWidgetController.nextLyricFlipperSlot(1, animateTransition = true, reducedMotion = false))
+    assertEquals(0, com.example.widget.AurixWidgetController.nextLyricFlipperSlot(0, animateTransition = true, reducedMotion = true))
+    assertEquals(1, com.example.widget.AurixWidgetController.nextLyricFlipperSlot(1, animateTransition = true, reducedMotion = true))
+    assertEquals(0, com.example.widget.AurixWidgetController.nextLyricFlipperSlot(0, animateTransition = false, reducedMotion = false))
+    assertEquals(1, com.example.widget.AurixWidgetController.nextLyricFlipperSlot(1, animateTransition = false, reducedMotion = false))
   }
 
   @Test

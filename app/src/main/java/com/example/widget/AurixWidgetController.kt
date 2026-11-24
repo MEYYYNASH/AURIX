@@ -23,6 +23,7 @@ import android.graphics.Shader
 import android.graphics.Typeface
 import android.os.Build
 import android.os.Bundle
+import android.provider.Settings
 import android.text.Layout
 import android.text.SpannableString
 import android.text.Spanned
@@ -87,7 +88,11 @@ data class WidgetSnapshotState(
   val glassLevel: Float = PreferencesManager.DEFAULT_DYNAMIC_BG_GLASS,
   val blurLevel: Float = PreferencesManager.DEFAULT_DYNAMIC_BG_BLUR,
   val themeMode: String = "dark",
-  val language: String = "en"
+  val language: String = "en",
+  val lyricsFlipperSlot: Int = 0,
+  val prevLyricLine: String = "",
+  val prevNextLyricLine: String = "",
+  val reducedMotion: Boolean = false
 )
 
 object AurixWidgetController {
@@ -141,8 +146,35 @@ object AurixWidgetController {
   @Volatile
   private var cachedRoundedArtBitmap: Bitmap? = null
 
+  @Volatile
+  private var cachedRawLrcKey: String = ""
+
+  @Volatile
+  private var cachedParsedLrcLines: List<LyricLine> = emptyList()
+
   fun shouldShowLikeButton(minWidthDp: Int): Boolean {
     return minWidthDp <= 0 || minWidthDp >= MIN_WIDTH_DP_FOR_LIKE
+  }
+
+  fun nextLyricFlipperSlot(
+    currentSlot: Int,
+    animateTransition: Boolean,
+    reducedMotion: Boolean
+  ): Int {
+    val safeCurrent = if (currentSlot == 1) 1 else 0
+    return if (animateTransition && !reducedMotion) {
+      1 - safeCurrent
+    } else {
+      safeCurrent
+    }
+  }
+
+  private fun isReducedMotionActive(context: Context, appReducedMotion: Boolean): Boolean {
+    if (appReducedMotion) return true
+    val scale = runCatching {
+      Settings.Global.getFloat(context.contentResolver, Settings.Global.ANIMATOR_DURATION_SCALE, 1f)
+    }.getOrDefault(1f)
+    return scale <= 0.01f
   }
 
   fun containsKhmerScript(text: String?): Boolean {
@@ -238,7 +270,11 @@ object AurixWidgetController {
       glassLevel = prefs.getFloat("glass_level", PreferencesManager.DEFAULT_DYNAMIC_BG_GLASS).coerceIn(0f, 1.00f),
       blurLevel = prefs.getFloat("blur_level", PreferencesManager.DEFAULT_DYNAMIC_BG_BLUR).coerceIn(0f, 100f),
       themeMode = prefs.getString("theme_mode", "dark").orEmpty().ifBlank { "dark" },
-      language = savedLang
+      language = savedLang,
+      lyricsFlipperSlot = prefs.getInt("lyrics_flipper_slot", 0).coerceIn(0, 1),
+      prevLyricLine = prefs.getString("prev_lyric_line", "").orEmpty(),
+      prevNextLyricLine = prefs.getString("prev_next_lyric_line", "").orEmpty(),
+      reducedMotion = prefs.getBoolean("reduced_motion", false)
     )
   }
 
@@ -266,6 +302,10 @@ object AurixWidgetController {
       .putFloat("blur_level", state.blurLevel.coerceIn(0f, 100f))
       .putString("theme_mode", state.themeMode)
       .putString("language", state.language)
+      .putInt("lyrics_flipper_slot", state.lyricsFlipperSlot.coerceIn(0, 1))
+      .putString("prev_lyric_line", state.prevLyricLine)
+      .putString("prev_next_lyric_line", state.prevNextLyricLine)
+      .putBoolean("reduced_motion", state.reducedMotion)
       .apply()
   }
 
@@ -305,10 +345,19 @@ object AurixWidgetController {
     )
 
     val trackChanged = current.songId != song.id || current.artworkUrl != song.artworkUrl
+    val lineTextChanged = current.currentLyricLine != lyricSnap.currentLine
     val lyricsChanged = current.hasLyrics != lyricSnap.hasLyrics ||
-      current.currentLyricLine != lyricSnap.currentLine ||
+      lineTextChanged ||
       current.nextLyricLine != lyricSnap.nextLine ||
       current.songId != song.id
+
+    val reduceMotion = isReducedMotionActive(appCtx, current.reducedMotion)
+    val shouldAnimateLine = lineTextChanged && current.currentLyricLine.isNotBlank() && lyricSnap.currentLine.isNotBlank()
+    val nextSlot = nextLyricFlipperSlot(
+      currentSlot = current.lyricsFlipperSlot,
+      animateTransition = shouldAnimateLine,
+      reducedMotion = reduceMotion
+    )
 
     val effectiveDur = durationMs.takeIf { it > 0L }
       ?: (song.fullDurationSeconds.takeIf { it > 0L } ?: song.durationSeconds) * 1000L
@@ -328,7 +377,10 @@ object AurixWidgetController {
       activeLyricIndex = lyricSnap.activeIndex,
       rawLrc = rawLrc,
       plainLyrics = plainLyrics,
-      lyricOffsetMs = lyricOffsetMs
+      lyricOffsetMs = lyricOffsetMs,
+      lyricsFlipperSlot = nextSlot,
+      prevLyricLine = if (shouldAnimateLine) current.currentLyricLine else current.prevLyricLine,
+      prevNextLyricLine = if (shouldAnimateLine) current.nextLyricLine else current.prevNextLyricLine
     )
     saveSnapshot(appCtx, updated)
     refreshAllWidgetsAsync(
@@ -340,14 +392,17 @@ object AurixWidgetController {
   }
 
   /**
-   * Called ~every 1 second ONLY while playing.
-   * Updates Music widget progress bar and updates Lyrics widget ONLY if the synced line changed.
+   * Called while playing only.
+   * Throttles Music widget progress updates to ~1s (via allowMusicUpdate) while detecting
+   * synced lyric line changes on the beat and smoothly flipping only the active ViewFlipper slot
+   * via partiallyUpdateAppWidget with zero card flicker.
    */
   fun onPlaybackProgressTick(
     context: Context,
     positionMs: Long,
     durationMs: Long,
-    isPlaying: Boolean
+    isPlaying: Boolean,
+    allowMusicUpdate: Boolean = true
   ) {
     if (!isPlaying) return
     val appCtx = context.applicationContext
@@ -368,6 +423,15 @@ object AurixWidgetController {
     val lineChanged = lyricSnap.activeIndex != current.activeLyricIndex ||
       lyricSnap.currentLine != current.currentLyricLine
 
+    if (!lineChanged && !allowMusicUpdate) return
+
+    val reduceMotion = isReducedMotionActive(appCtx, current.reducedMotion)
+    val nextSlot = nextLyricFlipperSlot(
+      currentSlot = current.lyricsFlipperSlot,
+      animateTransition = lineChanged,
+      reducedMotion = reduceMotion
+    )
+
     val effectiveDur = durationMs.takeIf { it > 0L } ?: current.durationMs.coerceAtLeast(1000L)
     val updated = current.copy(
       isPlaying = true,
@@ -376,15 +440,24 @@ object AurixWidgetController {
       hasLyrics = lyricSnap.hasLyrics,
       currentLyricLine = lyricSnap.currentLine,
       nextLyricLine = lyricSnap.nextLine,
-      activeLyricIndex = lyricSnap.activeIndex
+      activeLyricIndex = lyricSnap.activeIndex,
+      lyricsFlipperSlot = nextSlot,
+      prevLyricLine = if (lineChanged) current.currentLyricLine else current.prevLyricLine,
+      prevNextLyricLine = if (lineChanged) current.nextLyricLine else current.prevNextLyricLine
     )
     saveSnapshot(appCtx, updated)
-    refreshAllWidgetsAsync(
-      context = appCtx,
-      refreshMusic = true,
-      refreshLyrics = lineChanged,
-      forceArtworkReload = false
-    )
+
+    if (allowMusicUpdate) {
+      refreshAllWidgetsAsync(
+        context = appCtx,
+        refreshMusic = true,
+        refreshLyrics = false,
+        forceArtworkReload = false
+      )
+    }
+    if (lineChanged) {
+      animateLyricsLineTransitionAsync(appCtx, updated)
+    }
   }
 
   fun syncFavoriteState(context: Context, songId: String, isFavorite: Boolean) {
@@ -404,6 +477,7 @@ object AurixWidgetController {
     blurLevel: Float? = null,
     themeMode: String? = null,
     language: String? = null,
+    reducedMotion: Boolean? = null,
     refreshWidgetsNow: Boolean = true
   ) {
     val appCtx = context.applicationContext
@@ -430,6 +504,7 @@ object AurixWidgetController {
       blurLevel = (blurLevel ?: current.blurLevel).coerceIn(0f, 100f),
       themeMode = themeMode ?: current.themeMode,
       language = nextLang,
+      reducedMotion = reducedMotion ?: current.reducedMotion,
       currentLyricLine = lyricSnap?.currentLine ?: current.currentLyricLine,
       nextLyricLine = lyricSnap?.nextLine ?: current.nextLyricLine,
       hasLyrics = lyricSnap?.hasLyrics ?: current.hasLyrics
@@ -437,6 +512,51 @@ object AurixWidgetController {
     saveSnapshot(appCtx, updated)
     if (refreshWidgetsNow) {
       refreshAllWidgetsAsync(appCtx, refreshMusic = true, refreshLyrics = true)
+    }
+  }
+
+  /**
+   * Uses partiallyUpdateAppWidget to write ONLY the incoming ViewFlipper slot and call
+   * setDisplayedChild(targetSlot), triggering the hardware-accelerated slide-up/fade-in/out
+   * transition on the launcher without flickering or reloading the ambient glow background.
+   */
+  private fun animateLyricsLineTransitionAsync(context: Context, state: WidgetSnapshotState) {
+    val appCtx = context.applicationContext
+    widgetScope.launch {
+      runCatching {
+        val manager = AppWidgetManager.getInstance(appCtx)
+        val lyricsIds = manager.getAppWidgetIds(ComponentName(appCtx, AurixLyricsWidgetProvider::class.java))
+        if (lyricsIds.isEmpty()) return@launch
+
+        val localizedCtx = LocaleHelper.wrapBaseContext(appCtx, state.language)
+        val isLight = isLightThemeActive(appCtx, state.themeMode) && !state.ambientGlowEnabled
+        val primaryTextColor = if (isLight) COLOR_TEXT_LIGHT else COLOR_TEXT_DARK
+        val mutedTextColor = if (isLight) COLOR_MUTED_LIGHT else 0xA6FFFFFF.toInt()
+        val noLyricsLabel = localizedCtx.getString(R.string.widget_no_lyrics_for_song)
+        val hasLyrics = state.hasLyrics && state.currentLyricLine.isNotBlank()
+        val displayCurrentLine = if (hasLyrics) state.currentLyricLine else noLyricsLabel
+        val displayNextLine = if (hasLyrics) state.nextLyricLine else ""
+        val currentColor = if (hasLyrics) primaryTextColor else mutedTextColor
+        val targetSlot = state.lyricsFlipperSlot.coerceIn(0, 1)
+
+        val partialViews = RemoteViews(appCtx.packageName, R.layout.widget_aurix_lyrics)
+        bindLyricsFlipperSlot(
+          context = appCtx,
+          views = partialViews,
+          slotIndex = targetSlot,
+          currentLine = displayCurrentLine,
+          nextLine = displayNextLine,
+          hasLyrics = hasLyrics,
+          language = state.language,
+          primaryTextColor = currentColor,
+          mutedTextColor = mutedTextColor
+        )
+        partialViews.setDisplayedChild(R.id.widget_lyrics_flipper, targetSlot)
+
+        for (widgetId in lyricsIds) {
+          runCatching { manager.partiallyUpdateAppWidget(widgetId, partialViews) }
+        }
+      }
     }
   }
 
@@ -769,30 +889,38 @@ object AurixWidgetController {
       views.setViewVisibility(R.id.widget_lyrics_accent_bar, View.GONE)
     }
 
-    // Use bundled Noto Sans Khmer typeface with extra line height when Khmer text is displayed
-    val usesKhmerFont = containsKhmerScript(displayCurrentLine) ||
-      containsKhmerScript(displayNextLine) ||
-      (!hasLyrics && state.language.equals("km", ignoreCase = true))
-
+    val activeSlot = state.lyricsFlipperSlot.coerceIn(0, 1)
+    val inactiveSlot = 1 - activeSlot
     val currentColorForDisplay = if (hasLyrics) primaryTextColor else mutedTextColor
-    if (usesKhmerFont) {
-      val khmerBmp = renderKhmerLyricsLinesBitmap(
-        context = context,
-        currentLine = displayCurrentLine,
-        nextLine = displayNextLine,
-        primaryColor = currentColorForDisplay,
-        mutedColor = mutedTextColor
-      )
-      if (khmerBmp != null) {
-        views.setViewVisibility(R.id.widget_lyrics_khmer_bitmap, View.VISIBLE)
-        views.setViewVisibility(R.id.widget_lyrics_text_container, View.GONE)
-        views.setImageViewBitmap(R.id.widget_lyrics_khmer_bitmap, khmerBmp)
-      } else {
-        bindStandardLyricsTextViews(views, displayCurrentLine, displayNextLine, currentColorForDisplay, mutedTextColor)
-      }
-    } else {
-      bindStandardLyricsTextViews(views, displayCurrentLine, displayNextLine, currentColorForDisplay, mutedTextColor)
-    }
+
+    // Populate the active ViewFlipper slot with the current lyric line
+    bindLyricsFlipperSlot(
+      context = context,
+      views = views,
+      slotIndex = activeSlot,
+      currentLine = displayCurrentLine,
+      nextLine = displayNextLine,
+      hasLyrics = hasLyrics,
+      language = state.language,
+      primaryTextColor = currentColorForDisplay,
+      mutedTextColor = mutedTextColor
+    )
+
+    // Keep the outgoing slot populated with the previous lyric (or fallback) so transitions never flash blank
+    val outgoingLine = state.prevLyricLine.takeIf { it.isNotBlank() } ?: displayCurrentLine
+    val outgoingNext = if (state.prevLyricLine.isNotBlank()) state.prevNextLyricLine else displayNextLine
+    bindLyricsFlipperSlot(
+      context = context,
+      views = views,
+      slotIndex = inactiveSlot,
+      currentLine = outgoingLine,
+      nextLine = outgoingNext,
+      hasLyrics = hasLyrics || state.prevLyricLine.isNotBlank(),
+      language = state.language,
+      primaryTextColor = currentColorForDisplay,
+      mutedTextColor = mutedTextColor
+    )
+    views.setDisplayedChild(R.id.widget_lyrics_flipper, activeSlot)
 
     // Mini rounded album art + styled Title · Artist footer
     views.setImageViewBitmap(R.id.widget_lyrics_mini_art, roundedArt)
@@ -815,23 +943,52 @@ object AurixWidgetController {
     return views
   }
 
-  private fun bindStandardLyricsTextViews(
+  private fun bindLyricsFlipperSlot(
+    context: Context,
     views: RemoteViews,
+    slotIndex: Int,
     currentLine: String,
     nextLine: String,
+    hasLyrics: Boolean,
+    language: String,
     primaryTextColor: Int,
     mutedTextColor: Int
   ) {
-    views.setViewVisibility(R.id.widget_lyrics_khmer_bitmap, View.GONE)
-    views.setViewVisibility(R.id.widget_lyrics_text_container, View.VISIBLE)
-    views.setTextViewText(R.id.widget_lyrics_current_line, currentLine)
-    views.setTextColor(R.id.widget_lyrics_current_line, primaryTextColor)
+    val khmerImgId = if (slotIndex == 0) R.id.widget_lyrics_khmer_bitmap_a else R.id.widget_lyrics_khmer_bitmap_b
+    val textContainerId = if (slotIndex == 0) R.id.widget_lyrics_text_container_a else R.id.widget_lyrics_text_container_b
+    val currentTextId = if (slotIndex == 0) R.id.widget_lyrics_current_line_a else R.id.widget_lyrics_current_line_b
+    val nextTextId = if (slotIndex == 0) R.id.widget_lyrics_next_line_a else R.id.widget_lyrics_next_line_b
+
+    val usesKhmerFont = containsKhmerScript(currentLine) ||
+      containsKhmerScript(nextLine) ||
+      (!hasLyrics && language.equals("km", ignoreCase = true))
+
+    if (usesKhmerFont) {
+      val khmerBmp = renderKhmerLyricsLinesBitmap(
+        context = context,
+        currentLine = currentLine,
+        nextLine = nextLine,
+        primaryColor = primaryTextColor,
+        mutedColor = mutedTextColor
+      )
+      if (khmerBmp != null) {
+        views.setViewVisibility(khmerImgId, View.VISIBLE)
+        views.setViewVisibility(textContainerId, View.GONE)
+        views.setImageViewBitmap(khmerImgId, khmerBmp)
+        return
+      }
+    }
+
+    views.setViewVisibility(khmerImgId, View.GONE)
+    views.setViewVisibility(textContainerId, View.VISIBLE)
+    views.setTextViewText(currentTextId, currentLine)
+    views.setTextColor(currentTextId, primaryTextColor)
     if (nextLine.isNotBlank()) {
-      views.setViewVisibility(R.id.widget_lyrics_next_line, View.VISIBLE)
-      views.setTextViewText(R.id.widget_lyrics_next_line, nextLine)
-      views.setTextColor(R.id.widget_lyrics_next_line, mutedTextColor)
+      views.setViewVisibility(nextTextId, View.VISIBLE)
+      views.setTextViewText(nextTextId, nextLine)
+      views.setTextColor(nextTextId, mutedTextColor)
     } else {
-      views.setViewVisibility(R.id.widget_lyrics_next_line, View.GONE)
+      views.setViewVisibility(nextTextId, View.GONE)
     }
   }
 
@@ -904,11 +1061,15 @@ object AurixWidgetController {
 
   private fun parseRawLrcLines(rawLrc: String): List<LyricLine> {
     if (rawLrc.isBlank()) return emptyList()
-    return runCatching {
+    if (rawLrc == cachedRawLrcKey) return cachedParsedLrcLines
+    val parsed = runCatching {
       val doc = LrcParser.parse(rawLrc)
       if (!doc.isSynced) emptyList()
       else doc.lines.map { LyricLine(it.timestampMs, it.text) }
     }.getOrDefault(emptyList())
+    cachedRawLrcKey = rawLrc
+    cachedParsedLrcLines = parsed
+    return parsed
   }
 
   private fun isLightThemeActive(context: Context, themeMode: String): Boolean {

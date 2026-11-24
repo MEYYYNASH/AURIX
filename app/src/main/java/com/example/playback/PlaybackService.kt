@@ -4,6 +4,7 @@ import android.app.PendingIntent
 import android.content.Context
 import android.content.Intent
 import android.media.MediaCodec
+import android.os.SystemClock
 import androidx.annotation.OptIn
 import androidx.media3.common.AudioAttributes
 import androidx.media3.common.C
@@ -413,7 +414,13 @@ class PlaybackService : MediaSessionService() {
       val pos = player.currentPosition.coerceAtLeast(0L)
       val dur = player.duration.takeIf { it > 0L } ?: snapshot.durationMs
       if (isPlaying) {
-        AurixWidgetController.onPlaybackProgressTick(this, pos, dur, isPlaying = true)
+        AurixWidgetController.onPlaybackProgressTick(
+          context = this,
+          positionMs = pos,
+          durationMs = dur,
+          isPlaying = true,
+          allowMusicUpdate = true
+        )
       } else {
         // Persist paused state and update Play/Pause icon once, then stop ticker to save battery
         val prefs = applicationContext.getSharedPreferences("aurix_widget_snapshot_prefs", Context.MODE_PRIVATE)
@@ -427,17 +434,24 @@ class PlaybackService : MediaSessionService() {
 
     if (isPlaying) {
       widgetTickerJob = serviceScope.launch {
+        var lastMusicPushMs = SystemClock.elapsedRealtime()
         while (isActive) {
-          delay(1_000L)
+          delay(350L)
           val active = mainPlayer ?: break
           if (!active.isPlaying) break
           val pos = active.currentPosition.coerceAtLeast(0L)
           val dur = active.duration.takeIf { it > 0L } ?: 0L
+          val nowMs = SystemClock.elapsedRealtime()
+          val shouldUpdateMusic = (nowMs - lastMusicPushMs) >= 1_000L
+          if (shouldUpdateMusic) {
+            lastMusicPushMs = nowMs
+          }
           AurixWidgetController.onPlaybackProgressTick(
             context = this@PlaybackService,
             positionMs = pos,
             durationMs = dur,
-            isPlaying = true
+            isPlaying = true,
+            allowMusicUpdate = shouldUpdateMusic
           )
         }
       }
