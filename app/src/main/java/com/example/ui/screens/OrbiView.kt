@@ -1700,8 +1700,9 @@ fun OrbiSearchLoadingScreen(
 @Composable
 fun OrbiDataLoadingScreen(
   statusText: String = "Syncing your library",
-  runner: OrbiRunner = OrbiRunner.SyncDown,
+  runner: OrbiRunner = OrbiRunner.SyncUp,
   outcome: OrbiStatusOutcome = OrbiStatusOutcome.Loading,
+  showHeaderSkeleton: Boolean = true,
   reducedMotion: Boolean = false,
   modifier: Modifier = Modifier
 ) {
@@ -1715,34 +1716,36 @@ fun OrbiDataLoadingScreen(
         .testTag("orbi_data_loading_screen"),
       verticalArrangement = Arrangement.spacedBy(10.dp)
     ) {
-      // Title skeleton bar
-      Row(
-        modifier = Modifier
-          .fillMaxWidth()
-          .padding(horizontal = 4.dp)
-          .orbiStaggeredRowEntrance(rowIndex = 0, reducedMotion = reducedMotion),
-        verticalAlignment = Alignment.CenterVertically,
-        horizontalArrangement = Arrangement.SpaceBetween
-      ) {
-        Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
+      if (showHeaderSkeleton) {
+        // Title skeleton bar
+        Row(
+          modifier = Modifier
+            .fillMaxWidth()
+            .padding(horizontal = 4.dp)
+            .orbiStaggeredRowEntrance(rowIndex = 0, reducedMotion = reducedMotion),
+          verticalAlignment = Alignment.CenterVertically,
+          horizontalArrangement = Arrangement.SpaceBetween
+        ) {
+          Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
+            Box(
+              modifier = Modifier
+                .width(168.dp)
+                .height(20.dp)
+                .shimmer(staggerIndex = 0, reducedMotion = reducedMotion, cornerRadius = 10.dp)
+            )
+            Box(
+              modifier = Modifier
+                .width(110.dp)
+                .height(11.dp)
+                .shimmer(staggerIndex = 1, reducedMotion = reducedMotion, cornerRadius = 5.5.dp)
+            )
+          }
           Box(
             modifier = Modifier
-              .width(168.dp)
-              .height(20.dp)
-              .shimmer(staggerIndex = 0, reducedMotion = reducedMotion, cornerRadius = 10.dp)
-          )
-          Box(
-            modifier = Modifier
-              .width(110.dp)
-              .height(11.dp)
-              .shimmer(staggerIndex = 1, reducedMotion = reducedMotion, cornerRadius = 5.5.dp)
+              .size(34.dp)
+              .shimmer(staggerIndex = 1, reducedMotion = reducedMotion, cornerRadius = 17.dp)
           )
         }
-        Box(
-          modifier = Modifier
-            .size(34.dp)
-            .shimmer(staggerIndex = 1, reducedMotion = reducedMotion, cornerRadius = 17.dp)
-        )
       }
 
       // Frameless StatusRow
@@ -2023,7 +2026,7 @@ fun OrbiMascotPreviewScreen(
             color = MaterialTheme.colorScheme.onBackground
           )
           Text(
-            text = "1.9.5 • Canvas + Animatable • 60fps",
+            text = "1.9.6 • Canvas + Animatable • 60fps",
             style = MaterialTheme.typography.labelSmall,
             color = accentColor
           )
@@ -2340,15 +2343,15 @@ fun OrbiMascotPreviewScreen(
               )
               OrbiScenarioCard(
                 state = OrbiState.UpdateAvailable,
-                title = "Update 1.9.5 Available",
-                subtitle = "Smooth Playlist Select mode animations, mini Orbi loading row, and 5 custom launcher icons.",
+                title = "Update 1.9.6 Available",
+                subtitle = "Unified frameless Library redesign, 3-column album row, and Orbi library sync shimmer.",
                 runner = OrbiRunner.SyncDown,
                 badgeText = "UPDATE AVAILABLE",
                 reducedMotion = reducedMotion
               )
               OrbiScenarioCard(
                 state = OrbiState.UpdateDownloading,
-                title = "Downloading AURIX 1.9.5",
+                title = "Downloading AURIX 1.9.6",
                 subtitle = "Fetching signed APK package in the background...",
                 runner = OrbiRunner.SyncDown,
                 badgeText = "DOWNLOADING",
@@ -2366,7 +2369,7 @@ fun OrbiMascotPreviewScreen(
               OrbiScenarioCard(
                 state = OrbiState.UpdateSuccess,
                 title = "You're Up to Date!",
-                subtitle = "AURIX 1.9.5 installed cleanly. Orbi is hopping happy!",
+                subtitle = "AURIX 1.9.6 installed cleanly. Orbi is hopping happy!",
                 runner = OrbiRunner.None,
                 badgeText = "UPDATE SUCCESS",
                 reducedMotion = reducedMotion

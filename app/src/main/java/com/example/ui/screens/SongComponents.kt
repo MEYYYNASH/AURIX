@@ -947,6 +947,252 @@ fun SongRow(
   )
 }
 
+/**
+ * Clean Frameless Library Track Row matching the reference Library layout:
+ * - No heavy outer glass pill card container.
+ * - Left: 52dp rounded-square cover artwork (14dp corner radius) with active equalizer overlay.
+ * - Center: Bold single-line track title + secondary artist/duration + inline genre badge pill.
+ * - Right: Compact favorite heart + circular action button (36dp circle) matching the right circle in the photo.
+ */
+@OptIn(ExperimentalFoundationApi::class)
+@Composable
+fun LibraryFramelessTrackRow(
+  song: Song,
+  isPlaying: Boolean = false,
+  isCurrent: Boolean = false,
+  reducedMotion: Boolean = false,
+  darkTheme: Boolean = true,
+  hasLyrics: Boolean = false,
+  genreBadge: String? = null,
+  onGenreBadgeClick: (() -> Unit)? = null,
+  onCheckLyrics: ((Song) -> Unit)? = null,
+  onSongClick: () -> Unit,
+  onFavoriteClick: () -> Unit,
+  onAddToAlbumClick: (() -> Unit)? = null,
+  onEditPhotoClick: (() -> Unit)? = null,
+  onDeleteClick: (() -> Unit)? = null,
+  modifier: Modifier = Modifier
+) {
+  LaunchedEffect(song.id) {
+    if (onCheckLyrics != null) {
+      delay(350L)
+      onCheckLyrics.invoke(song)
+    }
+  }
+
+  var showContextMenu by remember(song.id) { mutableStateOf(false) }
+  val accentColor = MaterialTheme.colorScheme.primary
+  val hasMenuActions = onAddToAlbumClick != null || onEditPhotoClick != null || onDeleteClick != null
+
+  val heartScale by animateFloatAsState(
+    targetValue = if (song.isFavorite) 1.15f else 1.0f,
+    animationSpec = if (reducedMotion) snap() else spring(dampingRatio = Spring.DampingRatioMediumBouncy),
+    label = "frameless_heart_pop"
+  )
+
+  val activeTintBg = when {
+    isCurrent && darkTheme -> accentColor.copy(alpha = 0.12f)
+    isCurrent -> accentColor.copy(alpha = 0.08f)
+    else -> Color.Transparent
+  }
+
+  Row(
+    modifier = modifier
+      .fillMaxWidth()
+      .clip(RoundedCornerShape(18.dp))
+      .background(activeTintBg)
+      .combinedClickable(
+        onClick = onSongClick,
+        onLongClick = { if (hasMenuActions) showContextMenu = true }
+      )
+      .padding(horizontal = 6.dp, vertical = 7.dp)
+      .testTag("song_row_${song.id}"),
+    verticalAlignment = Alignment.CenterVertically,
+    horizontalArrangement = Arrangement.spacedBy(12.dp)
+  ) {
+    // 52dp rounded-square cover art (14dp corner radius) matching the reference screenshot
+    Box {
+      Box(
+        modifier = Modifier
+          .size(50.dp)
+          .clip(RoundedCornerShape(14.dp))
+          .border(
+            width = if (isCurrent) 1.4.dp else 0.8.dp,
+            color = if (isCurrent) accentColor.copy(alpha = 0.78f)
+            else Color.White.copy(alpha = if (darkTheme) 0.14f else 0.72f),
+            shape = RoundedCornerShape(14.dp)
+          ),
+        contentAlignment = Alignment.Center
+      ) {
+        SongArtwork(song = song, modifier = Modifier.fillMaxSize(), cornerRadius = 14.dp)
+        if (isCurrent) {
+          Box(
+            modifier = Modifier
+              .fillMaxSize()
+              .background(Color.Black.copy(alpha = 0.40f)),
+            contentAlignment = Alignment.Center
+          ) {
+            EqualizerBars(
+              isPlaying = isPlaying,
+              color = accentColor,
+              reducedMotion = reducedMotion,
+              barWidth = 2.8.dp,
+              maxHeight = 13.dp
+            )
+          }
+        }
+      }
+
+      if (hasMenuActions) {
+        LibrarySongGlassMenu(
+          expanded = showContextMenu,
+          reducedMotion = reducedMotion,
+          onDismissRequest = { showContextMenu = false },
+          onAddToAlbumClick = onAddToAlbumClick,
+          onEditPhotoClick = onEditPhotoClick,
+          onDeleteClick = onDeleteClick
+        )
+      }
+    }
+
+    // Center: Two clean text lines (Title + Artist/Genre/Duration)
+    Column(
+      modifier = Modifier.weight(1f),
+      verticalArrangement = Arrangement.spacedBy(4.dp)
+    ) {
+      Text(
+        text = song.title,
+        style = MaterialTheme.typography.bodyMedium.copy(
+          fontSize = 15.sp,
+          lineHeight = 19.sp,
+          fontWeight = FontWeight.Bold
+        ),
+        maxLines = 1,
+        overflow = TextOverflow.Ellipsis,
+        color = if (isCurrent) accentColor else MaterialTheme.colorScheme.onBackground
+      )
+
+      val durationStr = if (song.durationSeconds > 0L) {
+        "${song.durationSeconds / 60}:${String.format("%02d", song.durationSeconds % 60)}"
+      } else ""
+      val subtitleText = if (durationStr.isNotBlank()) "${song.artist} · $durationStr" else song.artist
+
+      Row(
+        verticalAlignment = Alignment.CenterVertically,
+        horizontalArrangement = Arrangement.spacedBy(6.dp)
+      ) {
+        if (!genreBadge.isNullOrBlank()) {
+          Box(
+            modifier = Modifier
+              .clip(CircleShape)
+              .background(accentColor.copy(alpha = if (darkTheme) 0.15f else 0.11f))
+              .border(
+                width = 0.7.dp,
+                color = accentColor.copy(alpha = if (darkTheme) 0.38f else 0.28f),
+                shape = CircleShape
+              )
+              .then(
+                if (onGenreBadgeClick != null) Modifier.clickable { onGenreBadgeClick() }
+                else Modifier
+              )
+              .padding(horizontal = 6.5.dp, vertical = 1.dp)
+              .testTag("song_genre_badge_${song.id}"),
+            contentAlignment = Alignment.Center
+          ) {
+            Text(
+              text = genreBadge,
+              style = MaterialTheme.typography.labelSmall.copy(
+                fontSize = 9.5.sp,
+                lineHeight = 12.sp,
+                fontWeight = FontWeight.SemiBold
+              ),
+              color = if (darkTheme) {
+                androidx.compose.ui.graphics.lerp(accentColor, Color.White, 0.28f)
+              } else {
+                accentColor
+              },
+              maxLines = 1
+            )
+          }
+        }
+
+        Text(
+          text = subtitleText,
+          style = MaterialTheme.typography.bodySmall.copy(
+            fontSize = 12.5.sp,
+            lineHeight = 16.sp
+          ),
+          maxLines = 1,
+          overflow = TextOverflow.Ellipsis,
+          color = MaterialTheme.colorScheme.onSurfaceVariant,
+          modifier = Modifier.weight(1f, fill = false)
+        )
+      }
+    }
+
+    // Right: Subtle favorite heart + clean circular play/action pill matching the reference photo
+    Row(
+      verticalAlignment = Alignment.CenterVertically,
+      horizontalArrangement = Arrangement.spacedBy(4.dp)
+    ) {
+      Box(
+        modifier = Modifier
+          .size(32.dp)
+          .clip(CircleShape)
+          .clickable { onFavoriteClick() }
+          .testTag("song_favorite_button_${song.id}"),
+        contentAlignment = Alignment.Center
+      ) {
+        Icon(
+          imageVector = if (song.isFavorite) Icons.Rounded.Favorite else Icons.Rounded.FavoriteBorder,
+          contentDescription = "Favorite",
+          tint = if (song.isFavorite) {
+            MaterialTheme.colorScheme.error
+          } else if (darkTheme) {
+            Color.White.copy(alpha = 0.55f)
+          } else {
+            MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.70f)
+          },
+          modifier = Modifier
+            .scale(heartScale)
+            .size(18.dp)
+        )
+      }
+
+      Surface(
+        shape = CircleShape,
+        color = when {
+          isCurrent -> accentColor.copy(alpha = 0.22f)
+          darkTheme -> Color.White.copy(alpha = 0.10f)
+          else -> Color(0xFF94A3B8).copy(alpha = 0.18f)
+        },
+        border = BorderStroke(
+          0.9.dp,
+          when {
+            isCurrent -> accentColor.copy(alpha = 0.55f)
+            darkTheme -> Color.White.copy(alpha = 0.12f)
+            else -> Color(0xFF64748B).copy(alpha = 0.14f)
+          }
+        ),
+        modifier = Modifier
+          .size(34.dp)
+          .clip(CircleShape)
+          .clickable { onSongClick() }
+          .testTag("song_play_button_${song.id}")
+      ) {
+        Box(contentAlignment = Alignment.Center) {
+          Icon(
+            imageVector = if (isCurrent && isPlaying) Icons.Rounded.Pause else Icons.Rounded.PlayArrow,
+            contentDescription = if (isCurrent && isPlaying) "Pause" else "Play",
+            tint = if (isCurrent) accentColor else if (darkTheme) Color.White.copy(alpha = 0.90f) else MaterialTheme.colorScheme.onSurface,
+            modifier = Modifier.size(18.dp)
+          )
+        }
+      }
+    }
+  }
+}
+
 @Composable
 fun SongDownloadRow(
   song: Song,

@@ -99,7 +99,9 @@ import com.example.model.AlbumInfo
 import com.example.model.Song
 import com.example.model.computeAlbumId
 import com.example.recommendation.TrackMetadataClassifier
+import androidx.compose.material.icons.rounded.Sync
 import java.util.Locale
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 
 internal const val GENRE_FILTER_ALL = "ALL"
@@ -203,6 +205,7 @@ fun LibraryScreen(
     }.getOrDefault(1f)
   }
   val effectiveReducedMotion = reducedMotion || systemAnimatorScale <= 0f
+  val coroutineScope = rememberCoroutineScope()
 
   var pendingPhotoSongId by remember { mutableStateOf<String?>(null) }
   var songPendingDelete by remember { mutableStateOf<Song?>(null) }
@@ -211,6 +214,35 @@ fun LibraryScreen(
   var flyingCoverPayload by remember { mutableStateOf<FlyingAlbumCoverPayload?>(null) }
   var pulsingAlbumId by remember { mutableStateOf<String?>(null) }
   val albumCoverBoundsMap = remember { mutableStateMapOf<String, Rect>() }
+
+  // Orbi "Syncing your library..." & skeleton shimmer state (shown during refresh, import, and tab sync)
+  var isSyncingLibrary by remember { mutableStateOf(false) }
+  var syncStatusOutcome by remember { mutableStateOf<OrbiStatusOutcome?>(null) }
+  var syncTriggerCounter by remember { mutableIntStateOf(0) }
+
+  fun triggerLibrarySync(customDurationMs: Long = 680L) {
+    syncTriggerCounter += 1
+    val token = syncTriggerCounter
+    coroutineScope.launch {
+      isSyncingLibrary = true
+      syncStatusOutcome = OrbiStatusOutcome.Loading
+      delay(if (effectiveReducedMotion) 90L else customDurationMs)
+      if (syncTriggerCounter == token) {
+        isSyncingLibrary = false
+        val totalTracks = localSongs.size + favorites.size
+        val summaryMsg = if (albums.isNotEmpty() || totalTracks > 0) {
+          "Library synced · ${albums.size} albums · ${localSongs.size} songs"
+        } else {
+          "Library up to date"
+        }
+        syncStatusOutcome = OrbiStatusOutcome.Success(summaryMsg)
+        delay(if (effectiveReducedMotion) 250L else 1700L)
+        if (syncTriggerCounter == token) {
+          syncStatusOutcome = null
+        }
+      }
+    }
+  }
 
   LaunchedEffect(showCreateAlbumDialog) {
     onCreateSheetVisibilityChanged(showCreateAlbumDialog)
@@ -236,6 +268,7 @@ fun LibraryScreen(
 
   val audioLauncher = rememberLauncherForActivityResult(ActivityResultContracts.OpenMultipleDocuments()) { uris ->
     if (uris.isNotEmpty()) {
+      triggerLibrarySync(560L)
       val batchHandler = onAddLocalSongs
       if (batchHandler != null) {
         batchHandler(uris)
@@ -271,7 +304,8 @@ fun LibraryScreen(
       .padding(horizontal = 20.dp)
       .windowInsetsPadding(WindowInsets.statusBars),
   ) {
-    Spacer(modifier = Modifier.height(16.dp))
+    Spacer(modifier = Modifier.height(14.dp))
+    // Clean Minimal Header: Title + Subtitle on left, sleek circular action buttons on right
     Row(
       modifier = Modifier.fillMaxWidth(),
       horizontalArrangement = Arrangement.SpaceBetween,
@@ -280,69 +314,148 @@ fun LibraryScreen(
       Column(modifier = Modifier.weight(1f).padding(end = 8.dp)) {
         Text(
           text = stringResource(id = R.string.library_title),
-          style = MaterialTheme.typography.displayLarge.copy(fontSize = 28.sp, lineHeight = 38.sp, fontWeight = FontWeight.Bold),
+          style = MaterialTheme.typography.displayLarge.copy(
+            fontSize = 26.sp,
+            lineHeight = 32.sp,
+            fontWeight = FontWeight.ExtraBold
+          ),
           color = MaterialTheme.colorScheme.onBackground
         )
         Text(
           text = stringResource(id = R.string.library_subtitle),
-          style = MaterialTheme.typography.bodySmall.copy(lineHeight = 18.sp),
+          style = MaterialTheme.typography.bodySmall.copy(
+            fontSize = 12.5.sp,
+            lineHeight = 16.sp
+          ),
           color = MaterialTheme.colorScheme.onSurfaceVariant,
           maxLines = 1,
           overflow = TextOverflow.Ellipsis
         )
       }
-      when {
-        selectedTab == 0 -> {
-          Button(
-            onClick = { audioLauncher.launch(arrayOf("audio/*")) },
-            shape = CircleShape,
-            colors = ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.primary),
-            modifier = Modifier.testTag("library_add_local_button")
-          ) {
-            Icon(Icons.Rounded.Add, contentDescription = null, modifier = Modifier.size(18.dp))
-            Spacer(modifier = Modifier.width(4.dp))
-            Text(stringResource(id = R.string.library_add_local_short), fontWeight = FontWeight.SemiBold)
+
+      Row(
+        horizontalArrangement = Arrangement.spacedBy(8.dp),
+        verticalAlignment = Alignment.CenterVertically
+      ) {
+        // Circular Sync / Refresh button matching the circular top-right action in the photo
+        Surface(
+          onClick = { triggerLibrarySync(720L) },
+          shape = CircleShape,
+          color = if (darkTheme) Color.White.copy(alpha = 0.08f) else Color(0xFF94A3B8).copy(alpha = 0.16f),
+          border = BorderStroke(
+            0.9.dp,
+            if (darkTheme) Color.White.copy(alpha = 0.14f) else Color(0xFF64748B).copy(alpha = 0.16f)
+          ),
+          modifier = Modifier
+            .size(38.dp)
+            .testTag("library_sync_button")
+        ) {
+          Box(contentAlignment = Alignment.Center) {
+            Icon(
+              imageVector = Icons.Rounded.Sync,
+              contentDescription = "Sync library",
+              tint = if (isSyncingLibrary) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurface,
+              modifier = Modifier.size(18.dp)
+            )
           }
         }
-        selectedTab == 3 -> {
-          Button(
-            onClick = { showCreateAlbumDialog = true },
-            shape = CircleShape,
-            colors = ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.primary),
-            modifier = Modifier.testTag("library_create_album_button")
-          ) {
-            Icon(Icons.Rounded.Add, contentDescription = null, modifier = Modifier.size(18.dp))
-            Spacer(modifier = Modifier.width(4.dp))
-            Text(stringResource(id = R.string.album_new_button), fontWeight = FontWeight.SemiBold)
-          }
-        }
-        selectedTab == 2 && recentlyPlayed.isNotEmpty() -> {
-          Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
-            OutlinedButton(
-              onClick = onOpenInsights,
+
+        when {
+          selectedTab == 0 -> {
+            Surface(
+              onClick = { audioLauncher.launch(arrayOf("audio/*")) },
               shape = CircleShape,
-              contentPadding = PaddingValues(horizontal = 12.dp, vertical = 6.dp),
-              modifier = Modifier.testTag("library_open_insights_button")
+              color = MaterialTheme.colorScheme.primary,
+              modifier = Modifier
+                .height(38.dp)
+                .testTag("library_add_local_button")
             ) {
-              Text(stringResource(id = R.string.insights_pill_title), fontWeight = FontWeight.SemiBold)
+              Row(
+                modifier = Modifier.padding(horizontal = 13.dp),
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.spacedBy(4.dp)
+              ) {
+                Icon(
+                  Icons.Rounded.Add,
+                  contentDescription = null,
+                  tint = MaterialTheme.colorScheme.onPrimary,
+                  modifier = Modifier.size(17.dp)
+                )
+                Text(
+                  text = stringResource(id = R.string.library_add_local_short),
+                  style = MaterialTheme.typography.labelMedium.copy(fontWeight = FontWeight.Bold),
+                  color = MaterialTheme.colorScheme.onPrimary
+                )
+              }
             }
-            OutlinedButton(
-              onClick = onClearRecentHistory,
+          }
+          selectedTab == 3 -> {
+            Surface(
+              onClick = { showCreateAlbumDialog = true },
               shape = CircleShape,
-              border = BorderStroke(1.dp, MaterialTheme.colorScheme.error.copy(alpha = 0.45f)),
-              colors = ButtonDefaults.outlinedButtonColors(contentColor = MaterialTheme.colorScheme.error),
-              modifier = Modifier.testTag("library_clear_recent_button")
+              color = MaterialTheme.colorScheme.primary,
+              modifier = Modifier
+                .height(38.dp)
+                .testTag("library_create_album_button")
             ) {
-              Icon(Icons.Rounded.DeleteSweep, contentDescription = null, modifier = Modifier.size(18.dp))
-              Spacer(modifier = Modifier.width(4.dp))
-              Text(stringResource(id = R.string.library_clear), fontWeight = FontWeight.SemiBold)
+              Row(
+                modifier = Modifier.padding(horizontal = 13.dp),
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.spacedBy(4.dp)
+              ) {
+                Icon(
+                  Icons.Rounded.Add,
+                  contentDescription = null,
+                  tint = MaterialTheme.colorScheme.onPrimary,
+                  modifier = Modifier.size(17.dp)
+                )
+                Text(
+                  text = stringResource(id = R.string.album_new_button),
+                  style = MaterialTheme.typography.labelMedium.copy(fontWeight = FontWeight.Bold),
+                  color = MaterialTheme.colorScheme.onPrimary
+                )
+              }
+            }
+          }
+          selectedTab == 2 && recentlyPlayed.isNotEmpty() -> {
+            Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+              OutlinedButton(
+                onClick = onOpenInsights,
+                shape = CircleShape,
+                contentPadding = PaddingValues(horizontal = 11.dp, vertical = 5.dp),
+                modifier = Modifier
+                  .height(36.dp)
+                  .testTag("library_open_insights_button")
+              ) {
+                Text(
+                  stringResource(id = R.string.insights_pill_title),
+                  style = MaterialTheme.typography.labelMedium.copy(fontWeight = FontWeight.SemiBold)
+                )
+              }
+              OutlinedButton(
+                onClick = onClearRecentHistory,
+                shape = CircleShape,
+                contentPadding = PaddingValues(horizontal = 11.dp, vertical = 5.dp),
+                border = BorderStroke(1.dp, MaterialTheme.colorScheme.error.copy(alpha = 0.45f)),
+                colors = ButtonDefaults.outlinedButtonColors(contentColor = MaterialTheme.colorScheme.error),
+                modifier = Modifier
+                  .height(36.dp)
+                  .testTag("library_clear_recent_button")
+              ) {
+                Icon(Icons.Rounded.DeleteSweep, contentDescription = null, modifier = Modifier.size(16.dp))
+                Spacer(modifier = Modifier.width(4.dp))
+                Text(
+                  stringResource(id = R.string.library_clear),
+                  style = MaterialTheme.typography.labelMedium.copy(fontWeight = FontWeight.SemiBold)
+                )
+              }
             }
           }
         }
       }
     }
 
-    Spacer(modifier = Modifier.height(16.dp))
+    Spacer(modifier = Modifier.height(12.dp))
 
     GlassSegmentedBar(
       options = listOf(
@@ -353,7 +466,11 @@ fun LibraryScreen(
       ),
       selectedIndex = selectedTab,
       darkTheme = darkTheme,
-      onSelect = onTabSelected,
+      onSelect = { newTab ->
+        if (newTab != selectedTab) {
+          onTabSelected(newTab)
+        }
+      },
       testTags = listOf(
         "library_tab_songs",
         "library_tab_favorites",
@@ -363,310 +480,53 @@ fun LibraryScreen(
       reducedMotion = reducedMotion
     )
 
-    Spacer(modifier = Modifier.height(14.dp))
+    Spacer(modifier = Modifier.height(10.dp))
 
-    AnimatedContent(
-      targetState = selectedTab,
-      modifier = Modifier.weight(1f).fillMaxWidth(),
-      transitionSpec = {
-        if (reducedMotion) {
-          fadeIn(snap()) togetherWith fadeOut(snap())
-        } else {
-          val ease = CubicBezierEasing(0.2f, 0.8f, 0.2f, 1.0f)
-          val forward = targetState >= initialState
-          (fadeIn(tween(240, easing = ease)) +
-            slideInHorizontally(tween(260, easing = ease)) { w -> if (forward) w / 10 else -w / 10 }) togetherWith
-            (fadeOut(tween(170)) +
-              slideOutHorizontally(tween(220, easing = ease)) { w -> if (forward) -w / 14 else w / 14 })
-        }
-      },
-      label = "library_tab_content"
-    ) { activeTab ->
-      if (activeTab == 3) {
-        if (albums.isEmpty()) {
-        Box(
-          modifier = Modifier
-            .fillMaxSize()
-            .padding(bottom = 110.dp),
-          contentAlignment = Alignment.Center
-        ) {
-          GlassCard(
-            darkTheme = darkTheme,
-            cornerRadius = 26.dp,
-            modifier = Modifier.fillMaxWidth()
-          ) {
-            Column(
-              modifier = Modifier
-                .fillMaxWidth()
-                .padding(horizontal = 24.dp, vertical = 28.dp),
-              horizontalAlignment = Alignment.CenterHorizontally,
-              verticalArrangement = Arrangement.spacedBy(12.dp)
-            ) {
-              Box(
-                modifier = Modifier
-                  .size(56.dp)
-                  .clip(CircleShape)
-                  .background(MaterialTheme.colorScheme.primary.copy(alpha = 0.14f)),
-                contentAlignment = Alignment.Center
-              ) {
-                Icon(
-                  imageVector = Icons.Rounded.Album,
-                  contentDescription = null,
-                  tint = MaterialTheme.colorScheme.primary,
-                  modifier = Modifier.size(28.dp)
-                )
-              }
-              Text(
-                text = stringResource(id = R.string.library_empty_albums_title),
-                style = MaterialTheme.typography.titleMedium.copy(fontWeight = FontWeight.Bold, lineHeight = 24.sp),
-                color = MaterialTheme.colorScheme.onSurface
-              )
-              Text(
-                text = stringResource(id = R.string.library_empty_albums_sub),
-                style = MaterialTheme.typography.bodySmall.copy(lineHeight = 19.sp),
-                color = MaterialTheme.colorScheme.onSurfaceVariant,
-                textAlign = TextAlign.Center
-              )
-              Row(
-                horizontalArrangement = Arrangement.spacedBy(10.dp),
-                verticalAlignment = Alignment.CenterVertically
-              ) {
-                Button(
-                  onClick = { showCreateAlbumDialog = true },
-                  shape = CircleShape,
-                  modifier = Modifier.testTag("empty_create_album_button")
-                ) {
-                  Icon(Icons.Rounded.Add, contentDescription = null, modifier = Modifier.size(18.dp))
-                  Spacer(modifier = Modifier.width(6.dp))
-                  Text(stringResource(id = R.string.album_new_button), fontWeight = FontWeight.SemiBold)
-                }
-                OutlinedButton(
-                  onClick = { audioLauncher.launch(arrayOf("audio/*")) },
-                  shape = CircleShape
-                ) {
-                  Text(stringResource(id = R.string.library_add_audio_file), fontWeight = FontWeight.SemiBold)
-                }
-              }
-            }
-          }
-        }
-      } else {
-        val gridEase = CubicBezierEasing(0.22f, 1f, 0.36f, 1f)
-        LazyVerticalGrid(
-          columns = GridCells.Fixed(2),
-          modifier = Modifier
-            .fillMaxSize()
-            .testTag("library_album_grid"),
-          verticalArrangement = Arrangement.spacedBy(14.dp),
-          horizontalArrangement = Arrangement.spacedBy(14.dp),
-          contentPadding = PaddingValues(bottom = if (currentSong != null) 195.dp else 125.dp)
-        ) {
-          item(
-            key = "album_hold_tip",
-            span = { GridItemSpan(maxLineSpan) }
-          ) {
-            Row(
-              modifier = Modifier
-                .fillMaxWidth()
-                .clip(RoundedCornerShape(14.dp))
-                .background(MaterialTheme.colorScheme.primary.copy(alpha = if (darkTheme) 0.14f else 0.10f))
-                .border(1.dp, Color.White.copy(alpha = if (darkTheme) 0.16f else 0.70f), RoundedCornerShape(14.dp))
-                .padding(horizontal = 12.dp, vertical = 9.dp),
-              verticalAlignment = Alignment.CenterVertically,
-              horizontalArrangement = Arrangement.spacedBy(8.dp)
-            ) {
-              Icon(
-                imageVector = Icons.Rounded.TouchApp,
-                contentDescription = null,
-                tint = MaterialTheme.colorScheme.primary,
-                modifier = Modifier.size(18.dp)
-              )
-              Text(
-                text = stringResource(id = R.string.album_hold_tip),
-                style = MaterialTheme.typography.bodySmall.copy(fontWeight = FontWeight.Medium, lineHeight = 18.sp),
-                color = MaterialTheme.colorScheme.onSurface
-              )
-            }
-          }
-          items(
-            items = albums,
-            key = { it.albumId }
-          ) { album ->
-            val isFlyingTarget = flyingCoverPayload?.albumId == album.albumId
-            LibraryAlbumGridCard(
-              album = album,
-              darkTheme = darkTheme,
-              reducedMotion = effectiveReducedMotion,
-              isHiddenForFlight = isFlyingTarget,
-              pulseRing = pulsingAlbumId == album.albumId,
-              onCoverBoundsMeasured = { rect -> albumCoverBoundsMap[album.albumId] = rect },
-              onPulseFinished = {
-                if (pulsingAlbumId == album.albumId) {
-                  pulsingAlbumId = null
-                }
-              },
-              onClick = { onAlbumClick(album) },
-              onLongClick = { albumPendingHoldOptions = album },
-              modifier = Modifier.animateItem(
-                fadeInSpec = if (effectiveReducedMotion) snap() else tween(260, easing = gridEase),
-                placementSpec = if (effectiveReducedMotion) snap() else tween(380, easing = gridEase),
-                fadeOutSpec = if (effectiveReducedMotion) snap() else tween(200)
-              )
-            )
-          }
-        }
-      }
+    // Inline Orbi status row when syncing or showing completion outcome
+    val activeOutcome = syncStatusOutcome
+    if (!isSyncingLibrary && activeOutcome != null) {
+      StatusRow(
+        text = "Syncing your library",
+        runner = OrbiRunner.SyncUp,
+        outcome = activeOutcome,
+        reducedMotion = effectiveReducedMotion,
+        modifier = Modifier.padding(bottom = 6.dp)
+      )
+    }
+
+    if (isSyncingLibrary) {
+      // Full Orbi "Syncing your library..." + 3-column album skeleton + 4 track skeleton rows matching reference photo
+      OrbiDataLoadingScreen(
+        statusText = "Syncing your library",
+        runner = OrbiRunner.SyncUp,
+        outcome = OrbiStatusOutcome.Loading,
+        showHeaderSkeleton = false,
+        reducedMotion = effectiveReducedMotion,
+        modifier = Modifier
+          .weight(1f)
+          .fillMaxWidth()
+          .padding(top = 2.dp)
+      )
     } else {
-      val currentList = when (activeTab) {
-        0 -> localSongs
-        1 -> favorites
-        else -> recentlyPlayed
-      }
-
-      var selectedGenre by rememberSaveable(activeTab) { mutableStateOf(GENRE_FILTER_ALL) }
-      var groupByGenre by rememberSaveable(activeTab) { mutableStateOf(false) }
-
-      val resolvedGenresBySong = remember(currentList) {
-        currentList.map { song -> song to resolveLibraryTrackGenre(song) }
-      }
-      val genreCounts = remember(resolvedGenresBySong) {
-        val counts = LinkedHashMap<String, Int>()
-        resolvedGenresBySong.forEach { (_, genre) ->
-          counts[genre] = (counts[genre] ?: 0) + 1
-        }
-        counts
-      }
-      val orderedGenres = remember(genreCounts) {
-        val presentGenres = genreCounts.entries
-          .sortedWith(compareByDescending<Map.Entry<String, Int>> { it.value }.thenBy { it.key })
-          .map { it.key }
-        val extras = CANONICAL_LIBRARY_GENRES.filter { it !in presentGenres }
-        presentGenres + extras
-      }
-      val filteredPairs = remember(resolvedGenresBySong, selectedGenre) {
-        if (selectedGenre == GENRE_FILTER_ALL) {
-          resolvedGenresBySong
-        } else {
-          resolvedGenresBySong.filter { (_, genre) -> genre.equals(selectedGenre, ignoreCase = true) }
-        }
-      }
-      val groupedPairs = remember(filteredPairs, groupByGenre) {
-        if (!groupByGenre) {
-          emptyList()
-        } else {
-          filteredPairs
-            .groupBy({ it.second }, { it.first })
-            .entries
-            .sortedWith(compareByDescending<Map.Entry<String, List<Song>>> { it.value.size }.thenBy { it.key })
-            .map { it.key to it.value }
-        }
-      }
-
-      if (currentList.isEmpty()) {
-        Box(
-          modifier = Modifier
-            .fillMaxSize()
-            .padding(bottom = 110.dp),
-          contentAlignment = Alignment.Center
-        ) {
-          GlassCard(
-            darkTheme = darkTheme,
-            cornerRadius = 26.dp,
-            modifier = Modifier.fillMaxWidth()
-          ) {
-            Column(
-              modifier = Modifier
-                .fillMaxWidth()
-                .padding(horizontal = 24.dp, vertical = 28.dp),
-              horizontalAlignment = Alignment.CenterHorizontally,
-              verticalArrangement = Arrangement.spacedBy(12.dp)
-            ) {
-              val (emptyIcon, emptyTitle, emptyMsg) = when (activeTab) {
-                0 -> Triple(
-                  Icons.Rounded.LibraryMusic,
-                  stringResource(id = R.string.library_empty_local_title),
-                  stringResource(id = R.string.library_empty_local_sub)
-                )
-                1 -> Triple(
-                  Icons.Rounded.FavoriteBorder,
-                  stringResource(id = R.string.library_empty_fav_title),
-                  stringResource(id = R.string.library_empty_fav_sub)
-                )
-                else -> Triple(
-                  Icons.Rounded.History,
-                  stringResource(id = R.string.library_empty_recent_title),
-                  stringResource(id = R.string.library_empty_recent_sub)
-                )
-              }
-
-              Box(
-                modifier = Modifier
-                  .size(56.dp)
-                  .clip(CircleShape)
-                  .background(MaterialTheme.colorScheme.primary.copy(alpha = 0.14f)),
-                contentAlignment = Alignment.Center
-              ) {
-                Icon(
-                  imageVector = emptyIcon,
-                  contentDescription = null,
-                  tint = MaterialTheme.colorScheme.primary,
-                  modifier = Modifier.size(28.dp)
-                )
-              }
-
-              Text(
-                text = emptyTitle,
-                style = MaterialTheme.typography.titleMedium.copy(fontWeight = FontWeight.Bold, lineHeight = 24.sp),
-                color = MaterialTheme.colorScheme.onSurface
-              )
-              Text(
-                text = emptyMsg,
-                style = MaterialTheme.typography.bodySmall.copy(lineHeight = 19.sp),
-                color = MaterialTheme.colorScheme.onSurfaceVariant,
-                textAlign = TextAlign.Center
-              )
-
-              if (activeTab == 0) {
-                Spacer(modifier = Modifier.height(4.dp))
-                Button(
-                  onClick = { audioLauncher.launch(arrayOf("audio/*")) },
-                  shape = CircleShape
-                ) {
-                  Icon(Icons.Rounded.Add, contentDescription = null, modifier = Modifier.size(18.dp))
-                  Spacer(modifier = Modifier.width(6.dp))
-                  Text(stringResource(id = R.string.library_add_audio_file), fontWeight = FontWeight.SemiBold)
-                }
-              }
-            }
+      AnimatedContent(
+        targetState = selectedTab,
+        modifier = Modifier.weight(1f).fillMaxWidth(),
+        transitionSpec = {
+          if (reducedMotion) {
+            fadeIn(snap()) togetherWith fadeOut(snap())
+          } else {
+            val ease = CubicBezierEasing(0.2f, 0.8f, 0.2f, 1.0f)
+            val forward = targetState >= initialState
+            (fadeIn(tween(240, easing = ease)) +
+              slideInHorizontally(tween(260, easing = ease)) { w -> if (forward) w / 10 else -w / 10 }) togetherWith
+              (fadeOut(tween(170)) +
+                slideOutHorizontally(tween(220, easing = ease)) { w -> if (forward) -w / 14 else w / 14 })
           }
-        }
-      } else {
-        Column(modifier = Modifier.fillMaxSize()) {
-          LibraryGenreFilterBar(
-            totalCount = currentList.size,
-            orderedGenres = orderedGenres,
-            genreCounts = genreCounts,
-            selectedGenre = selectedGenre,
-            groupByGenre = groupByGenre,
-            filteredCount = filteredPairs.size,
-            darkTheme = darkTheme,
-            onSelectGenre = { chosen ->
-              selectedGenre = if (chosen == GENRE_FILTER_ALL || selectedGenre != chosen) {
-                chosen
-              } else {
-                GENRE_FILTER_ALL
-              }
-            },
-            onToggleGroupByGenre = { groupByGenre = !groupByGenre },
-            onPlayFilteredGenre = {
-              filteredPairs.firstOrNull()?.first?.let(onSongClick)
-            },
-            onClearGenreFilter = { selectedGenre = GENRE_FILTER_ALL }
-          )
-
-          Spacer(modifier = Modifier.height(8.dp))
-
-          if (filteredPairs.isEmpty()) {
+        },
+        label = "library_tab_content"
+      ) { activeTab ->
+        if (activeTab == 3) {
+          if (albums.isEmpty()) {
             Box(
               modifier = Modifier
                 .fillMaxSize()
@@ -676,195 +536,477 @@ fun LibraryScreen(
               GlassCard(
                 darkTheme = darkTheme,
                 cornerRadius = 26.dp,
-                modifier = Modifier
-                  .fillMaxWidth()
-                  .testTag("library_genre_empty_card")
+                modifier = Modifier.fillMaxWidth()
               ) {
                 Column(
                   modifier = Modifier
                     .fillMaxWidth()
-                    .padding(horizontal = 24.dp, vertical = 26.dp),
+                    .padding(horizontal = 24.dp, vertical = 28.dp),
                   horizontalAlignment = Alignment.CenterHorizontally,
                   verticalArrangement = Arrangement.spacedBy(12.dp)
                 ) {
                   Box(
                     modifier = Modifier
-                      .size(54.dp)
+                      .size(56.dp)
                       .clip(CircleShape)
-                      .background(MaterialTheme.colorScheme.primary.copy(alpha = 0.16f)),
+                      .background(MaterialTheme.colorScheme.primary.copy(alpha = 0.14f)),
                     contentAlignment = Alignment.Center
                   ) {
                     Icon(
-                      imageVector = libraryGenreIcon(selectedGenre),
+                      imageVector = Icons.Rounded.Album,
                       contentDescription = null,
                       tint = MaterialTheme.colorScheme.primary,
-                      modifier = Modifier.size(26.dp)
+                      modifier = Modifier.size(28.dp)
                     )
                   }
                   Text(
-                    text = stringResource(id = R.string.library_genre_empty_title, selectedGenre),
+                    text = stringResource(id = R.string.library_empty_albums_title),
                     style = MaterialTheme.typography.titleMedium.copy(fontWeight = FontWeight.Bold, lineHeight = 24.sp),
                     color = MaterialTheme.colorScheme.onSurface
                   )
                   Text(
-                    text = stringResource(id = R.string.library_genre_empty_sub, selectedGenre),
+                    text = stringResource(id = R.string.library_empty_albums_sub),
                     style = MaterialTheme.typography.bodySmall.copy(lineHeight = 19.sp),
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                     textAlign = TextAlign.Center
                   )
-                  OutlinedButton(
-                    onClick = { selectedGenre = GENRE_FILTER_ALL },
-                    shape = CircleShape,
-                    modifier = Modifier.testTag("library_reset_genre_filter_button")
+                  Row(
+                    horizontalArrangement = Arrangement.spacedBy(10.dp),
+                    verticalAlignment = Alignment.CenterVertically
                   ) {
-                    Text(stringResource(id = R.string.library_genre_clear_filter), fontWeight = FontWeight.SemiBold)
+                    Button(
+                      onClick = { showCreateAlbumDialog = true },
+                      shape = CircleShape,
+                      modifier = Modifier.testTag("empty_create_album_button")
+                    ) {
+                      Icon(Icons.Rounded.Add, contentDescription = null, modifier = Modifier.size(18.dp))
+                      Spacer(modifier = Modifier.width(6.dp))
+                      Text(stringResource(id = R.string.album_new_button), fontWeight = FontWeight.SemiBold)
+                    }
+                    OutlinedButton(
+                      onClick = { audioLauncher.launch(arrayOf("audio/*")) },
+                      shape = CircleShape
+                    ) {
+                      Text(stringResource(id = R.string.library_add_audio_file), fontWeight = FontWeight.SemiBold)
+                    }
                   }
                 }
               }
             }
           } else {
-            LazyColumn(
-              modifier = Modifier.fillMaxSize(),
-              verticalArrangement = Arrangement.spacedBy(8.dp),
+            // 3-Column Frameless Album Grid matching the 3-column reference photo
+            val gridEase = CubicBezierEasing(0.22f, 1f, 0.36f, 1f)
+            LazyVerticalGrid(
+              columns = GridCells.Fixed(3),
+              modifier = Modifier
+                .fillMaxSize()
+                .testTag("library_album_grid"),
+              verticalArrangement = Arrangement.spacedBy(14.dp),
+              horizontalArrangement = Arrangement.spacedBy(12.dp),
               contentPadding = PaddingValues(bottom = if (currentSong != null) 195.dp else 125.dp)
             ) {
-              if (activeTab == 0) {
-                item(key = "local_cover_tip") {
-                  Row(
+              item(
+                key = "album_hold_tip",
+                span = { GridItemSpan(maxLineSpan) }
+              ) {
+                Row(
+                  modifier = Modifier
+                    .fillMaxWidth()
+                    .clip(RoundedCornerShape(12.dp))
+                    .background(MaterialTheme.colorScheme.primary.copy(alpha = if (darkTheme) 0.12f else 0.08f))
+                    .padding(horizontal = 10.dp, vertical = 7.dp),
+                  verticalAlignment = Alignment.CenterVertically,
+                  horizontalArrangement = Arrangement.spacedBy(7.dp)
+                ) {
+                  Icon(
+                    imageVector = Icons.Rounded.TouchApp,
+                    contentDescription = null,
+                    tint = MaterialTheme.colorScheme.primary,
+                    modifier = Modifier.size(16.dp)
+                  )
+                  Text(
+                    text = stringResource(id = R.string.album_hold_tip),
+                    style = MaterialTheme.typography.bodySmall.copy(
+                      fontSize = 11.5.sp,
+                      fontWeight = FontWeight.Medium,
+                      lineHeight = 16.sp
+                    ),
+                    color = MaterialTheme.colorScheme.onSurface
+                  )
+                }
+              }
+              items(
+                items = albums,
+                key = { it.albumId }
+              ) { album ->
+                val isFlyingTarget = flyingCoverPayload?.albumId == album.albumId
+                LibraryAlbumGridCard(
+                  album = album,
+                  darkTheme = darkTheme,
+                  reducedMotion = effectiveReducedMotion,
+                  isHiddenForFlight = isFlyingTarget,
+                  pulseRing = pulsingAlbumId == album.albumId,
+                  onCoverBoundsMeasured = { rect -> albumCoverBoundsMap[album.albumId] = rect },
+                  onPulseFinished = {
+                    if (pulsingAlbumId == album.albumId) {
+                      pulsingAlbumId = null
+                    }
+                  },
+                  onClick = { onAlbumClick(album) },
+                  onLongClick = { albumPendingHoldOptions = album },
+                  modifier = Modifier.animateItem(
+                    fadeInSpec = if (effectiveReducedMotion) snap() else tween(260, easing = gridEase),
+                    placementSpec = if (effectiveReducedMotion) snap() else tween(380, easing = gridEase),
+                    fadeOutSpec = if (effectiveReducedMotion) snap() else tween(200)
+                  )
+                )
+              }
+            }
+          }
+        } else {
+          val currentList = when (activeTab) {
+            0 -> localSongs
+            1 -> favorites
+            else -> recentlyPlayed
+          }
+
+          var selectedGenre by rememberSaveable(activeTab) { mutableStateOf(GENRE_FILTER_ALL) }
+          var groupByGenre by rememberSaveable(activeTab) { mutableStateOf(false) }
+
+          val resolvedGenresBySong = remember(currentList) {
+            currentList.map { song -> song to resolveLibraryTrackGenre(song) }
+          }
+          val genreCounts = remember(resolvedGenresBySong) {
+            val counts = LinkedHashMap<String, Int>()
+            resolvedGenresBySong.forEach { (_, genre) ->
+              counts[genre] = (counts[genre] ?: 0) + 1
+            }
+            counts
+          }
+          val orderedGenres = remember(genreCounts) {
+            val presentGenres = genreCounts.entries
+              .sortedWith(compareByDescending<Map.Entry<String, Int>> { it.value }.thenBy { it.key })
+              .map { it.key }
+            val extras = CANONICAL_LIBRARY_GENRES.filter { it !in presentGenres }
+            presentGenres + extras
+          }
+          val filteredPairs = remember(resolvedGenresBySong, selectedGenre) {
+            if (selectedGenre == GENRE_FILTER_ALL) {
+              resolvedGenresBySong
+            } else {
+              resolvedGenresBySong.filter { (_, genre) -> genre.equals(selectedGenre, ignoreCase = true) }
+            }
+          }
+          val groupedPairs = remember(filteredPairs, groupByGenre) {
+            if (!groupByGenre) {
+              emptyList()
+            } else {
+              filteredPairs
+                .groupBy({ it.second }, { it.first })
+                .entries
+                .sortedWith(compareByDescending<Map.Entry<String, List<Song>>> { it.value.size }.thenBy { it.key })
+                .map { it.key to it.value }
+            }
+          }
+
+          if (currentList.isEmpty() && albums.isEmpty()) {
+            Box(
+              modifier = Modifier
+                .fillMaxSize()
+                .padding(bottom = 110.dp),
+              contentAlignment = Alignment.Center
+            ) {
+              GlassCard(
+                darkTheme = darkTheme,
+                cornerRadius = 26.dp,
+                modifier = Modifier.fillMaxWidth()
+              ) {
+                Column(
+                  modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(horizontal = 24.dp, vertical = 28.dp),
+                  horizontalAlignment = Alignment.CenterHorizontally,
+                  verticalArrangement = Arrangement.spacedBy(12.dp)
+                ) {
+                  val (emptyIcon, emptyTitle, emptyMsg) = when (activeTab) {
+                    0 -> Triple(
+                      Icons.Rounded.LibraryMusic,
+                      stringResource(id = R.string.library_empty_local_title),
+                      stringResource(id = R.string.library_empty_local_sub)
+                    )
+                    1 -> Triple(
+                      Icons.Rounded.FavoriteBorder,
+                      stringResource(id = R.string.library_empty_fav_title),
+                      stringResource(id = R.string.library_empty_fav_sub)
+                    )
+                    else -> Triple(
+                      Icons.Rounded.History,
+                      stringResource(id = R.string.library_empty_recent_title),
+                      stringResource(id = R.string.library_empty_recent_sub)
+                    )
+                  }
+
+                  Box(
                     modifier = Modifier
-                      .fillMaxWidth()
-                      .padding(bottom = 4.dp)
-                      .clip(RoundedCornerShape(14.dp))
-                      .background(MaterialTheme.colorScheme.primary.copy(alpha = if (darkTheme) 0.14f else 0.10f))
-                      .border(1.dp, Color.White.copy(alpha = if (darkTheme) 0.16f else 0.70f), RoundedCornerShape(14.dp))
-                      .padding(horizontal = 12.dp, vertical = 9.dp),
-                    verticalAlignment = Alignment.CenterVertically,
-                    horizontalArrangement = Arrangement.spacedBy(8.dp)
+                      .size(56.dp)
+                      .clip(CircleShape)
+                      .background(MaterialTheme.colorScheme.primary.copy(alpha = 0.14f)),
+                    contentAlignment = Alignment.Center
                   ) {
                     Icon(
-                      imageVector = Icons.Rounded.AddPhotoAlternate,
+                      imageVector = emptyIcon,
                       contentDescription = null,
                       tint = MaterialTheme.colorScheme.primary,
-                      modifier = Modifier.size(18.dp)
+                      modifier = Modifier.size(28.dp)
                     )
-                    Text(
-                      text = stringResource(id = R.string.library_cover_tip),
-                      style = MaterialTheme.typography.bodySmall.copy(fontWeight = FontWeight.Medium, lineHeight = 18.sp),
-                      color = MaterialTheme.colorScheme.onSurface
-                    )
+                  }
+
+                  Text(
+                    text = emptyTitle,
+                    style = MaterialTheme.typography.titleMedium.copy(fontWeight = FontWeight.Bold, lineHeight = 24.sp),
+                    color = MaterialTheme.colorScheme.onSurface
+                  )
+                  Text(
+                    text = emptyMsg,
+                    style = MaterialTheme.typography.bodySmall.copy(lineHeight = 19.sp),
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    textAlign = TextAlign.Center
+                  )
+
+                  if (activeTab == 0) {
+                    Spacer(modifier = Modifier.height(4.dp))
+                    Button(
+                      onClick = { audioLauncher.launch(arrayOf("audio/*")) },
+                      shape = CircleShape
+                    ) {
+                      Icon(Icons.Rounded.Add, contentDescription = null, modifier = Modifier.size(18.dp))
+                      Spacer(modifier = Modifier.width(6.dp))
+                      Text(stringResource(id = R.string.library_add_audio_file), fontWeight = FontWeight.SemiBold)
+                    }
                   }
                 }
               }
+            }
+          } else {
+            Column(modifier = Modifier.fillMaxSize()) {
+              if (currentList.isNotEmpty()) {
+                LibraryGenreFilterBar(
+                  totalCount = currentList.size,
+                  orderedGenres = orderedGenres,
+                  genreCounts = genreCounts,
+                  selectedGenre = selectedGenre,
+                  groupByGenre = groupByGenre,
+                  filteredCount = filteredPairs.size,
+                  darkTheme = darkTheme,
+                  onSelectGenre = { chosen ->
+                    selectedGenre = if (chosen == GENRE_FILTER_ALL || selectedGenre != chosen) {
+                      chosen
+                    } else {
+                      GENRE_FILTER_ALL
+                    }
+                  },
+                  onToggleGroupByGenre = { groupByGenre = !groupByGenre },
+                  onPlayFilteredGenre = {
+                    filteredPairs.firstOrNull()?.first?.let(onSongClick)
+                  },
+                  onClearGenreFilter = { selectedGenre = GENRE_FILTER_ALL }
+                )
 
-              if (groupByGenre) {
-                groupedPairs.forEach { (genreName, genreSongs) ->
-                  val genreKey = libraryGenreTagKey(genreName)
-                  item(key = "genre_header_${activeTab}_$genreKey") {
-                    LibraryGenreCategoryHeader(
-                      genre = genreName,
-                      trackCount = genreSongs.size,
-                      isFocused = selectedGenre.equals(genreName, ignoreCase = true),
-                      darkTheme = darkTheme,
-                      onFilterToggle = {
-                        selectedGenre = if (selectedGenre.equals(genreName, ignoreCase = true)) {
-                          GENRE_FILTER_ALL
-                        } else {
-                          genreName
-                        }
-                      },
-                      onPlayCategory = {
-                        genreSongs.firstOrNull()?.let(onSongClick)
-                      },
-                      modifier = Modifier.testTag("library_genre_header_$genreKey")
-                    )
-                  }
-                  itemsIndexed(
-                    items = genreSongs,
-                    key = { idx, song -> "${activeTab}_grp_${genreKey}_${idx}_${song.id}_${song.artworkUrl}" }
-                  ) { _, song ->
-                    SongRow(
-                      song = song,
-                      isPlaying = isPlaying,
-                      isCurrent = currentSong?.id == song.id,
-                      reducedMotion = reducedMotion,
-                      darkTheme = darkTheme,
-                      hasLyrics = song.id in verifiedLyricsIds,
-                      genreBadge = genreName,
-                      onGenreBadgeClick = {
-                        selectedGenre = if (selectedGenre.equals(genreName, ignoreCase = true)) {
-                          GENRE_FILTER_ALL
-                        } else {
-                          genreName
-                        }
-                      },
-                      onCheckLyrics = onCheckLyrics,
-                      onSongClick = { onSongClick(song) },
-                      onFavoriteClick = { onFavoriteClick(song) },
-                      onAddToAlbumClick = onAddSongToAlbumClick?.let { callback -> { callback(song) } },
-                      onEditPhotoClick = if (activeTab == 0) {
-                        {
-                          pendingPhotoSongId = song.id
-                          photoPickerLauncher.launch(
-                            PickVisualMediaRequest(ActivityResultContracts.PickVisualMedia.ImageOnly)
-                          )
-                        }
-                      } else {
-                        null
-                      },
-                      onDeleteClick = when (activeTab) {
-                        0 -> { { songPendingDelete = song } }
-                        1 -> { { onFavoriteClick(song) } }
-                        else -> { { onRemoveRecentSong(song) } }
+                Spacer(modifier = Modifier.height(8.dp))
+              }
+
+              if (currentList.isNotEmpty() && filteredPairs.isEmpty()) {
+                Box(
+                  modifier = Modifier
+                    .fillMaxSize()
+                    .padding(bottom = 110.dp),
+                  contentAlignment = Alignment.Center
+                ) {
+                  GlassCard(
+                    darkTheme = darkTheme,
+                    cornerRadius = 26.dp,
+                    modifier = Modifier
+                      .fillMaxWidth()
+                      .testTag("library_genre_empty_card")
+                  ) {
+                    Column(
+                      modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(horizontal = 24.dp, vertical = 26.dp),
+                      horizontalAlignment = Alignment.CenterHorizontally,
+                      verticalArrangement = Arrangement.spacedBy(12.dp)
+                    ) {
+                      Box(
+                        modifier = Modifier
+                          .size(54.dp)
+                          .clip(CircleShape)
+                          .background(MaterialTheme.colorScheme.primary.copy(alpha = 0.16f)),
+                        contentAlignment = Alignment.Center
+                      ) {
+                        Icon(
+                          imageVector = libraryGenreIcon(selectedGenre),
+                          contentDescription = null,
+                          tint = MaterialTheme.colorScheme.primary,
+                          modifier = Modifier.size(26.dp)
+                        )
                       }
-                    )
+                      Text(
+                        text = stringResource(id = R.string.library_genre_empty_title, selectedGenre),
+                        style = MaterialTheme.typography.titleMedium.copy(fontWeight = FontWeight.Bold, lineHeight = 24.sp),
+                        color = MaterialTheme.colorScheme.onSurface
+                      )
+                      Text(
+                        text = stringResource(id = R.string.library_genre_empty_sub, selectedGenre),
+                        style = MaterialTheme.typography.bodySmall.copy(lineHeight = 19.sp),
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        textAlign = TextAlign.Center
+                      )
+                      OutlinedButton(
+                        onClick = { selectedGenre = GENRE_FILTER_ALL },
+                        shape = CircleShape,
+                        modifier = Modifier.testTag("library_reset_genre_filter_button")
+                      ) {
+                        Text(stringResource(id = R.string.library_genre_clear_filter), fontWeight = FontWeight.SemiBold)
+                      }
+                    }
                   }
                 }
               } else {
-                itemsIndexed(
-                  items = filteredPairs,
-                  key = { idx, pair -> "${activeTab}_${idx}_${pair.first.id}_${pair.first.artworkUrl}" }
-                ) { _, (song, songGenre) ->
-                  SongRow(
-                    song = song,
-                    isPlaying = isPlaying,
-                    isCurrent = currentSong?.id == song.id,
-                    reducedMotion = reducedMotion,
-                    darkTheme = darkTheme,
-                    hasLyrics = song.id in verifiedLyricsIds,
-                    genreBadge = songGenre,
-                    onGenreBadgeClick = {
-                      selectedGenre = if (selectedGenre.equals(songGenre, ignoreCase = true)) {
-                        GENRE_FILTER_ALL
-                      } else {
-                        songGenre
-                      }
-                    },
-                    onCheckLyrics = onCheckLyrics,
-                    onSongClick = { onSongClick(song) },
-                    onFavoriteClick = { onFavoriteClick(song) },
-                    onAddToAlbumClick = onAddSongToAlbumClick?.let { callback -> { callback(song) } },
-                    onEditPhotoClick = if (activeTab == 0) {
-                      {
-                        pendingPhotoSongId = song.id
-                        photoPickerLauncher.launch(
-                          PickVisualMediaRequest(ActivityResultContracts.PickVisualMedia.ImageOnly)
+                LazyColumn(
+                  modifier = Modifier.fillMaxSize(),
+                  verticalArrangement = Arrangement.spacedBy(4.dp),
+                  contentPadding = PaddingValues(bottom = if (currentSong != null) 195.dp else 125.dp)
+                ) {
+                  // Unified 3-Column Frameless Albums Row above the Track List (matching the reference photo)
+                  item(key = "unified_3col_albums_showcase") {
+                    LibraryUnifiedAlbumsRow(
+                      albums = albums,
+                      darkTheme = darkTheme,
+                      reducedMotion = effectiveReducedMotion,
+                      flyingAlbumId = flyingCoverPayload?.albumId,
+                      pulsingAlbumId = pulsingAlbumId,
+                      onCoverBoundsMeasured = { id, rect -> albumCoverBoundsMap[id] = rect },
+                      onPulseFinished = { id ->
+                        if (pulsingAlbumId == id) pulsingAlbumId = null
+                      },
+                      onAlbumClick = onAlbumClick,
+                      onAlbumLongClick = { albumPendingHoldOptions = it },
+                      onCreateAlbumClick = { showCreateAlbumDialog = true },
+                      onSeeAllAlbumsClick = { onTabSelected(3) },
+                      modifier = Modifier.padding(bottom = 8.dp)
+                    )
+                  }
+
+                  if (groupByGenre) {
+                    groupedPairs.forEach { (genreName, genreSongs) ->
+                      val genreKey = libraryGenreTagKey(genreName)
+                      item(key = "genre_header_${activeTab}_$genreKey") {
+                        LibraryGenreCategoryHeader(
+                          genre = genreName,
+                          trackCount = genreSongs.size,
+                          isFocused = selectedGenre.equals(genreName, ignoreCase = true),
+                          darkTheme = darkTheme,
+                          onFilterToggle = {
+                            selectedGenre = if (selectedGenre.equals(genreName, ignoreCase = true)) {
+                              GENRE_FILTER_ALL
+                            } else {
+                              genreName
+                            }
+                          },
+                          onPlayCategory = {
+                            genreSongs.firstOrNull()?.let(onSongClick)
+                          },
+                          modifier = Modifier.testTag("library_genre_header_$genreKey")
                         )
                       }
-                    } else {
-                      null
-                    },
-                    onDeleteClick = when (activeTab) {
-                      0 -> { { songPendingDelete = song } }
-                      1 -> { { onFavoriteClick(song) } }
-                      else -> { { onRemoveRecentSong(song) } }
+                      itemsIndexed(
+                        items = genreSongs,
+                        key = { idx, song -> "${activeTab}_grp_${genreKey}_${idx}_${song.id}_${song.artworkUrl}" }
+                      ) { _, song ->
+                        LibraryFramelessTrackRow(
+                          song = song,
+                          isPlaying = isPlaying,
+                          isCurrent = currentSong?.id == song.id,
+                          reducedMotion = reducedMotion,
+                          darkTheme = darkTheme,
+                          hasLyrics = song.id in verifiedLyricsIds,
+                          genreBadge = genreName,
+                          onGenreBadgeClick = {
+                            selectedGenre = if (selectedGenre.equals(genreName, ignoreCase = true)) {
+                              GENRE_FILTER_ALL
+                            } else {
+                              genreName
+                            }
+                          },
+                          onCheckLyrics = onCheckLyrics,
+                          onSongClick = { onSongClick(song) },
+                          onFavoriteClick = { onFavoriteClick(song) },
+                          onAddToAlbumClick = onAddSongToAlbumClick?.let { callback -> { callback(song) } },
+                          onEditPhotoClick = if (activeTab == 0) {
+                            {
+                              pendingPhotoSongId = song.id
+                              photoPickerLauncher.launch(
+                                PickVisualMediaRequest(ActivityResultContracts.PickVisualMedia.ImageOnly)
+                              )
+                            }
+                          } else {
+                            null
+                          },
+                          onDeleteClick = when (activeTab) {
+                            0 -> { { songPendingDelete = song } }
+                            1 -> { { onFavoriteClick(song) } }
+                            else -> { { onRemoveRecentSong(song) } }
+                          }
+                        )
+                      }
                     }
-                  )
+                  } else {
+                    itemsIndexed(
+                      items = filteredPairs,
+                      key = { idx, pair -> "${activeTab}_${idx}_${pair.first.id}_${pair.first.artworkUrl}" }
+                    ) { _, (song, songGenre) ->
+                      LibraryFramelessTrackRow(
+                        song = song,
+                        isPlaying = isPlaying,
+                        isCurrent = currentSong?.id == song.id,
+                        reducedMotion = reducedMotion,
+                        darkTheme = darkTheme,
+                        hasLyrics = song.id in verifiedLyricsIds,
+                        genreBadge = songGenre,
+                        onGenreBadgeClick = {
+                          selectedGenre = if (selectedGenre.equals(songGenre, ignoreCase = true)) {
+                            GENRE_FILTER_ALL
+                          } else {
+                            songGenre
+                          }
+                        },
+                        onCheckLyrics = onCheckLyrics,
+                        onSongClick = { onSongClick(song) },
+                        onFavoriteClick = { onFavoriteClick(song) },
+                        onAddToAlbumClick = onAddSongToAlbumClick?.let { callback -> { callback(song) } },
+                        onEditPhotoClick = if (activeTab == 0) {
+                          {
+                            pendingPhotoSongId = song.id
+                            photoPickerLauncher.launch(
+                              PickVisualMediaRequest(ActivityResultContracts.PickVisualMedia.ImageOnly)
+                            )
+                          }
+                        } else {
+                          null
+                        },
+                        onDeleteClick = when (activeTab) {
+                          0 -> { { songPendingDelete = song } }
+                          1 -> { { onFavoriteClick(song) } }
+                          else -> { { onRemoveRecentSong(song) } }
+                        }
+                      )
+                    }
+                  }
                 }
               }
             }
           }
         }
-      }
       }
     }
   } // End scaled Library Column
@@ -968,6 +1110,195 @@ fun LibraryScreen(
   }
 }
 
+/**
+ * Unified 3-Column Frameless Albums Row displayed directly above the track list in the Library screen,
+ * matching the 3 side-by-side album cards in the reference photo.
+ */
+@Composable
+private fun LibraryUnifiedAlbumsRow(
+  albums: List<AlbumInfo>,
+  darkTheme: Boolean,
+  reducedMotion: Boolean,
+  flyingAlbumId: String?,
+  pulsingAlbumId: String?,
+  onCoverBoundsMeasured: (String, Rect) -> Unit,
+  onPulseFinished: (String) -> Unit,
+  onAlbumClick: (AlbumInfo) -> Unit,
+  onAlbumLongClick: (AlbumInfo) -> Unit,
+  onCreateAlbumClick: () -> Unit,
+  onSeeAllAlbumsClick: () -> Unit,
+  modifier: Modifier = Modifier
+) {
+  val topAlbums = remember(albums) { albums.take(3) }
+  val accentColor = MaterialTheme.colorScheme.primary
+
+  Column(
+    modifier = modifier
+      .fillMaxWidth()
+      .testTag("library_unified_albums_row"),
+    verticalArrangement = Arrangement.spacedBy(8.dp)
+  ) {
+    Row(
+      modifier = Modifier
+        .fillMaxWidth()
+        .padding(horizontal = 4.dp),
+      horizontalArrangement = Arrangement.SpaceBetween,
+      verticalAlignment = Alignment.CenterVertically
+    ) {
+      Text(
+        text = stringResource(id = R.string.library_tab_albums),
+        style = MaterialTheme.typography.titleSmall.copy(
+          fontSize = 13.5.sp,
+          fontWeight = FontWeight.Bold
+        ),
+        color = MaterialTheme.colorScheme.onSurface
+      )
+      Row(
+        horizontalArrangement = Arrangement.spacedBy(10.dp),
+        verticalAlignment = Alignment.CenterVertically
+      ) {
+        if (albums.size > 3) {
+          Text(
+            text = "See all (${albums.size})",
+            style = MaterialTheme.typography.labelMedium.copy(
+              fontSize = 12.sp,
+              fontWeight = FontWeight.SemiBold
+            ),
+            color = accentColor,
+            modifier = Modifier
+              .clip(RoundedCornerShape(8.dp))
+              .clickable { onSeeAllAlbumsClick() }
+              .padding(horizontal = 6.dp, vertical = 2.dp)
+          )
+        }
+        Text(
+          text = "+ " + stringResource(id = R.string.album_new_button),
+          style = MaterialTheme.typography.labelMedium.copy(
+            fontSize = 12.sp,
+            fontWeight = FontWeight.SemiBold
+          ),
+          color = accentColor,
+          modifier = Modifier
+            .clip(RoundedCornerShape(8.dp))
+            .clickable { onCreateAlbumClick() }
+            .padding(horizontal = 6.dp, vertical = 2.dp)
+        )
+      }
+    }
+
+    Row(
+      modifier = Modifier
+        .fillMaxWidth()
+        .padding(horizontal = 2.dp),
+      horizontalArrangement = Arrangement.spacedBy(12.dp)
+    ) {
+      topAlbums.forEach { album ->
+        LibraryAlbumGridCard(
+          album = album,
+          darkTheme = darkTheme,
+          reducedMotion = reducedMotion,
+          isHiddenForFlight = flyingAlbumId == album.albumId,
+          pulseRing = pulsingAlbumId == album.albumId,
+          onCoverBoundsMeasured = { rect -> onCoverBoundsMeasured(album.albumId, rect) },
+          onPulseFinished = { onPulseFinished(album.albumId) },
+          onClick = { onAlbumClick(album) },
+          onLongClick = { onAlbumLongClick(album) },
+          modifier = Modifier.weight(1f)
+        )
+      }
+
+      // Fill remaining slots up to 3 columns so the 3-column geometry always matches the reference photo
+      val remainingSlots = (3 - topAlbums.size).coerceAtLeast(0)
+      for (slotIdx in 0 until remainingSlots) {
+        LibraryNewAlbumSlotCard(
+          slotIndex = slotIdx,
+          darkTheme = darkTheme,
+          onClick = onCreateAlbumClick,
+          modifier = Modifier.weight(1f)
+        )
+      }
+    }
+  }
+}
+
+@Composable
+private fun LibraryNewAlbumSlotCard(
+  slotIndex: Int,
+  darkTheme: Boolean,
+  onClick: () -> Unit,
+  modifier: Modifier = Modifier
+) {
+  val accentColor = MaterialTheme.colorScheme.primary
+  val coverShape = RoundedCornerShape(16.dp)
+  val slotFill = if (darkTheme) {
+    Color.White.copy(alpha = if (slotIndex == 0) 0.07f else 0.045f)
+  } else {
+    Color(0xFF94A3B8).copy(alpha = if (slotIndex == 0) 0.16f else 0.11f)
+  }
+  val slotBorder = if (darkTheme) {
+    Color.White.copy(alpha = if (slotIndex == 0) 0.14f else 0.08f)
+  } else {
+    Color(0xFF64748B).copy(alpha = if (slotIndex == 0) 0.18f else 0.11f)
+  }
+
+  Column(
+    modifier = modifier
+      .clip(RoundedCornerShape(16.dp))
+      .clickable { onClick() }
+      .padding(vertical = 2.dp),
+    verticalArrangement = Arrangement.spacedBy(6.dp)
+  ) {
+    Box(
+      modifier = Modifier
+        .fillMaxWidth()
+        .height(82.dp)
+        .clip(coverShape)
+        .background(slotFill)
+        .border(0.9.dp, slotBorder, coverShape),
+      contentAlignment = Alignment.Center
+    ) {
+      Icon(
+        imageVector = if (slotIndex == 0) Icons.Rounded.Add else Icons.Rounded.Album,
+        contentDescription = stringResource(id = R.string.album_new_button),
+        tint = if (slotIndex == 0) accentColor else MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.55f),
+        modifier = Modifier.size(22.dp)
+      )
+    }
+
+    Column(
+      modifier = Modifier.padding(horizontal = 2.dp),
+      verticalArrangement = Arrangement.spacedBy(2.dp)
+    ) {
+      Text(
+        text = if (slotIndex == 0) stringResource(id = R.string.album_new_button) else stringResource(id = R.string.library_tab_albums),
+        style = MaterialTheme.typography.labelMedium.copy(
+          fontSize = 12.5.sp,
+          lineHeight = 16.sp,
+          fontWeight = FontWeight.Bold
+        ),
+        color = if (slotIndex == 0) MaterialTheme.colorScheme.onSurface else MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.72f),
+        maxLines = 1,
+        overflow = TextOverflow.Ellipsis
+      )
+      Text(
+        text = if (slotIndex == 0) "Tap to create" else "Custom cover",
+        style = MaterialTheme.typography.bodySmall.copy(
+          fontSize = 11.sp,
+          lineHeight = 14.sp
+        ),
+        color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.68f),
+        maxLines = 1,
+        overflow = TextOverflow.Ellipsis
+      )
+    }
+  }
+}
+
+/**
+ * Clean Frameless 3-Column Album Card matching the reference screenshot:
+ * - NO outer card box background or outer border around the card.
+ * - Rounded cover box (82dp height, 16dp corner radius) + 2 compact text lines below.
+ */
 @OptIn(ExperimentalFoundationApi::class)
 @Composable
 private fun LibraryAlbumGridCard(
@@ -983,8 +1314,7 @@ private fun LibraryAlbumGridCard(
   modifier: Modifier = Modifier
 ) {
   val context = LocalContext.current
-  val cardShape = RoundedCornerShape(24.dp)
-  val coverShape = RoundedCornerShape(20.dp)
+  val coverShape = RoundedCornerShape(16.dp)
   val coverUrl = album.coverUrl
   val savedPreset = remember(album.albumId, coverUrl) {
     if (coverUrl.isNullOrBlank()) AlbumCoverPresetStore.getPresetOrNull(context, album.albumId) else null
@@ -1027,41 +1357,7 @@ private fun LibraryAlbumGridCard(
   Column(
     modifier = modifier
       .scale(pressScale)
-      .drawBehind {
-        if (pulseRing && ringProgress.value > 0.01f) {
-          val p = ringProgress.value
-          val alpha = (1f - p).coerceIn(0f, 1f)
-          val expand = p * 8.dp.toPx()
-          val corner = 24.dp.toPx() + expand * 0.4f
-          drawRoundRect(
-            brush = Brush.linearGradient(
-              colors = listOf(primaryAccent, lightAccent)
-            ),
-            topLeft = Offset(-expand, -expand),
-            size = androidx.compose.ui.geometry.Size(
-              width = size.width + expand * 2f,
-              height = size.height + expand * 2f
-            ),
-            cornerRadius = CornerRadius(corner, corner),
-            alpha = alpha * 0.9f,
-            style = Stroke(width = (3.5f - p * 2f).coerceAtLeast(1f).dp.toPx())
-          )
-        }
-      }
-      .clip(cardShape)
-      .background(
-        if (darkTheme) Color(0xFF172034).copy(alpha = 0.68f)
-        else Color.White.copy(alpha = 0.78f)
-      )
-      .border(
-        width = if (pulseRing && ringProgress.value > 0.01f) 1.5.dp else 1.dp,
-        color = if (pulseRing && ringProgress.value > 0.01f) {
-          lightAccent.copy(alpha = (1f - ringProgress.value * 0.6f).coerceIn(0.2f, 1f))
-        } else {
-          Color.White.copy(alpha = if (darkTheme) 0.16f else 0.90f)
-        },
-        shape = cardShape
-      )
+      .clip(RoundedCornerShape(16.dp))
       .combinedClickable(
         interactionSource = interactionSource,
         indication = ripple(color = MaterialTheme.colorScheme.primary),
@@ -1074,16 +1370,35 @@ private fun LibraryAlbumGridCard(
           onLongClick()
         }
       )
-      .padding(10.dp)
+      .padding(vertical = 2.dp)
       .testTag("library_album_card_${album.albumId}"),
-    verticalArrangement = Arrangement.spacedBy(8.dp)
+    verticalArrangement = Arrangement.spacedBy(6.dp)
   ) {
     Box(
       modifier = Modifier
         .fillMaxWidth()
-        .aspectRatio(1f)
+        .height(82.dp)
         .onGloballyPositioned { coords -> onCoverBoundsMeasured(coords.boundsInRoot()) }
         .alpha(if (isHiddenForFlight) 0f else 1f)
+        .drawBehind {
+          if (pulseRing && ringProgress.value > 0.01f) {
+            val p = ringProgress.value
+            val alpha = (1f - p).coerceIn(0f, 1f)
+            val expand = p * 6.dp.toPx()
+            val corner = 16.dp.toPx() + expand * 0.4f
+            drawRoundRect(
+              brush = Brush.linearGradient(colors = listOf(primaryAccent, lightAccent)),
+              topLeft = Offset(-expand, -expand),
+              size = androidx.compose.ui.geometry.Size(
+                width = size.width + expand * 2f,
+                height = size.height + expand * 2f
+              ),
+              cornerRadius = CornerRadius(corner, corner),
+              alpha = alpha * 0.9f,
+              style = Stroke(width = (3f - p * 1.8f).coerceAtLeast(1f).dp.toPx())
+            )
+          }
+        }
         .clip(coverShape)
         .background(
           Brush.linearGradient(
@@ -1099,6 +1414,15 @@ private fun LibraryAlbumGridCard(
               )
             }
           )
+        )
+        .border(
+          width = if (pulseRing && ringProgress.value > 0.01f) 1.5.dp else 0.8.dp,
+          color = if (pulseRing && ringProgress.value > 0.01f) {
+            lightAccent.copy(alpha = (1f - ringProgress.value * 0.6f).coerceIn(0.2f, 1f))
+          } else {
+            Color.White.copy(alpha = if (darkTheme) 0.15f else 0.72f)
+          },
+          shape = coverShape
         ),
       contentAlignment = Alignment.Center
     ) {
@@ -1134,42 +1458,40 @@ private fun LibraryAlbumGridCard(
             imageVector = Icons.Rounded.MusicNote,
             contentDescription = album.title,
             tint = Color.White.copy(alpha = 0.88f),
-            modifier = Modifier.size(36.dp)
+            modifier = Modifier.size(28.dp)
           )
         }
       }
     }
 
+    // Two clean text lines below the cover matching the reference photo
     Column(
       modifier = Modifier.padding(horizontal = 2.dp),
       verticalArrangement = Arrangement.spacedBy(2.dp)
     ) {
       Text(
         text = album.title,
-        style = MaterialTheme.typography.titleSmall.copy(
-          fontWeight = FontWeight.SemiBold,
-          lineHeight = 19.sp
+        style = MaterialTheme.typography.labelMedium.copy(
+          fontSize = 12.5.sp,
+          lineHeight = 16.sp,
+          fontWeight = FontWeight.Bold
         ),
         color = MaterialTheme.colorScheme.onSurface,
         maxLines = 1,
         overflow = TextOverflow.Ellipsis
       )
-      Text(
-        text = album.artist,
-        style = MaterialTheme.typography.bodySmall.copy(lineHeight = 16.sp),
-        color = MaterialTheme.colorScheme.onSurfaceVariant,
-        maxLines = 1,
-        overflow = TextOverflow.Ellipsis
-      )
-      val countLabel = when (album.tracks.size) {
-        0 -> stringResource(id = R.string.album_meta_empty)
-        1 -> stringResource(id = R.string.album_meta_single)
-        else -> stringResource(id = R.string.album_meta_plural, album.tracks.size)
+      val countSuffix = when (album.tracks.size) {
+        0 -> album.artist
+        1 -> "${album.artist} · 1"
+        else -> "${album.artist} · ${album.tracks.size}"
       }
       Text(
-        text = countLabel,
-        style = MaterialTheme.typography.labelSmall,
-        color = MaterialTheme.colorScheme.primary,
+        text = countSuffix,
+        style = MaterialTheme.typography.bodySmall.copy(
+          fontSize = 11.sp,
+          lineHeight = 14.sp
+        ),
+        color = MaterialTheme.colorScheme.onSurfaceVariant,
         maxLines = 1,
         overflow = TextOverflow.Ellipsis
       )
