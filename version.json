@@ -3,12 +3,12 @@
   "versionCode": 10940,
   "releaseDate": "2026-11-23",
   "apkUrl": "https://github.com/MEYYYNASH/AURIX/releases/download/v1.9.4/AURIX-v1.9.4.apk",
-  "sha256": "",
+  "sha256": "b0a0861b218630ae1e03d6b6ee344c43f17022e759aa7d44e1ca65676c663b2f",
   "mandatory": false,
   "notes": [
     "Mini Inline Orbi Loading & Compact Sketch Skeletons (v1.9.4): Scaled StatusRow / OrbiStatusRow down to a sleek 34dp mini planet with a glowing orbiting bead, 15sp bold shimmer text, 3dp bouncing dots, and compact 46dp frameless sketch track skeletons",
     "App Icon Picker & 5 Orbi Launcher Icons: Switch between Classic, Midnight, Ember, AMOLED, and Pearl Orbi adaptive launcher icons in Settings > Appearance > App icon with Android 13+ monochrome themed icon layers, 512x512 Play Store PNG exports, confirmation bottom sheet, and Happy Orbi celebration",
-    "Orbi Mascot Animation System: Added OrbiView(state, size, runner) with white-lavender planet, -12° blinking/glancing eyes, -16° cyan-to-violet ring, glossy orbiting mini icons (Search, Music, Refresh, SyncUp, SyncDown), and interactive Orbi Animation Lab in Settings",
+    "Orbi Mascot Animation System: Added OrbiView(state, size, runner) with white-lavender planet, -12\u00b0 blinking/glancing eyes, -16\u00b0 cyan-to-violet ring, glossy orbiting mini icons (Search, Music, Refresh, SyncUp, SyncDown), and interactive Orbi Animation Lab in Settings",
     "Dark Glass Popup Menus & Delete Confirmation Redesign: Eliminated inner blur rectangle artifacts on song & album popup menus and redesigned Delete Album / Song confirmation dialogs in Dark Glass"
   ],
   "releasePageUrl": "https://github.com/MEYYYNASH/AURIX/releases/tag/v1.9.4"
