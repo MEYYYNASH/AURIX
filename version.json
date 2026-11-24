@@ -3,13 +3,13 @@
   "versionCode": 20004,
   "releaseDate": "2026-11-24",
   "apkUrl": "https://github.com/MEYYYNASH/AURIX/releases/download/v2.0.4/AURIX-v2.0.4.apk",
-  "sha256": "e651ee65d36bbb45ae95e79f8c1a8848145e54817bb13838aaf1a6c1182cf00d",
+  "sha256": "f8d8a89672e783b9a24529ef7787df37ef2c280425f25c13cfd48611079adea9",
   "mandatory": false,
   "notes": [
-    "Widget Photo Picker, Smooth Widget Animations & Clean Lyrics UI (v2.0.4): Fixed Widget Customizer Photo Picker on HEIC/AVIF and single-use gallery streams (single-read temp file + ImageDecoder + automatic GetContent fallback), fixed Home Screen Lyrics widget line transition animations by keeping composite & Khmer bitmaps well below the 1 MB Binder IPC limit (RGB_565 + self-relative slide transitions), removed the floating circle overlay from the Lyrics screen for an uncluttered reading view, and cleaned up the TAP Sync button styling in the Custom Lyrics Editor",
+    "Widget Photo Picker, Smooth Widget Animations & Clean Lyrics UI (v2.0.4): Fixed Photo Picker HEIC/AVIF & single-use gallery streams, fixed Home Screen Lyrics widget line animations with Binder-safe RGB_565 & Khmer bitmaps, removed floating overlay from Lyrics screen, and cleaned up the TAP Sync button styling",
     "Widget Customizer & Live Settings Preview (v2.0.3): Added Settings > Widgets > Customize widget with live 2:1 preview, 9 Frame styles, 5 Backgrounds, Blur & Darkness sliders, and fixed 2:1 Background Cropper",
     "Developer Mode & Offline Custom Lyrics Editor (v2.0.2): Tap Build number 7 times in Settings > About to unlock Developer mode with Write & TAP Sync editor, .lrc/.txt import/export, and Room offline priority over LRCLIB",
-    "Lyrics Animation Picker & 5 Transition Styles (v2.0.1): Settings > Lyrics > Lyrics animation sheet with 5 looping live-preview cards (Slide Up, Blur Fade, Karaoke Fill, Typewriter, Pop Zoom) and Both/App/Widget targeting"
+    "Lyrics Animation Picker & 5 Transition Styles (v2.0.1): Settings > Lyrics > Lyrics animation sheet with 5 looping live-preview cards and Both/App/Widget targeting"
   ],
   "releasePageUrl": "https://github.com/MEYYYNASH/AURIX/releases/tag/v2.0.4"
 }
