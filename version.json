@@ -3,7 +3,7 @@
   "versionCode": 20002,
   "releaseDate": "2026-11-24",
   "apkUrl": "https://github.com/MEYYYNASH/AURIX/releases/download/v2.0.2/AURIX-v2.0.2.apk",
-  "sha256": "e651ee65d36bbb45ae95e79f8c1a8848145e54817bb13838aaf1a6c1182cf00d",
+  "sha256": "7d068b7e29ad5210387af827773d811c9220d648f32221d4e6e79e83a3dc69bd",
   "mandatory": false,
   "notes": [
     "Lyrics Animation Picker & 5 Transition Styles (v2.0.2): Added Settings > Lyrics > Lyrics animation sheet with 5 looping live-preview cards (Slide Up, Blur Fade, Karaoke Fill, Typewriter, Pop Zoom), Both/App/Widget targeting (same animation or different animations for App Lyrics vs Widget), Replay Preview button, DataStore persistence (lyrics_anim), zero-polling exact LRC timestamp widget scheduling, Share Card live animation preview, system Remove Animations support, and full EN/KM localization",
