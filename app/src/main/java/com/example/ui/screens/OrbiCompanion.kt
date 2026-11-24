@@ -1,8 +1,18 @@
 package com.example.ui.screens
 
+import android.content.Context
+import android.content.Intent
+import android.graphics.Bitmap
+import android.graphics.LinearGradient
+import android.graphics.Paint
+import android.graphics.RectF
+import android.graphics.Shader
+import android.graphics.Typeface
+import android.widget.Toast
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.animateColorAsState
 import androidx.compose.animation.core.FastOutSlowInEasing
+import androidx.compose.animation.core.LinearEasing
 import androidx.compose.animation.core.RepeatMode
 import androidx.compose.animation.core.Spring
 import androidx.compose.animation.core.animateFloat
@@ -47,6 +57,8 @@ import androidx.compose.material.icons.rounded.Lock
 import androidx.compose.material.icons.rounded.MusicNote
 import androidx.compose.material.icons.rounded.NightlightRound
 import androidx.compose.material.icons.rounded.People
+import androidx.compose.material.icons.rounded.Share
+import androidx.compose.material.icons.rounded.Smartphone
 import androidx.compose.material.icons.rounded.WorkspacePremium
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.Icon
@@ -62,6 +74,7 @@ import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -76,7 +89,11 @@ import androidx.compose.ui.graphics.Path
 import androidx.compose.ui.graphics.StrokeCap
 import androidx.compose.ui.graphics.drawscope.DrawScope
 import androidx.compose.ui.graphics.drawscope.Stroke
+import androidx.compose.ui.graphics.drawscope.rotate
+import androidx.compose.ui.graphics.graphicsLayer
+import androidx.compose.ui.graphics.toArgb
 import androidx.compose.ui.graphics.vector.ImageVector
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.semantics.Role
@@ -87,10 +104,22 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import androidx.compose.ui.window.Dialog
+import androidx.core.content.FileProvider
+import androidx.core.content.res.ResourcesCompat
 import com.example.R
+import com.example.data.IconManager
+import com.example.data.OrbiAppIcon
 import com.example.model.Song
+import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.delay
+import kotlinx.coroutines.launch
+import kotlinx.coroutines.withContext
+import java.io.File
+import java.io.FileOutputStream
 import java.util.Calendar
+import kotlin.math.PI
+import kotlin.math.sin
 
 enum class OrbiMood(val id: String) {
   LOFI_HEADPHONES("lofi"),
@@ -108,48 +137,107 @@ enum class OrbiMood(val id: String) {
     PARTY_SPARK -> R.string.orbi_mood_party
     CLASSIC_IDLE -> R.string.orbi_mood_idle
   }
+
+  fun shortLabelRes(): Int = when (this) {
+    LOFI_HEADPHONES -> R.string.orbi_mood_short_lofi
+    PHONK_SHADES -> R.string.orbi_mood_short_phonk
+    NIGHT_SLEEPY -> R.string.orbi_mood_short_night
+    ROMANTIC_HEART -> R.string.orbi_mood_short_romantic
+    PARTY_SPARK -> R.string.orbi_mood_short_party
+    CLASSIC_IDLE -> R.string.orbi_mood_short_idle
+  }
 }
 
+/**
+ * Synced with the 5 official OrbiAppIcon launcher styles (Classic, Midnight, Ember, AMOLED, Pearl)
+ * plus 1 milestone-exclusive Prismatic style.
+ */
 enum class OrbiCompanionTheme(
   val id: String,
   val primary: Color,
   val secondary: Color,
   val ringColor: Color,
+  val bgTopColor: Color,
+  val bgBottomColor: Color,
+  val planetTopColor: Color,
+  val planetBottomColor: Color,
+  val eyeColor: Color,
+  val ringGradientColors: List<Color>,
+  val isThinRing: Boolean = false,
+  val isAmoledCutout: Boolean = false,
+  val officialIcon: OrbiAppIcon? = null,
   val badgeIdRequired: String?
 ) {
-  AURORA(
-    id = "aurora",
+  CLASSIC(
+    id = "classic",
     primary = Color(0xFF43C7F4),
-    secondary = Color(0xFF7965FF),
-    ringColor = Color(0xFF43C7F4),
+    secondary = Color(0xFF6E7084),
+    ringColor = Color(0xFF3A3B42),
+    bgTopColor = OrbiAppIcon.CLASSIC.bgTopColor,
+    bgBottomColor = OrbiAppIcon.CLASSIC.bgBottomColor,
+    planetTopColor = OrbiAppIcon.CLASSIC.planetTopColor,
+    planetBottomColor = OrbiAppIcon.CLASSIC.planetBottomColor,
+    eyeColor = OrbiAppIcon.CLASSIC.eyeColor,
+    ringGradientColors = OrbiAppIcon.CLASSIC.ringColors,
+    officialIcon = OrbiAppIcon.CLASSIC,
     badgeIdRequired = null
   ),
   MIDNIGHT(
     id = "midnight",
-    primary = Color(0xFF6366F1),
-    secondary = Color(0xFF1E1B4B),
-    ringColor = Color(0xFF818CF8),
+    primary = Color(0xFF5CE6FF),
+    secondary = Color(0xFF7A5CFF),
+    ringColor = Color(0xFF5CE6FF),
+    bgTopColor = OrbiAppIcon.MIDNIGHT.bgTopColor,
+    bgBottomColor = OrbiAppIcon.MIDNIGHT.bgBottomColor,
+    planetTopColor = OrbiAppIcon.MIDNIGHT.planetTopColor,
+    planetBottomColor = OrbiAppIcon.MIDNIGHT.planetBottomColor,
+    eyeColor = OrbiAppIcon.MIDNIGHT.eyeColor,
+    ringGradientColors = OrbiAppIcon.MIDNIGHT.ringColors,
+    officialIcon = OrbiAppIcon.MIDNIGHT,
     badgeIdRequired = "night_owl"
   ),
-  MINT_CLOUD(
-    id = "mint",
-    primary = Color(0xFF2DD4BF),
-    secondary = Color(0xFF0EA5E9),
-    ringColor = Color(0xFF5EEAD4),
+  EMBER(
+    id = "ember",
+    primary = Color(0xFFEF4444),
+    secondary = Color(0xFFF97316),
+    ringColor = Color(0xFFEF4444),
+    bgTopColor = OrbiAppIcon.EMBER.bgTopColor,
+    bgBottomColor = OrbiAppIcon.EMBER.bgBottomColor,
+    planetTopColor = OrbiAppIcon.EMBER.planetTopColor,
+    planetBottomColor = OrbiAppIcon.EMBER.planetBottomColor,
+    eyeColor = OrbiAppIcon.EMBER.eyeColor,
+    ringGradientColors = OrbiAppIcon.EMBER.ringColors,
+    officialIcon = OrbiAppIcon.EMBER,
     badgeIdRequired = "chill_drifter"
   ),
-  ROSE_VELVET(
-    id = "rose",
-    primary = Color(0xFFFB7185),
-    secondary = Color(0xFFA855F7),
-    ringColor = Color(0xFFF472B6),
+  AMOLED(
+    id = "amoled",
+    primary = Color(0xFFE2E8F0),
+    secondary = Color(0xFF94A3B8),
+    ringColor = Color(0xFFFFFFFF),
+    bgTopColor = OrbiAppIcon.AMOLED.bgTopColor,
+    bgBottomColor = OrbiAppIcon.AMOLED.bgBottomColor,
+    planetTopColor = OrbiAppIcon.AMOLED.planetTopColor,
+    planetBottomColor = OrbiAppIcon.AMOLED.planetBottomColor,
+    eyeColor = OrbiAppIcon.AMOLED.eyeColor,
+    ringGradientColors = OrbiAppIcon.AMOLED.ringColors,
+    isThinRing = true,
+    isAmoledCutout = true,
+    officialIcon = OrbiAppIcon.AMOLED,
     badgeIdRequired = "heart_collector"
   ),
-  SUNSET_GOLD(
-    id = "sunset",
-    primary = Color(0xFFF59E0B),
-    secondary = Color(0xFFEF4444),
-    ringColor = Color(0xFFFBBF24),
+  PEARL(
+    id = "pearl",
+    primary = Color(0xFF7C3AED),
+    secondary = Color(0xFFA78BFA),
+    ringColor = Color(0xFF7C3AED),
+    bgTopColor = OrbiAppIcon.PEARL.bgTopColor,
+    bgBottomColor = OrbiAppIcon.PEARL.bgBottomColor,
+    planetTopColor = OrbiAppIcon.PEARL.planetTopColor,
+    planetBottomColor = OrbiAppIcon.PEARL.planetBottomColor,
+    eyeColor = OrbiAppIcon.PEARL.eyeColor,
+    ringGradientColors = OrbiAppIcon.PEARL.ringColors,
+    officialIcon = OrbiAppIcon.PEARL,
     badgeIdRequired = "artist_explorer"
   ),
   PRISMATIC(
@@ -157,21 +245,49 @@ enum class OrbiCompanionTheme(
     primary = Color(0xFF22D3EE),
     secondary = Color(0xFFEC4899),
     ringColor = Color(0xFFA855F7),
+    bgTopColor = Color(0xFF141233),
+    bgBottomColor = Color(0xFF09071A),
+    planetTopColor = Color(0xFFFFFFFF),
+    planetBottomColor = Color(0xFFE0E7FF),
+    eyeColor = Color(0xFF0E1324),
+    ringGradientColors = listOf(
+      Color(0xFF22D3EE),
+      Color(0xFFA855F7),
+      Color(0xFFEC4899),
+      Color(0xFFFBBF24)
+    ),
+    officialIcon = null,
     badgeIdRequired = "aurix_legend"
   );
 
   fun labelRes(): Int = when (this) {
-    AURORA -> R.string.orbi_theme_aurora
+    CLASSIC -> R.string.orbi_theme_classic
     MIDNIGHT -> R.string.orbi_theme_midnight
-    MINT_CLOUD -> R.string.orbi_theme_mint
-    ROSE_VELVET -> R.string.orbi_theme_rose
-    SUNSET_GOLD -> R.string.orbi_theme_sunset
+    EMBER -> R.string.orbi_theme_ember
+    AMOLED -> R.string.orbi_theme_amoled
+    PEARL -> R.string.orbi_theme_pearl
     PRISMATIC -> R.string.orbi_theme_prismatic
   }
 
   companion object {
-    fun fromId(raw: String?): OrbiCompanionTheme =
-      entries.firstOrNull { it.id.equals(raw, ignoreCase = true) } ?: AURORA
+    // Backward-compatible aliases so any existing callers/tests referencing AURORA/MINT_CLOUD/ROSE_VELVET/SUNSET_GOLD compile seamlessly
+    val AURORA: OrbiCompanionTheme get() = CLASSIC
+    val MINT_CLOUD: OrbiCompanionTheme get() = EMBER
+    val ROSE_VELVET: OrbiCompanionTheme get() = AMOLED
+    val SUNSET_GOLD: OrbiCompanionTheme get() = PEARL
+
+    fun fromId(raw: String?): OrbiCompanionTheme {
+      if (raw.isNullOrBlank()) return CLASSIC
+      return when (raw.trim().lowercase()) {
+        "classic", "aurora" -> CLASSIC
+        "midnight" -> MIDNIGHT
+        "ember", "mint" -> EMBER
+        "amoled", "rose" -> AMOLED
+        "pearl", "sunset" -> PEARL
+        "prismatic" -> PRISMATIC
+        else -> CLASSIC
+      }
+    }
   }
 }
 
@@ -232,6 +348,40 @@ fun resolveOrbiMood(
   }
 }
 
+/**
+ * Cycles through null (Auto) -> LOFI_HEADPHONES -> PHONK_SHADES -> NIGHT_SLEEPY -> ROMANTIC_HEART -> PARTY_SPARK -> null.
+ */
+fun cycleNextOrbiMoodOverride(currentOverride: OrbiMood?): OrbiMood? {
+  val sequence = listOf(
+    null,
+    OrbiMood.LOFI_HEADPHONES,
+    OrbiMood.PHONK_SHADES,
+    OrbiMood.NIGHT_SLEEPY,
+    OrbiMood.ROMANTIC_HEART,
+    OrbiMood.PARTY_SPARK
+  )
+  val idx = sequence.indexOf(currentOverride)
+  return if (idx == -1 || idx == sequence.lastIndex) null else sequence[idx + 1]
+}
+
+/**
+ * Extracts normalized low/mid beat energy (0f..1f) from real-time FFT spectrum bars
+ * so Orbi's tilted orbit ring pulses gently to the beat when playing.
+ */
+fun computeOrbiBeatEnergy(
+  spectrumBars: FloatArray?,
+  isPlaying: Boolean,
+  reducedMotion: Boolean = false
+): Float {
+  if (!isPlaying || reducedMotion || spectrumBars == null || spectrumBars.isEmpty()) return 0f
+  val count = minOf(6, spectrumBars.size)
+  var sum = 0f
+  for (i in 0 until count) {
+    sum += spectrumBars[i].coerceIn(0f, 1f)
+  }
+  return (sum / count.toFloat()).coerceIn(0f, 1f)
+}
+
 fun computeOrbiMilestoneBadges(
   totalPlays: Int,
   favoritesCount: Int,
@@ -251,7 +401,7 @@ fun computeOrbiMilestoneBadges(
       requirementRes = R.string.orbi_badge_first_beat_req,
       unlocked = totalPlays >= 1,
       progressFraction = (totalPlays / 1f).coerceIn(0f, 1f),
-      unlockedTheme = OrbiCompanionTheme.AURORA,
+      unlockedTheme = OrbiCompanionTheme.CLASSIC,
       accentColor = Color(0xFF43C7F4)
     ),
     OrbiMilestoneBadge(
@@ -261,16 +411,16 @@ fun computeOrbiMilestoneBadges(
       unlocked = (isNightNow && totalPlays >= 1) || totalPlays >= 5,
       progressFraction = if (isNightNow && totalPlays >= 1) 1f else (totalPlays / 5f).coerceIn(0f, 1f),
       unlockedTheme = OrbiCompanionTheme.MIDNIGHT,
-      accentColor = Color(0xFF818CF8)
+      accentColor = Color(0xFF5CE6FF)
     ),
     OrbiMilestoneBadge(
       id = "chill_drifter",
       titleRes = R.string.orbi_badge_chill_drifter,
       requirementRes = R.string.orbi_badge_chill_drifter_req,
-      unlocked = totalPlays >= 10 || (chillSignal && totalPlays >= 1),
-      progressFraction = if (chillSignal && totalPlays >= 1) 1f else (totalPlays / 10f).coerceIn(0f, 1f),
-      unlockedTheme = OrbiCompanionTheme.MINT_CLOUD,
-      accentColor = Color(0xFF2DD4BF)
+      unlocked = (chillSignal && totalPlays >= 2) || totalPlays >= 10,
+      progressFraction = if (chillSignal && totalPlays >= 2) 1f else (totalPlays / 10f).coerceIn(0f, 1f),
+      unlockedTheme = OrbiCompanionTheme.EMBER,
+      accentColor = Color(0xFFEF4444)
     ),
     OrbiMilestoneBadge(
       id = "heart_collector",
@@ -278,7 +428,7 @@ fun computeOrbiMilestoneBadges(
       requirementRes = R.string.orbi_badge_heart_collector_req,
       unlocked = favoritesCount >= 5,
       progressFraction = (favoritesCount / 5f).coerceIn(0f, 1f),
-      unlockedTheme = OrbiCompanionTheme.ROSE_VELVET,
+      unlockedTheme = OrbiCompanionTheme.AMOLED,
       accentColor = Color(0xFFFB7185)
     ),
     OrbiMilestoneBadge(
@@ -287,8 +437,8 @@ fun computeOrbiMilestoneBadges(
       requirementRes = R.string.orbi_badge_artist_explorer_req,
       unlocked = uniqueArtistsCount >= 5,
       progressFraction = (uniqueArtistsCount / 5f).coerceIn(0f, 1f),
-      unlockedTheme = OrbiCompanionTheme.SUNSET_GOLD,
-      accentColor = Color(0xFFF59E0B)
+      unlockedTheme = OrbiCompanionTheme.PEARL,
+      accentColor = Color(0xFFA78BFA)
     ),
     OrbiMilestoneBadge(
       id = "aurix_legend",
@@ -297,7 +447,7 @@ fun computeOrbiMilestoneBadges(
       unlocked = totalPlays >= 30,
       progressFraction = (totalPlays / 30f).coerceIn(0f, 1f),
       unlockedTheme = OrbiCompanionTheme.PRISMATIC,
-      accentColor = Color(0xFFEC4899)
+      accentColor = Color(0xFF22D3EE)
     )
   )
 }
@@ -306,13 +456,17 @@ fun isOrbiThemeUnlocked(
   theme: OrbiCompanionTheme,
   badges: List<OrbiMilestoneBadge>
 ): Boolean {
-  val req = theme.badgeIdRequired ?: return true
-  return badges.any { it.id == req && it.unlocked }
+  val reqId = theme.badgeIdRequired ?: return true
+  return badges.any { it.id == reqId && it.unlocked }
 }
 
 /**
- * Clean, minimal interactive Orbi avatar that subtly wears the active music mood accessory
- * (Lo-fi headphones, Phonk shades, Night sleepy moon, Romantic heart glow, or Party spark).
+ * Interactive Orbi Mini-Companion Avatar rendered using the official OrbiLauncherIconTile geometry:
+ * - Authentic 108dp normalized coordinate system
+ * - Tilted (-12°) planet sphere + two tall rounded-pill eyes (cy - 9.8*s)
+ * - Split 3D orbit ring (back half 180..360 behind planet, front half 0..180 in front of planet)
+ * - Modified with mood accessories (Lo-fi headphones, Phonk cyber shades, Late-Night sleepy moon,
+ *   Romantic heart glow, Party star spark) and live beat-reactive orbit ring pulse.
  */
 @Composable
 fun OrbiCompanionAvatar(
@@ -321,6 +475,7 @@ fun OrbiCompanionAvatar(
   isPlaying: Boolean,
   reducedMotion: Boolean,
   size: Dp = 44.dp,
+  beatEnergy: Float = 0f,
   onClick: (() -> Unit)? = null,
   modifier: Modifier = Modifier
 ) {
@@ -340,51 +495,87 @@ fun OrbiCompanionAvatar(
     label = "orbi_tap_scale"
   )
 
-  val infinite = rememberInfiniteTransition(label = "orbi_companion_float")
-  val bob by infinite.animateFloat(
-    initialValue = -1.6f,
-    targetValue = 1.6f,
-    animationSpec = infiniteRepeatable(
-      animation = tween(durationMillis = if (isPlaying) 1400 else 2800, easing = FastOutSlowInEasing),
-      repeatMode = RepeatMode.Reverse
-    ),
-    label = "orbi_bob"
+  val animationsEnabled = rememberOrbiAnimationsEnabled(reducedMotion)
+  val infinite = rememberInfiniteTransition(label = "orbi_official_logo_companion")
+
+  val floatPhase = if (!animationsEnabled) {
+    0f
+  } else {
+    val anim by infinite.animateFloat(
+      initialValue = -1f,
+      targetValue = 1f,
+      animationSpec = infiniteRepeatable(
+        animation = tween(durationMillis = if (isPlaying) 1450 else 2100, easing = OrbiEasing),
+        repeatMode = RepeatMode.Reverse
+      ),
+      label = "orbi_logo_float"
+    )
+    anim
+  }
+
+  val blinkClock = if (!animationsEnabled) {
+    0.5f
+  } else {
+    val anim by infinite.animateFloat(
+      initialValue = 0f,
+      targetValue = 1f,
+      animationSpec = infiniteRepeatable(
+        animation = tween(durationMillis = 3900, easing = LinearEasing),
+        repeatMode = RepeatMode.Restart
+      ),
+      label = "orbi_logo_blink"
+    )
+    anim
+  }
+  val blinkScaleY = when {
+    !animationsEnabled -> 1f
+    blinkClock < 0.025f -> 1f - (blinkClock / 0.025f) * 0.90f
+    blinkClock < 0.055f -> 0.10f + ((blinkClock - 0.025f) / 0.030f) * 0.90f
+    else -> 1f
+  }
+
+  val glancePhase = if (!animationsEnabled) {
+    0f
+  } else {
+    val anim by infinite.animateFloat(
+      initialValue = 0f,
+      targetValue = 1f,
+      animationSpec = infiniteRepeatable(
+        animation = tween(durationMillis = 4200, easing = LinearEasing),
+        repeatMode = RepeatMode.Restart
+      ),
+      label = "orbi_logo_glance"
+    )
+    sin(anim * 2.0 * PI).toFloat()
+  }
+
+  val smoothedBeat by animateFloatAsState(
+    targetValue = if (isPlaying && !reducedMotion) beatEnergy.coerceIn(0f, 1f) else 0f,
+    animationSpec = if (reducedMotion) snap() else tween(110, easing = FastOutSlowInEasing),
+    label = "orbi_beat_pulse"
   )
-  val pulse by infinite.animateFloat(
-    initialValue = 0.72f,
-    targetValue = 1.0f,
-    animationSpec = infiniteRepeatable(
-      animation = tween(durationMillis = 2000, easing = FastOutSlowInEasing),
-      repeatMode = RepeatMode.Reverse
-    ),
-    label = "orbi_glow_pulse"
-  )
-  val activeBob = if (reducedMotion) 0f else bob
-  val activePulse = if (reducedMotion) 0.85f else pulse
 
   val cd = stringResource(id = R.string.orbi_companion_cd)
-  val corner = size * 0.32f
+  val corner = size * 0.285f
+  val tileBorderColor = when (theme) {
+    OrbiCompanionTheme.AMOLED -> Color.White.copy(alpha = 0.26f + 0.30f * smoothedBeat)
+    OrbiCompanionTheme.PEARL -> Color(0xFFA78BFA).copy(alpha = 0.50f + 0.30f * smoothedBeat)
+    else -> theme.primary.copy(alpha = 0.38f + 0.42f * smoothedBeat)
+  }
+
   Box(
     modifier = modifier
       .size(size)
       .scale(tapScale)
       .clip(RoundedCornerShape(corner))
       .background(
-        Brush.linearGradient(
-          colors = listOf(
-            theme.primary.copy(alpha = 0.24f),
-            theme.secondary.copy(alpha = 0.30f)
-          )
+        Brush.verticalGradient(
+          colors = listOf(theme.bgTopColor, theme.bgBottomColor)
         )
       )
       .border(
-        width = 1.dp,
-        brush = Brush.linearGradient(
-          colors = listOf(
-            theme.primary.copy(alpha = 0.65f * activePulse),
-            theme.secondary.copy(alpha = 0.45f)
-          )
-        ),
+        width = (1f + 0.7f * smoothedBeat).dp,
+        color = tileBorderColor,
         shape = RoundedCornerShape(corner)
       )
       .then(
@@ -401,232 +592,352 @@ fun OrbiCompanionAvatar(
       ),
     contentAlignment = Alignment.Center
   ) {
-    Canvas(modifier = Modifier.fillMaxSize()) {
-      drawOrbiCompanionCharacter(
+    Canvas(
+      modifier = Modifier
+        .fillMaxSize()
+        .graphicsLayer {
+          translationY = floatPhase * 1.6.dp.toPx()
+        }
+    ) {
+      drawModifiedOfficialOrbiLogo(
         mood = mood,
         theme = theme,
-        bobPx = activeBob * (this.size.minDimension / 44f),
-        glowAlpha = activePulse
+        blinkScaleY = blinkScaleY,
+        glancePhase = glancePhase,
+        beatEnergy = smoothedBeat
       )
     }
   }
 }
 
-private fun DrawScope.drawOrbiCompanionCharacter(
+/**
+ * Draws the official Orbi launcher logo (`OrbiLauncherIconTile` geometry) modified with
+ * mood accessories and beat-reactive orbit ring pulse.
+ */
+internal fun DrawScope.drawModifiedOfficialOrbiLogo(
   mood: OrbiMood,
   theme: OrbiCompanionTheme,
-  bobPx: Float,
-  glowAlpha: Float
+  blinkScaleY: Float = 1f,
+  glancePhase: Float = 0f,
+  beatEnergy: Float = 0f
 ) {
-  val w = size.width
-  val h = size.height
-  val cx = w * 0.5f
-  val cy = h * 0.54f + bobPx
-  val bodyR = minOf(w, h) * 0.29f
+  if (this.size.minDimension <= 0f) return
+  val s = this.size.minDimension / 108f
+  val cx = this.size.width / 2f
+  val cy = this.size.height / 2f
 
-  // Soft ambient halo behind Orbi
-  drawCircle(
-    brush = Brush.radialGradient(
-      colors = listOf(theme.primary.copy(alpha = 0.38f * glowAlpha), Color.Transparent),
-      center = Offset(cx, cy),
-      radius = bodyR * 1.95f
-    ),
-    radius = bodyR * 1.95f,
-    center = Offset(cx, cy)
+  val planetR = 20.5f * s
+  val ringRx = (29.5f + 1.8f * beatEnergy) * s
+  val ringRy = (7.8f + 0.55f * beatEnergy) * s
+  val baseRingStroke = if (theme.isThinRing) 2.4f else 3.8f
+  val ringStroke = (baseRingStroke + 1.45f * beatEnergy) * s
+
+  val ringBrush = Brush.linearGradient(
+    colors = theme.ringGradientColors,
+    start = Offset(cx - ringRx, cy - ringRy),
+    end = Offset(cx + ringRx, cy + ringRy)
   )
 
-  // Signature orbital ring behind Orbi
-  drawOval(
-    brush = Brush.linearGradient(listOf(theme.ringColor.copy(alpha = 0.85f), theme.secondary.copy(alpha = 0.75f))),
-    topLeft = Offset(cx - bodyR * 1.32f, cy - bodyR * 0.34f),
-    size = Size(bodyR * 2.64f, bodyR * 0.72f),
-    style = Stroke(width = (w * 0.045f).coerceAtLeast(1.4f))
-  )
-
-  // Crisp glossy Orbi body
-  drawCircle(
-    brush = Brush.radialGradient(
-      colors = listOf(Color.White, Color(0xFFE7F2FF)),
-      center = Offset(cx - bodyR * 0.25f, cy - bodyR * 0.30f),
-      radius = bodyR * 1.35f
-    ),
-    radius = bodyR,
-    center = Offset(cx, cy)
-  )
-
-  // Subtle colored cheek tint
-  val cheekY = cy + bodyR * 0.16f
-  val cheekOffset = bodyR * 0.52f
-  val cheekColor = if (mood == OrbiMood.ROMANTIC_HEART) Color(0xFFFB7185) else theme.primary
-  drawCircle(
-    color = cheekColor.copy(alpha = 0.32f),
-    radius = bodyR * 0.17f,
-    center = Offset(cx - cheekOffset, cheekY)
-  )
-  drawCircle(
-    color = cheekColor.copy(alpha = 0.32f),
-    radius = bodyR * 0.17f,
-    center = Offset(cx + cheekOffset, cheekY)
-  )
-
-  // Face expression (varies cleanly by mood)
-  val eyeOffsetX = bodyR * 0.33f
-  val eyeY = cy - bodyR * 0.06f
-  val eyeR = bodyR * 0.135f
-  val inkColor = Color(0xFF0E1726)
-
-  when (mood) {
-    OrbiMood.NIGHT_SLEEPY -> {
-      // Calm closed sleepy eyes (curved arcs)
-      val strokeW = (bodyR * 0.14f).coerceAtLeast(1.4f)
-      drawArc(
-        color = inkColor,
-        startAngle = 15f,
-        sweepAngle = 150f,
-        useCenter = false,
-        topLeft = Offset(cx - eyeOffsetX - eyeR, eyeY - eyeR * 0.6f),
-        size = Size(eyeR * 2f, eyeR * 1.6f),
-        style = Stroke(width = strokeW, cap = StrokeCap.Round)
-      )
-      drawArc(
-        color = inkColor,
-        startAngle = 15f,
-        sweepAngle = 150f,
-        useCenter = false,
-        topLeft = Offset(cx + eyeOffsetX - eyeR, eyeY - eyeR * 0.6f),
-        size = Size(eyeR * 2f, eyeR * 1.6f),
-        style = Stroke(width = strokeW, cap = StrokeCap.Round)
-      )
-    }
-
-    OrbiMood.PHONK_SHADES -> {
-      // Sleek cyber shades
-      val lensW = bodyR * 0.64f
-      val lensH = bodyR * 0.40f
-      val topY = eyeY - lensH * 0.48f
-      drawRoundRect(
-        color = Color(0xFF0A0F1E),
-        topLeft = Offset(cx - lensW - bodyR * 0.05f, topY),
-        size = Size(lensW, lensH),
-        cornerRadius = CornerRadius(lensH * 0.35f, lensH * 0.35f)
-      )
-      drawRoundRect(
-        color = Color(0xFF0A0F1E),
-        topLeft = Offset(cx + bodyR * 0.05f, topY),
-        size = Size(lensW, lensH),
-        cornerRadius = CornerRadius(lensH * 0.35f, lensH * 0.35f)
-      )
-      drawLine(
-        color = Color(0xFF0A0F1E),
-        start = Offset(cx - bodyR * 0.07f, topY + lensH * 0.35f),
-        end = Offset(cx + bodyR * 0.07f, topY + lensH * 0.35f),
-        strokeWidth = (bodyR * 0.12f).coerceAtLeast(1.4f)
-      )
-      // Cyan lens glint
-      drawLine(
-        color = theme.primary.copy(alpha = 0.85f),
-        start = Offset(cx - lensW * 0.72f, topY + lensH * 0.28f),
-        end = Offset(cx - lensW * 0.35f, topY + lensH * 0.72f),
-        strokeWidth = (bodyR * 0.08f).coerceAtLeast(1.1f),
-        cap = StrokeCap.Round
-      )
-      drawLine(
-        color = theme.primary.copy(alpha = 0.85f),
-        start = Offset(cx + lensW * 0.28f, topY + lensH * 0.28f),
-        end = Offset(cx + lensW * 0.65f, topY + lensH * 0.72f),
-        strokeWidth = (bodyR * 0.08f).coerceAtLeast(1.1f),
-        cap = StrokeCap.Round
-      )
-    }
-
-    else -> {
-      // Bright friendly Orbi eyes with white highlight dot
-      drawCircle(color = inkColor, radius = eyeR, center = Offset(cx - eyeOffsetX, eyeY))
-      drawCircle(color = inkColor, radius = eyeR, center = Offset(cx + eyeOffsetX, eyeY))
-      drawCircle(
-        color = Color.White,
-        radius = eyeR * 0.36f,
-        center = Offset(cx - eyeOffsetX - eyeR * 0.26f, eyeY - eyeR * 0.26f)
-      )
-      drawCircle(
-        color = Color.White,
-        radius = eyeR * 0.36f,
-        center = Offset(cx + eyeOffsetX - eyeR * 0.26f, eyeY - eyeR * 0.26f)
-      )
-    }
+  // Beat-reactive ambient halo behind the planet & ring
+  if (beatEnergy > 0.04f || mood != OrbiMood.CLASSIC_IDLE) {
+    val haloAlpha = (0.16f + 0.34f * beatEnergy).coerceIn(0f, 0.52f)
+    drawCircle(
+      brush = Brush.radialGradient(
+        colors = listOf(theme.primary.copy(alpha = haloAlpha), Color.Transparent),
+        center = Offset(cx, cy),
+        radius = planetR * (1.75f + 0.35f * beatEnergy)
+      ),
+      radius = planetR * (1.75f + 0.35f * beatEnergy),
+      center = Offset(cx, cy)
+    )
   }
 
-  // Accessories (minimalist & crisp, never noisy)
-  when (mood) {
-    OrbiMood.LOFI_HEADPHONES -> {
-      val bandR = bodyR * 1.12f
+  // Official -12° tilted planet & 3D orbit ring
+  rotate(degrees = -12f, pivot = Offset(cx, cy)) {
+    // 1. Back half of orbit ring (180..360)
+    if (beatEnergy > 0.08f) {
       drawArc(
-        color = theme.primary,
-        startAngle = 192f,
-        sweepAngle = 156f,
+        color = theme.primary.copy(alpha = 0.28f * beatEnergy),
+        startAngle = 180f,
+        sweepAngle = 180f,
+        useCenter = false,
+        topLeft = Offset(cx - ringRx, cy - ringRy),
+        size = Size(ringRx * 2f, ringRy * 2f),
+        style = Stroke(width = ringStroke * 1.9f, cap = StrokeCap.Round)
+      )
+    }
+    drawArc(
+      brush = ringBrush,
+      startAngle = 180f,
+      sweepAngle = 180f,
+      useCenter = false,
+      topLeft = Offset(cx - ringRx, cy - ringRy),
+      size = Size(ringRx * 2f, ringRy * 2f),
+      style = Stroke(width = ringStroke, cap = StrokeCap.Round)
+    )
+
+    // 2. Soft drop shadow + Official Planet Sphere
+    if (!theme.isAmoledCutout) {
+      drawCircle(
+        color = Color.Black.copy(alpha = 0.18f),
+        radius = planetR * 1.04f,
+        center = Offset(cx, cy + 1.5f * s)
+      )
+    }
+    drawCircle(
+      brush = Brush.verticalGradient(
+        colors = listOf(theme.planetTopColor, theme.planetBottomColor),
+        startY = cy - planetR,
+        endY = cy + planetR
+      ),
+      radius = planetR,
+      center = Offset(cx, cy)
+    )
+
+    // 3. Official Two Tall Oval Eyes (cy - 9.8*s) or Mood Eye Modifications
+    val gDx = glancePhase * 1.6f * s
+    val eyeRx = 2.5f * s
+    val eyeRy = 4.3f * s * blinkScaleY.coerceAtLeast(0.08f)
+    val leftEyeCx = cx - 4.5f * s + gDx
+    val rightEyeCx = cx + 4.5f * s + gDx
+    val eyeCy = cy - 9.8f * s
+
+    when (mood) {
+      OrbiMood.NIGHT_SLEEPY -> {
+        // Calm sleepy curved eyelids at the official upper-hemisphere eye position
+        val lidStroke = (2.1f * s).coerceAtLeast(1.2f)
+        val lidW = eyeRx * 2.2f
+        val lidH = eyeRx * 1.5f
+        drawArc(
+          color = theme.eyeColor,
+          startAngle = 15f,
+          sweepAngle = 150f,
+          useCenter = false,
+          topLeft = Offset(leftEyeCx - lidW * 0.5f, eyeCy - lidH * 0.4f),
+          size = Size(lidW, lidH),
+          style = Stroke(width = lidStroke, cap = StrokeCap.Round)
+        )
+        drawArc(
+          color = theme.eyeColor,
+          startAngle = 15f,
+          sweepAngle = 150f,
+          useCenter = false,
+          topLeft = Offset(rightEyeCx - lidW * 0.5f, eyeCy - lidH * 0.4f),
+          size = Size(lidW, lidH),
+          style = Stroke(width = lidStroke, cap = StrokeCap.Round)
+        )
+      }
+
+      OrbiMood.PHONK_SHADES -> {
+        // Draw official tall eyes first, then sleek cyber sunglasses across them
+        drawRoundRect(
+          color = theme.eyeColor,
+          topLeft = Offset(leftEyeCx - eyeRx, eyeCy - eyeRy),
+          size = Size(eyeRx * 2f, eyeRy * 2f),
+          cornerRadius = CornerRadius(eyeRx, eyeRx)
+        )
+        drawRoundRect(
+          color = theme.eyeColor,
+          topLeft = Offset(rightEyeCx - eyeRx, eyeCy - eyeRy),
+          size = Size(eyeRx * 2f, eyeRy * 2f),
+          cornerRadius = CornerRadius(eyeRx, eyeRx)
+        )
+        val lensW = 9.2f * s
+        val lensH = 5.6f * s
+        val lensTop = eyeCy - lensH * 0.52f
+        val leftLensLeft = leftEyeCx - lensW * 0.55f
+        val rightLensLeft = rightEyeCx - lensW * 0.45f
+        val shadeFill = Color(0xFF070B14)
+        val glintColor = if (theme == OrbiCompanionTheme.EMBER) Color(0xFFEF4444) else Color(0xFF5CE6FF)
+
+        drawRoundRect(
+          color = shadeFill,
+          topLeft = Offset(leftLensLeft, lensTop),
+          size = Size(lensW, lensH),
+          cornerRadius = CornerRadius(1.8f * s, 1.8f * s)
+        )
+        drawRoundRect(
+          color = shadeFill,
+          topLeft = Offset(rightLensLeft, lensTop),
+          size = Size(lensW, lensH),
+          cornerRadius = CornerRadius(1.8f * s, 1.8f * s)
+        )
+        // Neon rim & bridge
+        drawRoundRect(
+          color = glintColor.copy(alpha = 0.85f),
+          topLeft = Offset(leftLensLeft, lensTop),
+          size = Size(lensW, lensH),
+          cornerRadius = CornerRadius(1.8f * s, 1.8f * s),
+          style = Stroke(width = (1.1f * s).coerceAtLeast(0.8f))
+        )
+        drawRoundRect(
+          color = glintColor.copy(alpha = 0.85f),
+          topLeft = Offset(rightLensLeft, lensTop),
+          size = Size(lensW, lensH),
+          cornerRadius = CornerRadius(1.8f * s, 1.8f * s),
+          style = Stroke(width = (1.1f * s).coerceAtLeast(0.8f))
+        )
+        drawLine(
+          color = glintColor,
+          start = Offset(leftLensLeft + lensW, lensTop + lensH * 0.38f),
+          end = Offset(rightLensLeft, lensTop + lensH * 0.38f),
+          strokeWidth = (1.4f * s).coerceAtLeast(1f)
+        )
+        // Diagonal lens reflection slash
+        drawLine(
+          color = Color.White.copy(alpha = 0.82f),
+          start = Offset(leftLensLeft + 2.2f * s, lensTop + 1.3f * s),
+          end = Offset(leftLensLeft + 4.8f * s, lensTop + lensH - 1.3f * s),
+          strokeWidth = (1.1f * s).coerceAtLeast(0.8f),
+          cap = StrokeCap.Round
+        )
+        drawLine(
+          color = Color.White.copy(alpha = 0.82f),
+          start = Offset(rightLensLeft + 2.2f * s, lensTop + 1.3f * s),
+          end = Offset(rightLensLeft + 4.8f * s, lensTop + lensH - 1.3f * s),
+          strokeWidth = (1.1f * s).coerceAtLeast(0.8f),
+          cap = StrokeCap.Round
+        )
+      }
+
+      else -> {
+        // Exact official Orbi tall oval eyes
+        drawRoundRect(
+          color = theme.eyeColor,
+          topLeft = Offset(leftEyeCx - eyeRx, eyeCy - eyeRy),
+          size = Size(eyeRx * 2f, eyeRy * 2f),
+          cornerRadius = CornerRadius(eyeRx, eyeRx)
+        )
+        drawRoundRect(
+          color = theme.eyeColor,
+          topLeft = Offset(rightEyeCx - eyeRx, eyeCy - eyeRy),
+          size = Size(eyeRx * 2f, eyeRy * 2f),
+          cornerRadius = CornerRadius(eyeRx, eyeRx)
+        )
+      }
+    }
+
+    // 3b. Lo-fi Headphones hugging the tilted Orbi planet crown
+    if (mood == OrbiMood.LOFI_HEADPHONES) {
+      val bandR = planetR * 1.13f
+      val accentCol = if (theme == OrbiCompanionTheme.CLASSIC) Color(0xFF43C7F4) else theme.primary
+      drawArc(
+        color = accentCol,
+        startAngle = 195f,
+        sweepAngle = 150f,
         useCenter = false,
         topLeft = Offset(cx - bandR, cy - bandR),
         size = Size(bandR * 2f, bandR * 2f),
-        style = Stroke(width = (bodyR * 0.18f).coerceAtLeast(1.8f), cap = StrokeCap.Round)
+        style = Stroke(width = (3.1f * s).coerceAtLeast(1.4f), cap = StrokeCap.Round)
       )
-      val cupW = bodyR * 0.28f
-      val cupH = bodyR * 0.56f
+      val cupW = 5.4f * s
+      val cupH = 10.6f * s
+      val cupY = cy - 7.5f * s
+      val leftCupX = cx - planetR - cupW * 0.55f
+      val rightCupX = cx + planetR - cupW * 0.45f
       drawRoundRect(
-        color = Color(0xFF151F30),
-        topLeft = Offset(cx - bodyR - cupW * 0.55f, cy - cupH * 0.5f),
+        color = Color(0xFF101726),
+        topLeft = Offset(leftCupX, cupY),
         size = Size(cupW, cupH),
         cornerRadius = CornerRadius(cupW * 0.5f, cupW * 0.5f)
       )
       drawRoundRect(
-        color = Color(0xFF151F30),
-        topLeft = Offset(cx + bodyR - cupW * 0.45f, cy - cupH * 0.5f),
+        color = Color(0xFF101726),
+        topLeft = Offset(rightCupX, cupY),
         size = Size(cupW, cupH),
         cornerRadius = CornerRadius(cupW * 0.5f, cupW * 0.5f)
       )
       drawRoundRect(
-        color = theme.primary,
-        topLeft = Offset(cx - bodyR - cupW * 0.55f, cy - cupH * 0.5f),
+        color = accentCol,
+        topLeft = Offset(leftCupX, cupY),
         size = Size(cupW, cupH),
         cornerRadius = CornerRadius(cupW * 0.5f, cupW * 0.5f),
-        style = Stroke(width = (bodyR * 0.08f).coerceAtLeast(1f))
+        style = Stroke(width = (1.3f * s).coerceAtLeast(0.9f))
       )
       drawRoundRect(
-        color = theme.primary,
-        topLeft = Offset(cx + bodyR - cupW * 0.45f, cy - cupH * 0.5f),
+        color = accentCol,
+        topLeft = Offset(rightCupX, cupY),
         size = Size(cupW, cupH),
         cornerRadius = CornerRadius(cupW * 0.5f, cupW * 0.5f),
-        style = Stroke(width = (bodyR * 0.08f).coerceAtLeast(1f))
+        style = Stroke(width = (1.3f * s).coerceAtLeast(0.9f))
       )
     }
 
+    // 4. Front half of orbit ring (0..180)
+    if (theme.isAmoledCutout) {
+      drawArc(
+        color = Color.Black,
+        startAngle = 0f,
+        sweepAngle = 180f,
+        useCenter = false,
+        topLeft = Offset(cx - ringRx, cy - ringRy),
+        size = Size(ringRx * 2f, ringRy * 2f),
+        style = Stroke(width = ringStroke * 2.15f, cap = StrokeCap.Round)
+      )
+    } else if (beatEnergy > 0.08f) {
+      drawArc(
+        color = theme.primary.copy(alpha = 0.34f * beatEnergy),
+        startAngle = 0f,
+        sweepAngle = 180f,
+        useCenter = false,
+        topLeft = Offset(cx - ringRx, cy - ringRy),
+        size = Size(ringRx * 2f, ringRy * 2f),
+        style = Stroke(width = ringStroke * 2.0f, cap = StrokeCap.Round)
+      )
+    }
+    drawArc(
+      brush = ringBrush,
+      startAngle = 0f,
+      sweepAngle = 180f,
+      useCenter = false,
+      topLeft = Offset(cx - ringRx, cy - ringRy),
+      size = Size(ringRx * 2f, ringRy * 2f),
+      style = Stroke(width = ringStroke, cap = StrokeCap.Round)
+    )
+  }
+
+  // 5. Floating top-right orbital mood badges (Moon, Heart, Spark)
+  when (mood) {
     OrbiMood.NIGHT_SLEEPY -> {
-      // Minimalist glowing crescent moon in top-right corner
-      val mx = cx + bodyR * 0.92f
-      val my = cy - bodyR * 0.92f
-      val mr = bodyR * 0.34f
-      drawCircle(color = Color(0xFFFDE047), radius = mr, center = Offset(mx, my))
-      drawCircle(color = Color(0xFF161D36), radius = mr * 0.85f, center = Offset(mx + mr * 0.36f, my - mr * 0.16f))
+      val mx = cx + 24.5f * s
+      val my = cy - 23.5f * s
+      val mr = 6.6f * s
+      val maskPath = Path().apply {
+        addOval(androidx.compose.ui.geometry.Rect(mx - mr, my - mr, mx + mr, my + mr))
+      }
+      val cutoutPath = Path().apply {
+        addOval(
+          androidx.compose.ui.geometry.Rect(
+            mx - mr * 0.35f,
+            my - mr * 1.05f,
+            mx + mr * 1.25f,
+            my + mr * 0.55f
+          )
+        )
+      }
+      val crescent = Path().apply {
+        op(maskPath, cutoutPath, androidx.compose.ui.graphics.PathOperation.Difference)
+      }
+      drawPath(path = crescent, color = Color(0xFFFDE047))
     }
 
     OrbiMood.ROMANTIC_HEART -> {
-      // Crisp tiny floating heart top-right
-      val hx = cx + bodyR * 0.88f
-      val hy = cy - bodyR * 0.88f
-      val hs = bodyR * 0.34f
+      val hx = cx + 24.5f * s
+      val hy = cy - 23.0f * s
+      val hs = 6.8f * s
       val heartPath = Path().apply {
-        moveTo(hx, hy + hs * 0.55f)
-        cubicTo(hx - hs, hy - hs * 0.05f, hx - hs * 0.72f, hy - hs * 0.85f, hx, hy - hs * 0.25f)
-        cubicTo(hx + hs * 0.72f, hy - hs * 0.85f, hx + hs, hy - hs * 0.05f, hx, hy + hs * 0.55f)
+        moveTo(hx, hy + hs * 0.58f)
+        cubicTo(hx - hs, hy - hs * 0.05f, hx - hs * 0.72f, hy - hs * 0.88f, hx, hy - hs * 0.25f)
+        cubicTo(hx + hs * 0.72f, hy - hs * 0.88f, hx + hs, hy - hs * 0.05f, hx, hy + hs * 0.58f)
         close()
       }
       drawPath(path = heartPath, color = Color(0xFFFB7185))
     }
 
     OrbiMood.PARTY_SPARK -> {
-      // Tiny diamond star spark top-right
-      val sx = cx + bodyR * 0.92f
-      val sy = cy - bodyR * 0.90f
-      val sr = bodyR * 0.32f
+      val sx = cx + 24.5f * s
+      val sy = cy - 23.5f * s
+      val sr = 6.8f * s
       val spark = Path().apply {
         moveTo(sx, sy - sr)
         lineTo(sx + sr * 0.34f, sy - sr * 0.34f)
@@ -646,22 +957,93 @@ private fun DrawScope.drawOrbiCompanionCharacter(
 }
 
 /**
- * Clean, uncluttered bottom sheet opened by tapping the Orbi avatar on Home.
+ * Compact, non-intrusive reactive Orbi companion pill for Now Playing header and Standby Desk Clock.
+ */
+@Composable
+fun OrbiMiniMoodBadge(
+  mood: OrbiMood,
+  theme: OrbiCompanionTheme,
+  isPlaying: Boolean,
+  reducedMotion: Boolean,
+  beatEnergy: Float = 0f,
+  showLabel: Boolean = false,
+  onClick: (() -> Unit)? = null,
+  modifier: Modifier = Modifier
+) {
+  Surface(
+    shape = CircleShape,
+    color = Color.White.copy(alpha = 0.10f),
+    border = BorderStroke(1.dp, theme.primary.copy(alpha = 0.35f + 0.35f * beatEnergy.coerceIn(0f, 1f))),
+    modifier = modifier
+      .then(
+        if (onClick != null) {
+          Modifier.clickable(role = Role.Button) { onClick() }
+        } else {
+          Modifier
+        }
+      )
+  ) {
+    Row(
+      modifier = Modifier.padding(
+        start = 4.dp,
+        end = if (showLabel) 10.dp else 4.dp,
+        top = 4.dp,
+        bottom = 4.dp
+      ),
+      verticalAlignment = Alignment.CenterVertically,
+      horizontalArrangement = Arrangement.spacedBy(6.dp)
+    ) {
+      OrbiCompanionAvatar(
+        mood = mood,
+        theme = theme,
+        isPlaying = isPlaying,
+        reducedMotion = reducedMotion,
+        beatEnergy = beatEnergy,
+        size = 26.dp
+      )
+      if (showLabel) {
+        Text(
+          text = stringResource(id = mood.shortLabelRes()),
+          style = MaterialTheme.typography.labelSmall.copy(
+            fontWeight = FontWeight.SemiBold,
+            fontSize = 11.sp
+          ),
+          color = Color.White.copy(alpha = 0.90f),
+          maxLines = 1
+        )
+      }
+    }
+  }
+}
+
+/**
+ * Clean, uncluttered bottom sheet opened by tapping the Orbi avatar on Home or Now Playing.
+ * Includes live official Orbi logo preview, tap-to-cycle Mood Stickers row, official Orbi themes
+ * (+ 1-tap "Apply as App Icon"), Shareable Orbi Sticker Card preview dialog, and link to Music Insights.
  */
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun OrbiCompanionSheet(
   mood: OrbiMood,
+  moodOverride: OrbiMood? = null,
   selectedTheme: OrbiCompanionTheme,
   badges: List<OrbiMilestoneBadge>,
   isPlaying: Boolean,
   reducedMotion: Boolean,
   darkTheme: Boolean,
+  beatEnergy: Float = 0f,
+  totalPlays: Int = 0,
+  favoritesCount: Int = 0,
+  topVibeLabel: String = "AURIX",
+  onSelectMoodOverride: (OrbiMood?) -> Unit = {},
   onSelectTheme: (OrbiCompanionTheme) -> Unit,
   onOpenInsights: () -> Unit,
   onDismiss: () -> Unit
 ) {
+  val context = LocalContext.current
+  var showShareCardDialog by remember { mutableStateOf(false) }
   val sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true)
+
   ModalBottomSheet(
     onDismissRequest = onDismiss,
     sheetState = sheetState,
@@ -674,7 +1056,7 @@ fun OrbiCompanionSheet(
         .padding(horizontal = 20.dp)
         .navigationBarsPadding()
         .padding(bottom = 24.dp),
-      verticalArrangement = Arrangement.spacedBy(18.dp)
+      verticalArrangement = Arrangement.spacedBy(16.dp)
     ) {
       Row(
         modifier = Modifier.fillMaxWidth(),
@@ -686,7 +1068,9 @@ fun OrbiCompanionSheet(
           theme = selectedTheme,
           isPlaying = isPlaying,
           reducedMotion = reducedMotion,
-          size = 64.dp
+          beatEnergy = beatEnergy,
+          size = 64.dp,
+          onClick = { onSelectMoodOverride(cycleNextOrbiMoodOverride(moodOverride)) }
         )
         Column(modifier = Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(3.dp)) {
           Text(
@@ -709,6 +1093,18 @@ fun OrbiCompanionSheet(
           )
         }
         IconButton(
+          onClick = { showShareCardDialog = true },
+          modifier = Modifier
+            .minimumInteractiveComponentSize()
+            .testTag("orbi_sheet_share_button")
+        ) {
+          Icon(
+            imageVector = Icons.Rounded.Share,
+            contentDescription = stringResource(id = R.string.orbi_share_sticker_card),
+            tint = selectedTheme.primary
+          )
+        }
+        IconButton(
           onClick = onDismiss,
           modifier = Modifier
             .minimumInteractiveComponentSize()
@@ -722,73 +1118,194 @@ fun OrbiCompanionSheet(
         }
       }
 
-      Text(
-        text = stringResource(id = R.string.orbi_themes_title),
-        style = MaterialTheme.typography.labelLarge.copy(fontWeight = FontWeight.SemiBold),
-        color = MaterialTheme.colorScheme.onSurface
-      )
+      // Tap-to-preview Mood Stickers row (Auto + 5 mood stickers)
+      Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+        Text(
+          text = stringResource(id = R.string.orbi_mood_stickers_title),
+          style = MaterialTheme.typography.labelLarge.copy(fontWeight = FontWeight.SemiBold),
+          color = MaterialTheme.colorScheme.onSurface
+        )
+        OrbiMoodStickerPickerRow(
+          activeMood = mood,
+          moodOverride = moodOverride,
+          selectedTheme = selectedTheme,
+          darkTheme = darkTheme,
+          onSelectMoodOverride = onSelectMoodOverride
+        )
+      }
 
-      OrbiThemePickerRow(
-        selectedTheme = selectedTheme,
-        badges = badges,
-        darkTheme = darkTheme,
-        onSelectTheme = onSelectTheme
-      )
-
-      Surface(
-        onClick = {
-          onDismiss()
-          onOpenInsights()
-        },
-        shape = RoundedCornerShape(18.dp),
-        color = selectedTheme.primary.copy(alpha = 0.14f),
-        border = BorderStroke(1.dp, selectedTheme.primary.copy(alpha = 0.35f)),
-        modifier = Modifier
-          .fillMaxWidth()
-          .testTag("orbi_sheet_open_insights_button")
-      ) {
+      // Official Orbi Themes row
+      Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
         Row(
-          modifier = Modifier
-            .fillMaxWidth()
-            .padding(horizontal = 16.dp, vertical = 14.dp),
-          horizontalArrangement = Arrangement.Center,
+          modifier = Modifier.fillMaxWidth(),
+          horizontalArrangement = Arrangement.SpaceBetween,
           verticalAlignment = Alignment.CenterVertically
         ) {
-          Icon(
-            imageVector = Icons.Rounded.WorkspacePremium,
-            contentDescription = null,
-            tint = selectedTheme.primary,
-            modifier = Modifier.size(18.dp)
-          )
-          Spacer(modifier = Modifier.width(8.dp))
           Text(
-            text = stringResource(id = R.string.orbi_open_insights),
+            text = stringResource(id = R.string.orbi_themes_title),
             style = MaterialTheme.typography.labelLarge.copy(fontWeight = FontWeight.SemiBold),
             color = MaterialTheme.colorScheme.onSurface
           )
+          val official = selectedTheme.officialIcon
+          if (official != null) {
+            Surface(
+              onClick = {
+                if (IconManager.applyIcon(context, official)) {
+                  Toast.makeText(
+                    context,
+                    context.getString(R.string.app_icon_changed_toast),
+                    Toast.LENGTH_SHORT
+                  ).show()
+                }
+              },
+              shape = CircleShape,
+              color = selectedTheme.primary.copy(alpha = 0.14f),
+              border = BorderStroke(1.dp, selectedTheme.primary.copy(alpha = 0.35f)),
+              modifier = Modifier.testTag("orbi_apply_launcher_icon_chip")
+            ) {
+              Row(
+                modifier = Modifier.padding(horizontal = 10.dp, vertical = 4.dp),
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.spacedBy(4.dp)
+              ) {
+                Icon(
+                  imageVector = Icons.Rounded.Smartphone,
+                  contentDescription = null,
+                  tint = selectedTheme.primary,
+                  modifier = Modifier.size(13.dp)
+                )
+                Text(
+                  text = stringResource(id = R.string.orbi_sync_launcher_icon),
+                  style = MaterialTheme.typography.labelSmall.copy(fontWeight = FontWeight.SemiBold),
+                  color = selectedTheme.primary
+                )
+              }
+            }
+          }
+        }
+
+        OrbiThemePickerRow(
+          selectedTheme = selectedTheme,
+          badges = badges,
+          darkTheme = darkTheme,
+          onSelectTheme = onSelectTheme
+        )
+      }
+
+      // Actions: Share Sticker Card + View all in Insights
+      Row(
+        modifier = Modifier.fillMaxWidth(),
+        horizontalArrangement = Arrangement.spacedBy(10.dp)
+      ) {
+        Surface(
+          onClick = { showShareCardDialog = true },
+          shape = RoundedCornerShape(18.dp),
+          color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.06f),
+          border = BorderStroke(1.dp, MaterialTheme.colorScheme.onSurface.copy(alpha = 0.14f)),
+          modifier = Modifier
+            .weight(1f)
+            .testTag("orbi_sheet_share_card_cta")
+        ) {
+          Row(
+            modifier = Modifier.padding(horizontal = 12.dp, vertical = 13.dp),
+            horizontalArrangement = Arrangement.Center,
+            verticalAlignment = Alignment.CenterVertically
+          ) {
+            Icon(
+              imageVector = Icons.Rounded.Share,
+              contentDescription = null,
+              tint = selectedTheme.primary,
+              modifier = Modifier.size(17.dp)
+            )
+            Spacer(modifier = Modifier.width(6.dp))
+            Text(
+              text = stringResource(id = R.string.orbi_share_sticker_card),
+              style = MaterialTheme.typography.labelMedium.copy(fontWeight = FontWeight.SemiBold),
+              color = MaterialTheme.colorScheme.onSurface,
+              maxLines = 1,
+              overflow = TextOverflow.Ellipsis
+            )
+          }
+        }
+
+        Surface(
+          onClick = {
+            onDismiss()
+            onOpenInsights()
+          },
+          shape = RoundedCornerShape(18.dp),
+          color = selectedTheme.primary.copy(alpha = 0.14f),
+          border = BorderStroke(1.dp, selectedTheme.primary.copy(alpha = 0.35f)),
+          modifier = Modifier
+            .weight(1f)
+            .testTag("orbi_sheet_open_insights_button")
+        ) {
+          Row(
+            modifier = Modifier.padding(horizontal = 12.dp, vertical = 13.dp),
+            horizontalArrangement = Arrangement.Center,
+            verticalAlignment = Alignment.CenterVertically
+          ) {
+            Icon(
+              imageVector = Icons.Rounded.WorkspacePremium,
+              contentDescription = null,
+              tint = selectedTheme.primary,
+              modifier = Modifier.size(17.dp)
+            )
+            Spacer(modifier = Modifier.width(6.dp))
+            Text(
+              text = stringResource(id = R.string.orbi_open_insights),
+              style = MaterialTheme.typography.labelMedium.copy(fontWeight = FontWeight.SemiBold),
+              color = MaterialTheme.colorScheme.onSurface,
+              maxLines = 1,
+              overflow = TextOverflow.Ellipsis
+            )
+          }
         }
       }
     }
   }
+
+  if (showShareCardDialog) {
+    OrbiMoodStickerShareDialog(
+      mood = mood,
+      theme = selectedTheme,
+      badges = badges,
+      totalPlays = totalPlays,
+      favoritesCount = favoritesCount,
+      topVibeLabel = topVibeLabel,
+      isPlaying = isPlaying,
+      reducedMotion = reducedMotion,
+      beatEnergy = beatEnergy,
+      onDismiss = { showShareCardDialog = false }
+    )
+  }
 }
 
 /**
- * Clean collapsible card inside MusicInsightsScreen displaying live reactive Orbi,
- * unlocked theme swatches, and a crisp 2-column milestone badge grid.
+ * Clean collapsible card inside MusicInsightsScreen displaying live reactive official Orbi logo,
+ * mood sticker preview pills, unlocked official theme swatches, share button, and 2-column milestone badge grid.
  */
 @Composable
 fun OrbiCompanionInsightsCard(
   mood: OrbiMood,
+  moodOverride: OrbiMood? = null,
   selectedTheme: OrbiCompanionTheme,
   badges: List<OrbiMilestoneBadge>,
   isPlaying: Boolean,
   darkTheme: Boolean,
   reducedMotion: Boolean,
+  beatEnergy: Float = 0f,
+  totalPlays: Int = 0,
+  favoritesCount: Int = 0,
+  topVibeLabel: String = "AURIX",
   isExpanded: Boolean,
   onToggleExpand: () -> Unit,
+  onSelectMoodOverride: (OrbiMood?) -> Unit = {},
   onSelectTheme: (OrbiCompanionTheme) -> Unit
 ) {
   val unlockedCount = remember(badges) { badges.count { it.unlocked } }
+  var showShareCardDialog by remember { mutableStateOf(false) }
+
   val cardEnter = remember(reducedMotion) {
     if (reducedMotion) fadeIn(snap()) else expandVertically(tween(240)) + fadeIn(tween(200))
   }
@@ -820,7 +1337,9 @@ fun OrbiCompanionInsightsCard(
           theme = selectedTheme,
           isPlaying = isPlaying,
           reducedMotion = reducedMotion,
-          size = 48.dp
+          beatEnergy = beatEnergy,
+          size = 48.dp,
+          onClick = { onSelectMoodOverride(cycleNextOrbiMoodOverride(moodOverride)) }
         )
         Column(modifier = Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(2.dp)) {
           Text(
@@ -834,6 +1353,19 @@ fun OrbiCompanionInsightsCard(
             color = selectedTheme.primary,
             maxLines = 1,
             overflow = TextOverflow.Ellipsis
+          )
+        }
+        IconButton(
+          onClick = { showShareCardDialog = true },
+          modifier = Modifier
+            .size(36.dp)
+            .testTag("insights_orbi_share_button")
+        ) {
+          Icon(
+            imageVector = Icons.Rounded.Share,
+            contentDescription = stringResource(id = R.string.orbi_share_sticker_card),
+            tint = selectedTheme.primary,
+            modifier = Modifier.size(18.dp)
           )
         }
         Surface(
@@ -852,6 +1384,14 @@ fun OrbiCompanionInsightsCard(
 
       AnimatedVisibility(visible = isExpanded, enter = cardEnter, exit = cardExit) {
         Column(verticalArrangement = Arrangement.spacedBy(14.dp)) {
+          OrbiMoodStickerPickerRow(
+            activeMood = mood,
+            moodOverride = moodOverride,
+            selectedTheme = selectedTheme,
+            darkTheme = darkTheme,
+            onSelectMoodOverride = onSelectMoodOverride
+          )
+
           OrbiThemePickerRow(
             selectedTheme = selectedTheme,
             badges = badges,
@@ -882,6 +1422,87 @@ fun OrbiCompanionInsightsCard(
               }
             }
           }
+        }
+      }
+    }
+  }
+
+  if (showShareCardDialog) {
+    OrbiMoodStickerShareDialog(
+      mood = mood,
+      theme = selectedTheme,
+      badges = badges,
+      totalPlays = totalPlays,
+      favoritesCount = favoritesCount,
+      topVibeLabel = topVibeLabel,
+      isPlaying = isPlaying,
+      reducedMotion = reducedMotion,
+      beatEnergy = beatEnergy,
+      onDismiss = { showShareCardDialog = false }
+    )
+  }
+}
+
+@Composable
+private fun OrbiMoodStickerPickerRow(
+  activeMood: OrbiMood,
+  moodOverride: OrbiMood?,
+  selectedTheme: OrbiCompanionTheme,
+  darkTheme: Boolean,
+  onSelectMoodOverride: (OrbiMood?) -> Unit
+) {
+  val items: List<Pair<OrbiMood?, Int>> = listOf(
+    null to R.string.orbi_mood_auto,
+    OrbiMood.LOFI_HEADPHONES to R.string.orbi_mood_short_lofi,
+    OrbiMood.PHONK_SHADES to R.string.orbi_mood_short_phonk,
+    OrbiMood.NIGHT_SLEEPY to R.string.orbi_mood_short_night,
+    OrbiMood.ROMANTIC_HEART to R.string.orbi_mood_short_romantic,
+    OrbiMood.PARTY_SPARK to R.string.orbi_mood_short_party
+  )
+  Row(
+    modifier = Modifier
+      .fillMaxWidth()
+      .horizontalScroll(rememberScrollState()),
+    horizontalArrangement = Arrangement.spacedBy(8.dp)
+  ) {
+    items.forEach { (optionMood, labelRes) ->
+      val selected = moodOverride == optionMood
+      val tagId = optionMood?.id ?: "auto"
+      Surface(
+        onClick = { onSelectMoodOverride(optionMood) },
+        shape = CircleShape,
+        color = if (selected) {
+          selectedTheme.primary.copy(alpha = 0.18f)
+        } else if (darkTheme) {
+          Color.White.copy(alpha = 0.05f)
+        } else {
+          Color.Black.copy(alpha = 0.04f)
+        },
+        border = BorderStroke(
+          width = if (selected) 1.5.dp else 1.dp,
+          color = if (selected) selectedTheme.primary else MaterialTheme.colorScheme.onSurface.copy(alpha = 0.12f)
+        ),
+        modifier = Modifier.testTag("orbi_mood_sticker_chip_$tagId")
+      ) {
+        Row(
+          modifier = Modifier.padding(horizontal = 11.dp, vertical = 6.dp),
+          verticalAlignment = Alignment.CenterVertically,
+          horizontalArrangement = Arrangement.spacedBy(6.dp)
+        ) {
+          OrbiCompanionAvatar(
+            mood = optionMood ?: activeMood,
+            theme = selectedTheme,
+            isPlaying = false,
+            reducedMotion = true,
+            size = 20.dp
+          )
+          Text(
+            text = stringResource(id = labelRes),
+            style = MaterialTheme.typography.labelMedium.copy(
+              fontWeight = if (selected) FontWeight.Bold else FontWeight.Medium
+            ),
+            color = if (selected) selectedTheme.primary else MaterialTheme.colorScheme.onSurface
+          )
         }
       }
     }
@@ -927,37 +1548,40 @@ private fun OrbiThemePickerRow(
         modifier = Modifier.testTag("orbi_theme_chip_${theme.id}")
       ) {
         Row(
-          modifier = Modifier.padding(horizontal = 12.dp, vertical = 9.dp),
+          modifier = Modifier.padding(horizontal = 10.dp, vertical = 8.dp),
           verticalAlignment = Alignment.CenterVertically,
           horizontalArrangement = Arrangement.spacedBy(7.dp)
         ) {
-          Box(
-            modifier = Modifier
-              .size(16.dp)
-              .clip(CircleShape)
-              .background(
-                Brush.linearGradient(
-                  listOf(
-                    theme.primary.copy(alpha = if (unlocked) 1f else 0.35f),
-                    theme.secondary.copy(alpha = if (unlocked) 1f else 0.35f)
-                  )
-                )
-              ),
-            contentAlignment = Alignment.Center
-          ) {
+          Box(contentAlignment = Alignment.Center) {
+            OrbiCompanionAvatar(
+              mood = OrbiMood.CLASSIC_IDLE,
+              theme = theme,
+              isPlaying = false,
+              reducedMotion = true,
+              size = 24.dp,
+              modifier = Modifier.graphicsLayer { alpha = if (unlocked) 1f else 0.38f }
+            )
             if (selected) {
-              Icon(
-                imageVector = Icons.Rounded.Check,
-                contentDescription = null,
-                tint = Color.White,
-                modifier = Modifier.size(11.dp)
-              )
+              Box(
+                modifier = Modifier
+                  .size(14.dp)
+                  .clip(CircleShape)
+                  .background(theme.primary),
+                contentAlignment = Alignment.Center
+              ) {
+                Icon(
+                  imageVector = Icons.Rounded.Check,
+                  contentDescription = null,
+                  tint = Color.Black,
+                  modifier = Modifier.size(10.dp)
+                )
+              }
             } else if (!unlocked) {
               Icon(
                 imageVector = Icons.Rounded.Lock,
                 contentDescription = null,
-                tint = Color.White.copy(alpha = 0.85f),
-                modifier = Modifier.size(10.dp)
+                tint = Color.White.copy(alpha = 0.9f),
+                modifier = Modifier.size(12.dp)
               )
             }
           }
@@ -1060,6 +1684,387 @@ private fun OrbiBadgeTile(
         maxLines = 2,
         overflow = TextOverflow.Ellipsis
       )
+    }
+  }
+}
+
+/**
+ * Shareable Orbi Mood & Music DNA Sticker Card preview dialog + PNG exporter.
+ */
+@Composable
+fun OrbiMoodStickerShareDialog(
+  mood: OrbiMood,
+  theme: OrbiCompanionTheme,
+  badges: List<OrbiMilestoneBadge>,
+  totalPlays: Int,
+  favoritesCount: Int,
+  topVibeLabel: String,
+  isPlaying: Boolean,
+  reducedMotion: Boolean,
+  beatEnergy: Float,
+  onDismiss: () -> Unit
+) {
+  val context = LocalContext.current
+  val scope = rememberCoroutineScope()
+  val moodText = stringResource(id = mood.labelRes())
+  val themeName = stringResource(id = theme.labelRes())
+  val unlockedCount = badges.count { it.unlocked }
+  val playsLabel = stringResource(id = R.string.orbi_stat_plays)
+  val favsLabel = stringResource(id = R.string.orbi_stat_favorites)
+  val vibeLabel = stringResource(id = R.string.orbi_stat_top_vibe)
+
+  Dialog(onDismissRequest = onDismiss) {
+    Surface(
+      shape = RoundedCornerShape(28.dp),
+      color = Color(0xFF0E1424),
+      border = BorderStroke(1.dp, theme.primary.copy(alpha = 0.40f)),
+      modifier = Modifier
+        .fillMaxWidth()
+        .testTag("orbi_sticker_share_dialog")
+    ) {
+      Column(
+        modifier = Modifier.padding(20.dp),
+        horizontalAlignment = Alignment.CenterHorizontally,
+        verticalArrangement = Arrangement.spacedBy(16.dp)
+      ) {
+        Row(
+          modifier = Modifier.fillMaxWidth(),
+          horizontalArrangement = Arrangement.SpaceBetween,
+          verticalAlignment = Alignment.CenterVertically
+        ) {
+          Column(modifier = Modifier.weight(1f)) {
+            Text(
+              text = stringResource(id = R.string.orbi_share_card_title),
+              style = MaterialTheme.typography.titleMedium.copy(fontWeight = FontWeight.Bold),
+              color = Color.White
+            )
+            Text(
+              text = stringResource(id = R.string.orbi_share_card_sub),
+              style = MaterialTheme.typography.labelSmall,
+              color = Color.White.copy(alpha = 0.68f)
+            )
+          }
+          IconButton(onClick = onDismiss) {
+            Icon(
+              imageVector = Icons.Rounded.Close,
+              contentDescription = stringResource(id = R.string.cd_close_sheet),
+              tint = Color.White.copy(alpha = 0.72f)
+            )
+          }
+        }
+
+        // Live Sticker Card Preview
+        Box(
+          modifier = Modifier
+            .fillMaxWidth()
+            .clip(RoundedCornerShape(24.dp))
+            .background(
+              Brush.verticalGradient(
+                listOf(
+                  Color(0xFF151E34),
+                  Color(0xFF0A0F1D)
+                )
+              )
+            )
+            .border(
+              width = 1.dp,
+              brush = Brush.linearGradient(
+                listOf(theme.primary.copy(alpha = 0.65f), theme.secondary.copy(alpha = 0.35f))
+              ),
+              shape = RoundedCornerShape(24.dp)
+            )
+            .padding(20.dp)
+        ) {
+          Column(
+            modifier = Modifier.fillMaxWidth(),
+            horizontalAlignment = Alignment.CenterHorizontally,
+            verticalArrangement = Arrangement.spacedBy(12.dp)
+          ) {
+            OrbiCompanionAvatar(
+              mood = mood,
+              theme = theme,
+              isPlaying = isPlaying,
+              reducedMotion = reducedMotion,
+              beatEnergy = beatEnergy,
+              size = 88.dp
+            )
+            Text(
+              text = moodText,
+              style = MaterialTheme.typography.titleSmall.copy(fontWeight = FontWeight.Bold),
+              color = Color.White
+            )
+            Surface(
+              shape = CircleShape,
+              color = theme.primary.copy(alpha = 0.16f),
+              border = BorderStroke(1.dp, theme.primary.copy(alpha = 0.40f))
+            ) {
+              Text(
+                text = "AURIX · $themeName · $unlockedCount/${badges.size}",
+                style = MaterialTheme.typography.labelSmall.copy(fontWeight = FontWeight.SemiBold),
+                color = theme.primary,
+                modifier = Modifier.padding(horizontal = 12.dp, vertical = 4.dp)
+              )
+            }
+
+            Row(
+              modifier = Modifier
+                .fillMaxWidth()
+                .padding(top = 4.dp),
+              horizontalArrangement = Arrangement.SpaceEvenly
+            ) {
+              StickerStatColumn(label = playsLabel, value = totalPlays.toString(), accent = theme.primary)
+              StickerStatColumn(label = favsLabel, value = favoritesCount.toString(), accent = theme.primary)
+              StickerStatColumn(label = vibeLabel, value = topVibeLabel.ifBlank { "Chill" }, accent = theme.primary)
+            }
+          }
+        }
+
+        Surface(
+          onClick = {
+            scope.launch {
+              shareOrbiStickerCardPng(
+                context = context,
+                mood = mood,
+                theme = theme,
+                moodLabel = moodText,
+                themeLabel = themeName,
+                unlockedBadges = unlockedCount,
+                totalBadges = badges.size,
+                totalPlays = totalPlays,
+                favoritesCount = favoritesCount,
+                topVibeLabel = topVibeLabel.ifBlank { "Chill" }
+              )
+              onDismiss()
+            }
+          },
+          shape = CircleShape,
+          color = theme.primary,
+          modifier = Modifier
+            .fillMaxWidth()
+            .testTag("orbi_sticker_confirm_share_button")
+        ) {
+          Row(
+            modifier = Modifier.padding(vertical = 13.dp),
+            horizontalArrangement = Arrangement.Center,
+            verticalAlignment = Alignment.CenterVertically
+          ) {
+            Icon(
+              imageVector = Icons.Rounded.Share,
+              contentDescription = null,
+              tint = Color(0xFF070B14),
+              modifier = Modifier.size(18.dp)
+            )
+            Spacer(modifier = Modifier.width(8.dp))
+            Text(
+              text = stringResource(id = R.string.orbi_share_action),
+              style = MaterialTheme.typography.labelLarge.copy(fontWeight = FontWeight.Bold),
+              color = Color(0xFF070B14)
+            )
+          }
+        }
+      }
+    }
+  }
+}
+
+@Composable
+private fun StickerStatColumn(label: String, value: String, accent: Color) {
+  Column(horizontalAlignment = Alignment.CenterHorizontally) {
+    Text(
+      text = value,
+      style = MaterialTheme.typography.titleMedium.copy(fontWeight = FontWeight.ExtraBold),
+      color = accent,
+      maxLines = 1
+    )
+    Text(
+      text = label,
+      style = MaterialTheme.typography.labelSmall,
+      color = Color.White.copy(alpha = 0.65f),
+      maxLines = 1
+    )
+  }
+}
+
+/**
+ * Renders a crisp 900x1120 PNG Sticker Card featuring the modified official Orbi logo,
+ * active mood, theme badge, and Music DNA stats, then launches Android's Share Sheet.
+ */
+suspend fun shareOrbiStickerCardPng(
+  context: Context,
+  mood: OrbiMood,
+  theme: OrbiCompanionTheme,
+  moodLabel: String,
+  themeLabel: String,
+  unlockedBadges: Int,
+  totalBadges: Int,
+  totalPlays: Int,
+  favoritesCount: Int,
+  topVibeLabel: String
+) = withContext(Dispatchers.IO) {
+  runCatching {
+    val w = 900
+    val h = 1120
+    val bmp = Bitmap.createBitmap(w, h, Bitmap.Config.ARGB_8888)
+    try {
+      val canvas = android.graphics.Canvas(bmp)
+      val bgPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
+        shader = LinearGradient(
+          0f, 0f, 0f, h.toFloat(),
+          intArrayOf(0xFF141D33.toInt(), 0xFF090D1A.toInt()),
+          null,
+          Shader.TileMode.CLAMP
+        )
+      }
+      canvas.drawRoundRect(RectF(0f, 0f, w.toFloat(), h.toFloat()), 64f, 64f, bgPaint)
+
+      // Outer border
+      val borderPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
+        style = Paint.Style.STROKE
+        strokeWidth = 4f
+        color = theme.primary.toArgb()
+        alpha = 140
+      }
+      canvas.drawRoundRect(RectF(16f, 16f, w - 16f, h - 16f), 56f, 56f, borderPaint)
+
+      // Official Orbi Logo Tile in center-top
+      val tileSize = 320f
+      val tileLeft = (w - tileSize) * 0.5f
+      val tileTop = 120f
+      val tilePaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
+        shader = LinearGradient(
+          0f, tileTop, 0f, tileTop + tileSize,
+          intArrayOf(theme.bgTopColor.toArgb(), theme.bgBottomColor.toArgb()),
+          null,
+          Shader.TileMode.CLAMP
+        )
+      }
+      canvas.drawRoundRect(
+        RectF(tileLeft, tileTop, tileLeft + tileSize, tileTop + tileSize),
+        tileSize * 0.285f,
+        tileSize * 0.285f,
+        tilePaint
+      )
+
+      val s = tileSize / 108f
+      val cx = w * 0.5f
+      val cy = tileTop + tileSize * 0.5f
+      val planetR = 20.5f * s
+      val ringRx = 29.5f * s
+      val ringRy = 7.8f * s
+      val ringStroke = (if (theme.isThinRing) 2.4f else 3.8f) * s
+
+      val ringPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
+        style = Paint.Style.STROKE
+        strokeWidth = ringStroke
+        strokeCap = Paint.Cap.ROUND
+        color = theme.ringGradientColors.firstOrNull()?.toArgb() ?: theme.primary.toArgb()
+      }
+
+      canvas.save()
+      canvas.rotate(-12f, cx, cy)
+      val ringOval = RectF(cx - ringRx, cy - ringRy, cx + ringRx, cy + ringRy)
+      canvas.drawArc(ringOval, 180f, 180f, false, ringPaint)
+
+      val planetPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
+        shader = LinearGradient(
+          0f, cy - planetR, 0f, cy + planetR,
+          intArrayOf(theme.planetTopColor.toArgb(), theme.planetBottomColor.toArgb()),
+          null,
+          Shader.TileMode.CLAMP
+        )
+      }
+      canvas.drawCircle(cx, cy, planetR, planetPaint)
+
+      val eyePaint = Paint(Paint.ANTI_ALIAS_FLAG).apply { color = theme.eyeColor.toArgb() }
+      val eyeRx = 2.5f * s
+      val eyeRy = 4.3f * s
+      val eyeCy = cy - 9.8f * s
+      canvas.drawRoundRect(
+        RectF(cx - 4.5f * s - eyeRx, eyeCy - eyeRy, cx - 4.5f * s + eyeRx, eyeCy + eyeRy),
+        eyeRx, eyeRx, eyePaint
+      )
+      canvas.drawRoundRect(
+        RectF(cx + 4.5f * s - eyeRx, eyeCy - eyeRy, cx + 4.5f * s + eyeRx, eyeCy + eyeRy),
+        eyeRx, eyeRx, eyePaint
+      )
+      canvas.drawArc(ringOval, 0f, 180f, false, ringPaint)
+      canvas.restore()
+
+      val hasKhmer = moodLabel.any { it.code in 0x1780..0x17FF } || themeLabel.any { it.code in 0x1780..0x17FF }
+      val baseTf = if (hasKhmer) {
+        runCatching { ResourcesCompat.getFont(context, R.font.noto_sans_khmer) }.getOrNull() ?: Typeface.DEFAULT
+      } else {
+        Typeface.create(Typeface.SANS_SERIF, Typeface.BOLD)
+      }
+
+      val titlePaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
+        color = android.graphics.Color.WHITE
+        textAlign = Paint.Align.CENTER
+        textSize = 48f
+        typeface = Typeface.create(baseTf, Typeface.BOLD)
+      }
+      canvas.drawText(moodLabel, cx, 535f, titlePaint)
+
+      val subPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
+        color = theme.primary.toArgb()
+        textAlign = Paint.Align.CENTER
+        textSize = 32f
+        typeface = Typeface.create(baseTf, Typeface.BOLD)
+      }
+      canvas.drawText("AURIX · $themeLabel · $unlockedBadges/$totalBadges Badges", cx, 600f, subPaint)
+
+      // Stats footer card
+      val statsRect = RectF(72f, 700f, w - 72f, 940f)
+      val statsBg = Paint(Paint.ANTI_ALIAS_FLAG).apply { color = 0x18FFFFFF }
+      canvas.drawRoundRect(statsRect, 36f, 36f, statsBg)
+
+      val valPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
+        color = android.graphics.Color.WHITE
+        textAlign = Paint.Align.CENTER
+        textSize = 52f
+        typeface = Typeface.create(baseTf, Typeface.BOLD)
+      }
+      val lblPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
+        color = 0xB0FFFFFF.toInt()
+        textAlign = Paint.Align.CENTER
+        textSize = 26f
+        typeface = baseTf
+      }
+
+      val col1 = w * 0.23f
+      val col2 = w * 0.50f
+      val col3 = w * 0.77f
+      canvas.drawText(totalPlays.toString(), col1, 810f, valPaint)
+      canvas.drawText("PLAYS", col1, 865f, lblPaint)
+      canvas.drawText(favoritesCount.toString(), col2, 810f, valPaint)
+      canvas.drawText("LIKED", col2, 865f, lblPaint)
+      canvas.drawText(topVibeLabel.take(10), col3, 810f, valPaint)
+      canvas.drawText("VIBE", col3, 865f, lblPaint)
+
+      val brandPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
+        color = 0x88FFFFFF.toInt()
+        textAlign = Paint.Align.CENTER
+        textSize = 24f
+        typeface = Typeface.create(baseTf, Typeface.BOLD)
+      }
+      canvas.drawText("AURIX MUSIC · ORBI COMPANION", cx, 1035f, brandPaint)
+
+      val outFile = File(context.cacheDir, "orbi_mood_sticker_${mood.id}.png")
+      FileOutputStream(outFile).use { fos ->
+        bmp.compress(Bitmap.CompressFormat.PNG, 95, fos)
+      }
+      val uri = FileProvider.getUriForFile(context, "${context.packageName}.fileprovider", outFile)
+      withContext(Dispatchers.Main) {
+        val shareIntent = Intent(Intent.ACTION_SEND).apply {
+          type = "image/png"
+          putExtra(Intent.EXTRA_STREAM, uri)
+          putExtra(Intent.EXTRA_TEXT, "My Orbi Companion ($moodLabel · $themeLabel) on AURIX")
+          addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
+        }
+        context.startActivity(Intent.createChooser(shareIntent, null))
+      }
+    } finally {
+      if (!bmp.isRecycled) bmp.recycle()
     }
   }
 }

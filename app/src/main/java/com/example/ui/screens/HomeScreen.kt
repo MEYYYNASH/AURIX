@@ -113,7 +113,8 @@ fun HomeScreen(
   onOpenFavoritesMix: () -> Unit = {},
   onOpenRecentlyAdded: () -> Unit = {},
   orbiMood: OrbiMood = OrbiMood.CLASSIC_IDLE,
-  orbiTheme: OrbiCompanionTheme = OrbiCompanionTheme.AURORA,
+  orbiTheme: OrbiCompanionTheme = OrbiCompanionTheme.CLASSIC,
+  orbiBeatEnergy: Float = 0f,
   onOpenOrbiCompanion: () -> Unit = {},
   onSongClick: (Song, List<Song>) -> Unit,
   onFavoriteClick: (Song) -> Unit
@@ -196,6 +197,7 @@ fun HomeScreen(
               theme = orbiTheme,
               isPlaying = isPlaying,
               reducedMotion = reducedMotion,
+              beatEnergy = orbiBeatEnergy,
               size = 44.dp,
               onClick = onOpenOrbiCompanion,
               modifier = Modifier.testTag("home_orbi_avatar")

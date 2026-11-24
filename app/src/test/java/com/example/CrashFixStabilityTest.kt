@@ -11,10 +11,10 @@ import org.junit.Test
 class CrashFixStabilityTest {
 
   @Test
-  fun release210_metadataAndVersionCodeAreConsistent() {
-    assertEquals("2.1.0", BuildConfig.VERSION_NAME)
-    assertEquals(20100, BuildConfig.VERSION_CODE)
-    assertTrue("Release 2.1.0 versionCode must exceed 2.0.4 (20004)", BuildConfig.VERSION_CODE > 20004)
+  fun release211_metadataAndVersionCodeAreConsistent() {
+    assertEquals("2.1.1", BuildConfig.VERSION_NAME)
+    assertEquals(20101, BuildConfig.VERSION_CODE)
+    assertTrue("Release 2.1.1 versionCode must exceed 2.1.0 (20100)", BuildConfig.VERSION_CODE > 20100)
     assertEquals(420, com.example.ui.screens.SELECT_BAR_OPEN_DURATION_MS)
     assertEquals(600, com.example.ui.screens.SELECT_CIRCLE_OPEN_DURATION_MS)
     assertEquals(380L, com.example.ui.screens.SELECT_CLOSE_CLEAR_DELAY_MS)
@@ -452,6 +452,27 @@ class CrashFixStabilityTest {
     )
     assertTrue(veteranBadges.all { it.unlocked })
     assertTrue(com.example.ui.screens.isOrbiThemeUnlocked(com.example.ui.screens.OrbiCompanionTheme.PRISMATIC, veteranBadges))
+
+    // Official OrbiAppIcon sync + legacy ID mapping
+    assertEquals(com.example.data.OrbiAppIcon.CLASSIC, com.example.ui.screens.OrbiCompanionTheme.CLASSIC.officialIcon)
+    assertEquals(com.example.data.OrbiAppIcon.MIDNIGHT, com.example.ui.screens.OrbiCompanionTheme.MIDNIGHT.officialIcon)
+    assertEquals(com.example.data.OrbiAppIcon.EMBER, com.example.ui.screens.OrbiCompanionTheme.EMBER.officialIcon)
+    assertEquals(com.example.data.OrbiAppIcon.AMOLED, com.example.ui.screens.OrbiCompanionTheme.AMOLED.officialIcon)
+    assertEquals(com.example.data.OrbiAppIcon.PEARL, com.example.ui.screens.OrbiCompanionTheme.PEARL.officialIcon)
+    assertNull(com.example.ui.screens.OrbiCompanionTheme.PRISMATIC.officialIcon)
+    assertEquals(com.example.ui.screens.OrbiCompanionTheme.CLASSIC, com.example.ui.screens.OrbiCompanionTheme.fromId("aurora"))
+    assertEquals(com.example.ui.screens.OrbiCompanionTheme.EMBER, com.example.ui.screens.OrbiCompanionTheme.fromId("mint"))
+    assertEquals(com.example.ui.screens.OrbiCompanionTheme.AMOLED, com.example.ui.screens.OrbiCompanionTheme.fromId("rose"))
+    assertEquals(com.example.ui.screens.OrbiCompanionTheme.PEARL, com.example.ui.screens.OrbiCompanionTheme.fromId("sunset"))
+
+    // Interactive mood sticker cycle & beat energy helper
+    val firstCycle = com.example.ui.screens.cycleNextOrbiMoodOverride(null)
+    assertEquals(com.example.ui.screens.OrbiMood.LOFI_HEADPHONES, firstCycle)
+    val lastCycle = com.example.ui.screens.cycleNextOrbiMoodOverride(com.example.ui.screens.OrbiMood.PARTY_SPARK)
+    assertNull(lastCycle)
+    assertEquals(0f, com.example.ui.screens.computeOrbiBeatEnergy(floatArrayOf(0.8f, 0.7f, 0.6f), isPlaying = false, reducedMotion = false), 0.001f)
+    assertEquals(0f, com.example.ui.screens.computeOrbiBeatEnergy(floatArrayOf(0.8f, 0.7f, 0.6f), isPlaying = true, reducedMotion = true), 0.001f)
+    assertTrue(com.example.ui.screens.computeOrbiBeatEnergy(floatArrayOf(0.9f, 0.8f, 0.7f, 0.6f), isPlaying = true, reducedMotion = false) > 0.5f)
 
     // Cover Blur Studio palettes, layouts & monogram helper
     assertEquals(6, com.example.data.CoverStudioPalette.entries.size)

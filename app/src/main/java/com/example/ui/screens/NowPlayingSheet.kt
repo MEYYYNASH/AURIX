@@ -142,6 +142,10 @@ fun NowPlayingSheet(
   developerModeEnabled: Boolean = false,
   onOpenLyricsEditor: (() -> Unit)? = null,
   onOpenStandby: () -> Unit = {},
+  orbiMood: OrbiMood = OrbiMood.CLASSIC_IDLE,
+  orbiTheme: OrbiCompanionTheme = OrbiCompanionTheme.CLASSIC,
+  orbiBeatEnergy: Float = 0f,
+  onOpenOrbiCompanion: () -> Unit = {},
   widgetCustomizerConfig: com.example.widget.WidgetCustomizerConfig = com.example.widget.WidgetCustomizerConfig.DEFAULT
 ) {
   BackHandler { onClose() }
@@ -324,7 +328,20 @@ fun NowPlayingSheet(
           }
         }
 
-        Row(verticalAlignment = Alignment.CenterVertically) {
+        Row(
+          verticalAlignment = Alignment.CenterVertically,
+          horizontalArrangement = Arrangement.spacedBy(2.dp)
+        ) {
+          OrbiMiniMoodBadge(
+            mood = orbiMood,
+            theme = orbiTheme,
+            isPlaying = isPlaying,
+            reducedMotion = reducedMotion,
+            beatEnergy = orbiBeatEnergy,
+            showLabel = false,
+            onClick = onOpenOrbiCompanion,
+            modifier = Modifier.testTag("np_orbi_mini_badge")
+          )
           IconButton(
             onClick = onOpenStandby,
             modifier = Modifier.minimumInteractiveComponentSize().testTag("np_standby_button")

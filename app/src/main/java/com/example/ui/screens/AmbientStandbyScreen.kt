@@ -125,6 +125,8 @@ fun AmbientStandbyScreen(
   spectrumBars: FloatArray,
   vinylStyle: Boolean,
   reducedMotion: Boolean,
+  orbiMood: OrbiMood = OrbiMood.CLASSIC_IDLE,
+  orbiTheme: OrbiCompanionTheme = OrbiCompanionTheme.CLASSIC,
   onToggleVinylStyle: (Boolean) -> Unit,
   onPlayPause: () -> Unit,
   onNext: () -> Unit,
@@ -289,7 +291,12 @@ fun AmbientStandbyScreen(
             batteryPercent = batteryPercent,
             isCharging = isCharging,
             accent = accentPrimary,
-            compact = true
+            compact = true,
+            orbiMood = orbiMood,
+            orbiTheme = orbiTheme,
+            isPlaying = isPlaying,
+            reducedMotion = reducedMotion,
+            beatEnergy = computeOrbiBeatEnergy(spectrumBars, isPlaying, reducedMotion)
           )
           Spacer(modifier = Modifier.height(18.dp))
           StandbyArtworkDisc(
@@ -336,7 +343,12 @@ fun AmbientStandbyScreen(
           batteryPercent = batteryPercent,
           isCharging = isCharging,
           accent = accentPrimary,
-          compact = false
+          compact = false,
+          orbiMood = orbiMood,
+          orbiTheme = orbiTheme,
+          isPlaying = isPlaying,
+          reducedMotion = reducedMotion,
+          beatEnergy = computeOrbiBeatEnergy(spectrumBars, isPlaying, reducedMotion)
         )
 
         StandbyArtworkDisc(
@@ -508,11 +520,16 @@ private fun StandbyClockHeader(
   batteryPercent: Int,
   isCharging: Boolean,
   accent: Color,
-  compact: Boolean
+  compact: Boolean,
+  orbiMood: OrbiMood = OrbiMood.CLASSIC_IDLE,
+  orbiTheme: OrbiCompanionTheme = OrbiCompanionTheme.CLASSIC,
+  isPlaying: Boolean = false,
+  reducedMotion: Boolean = false,
+  beatEnergy: Float = 0f
 ) {
   Column(
     horizontalAlignment = Alignment.CenterHorizontally,
-    verticalArrangement = Arrangement.spacedBy(4.dp)
+    verticalArrangement = Arrangement.spacedBy(6.dp)
   ) {
     Text(
       text = timeText,
@@ -526,7 +543,7 @@ private fun StandbyClockHeader(
     )
     Row(
       verticalAlignment = Alignment.CenterVertically,
-      horizontalArrangement = Arrangement.spacedBy(10.dp)
+      horizontalArrangement = Arrangement.spacedBy(8.dp)
     ) {
       Text(
         text = dateText,
@@ -535,6 +552,15 @@ private fun StandbyClockHeader(
           letterSpacing = 0.4.sp
         ),
         color = Color.White.copy(alpha = 0.62f)
+      )
+      OrbiMiniMoodBadge(
+        mood = orbiMood,
+        theme = orbiTheme,
+        isPlaying = isPlaying,
+        reducedMotion = reducedMotion,
+        beatEnergy = beatEnergy,
+        showLabel = true,
+        modifier = Modifier.testTag("standby_orbi_mini_badge")
       )
       if (batteryPercent >= 0) {
         Row(

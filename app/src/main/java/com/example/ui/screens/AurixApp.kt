@@ -338,6 +338,7 @@ private fun AurixMainShell(
   var showWidgetCustomizer by remember { mutableStateOf(false) }
   var showOrbiCompanionSheet by remember { mutableStateOf(false) }
   var showAmbientStandby by remember { mutableStateOf(false) }
+  var orbiMoodOverride by remember { mutableStateOf<OrbiMood?>(null) }
   var isLibraryCreateAlbumOpen by remember { mutableStateOf(false) }
   val developerModeUnlocked by viewModel.developerModeUnlocked.collectAsStateWithLifecycle()
   val developerModeEnabled by viewModel.developerModeEnabled.collectAsStateWithLifecycle()
@@ -377,6 +378,46 @@ private fun AurixMainShell(
 
   val isNowPlayingOpen = showNowPlaying && currentSong != null
   val pendingNotificationNav by viewModel.pendingNotificationNav.collectAsStateWithLifecycle()
+
+  val activeOrbiTheme = remember(orbiThemeId) { OrbiCompanionTheme.fromId(orbiThemeId) }
+  val autoOrbiMood = remember(currentSong, isPlaying, sleepMinutes, sleepEndOfTrack) {
+    resolveOrbiMood(
+      song = currentSong,
+      isPlaying = isPlaying,
+      sleepTimerActive = sleepMinutes > 0 || sleepEndOfTrack
+    )
+  }
+  val effectiveOrbiMood = orbiMoodOverride ?: autoOrbiMood
+  val orbiBeatEnergy = remember(spectrumBars, isPlaying, reducedMotion) {
+    computeOrbiBeatEnergy(spectrumBars, isPlaying, reducedMotion)
+  }
+  val orbiTotalPlays = remember(musicDna, recentPlayEntries, recentlyPlayed) {
+    maxOf(musicDna.totalQualifiedPlays, recentPlayEntries.size, recentlyPlayed.size)
+  }
+  val orbiTopVibeLabel = remember(musicDna) {
+    musicDna.moodDistribution.firstOrNull()?.mood
+      ?: musicDna.topGenres.firstOrNull()?.genre
+      ?: "AURIX"
+  }
+  val orbiMilestoneBadges = remember(musicDna, favorites, recentlyPlayed, recentPlayEntries, orbiTotalPlays) {
+    val uniqueArtists = maxOf(
+      musicDna.favoriteArtists.size,
+      (recentlyPlayed + favorites)
+        .map { it.artist.trim().lowercase() }
+        .filter { it.isNotBlank() }
+        .distinct()
+        .size
+    )
+    val dominantSignal = musicDna.moodDistribution.firstOrNull()?.mood
+      ?: musicDna.topGenres.firstOrNull()?.genre
+      ?: ""
+    computeOrbiMilestoneBadges(
+      totalPlays = orbiTotalPlays,
+      favoritesCount = favorites.size,
+      uniqueArtistsCount = uniqueArtists,
+      dominantMoodOrGenre = dominantSignal
+    )
+  }
 
   LaunchedEffect(pendingNotificationNav, currentSong) {
     val nav = pendingNotificationNav ?: return@LaunchedEffect
@@ -634,47 +675,14 @@ private fun AurixMainShell(
               onOpenDailyDiscovery = { currentScreen = Screen.PlaylistDetail("daily_discovery") },
               onOpenFavoritesMix = { currentScreen = Screen.PlaylistDetail("favorites_mix") },
               onOpenRecentlyAdded = { currentScreen = Screen.PlaylistDetail("recently_added") },
-              orbiMood = remember(currentSong, isPlaying, sleepMinutes, sleepEndOfTrack) {
-                resolveOrbiMood(
-                  song = currentSong,
-                  isPlaying = isPlaying,
-                  sleepTimerActive = sleepMinutes > 0 || sleepEndOfTrack
-                )
-              },
-              orbiTheme = remember(orbiThemeId) { OrbiCompanionTheme.fromId(orbiThemeId) },
+              orbiMood = effectiveOrbiMood,
+              orbiTheme = activeOrbiTheme,
+              orbiBeatEnergy = orbiBeatEnergy,
               onOpenOrbiCompanion = { showOrbiCompanionSheet = true },
               onSongClick = { song, queue -> viewModel.playSong(song, queue) },
               onFavoriteClick = { viewModel.toggleFavorite(it) }
             )
             is Screen.Insights -> {
-              val insightsOrbiMood = remember(currentSong, isPlaying, sleepMinutes, sleepEndOfTrack) {
-                resolveOrbiMood(
-                  song = currentSong,
-                  isPlaying = isPlaying,
-                  sleepTimerActive = sleepMinutes > 0 || sleepEndOfTrack
-                )
-              }
-              val insightsOrbiTheme = remember(orbiThemeId) { OrbiCompanionTheme.fromId(orbiThemeId) }
-              val insightsOrbiBadges = remember(musicDna, favorites, recentlyPlayed, recentPlayEntries) {
-                val totalPlays = maxOf(musicDna.totalQualifiedPlays, recentPlayEntries.size, recentlyPlayed.size)
-                val uniqueArtists = maxOf(
-                  musicDna.favoriteArtists.size,
-                  (recentlyPlayed + favorites)
-                    .map { it.artist.trim().lowercase() }
-                    .filter { it.isNotBlank() }
-                    .distinct()
-                    .size
-                )
-                val dominantSignal = musicDna.moodDistribution.firstOrNull()?.mood
-                  ?: musicDna.topGenres.firstOrNull()?.genre
-                  ?: ""
-                computeOrbiMilestoneBadges(
-                  totalPlays = totalPlays,
-                  favoritesCount = favorites.size,
-                  uniqueArtistsCount = uniqueArtists,
-                  dominantMoodOrGenre = dominantSignal
-                )
-              }
               MusicInsightsScreen(
                 musicDna = musicDna,
                 mostPlayedFilter = mostPlayedFilter,
@@ -686,10 +694,16 @@ private fun AurixMainShell(
                 darkTheme = darkTheme,
                 reducedMotion = reducedMotion,
                 verifiedLyricsIds = verifiedLyricsIds,
-                orbiMood = insightsOrbiMood,
-                orbiTheme = insightsOrbiTheme,
-                orbiBadges = insightsOrbiBadges,
+                orbiMood = effectiveOrbiMood,
+                orbiMoodOverride = orbiMoodOverride,
+                orbiTheme = activeOrbiTheme,
+                orbiBadges = orbiMilestoneBadges,
+                orbiBeatEnergy = orbiBeatEnergy,
+                orbiTotalPlays = orbiTotalPlays,
+                orbiFavoritesCount = favorites.size,
+                orbiTopVibeLabel = orbiTopVibeLabel,
                 onSelectOrbiTheme = { theme -> viewModel.setOrbiCompanionTheme(theme.id) },
+                onSelectOrbiMoodOverride = { overrideMood -> orbiMoodOverride = overrideMood },
                 onBack = { currentScreen = Screen.Home },
                 onSelectMostPlayedFilter = { viewModel.setMostPlayedFilter(it) },
                 onCheckLyrics = { viewModel.ensureLyricsVerified(it) },
@@ -1410,48 +1424,30 @@ private fun AurixMainShell(
             developerModeEnabled = developerModeEnabled,
             onOpenLyricsEditor = { showCustomLyricsEditor = true },
             onOpenStandby = { showAmbientStandby = true },
+            orbiMood = effectiveOrbiMood,
+            orbiTheme = activeOrbiTheme,
+            orbiBeatEnergy = orbiBeatEnergy,
+            onOpenOrbiCompanion = { showOrbiCompanionSheet = true },
             widgetCustomizerConfig = widgetCustomizerConfig
           )
         }
       }
 
       if (showOrbiCompanionSheet) {
-        val sheetOrbiMood = remember(currentSong, isPlaying, sleepMinutes, sleepEndOfTrack) {
-          resolveOrbiMood(
-            song = currentSong,
-            isPlaying = isPlaying,
-            sleepTimerActive = sleepMinutes > 0 || sleepEndOfTrack
-          )
-        }
-        val sheetOrbiTheme = remember(orbiThemeId) { OrbiCompanionTheme.fromId(orbiThemeId) }
-        val sheetOrbiBadges = remember(musicDna, favorites, recentlyPlayed, recentPlayEntries) {
-          val totalPlays = maxOf(musicDna.totalQualifiedPlays, recentPlayEntries.size, recentlyPlayed.size)
-          val uniqueArtists = maxOf(
-            musicDna.favoriteArtists.size,
-            (recentlyPlayed + favorites)
-              .map { it.artist.trim().lowercase() }
-              .filter { it.isNotBlank() }
-              .distinct()
-              .size
-          )
-          val dominantSignal = musicDna.moodDistribution.firstOrNull()?.mood
-            ?: musicDna.topGenres.firstOrNull()?.genre
-            ?: ""
-          computeOrbiMilestoneBadges(
-            totalPlays = totalPlays,
-            favoritesCount = favorites.size,
-            uniqueArtistsCount = uniqueArtists,
-            dominantMoodOrGenre = dominantSignal
-          )
-        }
         OrbiCompanionSheet(
-          mood = sheetOrbiMood,
-          selectedTheme = sheetOrbiTheme,
-          badges = sheetOrbiBadges,
+          mood = effectiveOrbiMood,
+          moodOverride = orbiMoodOverride,
+          selectedTheme = activeOrbiTheme,
+          badges = orbiMilestoneBadges,
           isPlaying = isPlaying,
           reducedMotion = reducedMotion,
           darkTheme = darkTheme,
+          beatEnergy = orbiBeatEnergy,
+          totalPlays = orbiTotalPlays,
+          favoritesCount = favorites.size,
+          topVibeLabel = orbiTopVibeLabel,
           onSelectTheme = { theme -> viewModel.setOrbiCompanionTheme(theme.id) },
+          onSelectMoodOverride = { overrideMood -> orbiMoodOverride = overrideMood },
           onOpenInsights = {
             showOrbiCompanionSheet = false
             currentScreen = Screen.Insights
@@ -1470,6 +1466,8 @@ private fun AurixMainShell(
           spectrumBars = spectrumBars,
           vinylStyle = standbyVinylStyle,
           reducedMotion = reducedMotion,
+          orbiMood = effectiveOrbiMood,
+          orbiTheme = activeOrbiTheme,
           onToggleVinylStyle = { isVinyl -> viewModel.setStandbyVinylStyle(isVinyl) },
           onPlayPause = { viewModel.togglePlayPause() },
           onNext = { viewModel.nextTrack() },

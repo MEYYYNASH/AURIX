@@ -68,9 +68,15 @@ fun MusicInsightsScreen(
   reducedMotion: Boolean,
   verifiedLyricsIds: Set<String> = emptySet(),
   orbiMood: OrbiMood = OrbiMood.CLASSIC_IDLE,
-  orbiTheme: OrbiCompanionTheme = OrbiCompanionTheme.AURORA,
+  orbiMoodOverride: OrbiMood? = null,
+  orbiTheme: OrbiCompanionTheme = OrbiCompanionTheme.CLASSIC,
   orbiBadges: List<OrbiMilestoneBadge> = emptyList(),
+  orbiBeatEnergy: Float = 0f,
+  orbiTotalPlays: Int = 0,
+  orbiFavoritesCount: Int = 0,
+  orbiTopVibeLabel: String = "AURIX",
   onSelectOrbiTheme: (OrbiCompanionTheme) -> Unit = {},
+  onSelectOrbiMoodOverride: (OrbiMood?) -> Unit = {},
   onBack: () -> Unit,
   onSelectMostPlayedFilter: (MostPlayedFilter) -> Unit,
   onCheckLyrics: (Song) -> Unit,
@@ -165,14 +171,20 @@ fun MusicInsightsScreen(
       item {
         OrbiCompanionInsightsCard(
           mood = orbiMood,
+          moodOverride = orbiMoodOverride,
           selectedTheme = orbiTheme,
           badges = orbiBadges,
           isPlaying = isPlaying,
           darkTheme = darkTheme,
           reducedMotion = reducedMotion,
+          beatEnergy = orbiBeatEnergy,
+          totalPlays = orbiTotalPlays,
+          favoritesCount = orbiFavoritesCount,
+          topVibeLabel = orbiTopVibeLabel,
           isExpanded = showOrbiCard,
           onToggleExpand = { showOrbiCard = !showOrbiCard },
-          onSelectTheme = onSelectOrbiTheme
+          onSelectTheme = onSelectOrbiTheme,
+          onSelectMoodOverride = onSelectOrbiMoodOverride
         )
       }
     }
