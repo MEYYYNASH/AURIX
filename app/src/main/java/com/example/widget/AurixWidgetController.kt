@@ -10,19 +10,27 @@ import android.graphics.Bitmap
 import android.graphics.BitmapFactory
 import android.graphics.Canvas
 import android.graphics.Color
+import android.graphics.ColorMatrix
+import android.graphics.ColorMatrixColorFilter
 import android.graphics.LinearGradient
 import android.graphics.Paint
 import android.graphics.PorterDuff
 import android.graphics.PorterDuffXfermode
 import android.graphics.RadialGradient
+import android.graphics.Rect
 import android.graphics.RectF
 import android.graphics.Shader
 import android.graphics.Typeface
+import android.os.Build
 import android.os.Bundle
 import android.text.Layout
+import android.text.SpannableString
+import android.text.Spanned
 import android.text.StaticLayout
 import android.text.TextPaint
 import android.text.TextUtils
+import android.text.style.ForegroundColorSpan
+import android.text.style.StyleSpan
 import android.view.View
 import android.widget.RemoteViews
 import androidx.core.content.res.ResourcesCompat
@@ -96,9 +104,9 @@ object AurixWidgetController {
   const val COLOR_ACCENT = 0xFF43C7F4.toInt()
   const val COLOR_SECOND_ACCENT = 0xFF7965FF.toInt()
   const val COLOR_HIGHLIGHT = 0xFFA855F7.toInt()
-  const val COLOR_TEXT_DARK = 0xFFF7F9FF.toInt()
+  const val COLOR_TEXT_DARK = 0xFFFFFFFF.toInt()
   const val COLOR_TEXT_LIGHT = 0xFF0E1726.toInt()
-  const val COLOR_MUTED_DARK = 0xFF929DB0.toInt()
+  const val COLOR_MUTED_DARK = 0xB8FFFFFF.toInt()
   const val COLOR_MUTED_LIGHT = 0xFF526077.toInt()
   const val COLOR_BORDER_DARK = 0xFF273348.toInt()
   const val COLOR_BORDER_LIGHT = 0xFFD0DCF0.toInt()
@@ -112,9 +120,9 @@ object AurixWidgetController {
 
   private const val PREFS_WIDGET_SNAPSHOT = "aurix_widget_snapshot_prefs"
   private const val CACHE_DIR_NAME = "widget_cache"
-  private const val CACHED_RAW_ART_FILE = "last_album_art.png"
-  private const val CACHED_GLOW_BG_FILE = "last_glow_bg.png"
-  private const val CACHED_ROUNDED_ART_FILE = "last_rounded_art.png"
+  private const val CACHED_RAW_ART_FILE = "last_album_art_v2.png"
+  private const val CACHED_GLOW_BG_FILE = "last_glow_bg_v2.png"
+  private const val CACHED_ROUNDED_ART_FILE = "last_rounded_art_v2.png"
 
   private val widgetScope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
 
@@ -488,7 +496,7 @@ object AurixWidgetController {
 
     if (lyricsIds.isNotEmpty()) {
       for (widgetId in lyricsIds) {
-        val views = buildLyricsWidgetRemoteViews(appCtx, snapshot, glowBg)
+        val views = buildLyricsWidgetRemoteViews(appCtx, snapshot, glowBg, roundedArt)
         runCatching { manager.updateAppWidget(widgetId, views) }
       }
     }
@@ -526,8 +534,9 @@ object AurixWidgetController {
         val snapshot = readSnapshot(appCtx)
         val rawArt = loadOrRestoreRawArtwork(appCtx, snapshot, forceReload = false)
         val glowBg = getOrRenderBackgroundBitmap(appCtx, snapshot, rawArt)
+        val roundedArt = getOrRenderRoundedAlbumArt(appCtx, rawArt)
         for (widgetId in appWidgetIds) {
-          val views = buildLyricsWidgetRemoteViews(appCtx, snapshot, glowBg)
+          val views = buildLyricsWidgetRemoteViews(appCtx, snapshot, glowBg, roundedArt)
           runCatching { appWidgetManager.updateAppWidget(widgetId, views) }
         }
       }
@@ -548,6 +557,11 @@ object AurixWidgetController {
     val mutedTextColor = if (isLight) COLOR_MUTED_LIGHT else COLOR_MUTED_DARK
 
     views.setImageViewBitmap(R.id.widget_music_bg_glow, glowBg)
+    views.setInt(
+      R.id.widget_music_card_border,
+      "setBackgroundResource",
+      if (isLight) R.drawable.widget_card_border_light else R.drawable.widget_card_border_dark
+    )
 
     val openPlayerPi = buildOpenAppPendingIntent(
       context = context,
@@ -587,28 +601,48 @@ object AurixWidgetController {
     } else 0
     views.setProgressBar(R.id.widget_music_progress, 1000, progressPermille, false)
 
-    // Translucent glass fill + thin border on control buttons
+    // Responsive width: Below 3 cells wide (< 180dp), hide Like
+    val minWidthDp = options?.getInt(AppWidgetManager.OPTION_APPWIDGET_MIN_WIDTH, 280) ?: 280
+    val showLike = shouldShowLikeButton(minWidthDp)
+    val contentWidthDp = (minWidthDp - 30).coerceIn(140, 420)
+    val totalWeight = if (showLike) 4.20f else 3.28f
+    val gapCount = if (showLike) 3 else 2
+    val usableDp = (contentWidthDp - gapCount * 6).coerceAtLeast(120)
+    val stdBtnW = ((usableDp * (1.0f / totalWeight)) * 2.5f).roundToInt().coerceIn(110, 240)
+    val playBtnW = ((usableDp * (1.28f / totalWeight)) * 2.5f).roundToInt().coerceIn(136, 300)
+    val likeBtnW = ((usableDp * (0.92f / totalWeight)) * 2.5f).roundToInt().coerceIn(104, 220)
+    val btnH = 95
+
+    // Translucent glass fill + thin border on control buttons at exact aspect ratio
     val standardBtnGlass = renderGlassPillBitmap(
-      widthPx = 140,
-      heightPx = 76,
-      cornerRadiusPx = 38f,
+      widthPx = stdBtnW,
+      heightPx = btnH,
+      cornerRadiusPx = btnH * 0.5f,
       glassLevel = state.glassLevel,
       isHighlighted = false,
       isLightTheme = isLight
     )
     val playBtnGlass = renderGlassPillBitmap(
-      widthPx = 160,
-      heightPx = 76,
-      cornerRadiusPx = 38f,
+      widthPx = playBtnW,
+      heightPx = btnH,
+      cornerRadiusPx = btnH * 0.5f,
       glassLevel = state.glassLevel,
       isHighlighted = state.isPlaying,
+      isLightTheme = isLight
+    )
+    val likeBtnGlass = renderGlassPillBitmap(
+      widthPx = likeBtnW,
+      heightPx = btnH,
+      cornerRadiusPx = btnH * 0.5f,
+      glassLevel = state.glassLevel,
+      isHighlighted = false,
       isLightTheme = isLight
     )
 
     views.setImageViewBitmap(R.id.widget_btn_prev_bg, standardBtnGlass)
     views.setImageViewBitmap(R.id.widget_btn_play_pause_bg, playBtnGlass)
     views.setImageViewBitmap(R.id.widget_btn_next_bg, standardBtnGlass)
-    views.setImageViewBitmap(R.id.widget_btn_like_bg, standardBtnGlass)
+    views.setImageViewBitmap(R.id.widget_btn_like_bg, likeBtnGlass)
 
     views.setImageViewResource(
       R.id.widget_btn_play_pause_icon,
@@ -619,6 +653,16 @@ object AurixWidgetController {
       if (state.isFavorite) R.drawable.ic_widget_heart_filled else R.drawable.ic_widget_heart_outline
     )
 
+    val controlIconTint = if (isLight) COLOR_TEXT_LIGHT else COLOR_TEXT_DARK
+    views.setInt(R.id.widget_btn_prev_icon, "setColorFilter", controlIconTint)
+    views.setInt(R.id.widget_btn_play_pause_icon, "setColorFilter", controlIconTint)
+    views.setInt(R.id.widget_btn_next_icon, "setColorFilter", controlIconTint)
+    views.setInt(
+      R.id.widget_btn_like_icon,
+      "setColorFilter",
+      if (state.isFavorite) COLOR_HEART_RED else controlIconTint
+    )
+
     // Content descriptions localized to selected language
     views.setContentDescription(R.id.widget_music_album_art, localizedCtx.getString(R.string.widget_cd_album_art))
     views.setContentDescription(R.id.widget_btn_prev_icon, localizedCtx.getString(R.string.widget_cd_prev))
@@ -627,10 +671,9 @@ object AurixWidgetController {
     views.setContentDescription(R.id.widget_btn_like_icon, localizedCtx.getString(R.string.widget_cd_like))
 
     // Responsive width: Below 3 cells wide (< 180dp), hide Like
-    val minWidthDp = options?.getInt(AppWidgetManager.OPTION_APPWIDGET_MIN_WIDTH, 250) ?: 250
     views.setViewVisibility(
       R.id.widget_btn_like,
-      if (shouldShowLikeButton(minWidthDp)) View.VISIBLE else View.GONE
+      if (showLike) View.VISIBLE else View.GONE
     )
 
     views.setOnClickPendingIntent(
@@ -656,15 +699,23 @@ object AurixWidgetController {
   private fun buildLyricsWidgetRemoteViews(
     context: Context,
     state: WidgetSnapshotState,
-    glowBg: Bitmap
+    glowBg: Bitmap,
+    roundedArt: Bitmap
   ): RemoteViews {
     val localizedCtx = LocaleHelper.wrapBaseContext(context, state.language)
     val views = RemoteViews(context.packageName, R.layout.widget_aurix_lyrics)
     val isLight = isLightThemeActive(context, state.themeMode) && !state.ambientGlowEnabled
     val primaryTextColor = if (isLight) COLOR_TEXT_LIGHT else COLOR_TEXT_DARK
-    val mutedTextColor = if (isLight) COLOR_MUTED_LIGHT else COLOR_MUTED_DARK
+    val mutedTextColor = if (isLight) COLOR_MUTED_LIGHT else 0xA6FFFFFF.toInt()
+    val footerTitleColor = if (isLight) COLOR_TEXT_LIGHT else 0xEBFFFFFF.toInt()
+    val footerArtistColor = if (isLight) COLOR_MUTED_LIGHT else 0x9EFFFFFF.toInt()
 
     views.setImageViewBitmap(R.id.widget_lyrics_bg_glow, glowBg)
+    views.setInt(
+      R.id.widget_lyrics_card_border,
+      "setBackgroundResource",
+      if (isLight) R.drawable.widget_card_border_light else R.drawable.widget_card_border_dark
+    )
 
     val openLyricsPi = buildOpenAppPendingIntent(
       context = context,
@@ -696,21 +747,26 @@ object AurixWidgetController {
 
     if (hasLyrics) {
       views.setViewVisibility(R.id.widget_lyrics_tag_container, View.VISIBLE)
-      views.setTextViewText(
+      views.setViewVisibility(R.id.widget_lyrics_accent_bar, View.VISIBLE)
+      val tagLabel = localizedCtx.getString(R.string.widget_lyrics_tag)
+      views.setTextViewText(R.id.widget_lyrics_tag_text, tagLabel)
+      views.setTextColor(
         R.id.widget_lyrics_tag_text,
-        localizedCtx.getString(R.string.widget_lyrics_tag)
+        if (isLight) COLOR_TEXT_LIGHT else 0xF0FFFFFF.toInt()
       )
+      val tagWidthPx = (118 + tagLabel.length * 10).coerceIn(154, 240)
       val tagGlassBitmap = renderGlassPillBitmap(
-        widthPx = 150,
-        heightPx = 46,
-        cornerRadiusPx = 23f,
+        widthPx = tagWidthPx,
+        heightPx = 56,
+        cornerRadiusPx = 28f,
         glassLevel = state.glassLevel,
-        isHighlighted = true,
+        isHighlighted = false,
         isLightTheme = isLight
       )
       views.setImageViewBitmap(R.id.widget_lyrics_tag_bg, tagGlassBitmap)
     } else {
       views.setViewVisibility(R.id.widget_lyrics_tag_container, View.GONE)
+      views.setViewVisibility(R.id.widget_lyrics_accent_bar, View.GONE)
     }
 
     // Use bundled Noto Sans Khmer typeface with extra line height when Khmer text is displayed
@@ -718,12 +774,13 @@ object AurixWidgetController {
       containsKhmerScript(displayNextLine) ||
       (!hasLyrics && state.language.equals("km", ignoreCase = true))
 
+    val currentColorForDisplay = if (hasLyrics) primaryTextColor else mutedTextColor
     if (usesKhmerFont) {
       val khmerBmp = renderKhmerLyricsLinesBitmap(
         context = context,
         currentLine = displayCurrentLine,
         nextLine = displayNextLine,
-        primaryColor = primaryTextColor,
+        primaryColor = currentColorForDisplay,
         mutedColor = mutedTextColor
       )
       if (khmerBmp != null) {
@@ -731,15 +788,29 @@ object AurixWidgetController {
         views.setViewVisibility(R.id.widget_lyrics_text_container, View.GONE)
         views.setImageViewBitmap(R.id.widget_lyrics_khmer_bitmap, khmerBmp)
       } else {
-        bindStandardLyricsTextViews(views, displayCurrentLine, displayNextLine, primaryTextColor, mutedTextColor)
+        bindStandardLyricsTextViews(views, displayCurrentLine, displayNextLine, currentColorForDisplay, mutedTextColor)
       }
     } else {
-      bindStandardLyricsTextViews(views, displayCurrentLine, displayNextLine, primaryTextColor, mutedTextColor)
+      bindStandardLyricsTextViews(views, displayCurrentLine, displayNextLine, currentColorForDisplay, mutedTextColor)
     }
 
-    val footer = if (state.artist.isNotBlank()) "${state.title} · ${state.artist}" else state.title
-    views.setTextViewText(R.id.widget_lyrics_song_footer, footer)
-    views.setTextColor(R.id.widget_lyrics_song_footer, mutedTextColor)
+    // Mini rounded album art + styled Title · Artist footer
+    views.setImageViewBitmap(R.id.widget_lyrics_mini_art, roundedArt)
+    val cleanTitle = state.title.trim()
+    val cleanArtist = state.artist.trim()
+    if (cleanArtist.isNotBlank()) {
+      val full = "$cleanTitle · $cleanArtist"
+      val span = SpannableString(full)
+      span.setSpan(StyleSpan(Typeface.BOLD), 0, cleanTitle.length, Spanned.SPAN_EXCLUSIVE_EXCLUSIVE)
+      span.setSpan(ForegroundColorSpan(footerTitleColor), 0, cleanTitle.length, Spanned.SPAN_EXCLUSIVE_EXCLUSIVE)
+      span.setSpan(ForegroundColorSpan(footerArtistColor), cleanTitle.length, full.length, Spanned.SPAN_EXCLUSIVE_EXCLUSIVE)
+      views.setTextViewText(R.id.widget_lyrics_song_footer, span)
+    } else {
+      val span = SpannableString(cleanTitle)
+      span.setSpan(StyleSpan(Typeface.BOLD), 0, cleanTitle.length, Spanned.SPAN_EXCLUSIVE_EXCLUSIVE)
+      span.setSpan(ForegroundColorSpan(footerTitleColor), 0, cleanTitle.length, Spanned.SPAN_EXCLUSIVE_EXCLUSIVE)
+      views.setTextViewText(R.id.widget_lyrics_song_footer, span)
+    }
 
     return views
   }
@@ -773,8 +844,8 @@ object AurixWidgetController {
   ): Bitmap? {
     return runCatching {
       val density = context.resources.displayMetrics.density.coerceAtLeast(1.5f)
-      val widthPx = (310f * density).roundToInt().coerceIn(360, 960)
-      val heightPx = (66f * density).roundToInt().coerceIn(96, 240)
+      val widthPx = (296f * density).roundToInt().coerceIn(360, 960)
+      val heightPx = (74f * density).roundToInt().coerceIn(108, 260)
       val bmp = Bitmap.createBitmap(widthPx, heightPx, Bitmap.Config.ARGB_8888)
       val canvas = Canvas(bmp)
 
@@ -785,13 +856,14 @@ object AurixWidgetController {
       val currentPaint = TextPaint(Paint.ANTI_ALIAS_FLAG).apply {
         typeface = Typeface.create(khmerTypeface, Typeface.BOLD)
         color = primaryColor
-        textSize = 15.5f * density
+        textSize = 16.5f * density
+        setShadowLayer(4f * density, 0f, 1.2f * density, 0x66000000)
       }
 
       val currentLayout = StaticLayout.Builder
         .obtain(currentLine, 0, currentLine.length, currentPaint, widthPx)
         .setAlignment(Layout.Alignment.ALIGN_NORMAL)
-        .setLineSpacing(3.5f * density, 1.24f)
+        .setLineSpacing(3.5f * density, 1.26f)
         .setIncludePad(true)
         .setMaxLines(if (nextLine.isNotBlank()) 1 else 2)
         .setEllipsize(TextUtils.TruncateAt.END)
@@ -800,21 +872,21 @@ object AurixWidgetController {
       val nextPaint = TextPaint(Paint.ANTI_ALIAS_FLAG).apply {
         typeface = Typeface.create(khmerTypeface, Typeface.NORMAL)
         color = mutedColor
-        textSize = 12.5f * density
+        textSize = 12.8f * density
       }
 
       val nextLayout = if (nextLine.isNotBlank()) {
         StaticLayout.Builder
           .obtain(nextLine, 0, nextLine.length, nextPaint, widthPx)
           .setAlignment(Layout.Alignment.ALIGN_NORMAL)
-          .setLineSpacing(3f * density, 1.22f)
+          .setLineSpacing(3f * density, 1.24f)
           .setIncludePad(true)
           .setMaxLines(1)
           .setEllipsize(TextUtils.TruncateAt.END)
           .build()
       } else null
 
-      val gapPx = if (nextLayout != null) (3f * density) else 0f
+      val gapPx = if (nextLayout != null) (4f * density) else 0f
       val totalTextHeight = currentLayout.height + (nextLayout?.height ?: 0) + gapPx
       val startY = ((heightPx - totalTextHeight) * 0.5f).coerceAtLeast(0f)
 
@@ -868,10 +940,11 @@ object AurixWidgetController {
         val req = ImageRequest.Builder(context)
           .data(state.artworkUrl)
           .allowHardware(false)
-          .size(256)
+          .size(360)
           .build()
         val res = context.imageLoader.execute(req)
-        (res as? SuccessResult)?.drawable?.toBitmap(256, 256, Bitmap.Config.ARGB_8888)
+        val rawBmp = (res as? SuccessResult)?.drawable?.toBitmap(config = Bitmap.Config.ARGB_8888)
+        rawBmp?.let { smartCropArtworkCore(it) }
       }.getOrNull()
 
       if (fetched != null) {
@@ -899,6 +972,79 @@ object AurixWidgetController {
     return null
   }
 
+  /**
+   * Trims dark letterbox/pillarbox margins (common on YouTube thumbnails) and center-crops
+   * to a clean square core so neither album art nor ambient glow ever shows dark side bars.
+   */
+  internal fun smartCropArtworkCore(source: Bitmap): Bitmap {
+    val w = source.width
+    val h = source.height
+    if (w < 16 || h < 16) return source
+
+    fun isDarkPixel(c: Int): Boolean {
+      val r = (c shr 16) and 0xFF
+      val g = (c shr 8) and 0xFF
+      val b = c and 0xFF
+      return (r + g + b) < 42
+    }
+
+    val maxTrimX = (w * 0.28f).roundToInt()
+    val maxTrimY = (h * 0.22f).roundToInt()
+    var left = 0
+    while (left < maxTrimX) {
+      val sampleCount = 8
+      var dark = 0
+      for (i in 1..sampleCount) {
+        val sy = (h * i) / (sampleCount + 1)
+        if (isDarkPixel(source.getPixel(left, sy))) dark++
+      }
+      if (dark >= sampleCount - 1) left++ else break
+    }
+    var right = w - 1
+    while (w - 1 - right < maxTrimX && right > left + 16) {
+      val sampleCount = 8
+      var dark = 0
+      for (i in 1..sampleCount) {
+        val sy = (h * i) / (sampleCount + 1)
+        if (isDarkPixel(source.getPixel(right, sy))) dark++
+      }
+      if (dark >= sampleCount - 1) right-- else break
+    }
+    var top = 0
+    while (top < maxTrimY) {
+      val sampleCount = 8
+      var dark = 0
+      for (i in 1..sampleCount) {
+        val sx = left + ((right - left) * i) / (sampleCount + 1)
+        if (isDarkPixel(source.getPixel(sx, top))) dark++
+      }
+      if (dark >= sampleCount - 1) top++ else break
+    }
+    var bottom = h - 1
+    while (h - 1 - bottom < maxTrimY && bottom > top + 16) {
+      val sampleCount = 8
+      var dark = 0
+      for (i in 1..sampleCount) {
+        val sx = left + ((right - left) * i) / (sampleCount + 1)
+        if (isDarkPixel(source.getPixel(sx, bottom))) dark++
+      }
+      if (dark >= sampleCount - 1) bottom-- else break
+    }
+
+    val trimmedW = (right - left + 1).coerceAtLeast(16)
+    val trimmedH = (bottom - top + 1).coerceAtLeast(16)
+    val side = min(trimmedW, trimmedH)
+    val cropX = left + (trimmedW - side) / 2
+    val cropY = top + (trimmedH - side) / 2
+
+    val cropped = Bitmap.createBitmap(source, cropX, cropY, side, side)
+    return if (side > 300) {
+      Bitmap.createScaledBitmap(cropped, 300, 300, true)
+    } else {
+      cropped
+    }
+  }
+
   private fun getOrRenderRoundedAlbumArt(context: Context, rawArt: Bitmap?): Bitmap {
     if (rawArt != null && cachedRoundedArtBitmap != null) {
       return cachedRoundedArtBitmap!!
@@ -906,8 +1052,8 @@ object AurixWidgetController {
     val cacheDir = File(context.filesDir, CACHE_DIR_NAME).apply { mkdirs() }
     val diskRoundedFile = File(cacheDir, CACHED_ROUNDED_ART_FILE)
 
-    val sizePx = 168
-    val cornerPx = 32f
+    val sizePx = 192
+    val cornerPx = 38f
     val output = Bitmap.createBitmap(sizePx, sizePx, Bitmap.Config.ARGB_8888)
     val canvas = Canvas(output)
     val paint = Paint(Paint.ANTI_ALIAS_FLAG)
@@ -934,20 +1080,20 @@ object AurixWidgetController {
       runCatching {
         val orbiDrawable = ResourcesCompat.getDrawable(context.resources, R.drawable.ic_widget_orbi, null)
         if (orbiDrawable != null) {
-          val pad = 34
+          val pad = 40
           orbiDrawable.setBounds(pad, pad, sizePx - pad, sizePx - pad)
           orbiDrawable.draw(canvas)
         }
       }
     }
 
-    // Subtle 1dp inner border
+    // Subtle crisp inner glass rim
     val borderPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
       style = Paint.Style.STROKE
-      strokeWidth = 2f
-      color = 0x38FFFFFF
+      strokeWidth = 2.2f
+      color = 0x44FFFFFF
     }
-    canvas.drawRoundRect(RectF(1f, 1f, sizePx - 1f, sizePx - 1f), cornerPx, cornerPx, borderPaint)
+    canvas.drawRoundRect(RectF(1.1f, 1.1f, sizePx - 1.1f, sizePx - 1.1f), cornerPx, cornerPx, borderPaint)
 
     if (rawArt != null) {
       cachedRoundedArtBitmap = output
@@ -961,9 +1107,10 @@ object AurixWidgetController {
   }
 
   /**
-   * Pre-renders the 26dp rounded, 1dp bordered blurred & dimmed album glow bitmap
+   * Pre-renders the seamless, full-bleed blurred & dimmed ambient album glow bitmap
    * (or solid #151F30 background when Ambient glow is off) and caches it on disk
    * so the widget is never blank after a reboot.
+   * Uses centerCrop in the layout with native clipToOutline(24dp) on API 31+ so corners never distort.
    */
   private fun getOrRenderBackgroundBitmap(
     context: Context,
@@ -971,6 +1118,7 @@ object AurixWidgetController {
     rawArt: Bitmap?
   ): Bitmap {
     val renderKey = buildString {
+      append("v2|")
       append(state.songId)
       append('|').append(state.artworkUrl)
       append('|').append(state.ambientGlowEnabled)
@@ -986,23 +1134,9 @@ object AurixWidgetController {
     val cacheDir = File(context.filesDir, CACHE_DIR_NAME).apply { mkdirs() }
     val diskGlowFile = File(cacheDir, CACHED_GLOW_BG_FILE)
 
-    val widthPx = 640
-    val heightPx = 300
-    val density = context.resources.displayMetrics.density.coerceAtLeast(2f)
-    val cornerRadiusPx = (26f * density).coerceIn(44f, 78f)
-    val borderStrokePx = (1f * density).coerceIn(2f, 3.5f)
-
-    val output = Bitmap.createBitmap(widthPx, heightPx, Bitmap.Config.ARGB_8888)
-    val canvas = Canvas(output)
+    val widthPx = 720
+    val heightPx = 420
     val rect = RectF(0f, 0f, widthPx.toFloat(), heightPx.toFloat())
-    val maskPaint = Paint(Paint.ANTI_ALIAS_FLAG)
-
-    // Draw 26dp rounded mask
-    canvas.drawRoundRect(rect, cornerRadiusPx, cornerRadiusPx, maskPaint)
-    val contentPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
-      xfermode = PorterDuffXfermode(PorterDuff.Mode.SRC_IN)
-    }
-
     val layerBmp = Bitmap.createBitmap(widthPx, heightPx, Bitmap.Config.ARGB_8888)
     val layerCanvas = Canvas(layerBmp)
 
@@ -1010,70 +1144,51 @@ object AurixWidgetController {
     val isAmoled = state.themeMode.equals("amoled", ignoreCase = true)
 
     if (!state.ambientGlowEnabled) {
-      // Ambient glow OFF: solid #151F30 background (or theme base)
+      // Ambient glow OFF: clean solid #151F30 background (or Light/AMOLED equivalent)
       val solidBg = when {
         isLight -> COLOR_CARD_LIGHT
         isAmoled -> COLOR_BG_AMOLED
-        else -> COLOR_CARD_DARK // #151F30
+        else -> COLOR_CARD_DARK
       }
       layerCanvas.drawColor(solidBg)
     } else {
-      // Base deep background (#080C14 / #151F30)
-      layerCanvas.drawColor(if (isAmoled) COLOR_BG_AMOLED else COLOR_CARD_DARK)
+      layerCanvas.drawColor(if (isAmoled) COLOR_BG_AMOLED else 0xFF0E1624.toInt())
 
       if (rawArt != null) {
         val blurredArt = createBlurredGlowBitmap(rawArt, state.blurLevel, widthPx, heightPx)
         layerCanvas.drawBitmap(blurredArt, 0f, 0f, Paint(Paint.ANTI_ALIAS_FLAG or Paint.FILTER_BITMAP_FLAG))
       } else {
-        // Soft ambient palette glow (#43C7F4, #7965FF, #A855F7) when no cover bitmap is loaded
-        val glowPaint1 = Paint(Paint.ANTI_ALIAS_FLAG).apply {
+        // Lush AURIX aurora glow when idle/empty
+        val glow1 = Paint(Paint.ANTI_ALIAS_FLAG).apply {
           shader = RadialGradient(
-            widthPx * 0.24f,
-            heightPx * 0.28f,
+            widthPx * 0.20f,
+            heightPx * 0.22f,
+            widthPx * 0.78f,
+            intArrayOf(0xB843C7F4.toInt(), 0x607965FF, Color.TRANSPARENT),
+            floatArrayOf(0f, 0.52f, 1f),
+            Shader.TileMode.CLAMP
+          )
+        }
+        layerCanvas.drawRect(rect, glow1)
+
+        val glow2 = Paint(Paint.ANTI_ALIAS_FLAG).apply {
+          shader = RadialGradient(
+            widthPx * 0.84f,
+            heightPx * 0.82f,
             widthPx * 0.72f,
-            intArrayOf(0xAA43C7F4.toInt(), 0x557965FF, Color.TRANSPARENT),
+            intArrayOf(0x99A855F7.toInt(), 0x447965FF, Color.TRANSPARENT),
             floatArrayOf(0f, 0.55f, 1f),
             Shader.TileMode.CLAMP
           )
         }
-        layerCanvas.drawRect(rect, glowPaint1)
-
-        val glowPaint2 = Paint(Paint.ANTI_ALIAS_FLAG).apply {
-          shader = RadialGradient(
-            widthPx * 0.80f,
-            heightPx * 0.76f,
-            widthPx * 0.65f,
-            intArrayOf(0x88A855F7.toInt(), Color.TRANSPARENT),
-            floatArrayOf(0f, 1f),
-            Shader.TileMode.CLAMP
-          )
-        }
-        layerCanvas.drawRect(rect, glowPaint2)
+        layerCanvas.drawRect(rect, glow2)
       }
 
-      // Soft accent bloom overlay so album glow always feels cohesive with AURIX palette
-      val bloomAlpha = ((1f - state.dimLevel * 0.5f) * 68f).roundToInt().coerceIn(22, 76)
-      val bloomPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
-        shader = LinearGradient(
-          0f,
-          0f,
-          widthPx.toFloat(),
-          heightPx.toFloat(),
-          intArrayOf(
-            Color.argb(bloomAlpha, 0x43, 0xC7, 0xF4),
-            Color.argb(bloomAlpha, 0x79, 0x65, 0xFF),
-            Color.argb((bloomAlpha * 0.8f).roundToInt(), 0xA8, 0x55, 0xF7)
-          ),
-          floatArrayOf(0f, 0.5f, 1f),
-          Shader.TileMode.CLAMP
-        )
-      }
-      layerCanvas.drawRect(rect, bloomPaint)
-
-      // Dim overlay (0-90%, default 40%) clamped to MIN_LEGIBLE_DIM_FLOOR so text is always readable
+      // Dim overlay (0-90%, default 40%) clamped to MIN_LEGIBLE_DIM_FLOOR so text stays razor-sharp
       val effectiveDim = state.dimLevel.coerceIn(0f, 0.90f).coerceAtLeast(MIN_LEGIBLE_DIM_FLOOR)
-      val topDimAlpha = (effectiveDim * 235f).roundToInt().coerceIn(68, 232)
-      val bottomDimAlpha = ((effectiveDim + 0.14f).coerceAtMost(0.94f) * 245f).roundToInt().coerceIn(96, 242)
+      val topDimAlpha = (effectiveDim * 195f).roundToInt().coerceIn(58, 224)
+      val midDimAlpha = ((effectiveDim + 0.06f).coerceAtMost(0.92f) * 218f).roundToInt().coerceIn(78, 232)
+      val bottomDimAlpha = ((effectiveDim + 0.16f).coerceAtMost(0.95f) * 238f).roundToInt().coerceIn(104, 242)
       val dimPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
         shader = LinearGradient(
           0f,
@@ -1081,31 +1196,45 @@ object AurixWidgetController {
           0f,
           heightPx.toFloat(),
           intArrayOf(
-            Color.argb(topDimAlpha, 0x08, 0x0C, 0x14),
-            Color.argb(bottomDimAlpha, 0x08, 0x0C, 0x14)
+            Color.argb(topDimAlpha, 0x07, 0x0B, 0x13),
+            Color.argb(midDimAlpha, 0x08, 0x0C, 0x15),
+            Color.argb(bottomDimAlpha, 0x05, 0x08, 0x10)
           ),
-          null,
+          floatArrayOf(0f, 0.52f, 1f),
           Shader.TileMode.CLAMP
         )
       }
       layerCanvas.drawRect(rect, dimPaint)
+
+      // Delicate frosted top-left glass sheen for sculpted depth
+      val sheenPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
+        shader = LinearGradient(
+          0f,
+          0f,
+          widthPx * 0.65f,
+          heightPx * 0.55f,
+          intArrayOf(0x22FFFFFF, 0x08FFFFFF, Color.TRANSPARENT),
+          floatArrayOf(0f, 0.42f, 1f),
+          Shader.TileMode.CLAMP
+        )
+      }
+      layerCanvas.drawRect(rect, sheenPaint)
     }
 
-    canvas.drawBitmap(layerBmp, 0f, 0f, contentPaint)
-
-    // 1dp border (#273348 in Dark/AMOLED, #D0DCF0 in Light)
-    val borderPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
-      style = Paint.Style.STROKE
-      strokeWidth = borderStrokePx
-      color = if (isLight) COLOR_BORDER_LIGHT else COLOR_BORDER_DARK
+    // On API < 31 (where clipToOutline isn't used by all launchers), clip corners softly; on API 31+, full-bleed centerCrop is clipped cleanly to 24dp by the root FrameLayout.
+    val output = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
+      layerBmp
+    } else {
+      val clipped = Bitmap.createBitmap(widthPx, heightPx, Bitmap.Config.ARGB_8888)
+      val c = Canvas(clipped)
+      val maskPaint = Paint(Paint.ANTI_ALIAS_FLAG)
+      c.drawRoundRect(rect, 48f, 48f, maskPaint)
+      val srcIn = Paint(Paint.ANTI_ALIAS_FLAG).apply {
+        xfermode = PorterDuffXfermode(PorterDuff.Mode.SRC_IN)
+      }
+      c.drawBitmap(layerBmp, 0f, 0f, srcIn)
+      clipped
     }
-    val inset = borderStrokePx * 0.5f
-    canvas.drawRoundRect(
-      RectF(inset, inset, widthPx - inset, heightPx - inset),
-      cornerRadiusPx - inset,
-      cornerRadiusPx - inset,
-      borderPaint
-    )
 
     cachedGlowRenderKey = renderKey
     cachedGlowBitmap = output
@@ -1118,8 +1247,8 @@ object AurixWidgetController {
   }
 
   /**
-   * Renders a translucent white fill and thin 1dp border for widget buttons and the "Lyrics" tag,
-   * controlled by Glass level (0-100%, default 50%).
+   * Renders a sculpted translucent white glass pill with top specular gradient and thin crisp border
+   * for widget buttons and the "Lyrics" badge, controlled by Glass level (0-100%, default 50%).
    */
   private fun renderGlassPillBitmap(
     widthPx: Int,
@@ -1132,38 +1261,108 @@ object AurixWidgetController {
     val bmp = Bitmap.createBitmap(widthPx, heightPx, Bitmap.Config.ARGB_8888)
     val canvas = Canvas(bmp)
     val clampedGlass = glassLevel.coerceIn(0f, 1f)
+    val rect = RectF(1.2f, 1.2f, widthPx - 1.2f, heightPx - 1.2f)
+    val radius = cornerRadiusPx.coerceAtMost(heightPx * 0.5f)
 
-    // Translucent fill scaled by glassLevel (0-100%)
-    val baseFillAlpha = (14 + (clampedGlass * 68f).roundToInt()).coerceIn(10, 96)
+    // Translucent gradient fill scaled by glassLevel (0-100%)
+    val topAlpha = (18 + (clampedGlass * 66f).roundToInt()).coerceIn(14, 96)
+    val bottomAlpha = (8 + (clampedGlass * 42f).roundToInt()).coerceIn(6, 62)
     val fillPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
       style = Paint.Style.FILL
-      color = when {
-        isHighlighted -> Color.argb((baseFillAlpha + 18).coerceAtMost(115), 0x43, 0xC7, 0xF4)
-        isLightTheme -> Color.argb(baseFillAlpha, 0x15, 0x1F, 0x30)
-        else -> Color.argb(baseFillAlpha, 0xFF, 0xFF, 0xFF)
+      shader = when {
+        isHighlighted -> LinearGradient(
+          0f,
+          0f,
+          widthPx.toFloat(),
+          heightPx.toFloat(),
+          intArrayOf(
+            Color.argb((topAlpha + 38).coerceAtMost(145), 0x43, 0xC7, 0xF4),
+            Color.argb((bottomAlpha + 30).coerceAtMost(120), 0x79, 0x65, 0xFF)
+          ),
+          null,
+          Shader.TileMode.CLAMP
+        )
+        isLightTheme -> LinearGradient(
+          0f,
+          0f,
+          0f,
+          heightPx.toFloat(),
+          intArrayOf(
+            Color.argb(topAlpha, 0x15, 0x1F, 0x30),
+            Color.argb(bottomAlpha, 0x15, 0x1F, 0x30)
+          ),
+          null,
+          Shader.TileMode.CLAMP
+        )
+        else -> LinearGradient(
+          0f,
+          0f,
+          0f,
+          heightPx.toFloat(),
+          intArrayOf(
+            Color.argb(topAlpha, 0xFF, 0xFF, 0xFF),
+            Color.argb(bottomAlpha, 0xFF, 0xFF, 0xFF)
+          ),
+          null,
+          Shader.TileMode.CLAMP
+        )
       }
     }
-    val rect = RectF(1f, 1f, widthPx - 1f, heightPx - 1f)
-    canvas.drawRoundRect(rect, cornerRadiusPx, cornerRadiusPx, fillPaint)
+    canvas.drawRoundRect(rect, radius, radius, fillPaint)
 
-    // Thin 1dp translucent border scaled by glassLevel
-    val borderAlpha = (24 + (clampedGlass * 110f).roundToInt()).coerceIn(20, 150)
+    // Hairline glass specular border scaled by glassLevel
+    val borderTopAlpha = (32 + (clampedGlass * 112f).roundToInt()).coerceIn(24, 165)
+    val borderBotAlpha = (12 + (clampedGlass * 54f).roundToInt()).coerceIn(10, 82)
     val borderPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
       style = Paint.Style.STROKE
       strokeWidth = 2f
-      color = when {
-        isHighlighted -> Color.argb((borderAlpha + 28).coerceAtMost(190), 0x43, 0xC7, 0xF4)
-        isLightTheme -> Color.argb(borderAlpha, 0x27, 0x33, 0x48)
-        else -> Color.argb(borderAlpha, 0xFF, 0xFF, 0xFF)
+      shader = when {
+        isHighlighted -> LinearGradient(
+          0f,
+          0f,
+          0f,
+          heightPx.toFloat(),
+          intArrayOf(
+            Color.argb((borderTopAlpha + 30).coerceAtMost(210), 0x99, 0xE6, 0xFF),
+            Color.argb(borderBotAlpha, 0x79, 0x65, 0xFF)
+          ),
+          null,
+          Shader.TileMode.CLAMP
+        )
+        isLightTheme -> LinearGradient(
+          0f,
+          0f,
+          0f,
+          heightPx.toFloat(),
+          intArrayOf(
+            Color.argb(borderTopAlpha, 0x27, 0x33, 0x48),
+            Color.argb(borderBotAlpha, 0x27, 0x33, 0x48)
+          ),
+          null,
+          Shader.TileMode.CLAMP
+        )
+        else -> LinearGradient(
+          0f,
+          0f,
+          0f,
+          heightPx.toFloat(),
+          intArrayOf(
+            Color.argb(borderTopAlpha, 0xFF, 0xFF, 0xFF),
+            Color.argb(borderBotAlpha, 0xFF, 0xFF, 0xFF)
+          ),
+          null,
+          Shader.TileMode.CLAMP
+        )
       }
     }
-    canvas.drawRoundRect(rect, cornerRadiusPx, cornerRadiusPx, borderPaint)
+    canvas.drawRoundRect(rect, radius, radius, borderPaint)
     return bmp
   }
 
   /**
-   * Fast multi-pass box/stack blur on a downsampled copy of the album art,
-   * scaled by Blur level (0-100%, default 60%).
+   * Lush, seamless edge-to-edge album glow: center-crops the clean artwork core (zoomed 1.18x
+   * so no edge artifacts leak in), boosts color richness slightly, and applies a 4-pass blur
+   * scaled smoothly by Blur level (0-100%, default 60%).
    */
   private fun createBlurredGlowBitmap(
     source: Bitmap,
@@ -1172,14 +1371,45 @@ object AurixWidgetController {
     targetHeight: Int
   ): Bitmap {
     val clampedBlur = blurPercent.coerceIn(0f, 100f)
-    val sampleW = 96
-    val sampleH = 54
-    val small = Bitmap.createScaledBitmap(source, sampleW, sampleH, true)
-      .copy(Bitmap.Config.ARGB_8888, true)
+    val sampleW = 128
+    val sampleH = 76
+    val small = Bitmap.createBitmap(sampleW, sampleH, Bitmap.Config.ARGB_8888)
+    val smallCanvas = Canvas(small)
 
-    val radius = ((clampedBlur / 100f) * 18f).roundToInt().coerceIn(1, 18)
+    // Center-crop source onto sampleW x sampleH with 1.18x overscan zoom so edges are rich & seamless
+    val srcW = source.width.toFloat()
+    val srcH = source.height.toFloat()
+    val targetRatio = sampleW.toFloat() / sampleH.toFloat()
+    val srcRatio = srcW / srcH
+    val cropW: Float
+    val cropH: Float
+    if (srcRatio > targetRatio) {
+      cropH = srcH / 1.18f
+      cropW = cropH * targetRatio
+    } else {
+      cropW = srcW / 1.18f
+      cropH = cropW / targetRatio
+    }
+    val cx = srcW * 0.5f
+    val cy = srcH * 0.5f
+    val srcRect = Rect(
+      (cx - cropW * 0.5f).roundToInt().coerceIn(0, source.width - 1),
+      (cy - cropH * 0.5f).roundToInt().coerceIn(0, source.height - 1),
+      (cx + cropW * 0.5f).roundToInt().coerceIn(1, source.width),
+      (cy + cropH * 0.5f).roundToInt().coerceIn(1, source.height)
+    )
+    val dstRect = Rect(0, 0, sampleW, sampleH)
+
+    // Gentle saturation boost (1.32x) so the ambient glow feels luminous, never muddy grey
+    val satMatrix = ColorMatrix().apply { setSaturation(1.32f) }
+    val artPaint = Paint(Paint.ANTI_ALIAS_FLAG or Paint.FILTER_BITMAP_FLAG).apply {
+      colorFilter = ColorMatrixColorFilter(satMatrix)
+    }
+    smallCanvas.drawBitmap(source, srcRect, dstRect, artPaint)
+
+    val radius = ((clampedBlur / 100f) * 20f).roundToInt().coerceIn(1, 20)
     if (clampedBlur > 1f) {
-      boxBlurInPlace(small, radius, passes = 3)
+      boxBlurInPlace(small, radius, passes = 4)
     }
     return Bitmap.createScaledBitmap(small, targetWidth, targetHeight, true)
   }

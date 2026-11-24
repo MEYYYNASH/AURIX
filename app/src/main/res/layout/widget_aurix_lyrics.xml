@@ -2,15 +2,17 @@
 <FrameLayout xmlns:android="http://schemas.android.com/apk/res/android"
     android:id="@+id/widget_lyrics_root"
     android:layout_width="match_parent"
-    android:layout_height="match_parent">
+    android:layout_height="match_parent"
+    android:background="@drawable/widget_card_clip"
+    android:clipToOutline="true">
 
-    <!-- Pre-rendered 26dp rounded blurred & dimmed ambient album glow or solid card background -->
+    <!-- Pre-rendered blurred & dimmed ambient album glow or solid card background (centerCrop prevents distortion) -->
     <ImageView
         android:id="@+id/widget_lyrics_bg_glow"
         android:layout_width="match_parent"
         android:layout_height="match_parent"
         android:contentDescription="@null"
-        android:scaleType="fitXY" />
+        android:scaleType="centerCrop" />
 
     <!-- Empty state: Orbi icon and "Open AURIX" -->
     <LinearLayout
@@ -19,13 +21,13 @@
         android:layout_height="match_parent"
         android:gravity="center"
         android:orientation="horizontal"
-        android:padding="12dp"
+        android:padding="16dp"
         android:visibility="gone">
 
         <ImageView
             android:id="@+id/widget_lyrics_empty_orbi"
-            android:layout_width="36dp"
-            android:layout_height="36dp"
+            android:layout_width="38dp"
+            android:layout_height="38dp"
             android:contentDescription="@null"
             android:src="@drawable/ic_widget_orbi" />
 
@@ -37,111 +39,193 @@
             android:ellipsize="end"
             android:lineSpacingExtra="3dp"
             android:maxLines="1"
+            android:shadowColor="#55000000"
+            android:shadowDy="1"
+            android:shadowRadius="3"
             android:text="@string/widget_open_aurix"
-            android:textColor="#F7F9FF"
-            android:textSize="15sp"
+            android:textColor="#FFFFFF"
+            android:textSize="15.5sp"
             android:textStyle="bold" />
     </LinearLayout>
 
-    <!-- Active Lyrics Content (12dp padding) -->
+    <!-- Active Lyrics Content -->
     <LinearLayout
         android:id="@+id/widget_lyrics_content_container"
         android:layout_width="match_parent"
         android:layout_height="match_parent"
         android:orientation="vertical"
-        android:padding="12dp">
+        android:paddingStart="16dp"
+        android:paddingTop="12dp"
+        android:paddingEnd="16dp"
+        android:paddingBottom="12dp">
 
-        <!-- Small "Lyrics" glass tag (shown only when song has lyrics) -->
-        <FrameLayout
-            android:id="@+id/widget_lyrics_tag_container"
-            android:layout_width="wrap_content"
-            android:layout_height="22dp"
-            android:layout_marginBottom="4dp">
-
-            <ImageView
-                android:id="@+id/widget_lyrics_tag_bg"
-                android:layout_width="match_parent"
-                android:layout_height="match_parent"
-                android:contentDescription="@null"
-                android:scaleType="fitXY" />
-
-            <TextView
-                android:id="@+id/widget_lyrics_tag_text"
-                android:layout_width="wrap_content"
-                android:layout_height="wrap_content"
-                android:layout_gravity="center"
-                android:includeFontPadding="true"
-                android:paddingStart="10dp"
-                android:paddingEnd="10dp"
-                android:singleLine="true"
-                android:text="@string/widget_lyrics_tag"
-                android:textColor="#43C7F4"
-                android:textSize="10.5sp"
-                android:textStyle="bold" />
-        </FrameLayout>
-
-        <!-- Center Synced Lyrics Display -->
-        <FrameLayout
-            android:layout_width="match_parent"
-            android:layout_height="0dp"
-            android:layout_weight="1">
-
-            <!-- High-DPI Noto Sans Khmer fallback bitmap with extra line height when Khmer characters are present -->
-            <ImageView
-                android:id="@+id/widget_lyrics_khmer_bitmap"
-                android:layout_width="match_parent"
-                android:layout_height="match_parent"
-                android:contentDescription="@null"
-                android:scaleType="fitStart"
-                android:visibility="gone" />
-
-            <LinearLayout
-                android:id="@+id/widget_lyrics_text_container"
-                android:layout_width="match_parent"
-                android:layout_height="match_parent"
-                android:gravity="center_vertical"
-                android:orientation="vertical">
-
-                <TextView
-                    android:id="@+id/widget_lyrics_current_line"
-                    android:layout_width="match_parent"
-                    android:layout_height="wrap_content"
-                    android:ellipsize="end"
-                    android:includeFontPadding="true"
-                    android:lineSpacingExtra="4dp"
-                    android:lineSpacingMultiplier="1.15"
-                    android:maxLines="2"
-                    android:textColor="#F7F9FF"
-                    android:textSize="16sp"
-                    android:textStyle="bold" />
-
-                <TextView
-                    android:id="@+id/widget_lyrics_next_line"
-                    android:layout_width="match_parent"
-                    android:layout_height="wrap_content"
-                    android:layout_marginTop="3dp"
-                    android:ellipsize="end"
-                    android:includeFontPadding="true"
-                    android:lineSpacingExtra="3dp"
-                    android:lineSpacingMultiplier="1.12"
-                    android:maxLines="1"
-                    android:textColor="#929DB0"
-                    android:textSize="13sp" />
-            </LinearLayout>
-        </FrameLayout>
-
-        <!-- Bottom small song title & artist -->
-        <TextView
-            android:id="@+id/widget_lyrics_song_footer"
+        <!-- Top Header: Sleek "Lyrics" glass pill on left + subtle Orbi mark on right -->
+        <LinearLayout
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
+            android:gravity="center_vertical"
+            android:orientation="horizontal">
+
+            <FrameLayout
+                android:id="@+id/widget_lyrics_tag_container"
+                android:layout_width="wrap_content"
+                android:layout_height="22dp">
+
+                <ImageView
+                    android:id="@+id/widget_lyrics_tag_bg"
+                    android:layout_width="match_parent"
+                    android:layout_height="match_parent"
+                    android:contentDescription="@null"
+                    android:scaleType="fitXY" />
+
+                <LinearLayout
+                    android:layout_width="wrap_content"
+                    android:layout_height="match_parent"
+                    android:layout_gravity="center"
+                    android:gravity="center_vertical"
+                    android:orientation="horizontal"
+                    android:paddingStart="8dp"
+                    android:paddingEnd="9dp">
+
+                    <ImageView
+                        android:layout_width="11dp"
+                        android:layout_height="11dp"
+                        android:contentDescription="@null"
+                        android:src="@drawable/ic_widget_lyrics_wave" />
+
+                    <TextView
+                        android:id="@+id/widget_lyrics_tag_text"
+                        android:layout_width="wrap_content"
+                        android:layout_height="wrap_content"
+                        android:layout_marginStart="5dp"
+                        android:includeFontPadding="false"
+                        android:singleLine="true"
+                        android:text="@string/widget_lyrics_tag"
+                        android:textColor="#E8F9FF"
+                        android:textSize="10.5sp"
+                        android:textStyle="bold" />
+                </LinearLayout>
+            </FrameLayout>
+
+            <FrameLayout
+                android:layout_width="0dp"
+                android:layout_height="1dp"
+                android:layout_weight="1" />
+
+            <ImageView
+                android:id="@+id/widget_lyrics_brand_orbi"
+                android:layout_width="18dp"
+                android:layout_height="18dp"
+                android:alpha="0.82"
+                android:contentDescription="@null"
+                android:src="@drawable/ic_widget_orbi" />
+        </LinearLayout>
+
+        <!-- Center Stage: Active synced lyric line with glowing accent bar + next line dimmed -->
+        <LinearLayout
+            android:layout_width="match_parent"
+            android:layout_height="0dp"
             android:layout_marginTop="4dp"
-            android:ellipsize="end"
-            android:includeFontPadding="true"
-            android:lineSpacingExtra="2dp"
-            android:maxLines="1"
-            android:singleLine="true"
-            android:textColor="#929DB0"
-            android:textSize="11.5sp" />
+            android:layout_marginBottom="4dp"
+            android:layout_weight="1"
+            android:gravity="center_vertical"
+            android:orientation="horizontal">
+
+            <ImageView
+                android:id="@+id/widget_lyrics_accent_bar"
+                android:layout_width="3dp"
+                android:layout_height="34dp"
+                android:layout_marginEnd="11dp"
+                android:background="@drawable/widget_lyric_accent_bar"
+                android:contentDescription="@null" />
+
+            <FrameLayout
+                android:layout_width="0dp"
+                android:layout_height="match_parent"
+                android:layout_weight="1">
+
+                <!-- High-DPI Noto Sans Khmer fallback bitmap with extra line height when Khmer text is present -->
+                <ImageView
+                    android:id="@+id/widget_lyrics_khmer_bitmap"
+                    android:layout_width="match_parent"
+                    android:layout_height="match_parent"
+                    android:contentDescription="@null"
+                    android:scaleType="fitStart"
+                    android:visibility="gone" />
+
+                <LinearLayout
+                    android:id="@+id/widget_lyrics_text_container"
+                    android:layout_width="match_parent"
+                    android:layout_height="match_parent"
+                    android:gravity="center_vertical"
+                    android:orientation="vertical">
+
+                    <TextView
+                        android:id="@+id/widget_lyrics_current_line"
+                        android:layout_width="match_parent"
+                        android:layout_height="wrap_content"
+                        android:ellipsize="end"
+                        android:includeFontPadding="true"
+                        android:lineSpacingExtra="2dp"
+                        android:lineSpacingMultiplier="1.08"
+                        android:maxLines="2"
+                        android:shadowColor="#66000000"
+                        android:shadowDy="1.5"
+                        android:shadowRadius="4"
+                        android:textColor="#FFFFFF"
+                        android:textSize="18sp"
+                        android:textStyle="bold" />
+
+                    <TextView
+                        android:id="@+id/widget_lyrics_next_line"
+                        android:layout_width="match_parent"
+                        android:layout_height="wrap_content"
+                        android:layout_marginTop="4dp"
+                        android:ellipsize="end"
+                        android:includeFontPadding="true"
+                        android:lineSpacingExtra="2dp"
+                        android:lineSpacingMultiplier="1.08"
+                        android:maxLines="1"
+                        android:textColor="#A8FFFFFF"
+                        android:textSize="13sp" />
+                </LinearLayout>
+            </FrameLayout>
+        </LinearLayout>
+
+        <!-- Bottom Footer: Mini rounded album cover + Song Title & Artist -->
+        <LinearLayout
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:gravity="center_vertical"
+            android:orientation="horizontal">
+
+            <ImageView
+                android:id="@+id/widget_lyrics_mini_art"
+                android:layout_width="20dp"
+                android:layout_height="20dp"
+                android:layout_marginEnd="8dp"
+                android:contentDescription="@null"
+                android:scaleType="fitCenter" />
+
+            <TextView
+                android:id="@+id/widget_lyrics_song_footer"
+                android:layout_width="0dp"
+                android:layout_height="wrap_content"
+                android:layout_weight="1"
+                android:ellipsize="end"
+                android:includeFontPadding="true"
+                android:maxLines="1"
+                android:singleLine="true"
+                android:textColor="#B8FFFFFF"
+                android:textSize="11.5sp" />
+        </LinearLayout>
     </LinearLayout>
+
+    <!-- Crisp 1dp true-dp specular glass perimeter border (never stretches) -->
+    <ImageView
+        android:id="@+id/widget_lyrics_card_border"
+        android:layout_width="match_parent"
+        android:layout_height="match_parent"
+        android:background="@drawable/widget_card_border_dark"
+        android:contentDescription="@null" />
 </FrameLayout>

@@ -162,10 +162,10 @@ class UpdateManager(
     private const val META_FILE_NAME = "aurix_update.apk.meta.json"
 
     val CURRENT_RELEASE_NOTES = listOf(
+      "Sculpted Frosted-Glass Widget Redesign (v1.9.9): Redesigned both Lyrics and Music home screen widgets with true-dp 24dp clipped glass corners (zero corner stretching), smart letterbox-free album art cropping and vibrant edge-to-edge centerCrop Ambient glow, crisp 1dp specular perimeter rim, glowing cyan-to-violet active lyric accent bar, sleek 3-bar waveform Lyrics pill + Orbi mark, mini rounded album art footer with bold Title · Artist styling, and precision-proportioned frosted glass control buttons",
       "Home Screen Music & Lyrics Widgets + Shared Ambient Album Glow (v1.9.8): Added 4×2 Music widget (album art, progress bar, Prev/Play-Pause/Next/Like with #EF4444 heart, responsive <3-cell layout, Orbi empty state) and 4×2 Synced Lyrics widget (LRC line-only updates, Noto Sans Khmer support, Lyrics tag), both powered by pre-rendered cached Ambient Album Glow synced with Settings Dim (0–90%, default 40%), Glass level (0–100%, default 50%), and Blur level (0–100%, default 60%) plus EN/KM localization",
       "Library Recent Search History & Customizable Dynamic Artwork Background (v1.9.7): Added Library search bar with last-5 recent search history on tap/focus, plus custom Dim, Glass level (កម្រិតកញ្ចក់), and Blur level (កម្រិត Blur) controls for Dynamic Artwork Background with a localized EN/KM Reset-to-Default confirmation dialog",
-      "Unified Frameless Library Redesign (v1.9.6): Added 3-column frameless albums row above tracks, clean frameless track rows with 50dp rounded covers and circular action buttons, 3-column Albums grid, and inline Orbi 'Syncing your library...' skeleton shimmer during refresh and audio import",
-      "Smooth Playlist Select Mode Open/Close & Tap Motion (v1.9.5): Added 420ms ease-out selection bar expansion, 600ms spring-overshoot selection circle roll-in (-120° to 0°), 46dp card glide with 35ms/20ms visible-row stagger, 300ms Select/Done button slide, #43C7F4 spring pop + 250ms white checkmark stroke draw, 2.5dp accent card outline, and 380ms delayed close clear"
+      "Unified Frameless Library Redesign (v1.9.6): Added 3-column frameless albums row above tracks, clean frameless track rows with 50dp rounded covers and circular action buttons, 3-column Albums grid, and inline Orbi 'Syncing your library...' skeleton shimmer during refresh and audio import"
     )
 
     fun parseVersionJson(rawJson: String): RemoteVersionInfo {

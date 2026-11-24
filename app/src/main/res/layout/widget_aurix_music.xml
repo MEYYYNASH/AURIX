@@ -2,15 +2,17 @@
 <FrameLayout xmlns:android="http://schemas.android.com/apk/res/android"
     android:id="@+id/widget_music_root"
     android:layout_width="match_parent"
-    android:layout_height="match_parent">
+    android:layout_height="match_parent"
+    android:background="@drawable/widget_card_clip"
+    android:clipToOutline="true">
 
-    <!-- Pre-rendered 26dp rounded blurred & dimmed ambient album glow or solid card background -->
+    <!-- Pre-rendered blurred & dimmed ambient album glow or solid card background (centerCrop prevents distortion) -->
     <ImageView
         android:id="@+id/widget_music_bg_glow"
         android:layout_width="match_parent"
         android:layout_height="match_parent"
         android:contentDescription="@null"
-        android:scaleType="fitXY" />
+        android:scaleType="centerCrop" />
 
     <!-- Empty state: Orbi icon and "Open AURIX" -->
     <LinearLayout
@@ -19,13 +21,13 @@
         android:layout_height="match_parent"
         android:gravity="center"
         android:orientation="horizontal"
-        android:padding="12dp"
+        android:padding="16dp"
         android:visibility="gone">
 
         <ImageView
             android:id="@+id/widget_music_empty_orbi"
-            android:layout_width="36dp"
-            android:layout_height="36dp"
+            android:layout_width="38dp"
+            android:layout_height="38dp"
             android:contentDescription="@null"
             android:src="@drawable/ic_widget_orbi" />
 
@@ -37,22 +39,28 @@
             android:ellipsize="end"
             android:lineSpacingExtra="3dp"
             android:maxLines="1"
+            android:shadowColor="#55000000"
+            android:shadowDy="1"
+            android:shadowRadius="3"
             android:text="@string/widget_open_aurix"
-            android:textColor="#F7F9FF"
-            android:textSize="15sp"
+            android:textColor="#FFFFFF"
+            android:textSize="15.5sp"
             android:textStyle="bold" />
     </LinearLayout>
 
-    <!-- Active Music Player Content (12dp padding) -->
+    <!-- Active Music Player Content -->
     <LinearLayout
         android:id="@+id/widget_music_content_container"
         android:layout_width="match_parent"
         android:layout_height="match_parent"
         android:gravity="center_vertical"
         android:orientation="vertical"
-        android:padding="12dp">
+        android:paddingStart="15dp"
+        android:paddingTop="13dp"
+        android:paddingEnd="15dp"
+        android:paddingBottom="13dp">
 
-        <!-- Top section: Album art + Title, Artist & Progress Bar -->
+        <!-- Top section: Crisp square album art + Title, Artist & glowing progress bar -->
         <LinearLayout
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
@@ -61,8 +69,8 @@
 
             <ImageView
                 android:id="@+id/widget_music_album_art"
-                android:layout_width="56dp"
-                android:layout_height="56dp"
+                android:layout_width="60dp"
+                android:layout_height="60dp"
                 android:contentDescription="@string/widget_cd_album_art"
                 android:scaleType="fitCenter" />
 
@@ -70,7 +78,7 @@
                 android:id="@+id/widget_music_meta_container"
                 android:layout_width="0dp"
                 android:layout_height="wrap_content"
-                android:layout_marginStart="12dp"
+                android:layout_marginStart="13dp"
                 android:layout_weight="1"
                 android:orientation="vertical">
 
@@ -80,11 +88,13 @@
                     android:layout_height="wrap_content"
                     android:ellipsize="end"
                     android:includeFontPadding="true"
-                    android:lineSpacingExtra="2dp"
                     android:maxLines="1"
+                    android:shadowColor="#55000000"
+                    android:shadowDy="1"
+                    android:shadowRadius="3"
                     android:singleLine="true"
-                    android:textColor="#F7F9FF"
-                    android:textSize="15sp"
+                    android:textColor="#FFFFFF"
+                    android:textSize="15.5sp"
                     android:textStyle="bold" />
 
                 <TextView
@@ -94,29 +104,28 @@
                     android:layout_marginTop="2dp"
                     android:ellipsize="end"
                     android:includeFontPadding="true"
-                    android:lineSpacingExtra="2dp"
                     android:maxLines="1"
                     android:singleLine="true"
-                    android:textColor="#929DB0"
+                    android:textColor="#B8FFFFFF"
                     android:textSize="12.5sp" />
 
                 <ProgressBar
                     android:id="@+id/widget_music_progress"
                     style="?android:attr/progressBarStyleHorizontal"
                     android:layout_width="match_parent"
-                    android:layout_height="5dp"
-                    android:layout_marginTop="7dp"
+                    android:layout_height="4.5dp"
+                    android:layout_marginTop="9dp"
                     android:max="1000"
                     android:progress="0"
                     android:progressDrawable="@drawable/widget_progress_bar" />
             </LinearLayout>
         </LinearLayout>
 
-        <!-- Bottom section: Prev / Play-Pause / Next / Like controls with translucent glass level -->
+        <!-- Bottom section: Sculpted translucent glass controls -->
         <LinearLayout
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
-            android:layout_marginTop="8dp"
+            android:layout_marginTop="11dp"
             android:gravity="center_vertical"
             android:orientation="horizontal">
 
@@ -124,14 +133,14 @@
             <FrameLayout
                 android:id="@+id/widget_btn_prev"
                 android:layout_width="0dp"
-                android:layout_height="36dp"
+                android:layout_height="38dp"
+                android:layout_marginEnd="6dp"
                 android:layout_weight="1">
 
                 <ImageView
                     android:id="@+id/widget_btn_prev_bg"
                     android:layout_width="match_parent"
                     android:layout_height="match_parent"
-                    android:layout_marginEnd="4dp"
                     android:contentDescription="@null"
                     android:scaleType="fitXY" />
 
@@ -140,7 +149,6 @@
                     android:layout_width="20dp"
                     android:layout_height="20dp"
                     android:layout_gravity="center"
-                    android:layout_marginEnd="2dp"
                     android:contentDescription="@string/widget_cd_prev"
                     android:src="@drawable/ic_widget_prev" />
             </FrameLayout>
@@ -149,22 +157,21 @@
             <FrameLayout
                 android:id="@+id/widget_btn_play_pause"
                 android:layout_width="0dp"
-                android:layout_height="36dp"
-                android:layout_weight="1.15">
+                android:layout_height="38dp"
+                android:layout_marginEnd="6dp"
+                android:layout_weight="1.28">
 
                 <ImageView
                     android:id="@+id/widget_btn_play_pause_bg"
                     android:layout_width="match_parent"
                     android:layout_height="match_parent"
-                    android:layout_marginStart="2dp"
-                    android:layout_marginEnd="2dp"
                     android:contentDescription="@null"
                     android:scaleType="fitXY" />
 
                 <ImageView
                     android:id="@+id/widget_btn_play_pause_icon"
-                    android:layout_width="21dp"
-                    android:layout_height="21dp"
+                    android:layout_width="22dp"
+                    android:layout_height="22dp"
                     android:layout_gravity="center"
                     android:contentDescription="@string/widget_cd_play_pause"
                     android:src="@drawable/ic_widget_play" />
@@ -174,14 +181,13 @@
             <FrameLayout
                 android:id="@+id/widget_btn_next"
                 android:layout_width="0dp"
-                android:layout_height="36dp"
+                android:layout_height="38dp"
                 android:layout_weight="1">
 
                 <ImageView
                     android:id="@+id/widget_btn_next_bg"
                     android:layout_width="match_parent"
                     android:layout_height="match_parent"
-                    android:layout_marginStart="4dp"
                     android:contentDescription="@null"
                     android:scaleType="fitXY" />
 
@@ -190,7 +196,6 @@
                     android:layout_width="20dp"
                     android:layout_height="20dp"
                     android:layout_gravity="center"
-                    android:layout_marginStart="2dp"
                     android:contentDescription="@string/widget_cd_next"
                     android:src="@drawable/ic_widget_next" />
             </FrameLayout>
@@ -199,14 +204,14 @@
             <FrameLayout
                 android:id="@+id/widget_btn_like"
                 android:layout_width="0dp"
-                android:layout_height="36dp"
-                android:layout_weight="0.9">
+                android:layout_height="38dp"
+                android:layout_marginStart="6dp"
+                android:layout_weight="0.92">
 
                 <ImageView
                     android:id="@+id/widget_btn_like_bg"
                     android:layout_width="match_parent"
                     android:layout_height="match_parent"
-                    android:layout_marginStart="6dp"
                     android:contentDescription="@null"
                     android:scaleType="fitXY" />
 
@@ -215,10 +220,17 @@
                     android:layout_width="19dp"
                     android:layout_height="19dp"
                     android:layout_gravity="center"
-                    android:layout_marginStart="3dp"
                     android:contentDescription="@string/widget_cd_like"
                     android:src="@drawable/ic_widget_heart_outline" />
             </FrameLayout>
         </LinearLayout>
     </LinearLayout>
+
+    <!-- Crisp 1dp true-dp specular glass perimeter border (never stretches) -->
+    <ImageView
+        android:id="@+id/widget_music_card_border"
+        android:layout_width="match_parent"
+        android:layout_height="match_parent"
+        android:background="@drawable/widget_card_border_dark"
+        android:contentDescription="@null" />
 </FrameLayout>
