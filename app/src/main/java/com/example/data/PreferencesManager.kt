@@ -28,11 +28,17 @@ val Context.dataStore by preferencesDataStore(
 
 class PreferencesManager(private val context: Context) {
   companion object {
-    const val DEFAULT_DYNAMIC_BG_DIM = 0.45f
-    const val DEFAULT_DYNAMIC_BG_GLASS = 0.75f
-    const val DEFAULT_DYNAMIC_BG_BLUR = 68f
+    const val DEFAULT_DYNAMIC_BG_DIM = 0.40f
+    const val DEFAULT_DYNAMIC_BG_GLASS = 0.50f
+    const val DEFAULT_DYNAMIC_BG_BLUR = 60f
     const val MAX_LIBRARY_RECENT_SEARCHES = 5
     private const val RECENT_SEARCH_DELIMITER = "\u001F"
+
+    fun isDefaultDynamicBg(dim: Float, glass: Float, blur: Float): Boolean {
+      return kotlin.math.abs(dim - DEFAULT_DYNAMIC_BG_DIM) < 0.005f &&
+        kotlin.math.abs(glass - DEFAULT_DYNAMIC_BG_GLASS) < 0.005f &&
+        kotlin.math.abs(blur - DEFAULT_DYNAMIC_BG_BLUR) < 0.5f
+    }
 
     val THEME_MODE = stringPreferencesKey("theme_mode")
     val ACCENT_COLOR = stringPreferencesKey("accent_color")
@@ -98,13 +104,13 @@ class PreferencesManager(private val context: Context) {
   val language: Flow<String> = safeDataFlow.map { prefs -> prefs[LANGUAGE] ?: "en" }
   val dynamicBg: Flow<Boolean> = safeDataFlow.map { prefs -> prefs[DYNAMIC_BG] ?: true }
   val dynamicBgDim: Flow<Float> = safeDataFlow.map { prefs ->
-    (prefs[DYNAMIC_BG_DIM] ?: DEFAULT_DYNAMIC_BG_DIM).coerceIn(0.05f, 0.90f)
+    (prefs[DYNAMIC_BG_DIM] ?: DEFAULT_DYNAMIC_BG_DIM).coerceIn(0f, 0.90f)
   }
   val dynamicBgGlass: Flow<Float> = safeDataFlow.map { prefs ->
-    (prefs[DYNAMIC_BG_GLASS] ?: DEFAULT_DYNAMIC_BG_GLASS).coerceIn(0.20f, 1.00f)
+    (prefs[DYNAMIC_BG_GLASS] ?: DEFAULT_DYNAMIC_BG_GLASS).coerceIn(0f, 1.00f)
   }
   val dynamicBgBlur: Flow<Float> = safeDataFlow.map { prefs ->
-    (prefs[DYNAMIC_BG_BLUR] ?: DEFAULT_DYNAMIC_BG_BLUR).coerceIn(12f, 100f)
+    (prefs[DYNAMIC_BG_BLUR] ?: DEFAULT_DYNAMIC_BG_BLUR).coerceIn(0f, 100f)
   }
   val reducedMotion: Flow<Boolean> = safeDataFlow.map { prefs -> prefs[REDUCED_MOTION] ?: false }
   val onboardingCompleted: Flow<Boolean> = safeDataFlow.map { prefs -> prefs[ONBOARDING_COMPLETED] ?: false }
@@ -136,13 +142,13 @@ class PreferencesManager(private val context: Context) {
   suspend fun setLanguage(lang: String) { context.dataStore.edit { it[LANGUAGE] = lang } }
   suspend fun setDynamicBg(enabled: Boolean) { context.dataStore.edit { it[DYNAMIC_BG] = enabled } }
   suspend fun setDynamicBgDim(value: Float) {
-    context.dataStore.edit { it[DYNAMIC_BG_DIM] = value.coerceIn(0.05f, 0.90f) }
+    context.dataStore.edit { it[DYNAMIC_BG_DIM] = value.coerceIn(0f, 0.90f) }
   }
   suspend fun setDynamicBgGlass(value: Float) {
-    context.dataStore.edit { it[DYNAMIC_BG_GLASS] = value.coerceIn(0.20f, 1.00f) }
+    context.dataStore.edit { it[DYNAMIC_BG_GLASS] = value.coerceIn(0f, 1.00f) }
   }
   suspend fun setDynamicBgBlur(value: Float) {
-    context.dataStore.edit { it[DYNAMIC_BG_BLUR] = value.coerceIn(12f, 100f) }
+    context.dataStore.edit { it[DYNAMIC_BG_BLUR] = value.coerceIn(0f, 100f) }
   }
   suspend fun resetDynamicBgCustomization() {
     context.dataStore.edit { prefs ->

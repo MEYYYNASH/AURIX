@@ -654,10 +654,11 @@ fun DynamicArtworkBackdrop(
   modifier: Modifier = Modifier
 ) {
   val custom = LocalDynamicBgCustomization.current
-  val effectiveBlurDp = custom.blurRadiusDp.coerceIn(12f, 100f).dp
-  val dimLevel = custom.dimLevel.coerceIn(0.05f, 0.90f)
-  // Scale dim factor relative to default 0.45f so user adjustments visibly brighten or darken the ambient glow
-  val dimRatio = (dimLevel / com.example.data.PreferencesManager.DEFAULT_DYNAMIC_BG_DIM).coerceIn(0.12f, 2.0f)
+  val effectiveBlurDp = custom.blurRadiusDp.coerceIn(0f, 100f).dp
+  val rawDimLevel = custom.dimLevel.coerceIn(0f, 0.90f)
+  // Keep text readable at every Dim setting with a gentle legibility floor
+  val dimLevel = rawDimLevel.coerceAtLeast(0.22f)
+  val dimRatio = (dimLevel / com.example.data.PreferencesManager.DEFAULT_DYNAMIC_BG_DIM).coerceIn(0.45f, 2.25f)
   val glowBoost = (1.18f - (dimLevel - 0.25f) * 0.55f).coerceIn(0.45f, 1.35f)
 
   val accentColor = MaterialTheme.colorScheme.primary
@@ -741,7 +742,7 @@ fun DynamicArtworkBackdrop(
               .fillMaxSize()
               .offset(x = activeOffsetX.dp)
               .scale(activeScale)
-              .blur(effectiveBlurDp)
+              .then(if (effectiveBlurDp > 0.dp) Modifier.blur(effectiveBlurDp) else Modifier)
           )
         }
         Box(
@@ -798,10 +799,10 @@ fun DynamicArtGlassBackdropLayer(
   modifier: Modifier = Modifier
 ) {
   val custom = LocalDynamicBgCustomization.current
-  val blurScale = (custom.blurRadiusDp / com.example.data.PreferencesManager.DEFAULT_DYNAMIC_BG_BLUR).coerceIn(0.25f, 1.5f)
-  val glassScale = (custom.glassLevel / com.example.data.PreferencesManager.DEFAULT_DYNAMIC_BG_GLASS).coerceIn(0.30f, 1.30f)
-  val effectiveBlurRadius = (blurRadius.value * blurScale).coerceIn(6f, 80f).dp
-  val effectiveScrimAlpha = (scrimAlpha * glassScale).coerceIn(0.18f, 0.94f)
+  val blurScale = (custom.blurRadiusDp.coerceIn(0f, 100f) / com.example.data.PreferencesManager.DEFAULT_DYNAMIC_BG_BLUR).coerceIn(0f, 1.65f)
+  val glassScale = (0.35f + custom.glassLevel.coerceIn(0f, 1.0f) * 1.15f).coerceIn(0.35f, 1.50f)
+  val effectiveBlurRadius = (blurRadius.value * blurScale).coerceIn(0f, 80f).dp
+  val effectiveScrimAlpha = (scrimAlpha * glassScale).coerceIn(0.24f, 0.94f)
   val layerAlpha by animateFloatAsState(
     targetValue = if (enabled && song != null) 1f else 0f,
     animationSpec = if (reducedMotion) snap() else tween(450),

@@ -135,14 +135,21 @@ fun NowPlayingSheet(
   onToggleMoodFlow: () -> Unit = {},
   visualizerEnabled: Boolean = true,
   onToggleVisualizer: (Boolean) -> Unit = {},
-  spectrumBars: FloatArray = FloatArray(AudioSpectrumBus.BAR_COUNT)
+  spectrumBars: FloatArray = FloatArray(AudioSpectrumBus.BAR_COUNT),
+  initialShowLyrics: Boolean = false,
+  openViewRequestTrigger: Int = 0
 ) {
   BackHandler { onClose() }
   LaunchedEffect(song.id) {
     onCheckLyrics?.invoke(song)
   }
 
-  var showLyrics by remember { mutableStateOf(false) }
+  var showLyrics by remember { mutableStateOf(initialShowLyrics) }
+  LaunchedEffect(openViewRequestTrigger, initialShowLyrics) {
+    if (openViewRequestTrigger > 0) {
+      showLyrics = initialShowLyrics
+    }
+  }
   var showDetails by remember { mutableStateOf(false) }
   var showShareLyrics by remember { mutableStateOf(false) }
   var showEqualizer by remember { mutableStateOf(false) }
@@ -195,9 +202,10 @@ fun NowPlayingSheet(
   ) {
     val maxDetailsSheetHeight = (maxHeight * 0.55f).coerceAtLeast(300.dp)
     val bgCustom = LocalDynamicBgCustomization.current
-    val npBlurDp = (bgCustom.blurRadiusDp * 0.80f).coerceIn(12f, 92f).dp
-    val npDimRatio = (bgCustom.dimLevel / com.example.data.PreferencesManager.DEFAULT_DYNAMIC_BG_DIM)
-      .coerceIn(0.15f, 1.95f)
+    val npBlurDp = (bgCustom.blurRadiusDp.coerceIn(0f, 100f) * 0.80f).coerceIn(0f, 92f).dp
+    val npDimEffective = bgCustom.dimLevel.coerceIn(0f, 0.90f).coerceAtLeast(0.22f)
+    val npDimRatio = (npDimEffective / com.example.data.PreferencesManager.DEFAULT_DYNAMIC_BG_DIM)
+      .coerceIn(0.45f, 2.25f)
     // True Dynamic Artwork Background sampled from actual album cover colors + blurred drifting art
     if (bgAlpha > 0.01f) {
       Box(modifier = Modifier.fillMaxSize().alpha(bgAlpha)) {
@@ -211,7 +219,7 @@ fun NowPlayingSheet(
               .fillMaxSize()
               .offset(x = activeBgShiftX.dp)
               .scale(activeBgScale)
-              .blur(npBlurDp)
+              .then(if (npBlurDp > 0.dp) Modifier.blur(npBlurDp) else Modifier)
           )
         }
         Box(

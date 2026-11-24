@@ -11,10 +11,10 @@ import org.junit.Test
 class CrashFixStabilityTest {
 
   @Test
-  fun release197_metadataAndVersionCodeAreConsistent() {
-    assertEquals("1.9.7", BuildConfig.VERSION_NAME)
-    assertEquals(10970, BuildConfig.VERSION_CODE)
-    assertTrue("Release 1.9.7 versionCode must exceed 1.9.6 (10960)", BuildConfig.VERSION_CODE > 10960)
+  fun release198_metadataAndVersionCodeAreConsistent() {
+    assertEquals("1.9.8", BuildConfig.VERSION_NAME)
+    assertEquals(10980, BuildConfig.VERSION_CODE)
+    assertTrue("Release 1.9.8 versionCode must exceed 1.9.7 (10970)", BuildConfig.VERSION_CODE > 10970)
     assertEquals(420, com.example.ui.screens.SELECT_BAR_OPEN_DURATION_MS)
     assertEquals(600, com.example.ui.screens.SELECT_CIRCLE_OPEN_DURATION_MS)
     assertEquals(380L, com.example.ui.screens.SELECT_CLOSE_CLEAR_DELAY_MS)
@@ -41,9 +41,50 @@ class CrashFixStabilityTest {
     val decoded = com.example.data.PreferencesManager.decodeRecentSearches(encoded)
     assertEquals(history, decoded)
 
-    assertEquals(0.45f, com.example.data.PreferencesManager.DEFAULT_DYNAMIC_BG_DIM, 0.0001f)
-    assertEquals(0.75f, com.example.data.PreferencesManager.DEFAULT_DYNAMIC_BG_GLASS, 0.0001f)
-    assertEquals(68f, com.example.data.PreferencesManager.DEFAULT_DYNAMIC_BG_BLUR, 0.0001f)
+    assertEquals(0.40f, com.example.data.PreferencesManager.DEFAULT_DYNAMIC_BG_DIM, 0.0001f)
+    assertEquals(0.50f, com.example.data.PreferencesManager.DEFAULT_DYNAMIC_BG_GLASS, 0.0001f)
+    assertEquals(60f, com.example.data.PreferencesManager.DEFAULT_DYNAMIC_BG_BLUR, 0.0001f)
+    assertTrue(com.example.data.PreferencesManager.isDefaultDynamicBg(0.40f, 0.50f, 60f))
+    org.junit.Assert.assertFalse(com.example.data.PreferencesManager.isDefaultDynamicBg(0.55f, 0.50f, 60f))
+  }
+
+  @Test
+  fun widgetController_resolvesSyncedLyricsResponsiveWidthAndKhmerDetection() {
+    val lines = listOf(
+      com.example.model.LyricLine(timestampMs = 5_000L, text = "First line"),
+      com.example.model.LyricLine(timestampMs = 12_000L, text = "សួស្តីពិភពលោក"),
+      com.example.model.LyricLine(timestampMs = 20_000L, text = "Final line")
+    )
+
+    val atMid = com.example.widget.AurixWidgetController.resolveSyncedLyricLines(
+      syncedLines = lines,
+      plainLyrics = null,
+      positionMs = 13_500L,
+      lyricOffsetMs = 0L,
+      noLyricsLabel = "No lyrics for this song"
+    )
+    assertTrue(atMid.hasLyrics)
+    assertEquals(1, atMid.activeIndex)
+    assertEquals("សួស្តីពិភពលោក", atMid.currentLine)
+    assertEquals("Final line", atMid.nextLine)
+    assertTrue(com.example.widget.AurixWidgetController.containsKhmerScript(atMid.currentLine))
+    org.junit.Assert.assertFalse(com.example.widget.AurixWidgetController.containsKhmerScript(atMid.nextLine))
+
+    val emptySnap = com.example.widget.AurixWidgetController.resolveSyncedLyricLines(
+      syncedLines = emptyList(),
+      plainLyrics = "",
+      positionMs = 10_000L,
+      lyricOffsetMs = 0L,
+      noLyricsLabel = "No lyrics for this song"
+    )
+    org.junit.Assert.assertFalse(emptySnap.hasLyrics)
+    assertEquals("No lyrics for this song", emptySnap.currentLine)
+
+    // Responsive width: hide Like below 3 cells (< 180dp)
+    org.junit.Assert.assertFalse(com.example.widget.AurixWidgetController.shouldShowLikeButton(150))
+    org.junit.Assert.assertFalse(com.example.widget.AurixWidgetController.shouldShowLikeButton(179))
+    assertTrue(com.example.widget.AurixWidgetController.shouldShowLikeButton(180))
+    assertTrue(com.example.widget.AurixWidgetController.shouldShowLikeButton(250))
   }
 
   @Test

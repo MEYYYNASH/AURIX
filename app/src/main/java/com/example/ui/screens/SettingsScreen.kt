@@ -122,6 +122,7 @@ fun SettingsScreen(
   onDynamicBgDimChanged: (Float) -> Unit = {},
   onDynamicBgGlassChanged: (Float) -> Unit = {},
   onDynamicBgBlurChanged: (Float) -> Unit = {},
+  onDynamicBgSliderReleased: () -> Unit = {},
   onResetDynamicBgCustomization: () -> Unit = {}
 ) {
   val context = LocalContext.current
@@ -449,172 +450,196 @@ fun SettingsScreen(
             )
           }
 
-          AnimatedVisibility(
-            visible = dynamicBg,
-            enter = if (reducedMotion) fadeIn(snap()) else expandVertically(tween(240)) + fadeIn(tween(200)),
-            exit = if (reducedMotion) fadeOut(snap()) else shrinkVertically(tween(200)) + fadeOut(tween(150))
+          val isAtDefaultGlow = remember(dynamicBgDim, dynamicBgGlass, dynamicBgBlur) {
+            com.example.data.PreferencesManager.isDefaultDynamicBg(
+              dim = dynamicBgDim,
+              glass = dynamicBgGlass,
+              blur = dynamicBgBlur
+            )
+          }
+          val canResetGlow = !isAtDefaultGlow
+          val contentAlpha = if (dynamicBg) 1f else 0.45f
+
+          Column(
+            modifier = Modifier
+              .fillMaxWidth()
+              .padding(start = 18.dp, end = 18.dp, bottom = 14.dp)
+              .clip(RoundedCornerShape(18.dp))
+              .background(
+                if (darkTheme) Color.White.copy(alpha = 0.05f)
+                else Color(0xFF0F172A).copy(alpha = 0.04f)
+              )
+              .border(
+                1.dp,
+                if (darkTheme) Color.White.copy(alpha = 0.10f)
+                else Color(0xFF0F172A).copy(alpha = 0.08f),
+                RoundedCornerShape(18.dp)
+              )
+              .padding(horizontal = 14.dp, vertical = 12.dp)
+              .testTag("dynamic_bg_customize_section"),
+            verticalArrangement = Arrangement.spacedBy(10.dp)
           ) {
-            Column(
-              modifier = Modifier
-                .fillMaxWidth()
-                .padding(start = 18.dp, end = 18.dp, bottom = 14.dp)
-                .clip(RoundedCornerShape(18.dp))
-                .background(
-                  if (darkTheme) Color.White.copy(alpha = 0.05f)
-                  else Color(0xFF0F172A).copy(alpha = 0.04f)
-                )
-                .border(
-                  1.dp,
-                  if (darkTheme) Color.White.copy(alpha = 0.10f)
-                  else Color(0xFF0F172A).copy(alpha = 0.08f),
-                  RoundedCornerShape(18.dp)
-                )
-                .padding(horizontal = 14.dp, vertical = 12.dp)
-                .testTag("dynamic_bg_customize_section"),
-              verticalArrangement = Arrangement.spacedBy(10.dp)
+            Row(
+              modifier = Modifier.fillMaxWidth(),
+              horizontalArrangement = Arrangement.SpaceBetween,
+              verticalAlignment = Alignment.CenterVertically
             ) {
+              Row(
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.spacedBy(6.dp),
+                modifier = Modifier.weight(1f)
+              ) {
+                Icon(
+                  imageVector = Icons.Rounded.Tune,
+                  contentDescription = null,
+                  tint = MaterialTheme.colorScheme.primary.copy(alpha = contentAlpha),
+                  modifier = Modifier.size(16.dp)
+                )
+                Text(
+                  text = stringResource(id = R.string.settings_dynamic_bg_customize_title),
+                  style = MaterialTheme.typography.labelLarge.copy(fontWeight = FontWeight.Bold),
+                  color = MaterialTheme.colorScheme.onSurface.copy(alpha = contentAlpha),
+                  maxLines = 1,
+                  overflow = TextOverflow.Ellipsis
+                )
+              }
+
+              Surface(
+                onClick = {
+                  if (canResetGlow) {
+                    showResetDynamicBgConfirmDialog = true
+                  }
+                },
+                enabled = canResetGlow,
+                shape = CircleShape,
+                color = if (canResetGlow) {
+                  MaterialTheme.colorScheme.primary.copy(alpha = 0.14f)
+                } else {
+                  MaterialTheme.colorScheme.onSurface.copy(alpha = 0.06f)
+                },
+                modifier = Modifier
+                  .defaultMinSize(minHeight = 36.dp)
+                  .testTag("dynamic_bg_reset_button")
+              ) {
+                val resetTint = if (canResetGlow) {
+                  MaterialTheme.colorScheme.primary
+                } else {
+                  MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.45f)
+                }
+                Row(
+                  modifier = Modifier.padding(horizontal = 11.dp, vertical = 6.dp),
+                  verticalAlignment = Alignment.CenterVertically,
+                  horizontalArrangement = Arrangement.spacedBy(4.dp)
+                ) {
+                  Icon(
+                    imageVector = Icons.Rounded.RestartAlt,
+                    contentDescription = null,
+                    tint = resetTint,
+                    modifier = Modifier.size(15.dp)
+                  )
+                  Text(
+                    text = stringResource(id = R.string.settings_dynamic_bg_reset_button),
+                    style = MaterialTheme.typography.labelSmall.copy(fontWeight = FontWeight.Bold),
+                    color = resetTint
+                  )
+                }
+              }
+            }
+
+            // 1. Dim Level Slider (0-90%, default 40%)
+            Column(verticalArrangement = Arrangement.spacedBy(2.dp)) {
               Row(
                 modifier = Modifier.fillMaxWidth(),
                 horizontalArrangement = Arrangement.SpaceBetween,
                 verticalAlignment = Alignment.CenterVertically
               ) {
-                Row(
-                  verticalAlignment = Alignment.CenterVertically,
-                  horizontalArrangement = Arrangement.spacedBy(6.dp),
-                  modifier = Modifier.weight(1f)
-                ) {
-                  Icon(
-                    imageVector = Icons.Rounded.Tune,
-                    contentDescription = null,
-                    tint = MaterialTheme.colorScheme.primary,
-                    modifier = Modifier.size(16.dp)
-                  )
-                  Text(
-                    text = stringResource(id = R.string.settings_dynamic_bg_customize_title),
-                    style = MaterialTheme.typography.labelLarge.copy(fontWeight = FontWeight.Bold),
-                    color = MaterialTheme.colorScheme.onSurface,
-                    maxLines = 1,
-                    overflow = TextOverflow.Ellipsis
-                  )
-                }
-
-                Surface(
-                  onClick = { showResetDynamicBgConfirmDialog = true },
-                  shape = CircleShape,
-                  color = MaterialTheme.colorScheme.primary.copy(alpha = 0.14f),
-                  modifier = Modifier
-                    .defaultMinSize(minHeight = 36.dp)
-                    .testTag("dynamic_bg_reset_button")
-                ) {
-                  Row(
-                    modifier = Modifier.padding(horizontal = 11.dp, vertical = 6.dp),
-                    verticalAlignment = Alignment.CenterVertically,
-                    horizontalArrangement = Arrangement.spacedBy(4.dp)
-                  ) {
-                    Icon(
-                      imageVector = Icons.Rounded.RestartAlt,
-                      contentDescription = null,
-                      tint = MaterialTheme.colorScheme.primary,
-                      modifier = Modifier.size(15.dp)
-                    )
-                    Text(
-                      text = stringResource(id = R.string.settings_dynamic_bg_reset_button),
-                      style = MaterialTheme.typography.labelSmall.copy(fontWeight = FontWeight.Bold),
-                      color = MaterialTheme.colorScheme.primary
-                    )
-                  }
-                }
-              }
-
-              // 1. Dim Level Slider
-              Column(verticalArrangement = Arrangement.spacedBy(2.dp)) {
-                Row(
-                  modifier = Modifier.fillMaxWidth(),
-                  horizontalArrangement = Arrangement.SpaceBetween,
-                  verticalAlignment = Alignment.CenterVertically
-                ) {
-                  Text(
-                    text = stringResource(id = R.string.settings_dynamic_bg_dim_label),
-                    style = MaterialTheme.typography.bodySmall.copy(fontWeight = FontWeight.SemiBold),
-                    color = MaterialTheme.colorScheme.onSurface
-                  )
-                  Text(
-                    text = "${(dynamicBgDim * 100f).roundToInt()}%",
-                    style = MaterialTheme.typography.labelMedium.copy(fontWeight = FontWeight.Bold),
-                    color = MaterialTheme.colorScheme.primary,
-                    modifier = Modifier.testTag("dynamic_bg_dim_value")
-                  )
-                }
-                Slider(
-                  value = dynamicBgDim.coerceIn(0.05f, 0.90f),
-                  onValueChange = { onDynamicBgDimChanged(it) },
-                  valueRange = 0.05f..0.90f,
-                  modifier = Modifier
-                    .fillMaxWidth()
-                    .height(32.dp)
-                    .testTag("dynamic_bg_dim_slider")
+                Text(
+                  text = stringResource(id = R.string.settings_dynamic_bg_dim_label),
+                  style = MaterialTheme.typography.bodySmall.copy(fontWeight = FontWeight.SemiBold),
+                  color = MaterialTheme.colorScheme.onSurface.copy(alpha = contentAlpha)
+                )
+                Text(
+                  text = "${(dynamicBgDim * 100f).roundToInt()}%",
+                  style = MaterialTheme.typography.labelMedium.copy(fontWeight = FontWeight.Bold),
+                  color = MaterialTheme.colorScheme.primary.copy(alpha = contentAlpha),
+                  modifier = Modifier.testTag("dynamic_bg_dim_value")
                 )
               }
+              Slider(
+                value = dynamicBgDim.coerceIn(0.00f, 0.90f),
+                onValueChange = { onDynamicBgDimChanged(it) },
+                onValueChangeFinished = onDynamicBgSliderReleased,
+                enabled = dynamicBg,
+                valueRange = 0.00f..0.90f,
+                modifier = Modifier
+                  .fillMaxWidth()
+                  .height(32.dp)
+                  .testTag("dynamic_bg_dim_slider")
+              )
+            }
 
-              // 2. Glass Level Slider (កម្រិត កញ្ចក់)
-              Column(verticalArrangement = Arrangement.spacedBy(2.dp)) {
-                Row(
-                  modifier = Modifier.fillMaxWidth(),
-                  horizontalArrangement = Arrangement.SpaceBetween,
-                  verticalAlignment = Alignment.CenterVertically
-                ) {
-                  Text(
-                    text = stringResource(id = R.string.settings_dynamic_bg_glass_label),
-                    style = MaterialTheme.typography.bodySmall.copy(fontWeight = FontWeight.SemiBold),
-                    color = MaterialTheme.colorScheme.onSurface
-                  )
-                  Text(
-                    text = "${(dynamicBgGlass * 100f).roundToInt()}%",
-                    style = MaterialTheme.typography.labelMedium.copy(fontWeight = FontWeight.Bold),
-                    color = MaterialTheme.colorScheme.primary,
-                    modifier = Modifier.testTag("dynamic_bg_glass_value")
-                  )
-                }
-                Slider(
-                  value = dynamicBgGlass.coerceIn(0.20f, 1.00f),
-                  onValueChange = { onDynamicBgGlassChanged(it) },
-                  valueRange = 0.20f..1.00f,
-                  modifier = Modifier
-                    .fillMaxWidth()
-                    .height(32.dp)
-                    .testTag("dynamic_bg_glass_slider")
+            // 2. Glass Level Slider (0-100%, default 50%)
+            Column(verticalArrangement = Arrangement.spacedBy(2.dp)) {
+              Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.SpaceBetween,
+                verticalAlignment = Alignment.CenterVertically
+              ) {
+                Text(
+                  text = stringResource(id = R.string.settings_dynamic_bg_glass_label),
+                  style = MaterialTheme.typography.bodySmall.copy(fontWeight = FontWeight.SemiBold),
+                  color = MaterialTheme.colorScheme.onSurface.copy(alpha = contentAlpha)
+                )
+                Text(
+                  text = "${(dynamicBgGlass * 100f).roundToInt()}%",
+                  style = MaterialTheme.typography.labelMedium.copy(fontWeight = FontWeight.Bold),
+                  color = MaterialTheme.colorScheme.primary.copy(alpha = contentAlpha),
+                  modifier = Modifier.testTag("dynamic_bg_glass_value")
                 )
               }
+              Slider(
+                value = dynamicBgGlass.coerceIn(0.00f, 1.00f),
+                onValueChange = { onDynamicBgGlassChanged(it) },
+                onValueChangeFinished = onDynamicBgSliderReleased,
+                enabled = dynamicBg,
+                valueRange = 0.00f..1.00f,
+                modifier = Modifier
+                  .fillMaxWidth()
+                  .height(32.dp)
+                  .testTag("dynamic_bg_glass_slider")
+              )
+            }
 
-              // 3. Blur Level Slider (កម្រិត blur)
-              Column(verticalArrangement = Arrangement.spacedBy(2.dp)) {
-                Row(
-                  modifier = Modifier.fillMaxWidth(),
-                  horizontalArrangement = Arrangement.SpaceBetween,
-                  verticalAlignment = Alignment.CenterVertically
-                ) {
-                  Text(
-                    text = stringResource(id = R.string.settings_dynamic_bg_blur_label),
-                    style = MaterialTheme.typography.bodySmall.copy(fontWeight = FontWeight.SemiBold),
-                    color = MaterialTheme.colorScheme.onSurface
-                  )
-                  Text(
-                    text = "${dynamicBgBlur.roundToInt()} dp",
-                    style = MaterialTheme.typography.labelMedium.copy(fontWeight = FontWeight.Bold),
-                    color = MaterialTheme.colorScheme.primary,
-                    modifier = Modifier.testTag("dynamic_bg_blur_value")
-                  )
-                }
-                Slider(
-                  value = dynamicBgBlur.coerceIn(12f, 100f),
-                  onValueChange = { onDynamicBgBlurChanged(it) },
-                  valueRange = 12f..100f,
-                  modifier = Modifier
-                    .fillMaxWidth()
-                    .height(32.dp)
-                    .testTag("dynamic_bg_blur_slider")
+            // 3. Blur Level Slider (0-100%, default 60%)
+            Column(verticalArrangement = Arrangement.spacedBy(2.dp)) {
+              Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.SpaceBetween,
+                verticalAlignment = Alignment.CenterVertically
+              ) {
+                Text(
+                  text = stringResource(id = R.string.settings_dynamic_bg_blur_label),
+                  style = MaterialTheme.typography.bodySmall.copy(fontWeight = FontWeight.SemiBold),
+                  color = MaterialTheme.colorScheme.onSurface.copy(alpha = contentAlpha)
+                )
+                Text(
+                  text = "${dynamicBgBlur.roundToInt()}%",
+                  style = MaterialTheme.typography.labelMedium.copy(fontWeight = FontWeight.Bold),
+                  color = MaterialTheme.colorScheme.primary.copy(alpha = contentAlpha),
+                  modifier = Modifier.testTag("dynamic_bg_blur_value")
                 )
               }
+              Slider(
+                value = dynamicBgBlur.coerceIn(0f, 100f),
+                onValueChange = { onDynamicBgBlurChanged(it) },
+                onValueChangeFinished = onDynamicBgSliderReleased,
+                enabled = dynamicBg,
+                valueRange = 0f..100f,
+                modifier = Modifier
+                  .fillMaxWidth()
+                  .height(32.dp)
+                  .testTag("dynamic_bg_blur_slider")
+              )
             }
           }
 
@@ -1040,7 +1065,7 @@ fun SettingsScreen(
         Icon(
           imageVector = Icons.Rounded.RestartAlt,
           contentDescription = null,
-          tint = MaterialTheme.colorScheme.primary
+          tint = Color(0xFFEF4444)
         )
       },
       title = {
@@ -1062,6 +1087,10 @@ fun SettingsScreen(
             onResetDynamicBgCustomization()
           },
           shape = CircleShape,
+          colors = ButtonDefaults.buttonColors(
+            containerColor = Color(0xFFEF4444),
+            contentColor = Color.White
+          ),
           modifier = Modifier
             .defaultMinSize(minHeight = 48.dp)
             .testTag("dynamic_bg_reset_confirm_button")

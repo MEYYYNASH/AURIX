@@ -254,6 +254,8 @@ private fun AurixMainShell(
   var currentScreen by remember { mutableStateOf<Screen>(Screen.Home) }
   var libraryTab by remember { mutableIntStateOf(0) }
   var showNowPlaying by remember { mutableStateOf(false) }
+  var nowPlayingInitialShowLyrics by remember { mutableStateOf(false) }
+  var nowPlayingOpenViewTrigger by remember { mutableIntStateOf(0) }
   val context = LocalContext.current
 
   val searchMode by viewModel.searchMode.collectAsStateWithLifecycle()
@@ -357,16 +359,36 @@ private fun AurixMainShell(
   val isNowPlayingOpen = showNowPlaying && currentSong != null
   val pendingNotificationNav by viewModel.pendingNotificationNav.collectAsStateWithLifecycle()
 
-  LaunchedEffect(pendingNotificationNav) {
+  LaunchedEffect(pendingNotificationNav, currentSong) {
     val nav = pendingNotificationNav ?: return@LaunchedEffect
     when (nav.screenRoute) {
-      com.example.data.AppNotificationHelper.SCREEN_SETTINGS -> currentScreen = Screen.Settings
+      com.example.data.AppNotificationHelper.SCREEN_SETTINGS -> {
+        currentScreen = Screen.Settings
+        showNowPlaying = false
+      }
       com.example.data.AppNotificationHelper.SCREEN_LIBRARY -> {
         libraryTab = nav.libraryTab
         currentScreen = Screen.Library
+        showNowPlaying = false
+      }
+      com.example.data.AppNotificationHelper.SCREEN_NOW_PLAYING_PLAYER -> {
+        nowPlayingInitialShowLyrics = false
+        nowPlayingOpenViewTrigger++
+        if (currentSong != null) {
+          showNowPlaying = true
+        }
+      }
+      com.example.data.AppNotificationHelper.SCREEN_NOW_PLAYING_LYRICS -> {
+        nowPlayingInitialShowLyrics = true
+        nowPlayingOpenViewTrigger++
+        if (currentSong != null) {
+          showNowPlaying = true
+        }
+      }
+      else -> {
+        showNowPlaying = false
       }
     }
-    showNowPlaying = false
     viewModel.consumeNotificationNav()
   }
 
@@ -1079,6 +1101,7 @@ private fun AurixMainShell(
               onDynamicBgDimChanged = { viewModel.setDynamicBgDim(it) },
               onDynamicBgGlassChanged = { viewModel.setDynamicBgGlass(it) },
               onDynamicBgBlurChanged = { viewModel.setDynamicBgBlur(it) },
+              onDynamicBgSliderReleased = { viewModel.onDynamicBgSliderReleased() },
               onResetDynamicBgCustomization = { viewModel.resetDynamicBgCustomization() }
             )
           }
@@ -1279,7 +1302,9 @@ private fun AurixMainShell(
             onToggleMoodFlow = { viewModel.toggleMoodFlow() },
             visualizerEnabled = nowPlayingVisualizerEnabled,
             onToggleVisualizer = { viewModel.setNowPlayingVisualizerEnabled(it) },
-            spectrumBars = spectrumBars
+            spectrumBars = spectrumBars,
+            initialShowLyrics = nowPlayingInitialShowLyrics,
+            openViewRequestTrigger = nowPlayingOpenViewTrigger
           )
         }
       }

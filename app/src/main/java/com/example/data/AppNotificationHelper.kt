@@ -29,6 +29,8 @@ object AppNotificationHelper {
 
   const val SCREEN_SETTINGS = "settings"
   const val SCREEN_LIBRARY = "library"
+  const val SCREEN_NOW_PLAYING_PLAYER = "now_playing_player"
+  const val SCREEN_NOW_PLAYING_LYRICS = "now_playing_lyrics"
 
   const val ACTION_VIEW_UPDATE = "view"
   const val ACTION_DOWNLOAD_UPDATE = "download_update"

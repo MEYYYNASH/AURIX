@@ -38,6 +38,7 @@ import com.example.playback.EqualizerUiState
 import com.example.playback.PlaybackService
 import com.example.recommendation.*
 import com.example.ui.screens.UpdateLogoState
+import com.example.widget.AurixWidgetController
 import com.google.common.util.concurrent.ListenableFuture
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.CoroutineExceptionHandler
@@ -1370,6 +1371,7 @@ class AurixViewModel(application: Application) : AndroidViewModel(application) {
     observeDiscoverWeeklyUpdates()
     observeCatalogMetadataSync()
     observeBackgroundDownloads()
+    observeWidgetStateSync()
     connectPlaybackController(application)
     loadDailyRecommendations(DailyFeedCategory.TIKTOK_VIRAL)
     loadPopularYoutubeSongs()
@@ -1381,6 +1383,61 @@ class AurixViewModel(application: Application) : AndroidViewModel(application) {
       checkForUpdates(application, silent = true)
     }
   }
+
+  private fun observeWidgetStateSync() {
+    val appCtx = getApplication<Application>()
+    viewModelScope.launch {
+      combine(
+        currentSong,
+        isPlaying,
+        lyrics,
+        lyricOffsetMs
+      ) { song, playing, lyr, offset ->
+        QuadWidgetPlayerState(song, playing, lyr, offset)
+      }.collectLatest { state ->
+        runCatching {
+          AurixWidgetController.syncTrackAndLyricsState(
+            context = appCtx,
+            song = state.song,
+            isPlaying = state.isPlaying,
+            positionMs = _currentPosition.value,
+            durationMs = _durationMs.value,
+            lyricsResult = state.lyrics,
+            lyricOffsetMs = state.lyricOffsetMs
+          )
+        }
+      }
+    }
+    viewModelScope.launch {
+      combine(
+        themeMode,
+        language,
+        dynamicBg
+      ) { theme, lang, glowEnabled ->
+        Triple(theme, lang, glowEnabled)
+      }.collectLatest { (theme, lang, glowEnabled) ->
+        runCatching {
+          AurixWidgetController.syncAmbientGlowAndSettings(
+            context = appCtx,
+            ambientGlowEnabled = glowEnabled,
+            dimLevel = dynamicBgDim.value,
+            glassLevel = dynamicBgGlass.value,
+            blurLevel = dynamicBgBlur.value,
+            themeMode = theme,
+            language = lang,
+            refreshWidgetsNow = true
+          )
+        }
+      }
+    }
+  }
+
+  private data class QuadWidgetPlayerState(
+    val song: Song?,
+    val isPlaying: Boolean,
+    val lyrics: LyricsResult?,
+    val lyricOffsetMs: Long
+  )
 
   private fun observeBackgroundDownloads() {
     viewModelScope.launch {
@@ -4851,21 +4908,92 @@ class AurixViewModel(application: Application) : AndroidViewModel(application) {
     }
   }
 
-  fun setThemeMode(mode: String) { safeLaunch(notifyUser = false) { prefsManager.setThemeMode(mode) } }
+  fun setThemeMode(mode: String) {
+    safeLaunch(notifyUser = false) {
+      prefsManager.setThemeMode(mode)
+      AurixWidgetController.syncAmbientGlowAndSettings(
+        context = getApplication(),
+        themeMode = mode,
+        refreshWidgetsNow = true
+      )
+    }
+  }
   fun setAccentColor(hex: String) { safeLaunch(notifyUser = false) { prefsManager.setAccentColor(hex) } }
   fun setLanguage(lang: String) {
     val normalized = LocaleHelper.normalizeLanguage(lang)
     runCatching { LocaleHelper.saveLanguageSync(getApplication(), normalized) }
-    safeLaunch(notifyUser = false) { prefsManager.setLanguage(normalized) }
+    safeLaunch(notifyUser = false) {
+      prefsManager.setLanguage(normalized)
+      AurixWidgetController.syncAmbientGlowAndSettings(
+        context = getApplication(),
+        language = normalized,
+        refreshWidgetsNow = true
+      )
+    }
   }
-  fun setDynamicBg(enabled: Boolean) { safeLaunch(notifyUser = false) { prefsManager.setDynamicBg(enabled) } }
-  fun setDynamicBgDim(value: Float) { safeLaunch(notifyUser = false) { prefsManager.setDynamicBgDim(value) } }
-  fun setDynamicBgGlass(value: Float) { safeLaunch(notifyUser = false) { prefsManager.setDynamicBgGlass(value) } }
-  fun setDynamicBgBlur(value: Float) { safeLaunch(notifyUser = false) { prefsManager.setDynamicBgBlur(value) } }
+  fun setDynamicBg(enabled: Boolean) {
+    safeLaunch(notifyUser = false) {
+      prefsManager.setDynamicBg(enabled)
+      AurixWidgetController.syncAmbientGlowAndSettings(
+        context = getApplication(),
+        ambientGlowEnabled = enabled,
+        refreshWidgetsNow = true
+      )
+    }
+  }
+  fun setDynamicBgDim(value: Float) {
+    safeLaunch(notifyUser = false) {
+      prefsManager.setDynamicBgDim(value)
+      AurixWidgetController.syncAmbientGlowAndSettings(
+        context = getApplication(),
+        dimLevel = value,
+        refreshWidgetsNow = false
+      )
+    }
+  }
+  fun setDynamicBgGlass(value: Float) {
+    safeLaunch(notifyUser = false) {
+      prefsManager.setDynamicBgGlass(value)
+      AurixWidgetController.syncAmbientGlowAndSettings(
+        context = getApplication(),
+        glassLevel = value,
+        refreshWidgetsNow = false
+      )
+    }
+  }
+  fun setDynamicBgBlur(value: Float) {
+    safeLaunch(notifyUser = false) {
+      prefsManager.setDynamicBgBlur(value)
+      AurixWidgetController.syncAmbientGlowAndSettings(
+        context = getApplication(),
+        blurLevel = value,
+        refreshWidgetsNow = false
+      )
+    }
+  }
+  fun onDynamicBgSliderReleased() {
+    runCatching {
+      AurixWidgetController.syncAmbientGlowAndSettings(
+        context = getApplication(),
+        ambientGlowEnabled = dynamicBg.value,
+        dimLevel = dynamicBgDim.value,
+        glassLevel = dynamicBgGlass.value,
+        blurLevel = dynamicBgBlur.value,
+        refreshWidgetsNow = true
+      )
+    }
+  }
   fun resetDynamicBgCustomization() {
     val appContext = localizedAppContext()
     safeLaunch(notifyUser = false) {
       prefsManager.resetDynamicBgCustomization()
+      AurixWidgetController.syncAmbientGlowAndSettings(
+        context = getApplication(),
+        dimLevel = PreferencesManager.DEFAULT_DYNAMIC_BG_DIM,
+        glassLevel = PreferencesManager.DEFAULT_DYNAMIC_BG_GLASS,
+        blurLevel = PreferencesManager.DEFAULT_DYNAMIC_BG_BLUR,
+        refreshWidgetsNow = true
+      )
       runCatching {
         Toast.makeText(
           appContext,

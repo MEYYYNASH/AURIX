@@ -24,8 +24,15 @@ import androidx.media3.session.MediaSession
 import androidx.media3.session.MediaSessionService
 import com.example.MainActivity
 import com.example.R
+import com.example.data.AurixDatabase
+import com.example.data.FavoriteSongEntity
 import com.example.data.StreamHeaderRegistry
 import com.example.data.YoutubeExtractor
+import com.example.lyrics.LrcParser
+import com.example.model.LyricLine
+import com.example.model.LyricsResult
+import com.example.model.Song
+import com.example.widget.AurixWidgetController
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
@@ -34,6 +41,7 @@ import kotlinx.coroutines.cancel
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.isActive
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.withContext
 
 class PlaybackService : MediaSessionService() {
   private var mediaSession: MediaSession? = null
@@ -41,6 +49,7 @@ class PlaybackService : MediaSessionService() {
   private var crossfadeOutPlayer: ExoPlayer? = null
   private val serviceScope = CoroutineScope(SupervisorJob() + Dispatchers.Main.immediate)
   private var monitorJob: Job? = null
+  private var widgetTickerJob: Job? = null
   private var crossfadeJob: Job? = null
   private var skipFadeJob: Job? = null
   private var recoveryJob: Job? = null
@@ -125,6 +134,7 @@ class PlaybackService : MediaSessionService() {
         if (!isPlaying) {
           AudioSpectrumBus.reset()
         }
+        updateWidgetPlayStateAndTicker(player, isPlaying)
         runCatching {
           val fadeOut = crossfadeOutPlayer
           if (!isPlaying && isCrossfadingNow && fadeOut != null) {
@@ -161,6 +171,9 @@ class PlaybackService : MediaSessionService() {
               player.volume = 1f
             }
           }
+        }
+        if (mediaItem != null) {
+          syncMediaItemToWidgets(player, mediaItem)
         }
       }
 
@@ -391,6 +404,193 @@ class PlaybackService : MediaSessionService() {
     }
   }
 
+  private fun updateWidgetPlayStateAndTicker(player: ExoPlayer, isPlaying: Boolean) {
+    widgetTickerJob?.cancel()
+    widgetTickerJob = null
+
+    val snapshot = AurixWidgetController.readSnapshot(this)
+    if (snapshot.songId.isNotBlank()) {
+      val pos = player.currentPosition.coerceAtLeast(0L)
+      val dur = player.duration.takeIf { it > 0L } ?: snapshot.durationMs
+      if (isPlaying) {
+        AurixWidgetController.onPlaybackProgressTick(this, pos, dur, isPlaying = true)
+      } else {
+        // Persist paused state and update Play/Pause icon once, then stop ticker to save battery
+        val prefs = applicationContext.getSharedPreferences("aurix_widget_snapshot_prefs", Context.MODE_PRIVATE)
+        prefs.edit()
+          .putBoolean("is_playing", false)
+          .putLong("position_ms", pos)
+          .apply()
+        AurixWidgetController.refreshAllWidgetsAsync(this, refreshMusic = true, refreshLyrics = false)
+      }
+    }
+
+    if (isPlaying) {
+      widgetTickerJob = serviceScope.launch {
+        while (isActive) {
+          delay(1_000L)
+          val active = mainPlayer ?: break
+          if (!active.isPlaying) break
+          val pos = active.currentPosition.coerceAtLeast(0L)
+          val dur = active.duration.takeIf { it > 0L } ?: 0L
+          AurixWidgetController.onPlaybackProgressTick(
+            context = this@PlaybackService,
+            positionMs = pos,
+            durationMs = dur,
+            isPlaying = true
+          )
+        }
+      }
+    }
+  }
+
+  private fun syncMediaItemToWidgets(player: ExoPlayer, mediaItem: MediaItem) {
+    val songId = mediaItem.mediaId.takeIf { it.isNotBlank() } ?: return
+    val meta = mediaItem.mediaMetadata
+    val title = meta.title?.toString()?.takeIf { it.isNotBlank() } ?: return
+    val artist = meta.artist?.toString()?.takeIf { it.isNotBlank() } ?: "AURIX"
+    val artworkUrl = meta.artworkUri?.toString().orEmpty()
+    val streamUrl = mediaItem.localConfiguration?.uri?.toString().orEmpty()
+    val isPlayingNow = player.isPlaying
+    val posMs = player.currentPosition.coerceAtLeast(0L)
+    val durMs = player.duration.takeIf { it > 0L } ?: 0L
+
+    serviceScope.launch {
+      val (isFav, lyricsResult, offsetMs) = withContext(Dispatchers.IO) {
+        runCatching {
+          val dao = AurixDatabase.getInstance(applicationContext).aurixDao()
+          val fav = dao.getFavoriteById(songId) != null
+          val cached = dao.getLyricsCache(songId)
+          val offset = dao.getLyricOffset(songId) ?: 0L
+          val lyrics = if (cached != null && cached.hasLyrics && !cached.isReportedBad) {
+            val rawLrc = cached.rawLrc.orEmpty()
+            val synced = if (rawLrc.isNotBlank()) {
+              val parsed = LrcParser.parse(rawLrc)
+              if (parsed.isSynced) parsed.lines.map { LyricLine(it.timestampMs, it.text) } else null
+            } else null
+            LyricsResult(
+              synced = synced,
+              plain = cached.plainLyrics,
+              matchedTitle = cached.matchedTitle,
+              matchedArtist = cached.matchedArtist,
+              rawLrc = cached.rawLrc
+            )
+          } else null
+          Triple(fav, lyrics, offset)
+        }.getOrDefault(Triple(false, null, 0L))
+      }
+
+      val song = Song(
+        id = songId,
+        title = title,
+        artist = artist,
+        artworkUrl = artworkUrl,
+        durationSeconds = (durMs / 1000L).coerceAtLeast(0L),
+        streamUrl = streamUrl,
+        isFavorite = isFav
+      )
+      AurixWidgetController.syncTrackAndLyricsState(
+        context = this@PlaybackService,
+        song = song,
+        isPlaying = isPlayingNow,
+        positionMs = posMs,
+        durationMs = durMs,
+        lyricsResult = lyricsResult,
+        lyricOffsetMs = offsetMs
+      )
+    }
+  }
+
+  override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {
+    val action = intent?.action
+    if (!action.isNullOrBlank()) {
+      handleWidgetAction(action)
+    }
+    return super.onStartCommand(intent, flags, startId)
+  }
+
+  private fun handleWidgetAction(action: String) {
+    val player = mediaSession?.player ?: mainPlayer ?: return
+    when (action) {
+      AurixWidgetController.ACTION_WIDGET_PLAY_PAUSE -> {
+        runCatching {
+          if (player.isPlaying) {
+            player.pause()
+          } else {
+            if (player.playbackState == Player.STATE_IDLE && player.mediaItemCount > 0) {
+              player.prepare()
+            } else if (player.playbackState == Player.STATE_ENDED) {
+              player.seekTo(0L)
+            }
+            player.play()
+          }
+        }
+      }
+      AurixWidgetController.ACTION_WIDGET_PREV -> {
+        runCatching {
+          if (player.currentPosition > 3000L) {
+            player.seekTo(0L)
+          } else if (player.hasPreviousMediaItem()) {
+            player.seekToPreviousMediaItem()
+            if (player.playbackState == Player.STATE_IDLE) {
+              player.prepare()
+            }
+            player.play()
+          } else if (player.mediaItemCount > 0) {
+            player.seekTo(0, 0L)
+            player.play()
+          }
+        }
+      }
+      AurixWidgetController.ACTION_WIDGET_NEXT -> {
+        runCatching {
+          if (player.hasNextMediaItem()) {
+            player.seekToNextMediaItem()
+            if (player.playbackState == Player.STATE_IDLE) {
+              player.prepare()
+            }
+            player.play()
+          } else if (player.mediaItemCount > 0) {
+            player.seekTo(0, 0L)
+            player.play()
+          }
+        }
+      }
+      AurixWidgetController.ACTION_WIDGET_LIKE -> {
+        val snap = AurixWidgetController.readSnapshot(this)
+        val songId = player.currentMediaItem?.mediaId?.takeIf { it.isNotBlank() } ?: snap.songId
+        if (songId.isBlank()) return
+        serviceScope.launch {
+          val nowFav = withContext(Dispatchers.IO) {
+            runCatching {
+              val dao = AurixDatabase.getInstance(applicationContext).aurixDao()
+              val existing = dao.getFavoriteById(songId)
+              if (existing != null) {
+                dao.deleteFavorite(songId)
+                false
+              } else {
+                val meta = player.currentMediaItem?.mediaMetadata
+                dao.insertFavorite(
+                  FavoriteSongEntity(
+                    id = songId,
+                    title = meta?.title?.toString()?.takeIf { it.isNotBlank() } ?: snap.title.ifBlank { "Track" },
+                    artist = meta?.artist?.toString()?.takeIf { it.isNotBlank() } ?: snap.artist.ifBlank { "Artist" },
+                    artworkUrl = meta?.artworkUri?.toString()?.takeIf { it.isNotBlank() } ?: snap.artworkUrl,
+                    durationSeconds = (snap.durationMs / 1000L).coerceAtLeast(0L),
+                    streamUrl = player.currentMediaItem?.localConfiguration?.uri?.toString().orEmpty(),
+                    source = "Widget"
+                  )
+                )
+                true
+              }
+            }.getOrDefault(!snap.isFavorite)
+          }
+          AurixWidgetController.syncFavoriteState(this@PlaybackService, songId, nowFav)
+        }
+      }
+    }
+  }
+
   override fun onGetSession(controllerInfo: MediaSession.ControllerInfo): MediaSession? {
     return mediaSession
   }
@@ -404,6 +604,7 @@ class PlaybackService : MediaSessionService() {
 
   override fun onDestroy() {
     monitorJob?.cancel()
+    widgetTickerJob?.cancel()
     crossfadeJob?.cancel()
     skipFadeJob?.cancel()
     recoveryJob?.cancel()

@@ -126,6 +126,38 @@
                 android:name="android.support.FILE_PROVIDER_PATHS"
                 android:resource="@xml/file_paths" />
         </provider>
+
+        <!-- AURIX Music Home Screen Widget (4x2) -->
+        <receiver
+            android:name=".widget.AurixMusicWidgetProvider"
+            android:exported="true"
+            android:label="@string/widget_music_label">
+            <intent-filter>
+                <action android:name="android.appwidget.action.APPWIDGET_UPDATE" />
+                <action android:name="com.example.aurix.widget.ACTION_PREV" />
+                <action android:name="com.example.aurix.widget.ACTION_PLAY_PAUSE" />
+                <action android:name="com.example.aurix.widget.ACTION_NEXT" />
+                <action android:name="com.example.aurix.widget.ACTION_LIKE" />
+                <action android:name="com.example.aurix.widget.ACTION_REFRESH" />
+            </intent-filter>
+            <meta-data
+                android:name="android.appwidget.provider"
+                android:resource="@xml/aurix_music_widget_info" />
+        </receiver>
+
+        <!-- AURIX Lyrics Home Screen Widget (4x2) -->
+        <receiver
+            android:name=".widget.AurixLyricsWidgetProvider"
+            android:exported="true"
+            android:label="@string/widget_lyrics_label">
+            <intent-filter>
+                <action android:name="android.appwidget.action.APPWIDGET_UPDATE" />
+                <action android:name="com.example.aurix.widget.ACTION_REFRESH" />
+            </intent-filter>
+            <meta-data
+                android:name="android.appwidget.provider"
+                android:resource="@xml/aurix_lyrics_widget_info" />
+        </receiver>
     </application>
 
 </manifest>

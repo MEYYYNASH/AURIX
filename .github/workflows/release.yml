@@ -10,9 +10,9 @@ on:
   workflow_dispatch:
     inputs:
       tag:
-        description: 'Release tag (e.g. v1.9.7)'
+        description: 'Release tag (e.g. v1.9.8)'
         required: false
-        default: 'v1.9.7'
+        default: 'v1.9.8'
 
 permissions:
   contents: write
@@ -52,13 +52,13 @@ jobs:
             RELEASE_TAG="${{ github.ref_name }}"
           else
             VERSION=$(grep -m1 'versionName' app/build.gradle.kts | sed -E 's/.*"([^"]+)".*/\1/' | tr '[:upper:]' '[:lower:]' | tr ' ' '-')
-            RELEASE_TAG="v${VERSION:-1.9.7}"
+            RELEASE_TAG="v${VERSION:-1.9.8}"
           fi
           VCODE=$(grep -m1 'versionCode' app/build.gradle.kts | sed -E 's/[^0-9]*([0-9]+).*/\1/')
           RDATE=$(grep -m1 'RELEASE_DATE' app/build.gradle.kts | sed -E 's/.*\\"([^\\"]+)\\".*/\1/')
           echo "RELEASE_TAG=${RELEASE_TAG}" >> "$GITHUB_ENV"
           echo "RELEASE_VERSION=${RELEASE_TAG#v}" >> "$GITHUB_ENV"
-          echo "RELEASE_VERSION_CODE=${VCODE:-10970}" >> "$GITHUB_ENV"
+          echo "RELEASE_VERSION_CODE=${VCODE:-10980}" >> "$GITHUB_ENV"
           echo "RELEASE_DATE=${RDATE:-$(date -u +%Y-%m-%d)}" >> "$GITHUB_ENV"
 
       - name: Ensure keystores exist
@@ -98,10 +98,10 @@ jobs:
             "sha256": os.environ["APK_SHA256"],
             "mandatory": False,
             "notes": [
-              f"Smooth Playlist Select Mode Open/Close & Tap Motion ({tag}): Added 420ms ease-out selection bar expansion, 600ms spring-overshoot selection circle roll-in (-120° to 0°), 46dp card glide with 35ms/20ms visible-row stagger, 300ms Select/Done button slide, #43C7F4 spring pop + 250ms white checkmark stroke draw, 2.5dp accent card outline, and 380ms delayed close clear",
-              "Mini Inline Orbi Loading & Compact Sketch Skeletons: Scaled StatusRow / OrbiStatusRow down to a sleek 34dp mini planet with a glowing orbiting bead, 15sp bold shimmer text, 3dp bouncing dots, and compact 46dp frameless sketch track skeletons",
-              "App Icon Picker & 5 Orbi Launcher Icons: Switch between Classic, Midnight, Ember, AMOLED, and Pearl Orbi adaptive launcher icons in Settings > Appearance > App icon with Android 13+ monochrome themed icon layers, 512x512 Play Store PNG exports, confirmation bottom sheet, and Happy Orbi celebration",
-              "Orbi Mascot Animation System: Added OrbiView(state, size, runner) with white-lavender planet, -12° blinking/glancing eyes, -16° cyan-to-violet ring, glossy orbiting mini icons (Search, Music, Refresh, SyncUp, SyncDown), and interactive Orbi Animation Lab in Settings"
+              f"Home Screen Music & Lyrics Widgets + Shared Ambient Album Glow ({tag}): Added 4×2 Music widget (album art, progress bar, Prev/Play-Pause/Next/Like with #EF4444 heart, responsive <3-cell layout, Orbi empty state) and 4×2 Synced Lyrics widget (LRC line-only updates, Noto Sans Khmer support, Lyrics tag), both powered by pre-rendered cached Ambient Album Glow synced with Settings Dim (0–90%, default 40%), Glass level (0–100%, default 50%), and Blur level (0–100%, default 60%) plus EN/KM localization",
+              "Library Recent Search History & Customizable Dynamic Artwork Background (v1.9.7): Added Library search bar with last-5 recent search history on tap/focus, plus custom Dim, Glass level (កម្រិតកញ្ចក់), and Blur level (កម្រិត Blur) controls for Dynamic Artwork Background with a localized EN/KM Reset-to-Default confirmation dialog",
+              "Unified Frameless Library Redesign (v1.9.6): Added 3-column frameless albums row above tracks, clean frameless track rows with 50dp rounded covers and circular action buttons, 3-column Albums grid, and inline Orbi 'Syncing your library...' skeleton shimmer during refresh and audio import",
+              "Smooth Playlist Select Mode Open/Close & Tap Motion (v1.9.5): Added 420ms ease-out selection bar expansion, 600ms spring-overshoot selection circle roll-in (-120° to 0°), 46dp card glide with 35ms/20ms visible-row stagger, 300ms Select/Done button slide, #43C7F4 spring pop + 250ms white checkmark stroke draw, 2.5dp accent card outline, and 380ms delayed close clear"
             ],
             "releasePageUrl": f"https://github.com/{repo}/releases/tag/{tag}"
           }
@@ -127,10 +127,10 @@ jobs:
             mandatory: false
 
             What's New in AURIX ${{ env.RELEASE_TAG }}:
-            - Smooth Playlist Select Mode Open/Close & Tap Motion: 420ms ease-out selection bar expansion, 600ms spring-overshoot selection circle roll-in (-120° to 0°), 46dp card glide with 35ms/20ms visible-row stagger, 300ms Select/Done button slide, #43C7F4 spring pop + 250ms white checkmark stroke draw, 2.5dp accent card outline, and 380ms delayed close clear
-            - Mini Inline Orbi Loading & Compact Sketch Skeletons: Sleek 34dp mini planet with glowing orbiting bead, 15sp bold shimmer text, 3dp bouncing dots, and compact 46dp frameless sketch track skeletons
-            - App Icon Picker & 5 Orbi Launcher Icons: Switch between Classic, Midnight, Ember, AMOLED, and Pearl Orbi adaptive launcher icons in Settings > Appearance > App icon with Android 13+ monochrome themed icon layers, 512x512 Play Store PNG exports, confirmation bottom sheet, and Happy Orbi celebration
-            - Orbi Mascot Animation System: Added OrbiView(state, size, runner) with white-lavender planet, -12° blinking/glancing eyes, -16° cyan-to-violet ring, glossy orbiting mini icons (Search, Music, Refresh, SyncUp, SyncDown), and interactive Orbi Animation Lab in Settings
+            - Home Screen Music & Lyrics Widgets + Shared Ambient Album Glow: Added 4×2 Music widget (album art, progress bar, Prev/Play-Pause/Next/Like with #EF4444 heart, responsive <3-cell layout, Orbi empty state) and 4×2 Synced Lyrics widget (LRC line-only updates, Noto Sans Khmer support, Lyrics tag), synced with Settings Ambient glow (Dim 0–90% default 40%, Glass 0–100% default 50%, Blur 0–100% default 60%) and EN/KM localization
+            - Library Recent Search History & Customizable Dynamic Artwork Background (v1.9.7): Library search bar with last-5 recent searches plus customizable Ambient glow sliders and Reset-to-Default confirmation dialog
+            - Unified Frameless Library Redesign (v1.9.6): 3-column frameless albums row above tracks, clean frameless track rows, and inline Orbi 'Syncing your library...' skeleton shimmer
+            - Smooth Playlist Select Mode Open/Close & Tap Motion (v1.9.5): 420ms ease-out selection bar expansion, 600ms spring-overshoot selection circles, 46dp card glide, and 250ms white checkmark stroke draw
           files: |
             app/build/outputs/apk/release/app-release.apk
             AURIX-${{ env.RELEASE_TAG }}.apk
