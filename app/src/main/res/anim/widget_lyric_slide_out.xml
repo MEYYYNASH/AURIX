@@ -3,24 +3,24 @@
     android:shareInterpolator="false">
 
     <translate
-        android:duration="300"
+        android:duration="340"
         android:fromYDelta="0%p"
-        android:interpolator="@android:interpolator/accelerate_quad"
-        android:toYDelta="-38%p" />
+        android:interpolator="@android:anim/accelerate_interpolator"
+        android:toYDelta="-75%p" />
 
     <alpha
-        android:duration="240"
+        android:duration="260"
         android:fromAlpha="1.0"
-        android:interpolator="@android:interpolator/accelerate_quad"
+        android:interpolator="@android:anim/accelerate_interpolator"
         android:toAlpha="0.0" />
 
     <scale
-        android:duration="300"
+        android:duration="320"
         android:fromXScale="1.0"
         android:fromYScale="1.0"
-        android:interpolator="@android:interpolator/accelerate_quad"
+        android:interpolator="@android:anim/accelerate_interpolator"
         android:pivotX="0%"
         android:pivotY="50%"
-        android:toXScale="0.96"
-        android:toYScale="0.96" />
+        android:toXScale="0.94"
+        android:toYScale="0.94" />
 </set>

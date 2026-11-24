@@ -2,10 +2,10 @@
 <set xmlns:android="http://schemas.android.com/apk/res/android"
     android:shareInterpolator="false">
 
-    <!-- blur_fade on widget: smooth 700ms fade-only entrance -->
+    <!-- blur_fade on widget: smooth fade-only entrance -->
     <alpha
-        android:duration="700"
+        android:duration="520"
         android:fromAlpha="0.0"
-        android:interpolator="@android:interpolator/decelerate_cubic"
+        android:interpolator="@android:anim/decelerate_interpolator"
         android:toAlpha="1.0" />
 </set>

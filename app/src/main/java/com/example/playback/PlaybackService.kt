@@ -127,6 +127,17 @@ class PlaybackService : MediaSessionService() {
     val player = runCatching { buildExoPlayer(handleAudioFocus = true) }.getOrNull() ?: return
     mainPlayer = player
 
+    // Restart zero-polling Lyrics widget scheduler whenever async LRCLIB lyrics arrive,
+    // custom Room lyrics are saved/deleted, or the lyric timing offset is adjusted.
+    AurixWidgetController.onLyricsSyncStateChanged = {
+      serviceScope.launch {
+        val active = mainPlayer ?: return@launch
+        if (active.isPlaying) {
+          scheduleNextLyricsWidgetTransition(active)
+        }
+      }
+    }
+
     player.addListener(object : Player.Listener {
       override fun onAudioSessionIdChanged(audioSessionId: Int) {
         runCatching { AudioEqualizerController.attachAudioSession(audioSessionId) }
@@ -544,23 +555,40 @@ class PlaybackService : MediaSessionService() {
         runCatching {
           val dao = AurixDatabase.getInstance(applicationContext).aurixDao()
           val fav = dao.getFavoriteById(songId) != null
-          val cached = dao.getLyricsCache(songId)
-          val offset = dao.getLyricOffset(songId) ?: 0L
-          val lyrics = if (cached != null && cached.hasLyrics && !cached.isReportedBad) {
-            val rawLrc = cached.rawLrc.orEmpty()
-            val synced = if (rawLrc.isNotBlank()) {
-              val parsed = LrcParser.parse(rawLrc)
-              if (parsed.isSynced) parsed.lines.map { LyricLine(it.timestampMs, it.text) } else null
-            } else null
-            LyricsResult(
+          val custom = dao.getCustomLyrics(songId)
+          val storedOffset = dao.getLyricOffset(songId) ?: 0L
+          val customRaw = custom?.lrcText?.takeIf { it.isNotBlank() }
+          if (customRaw != null) {
+            val parsed = LrcParser.parse(customRaw)
+            val synced = if (parsed.isSynced) parsed.lines.map { LyricLine(it.timestampMs, it.text) } else null
+            val plainText = parsed.lines.joinToString("\n") { it.text }.trim().ifBlank { customRaw }
+            val customLyrics = LyricsResult(
               synced = synced,
-              plain = cached.plainLyrics,
-              matchedTitle = cached.matchedTitle,
-              matchedArtist = cached.matchedArtist,
-              rawLrc = cached.rawLrc
+              plain = plainText,
+              matchedTitle = title,
+              matchedArtist = artist,
+              rawLrc = customRaw,
+              isCustom = true
             )
-          } else null
-          Triple(fav, lyrics, offset)
+            Triple(fav, customLyrics, storedOffset)
+          } else {
+            val cached = dao.getLyricsCache(songId)
+            val lyrics = if (cached != null && cached.hasLyrics && !cached.isReportedBad) {
+              val rawLrc = cached.rawLrc.orEmpty()
+              val synced = if (rawLrc.isNotBlank()) {
+                val parsed = LrcParser.parse(rawLrc)
+                if (parsed.isSynced) parsed.lines.map { LyricLine(it.timestampMs, it.text) } else null
+              } else null
+              LyricsResult(
+                synced = synced,
+                plain = cached.plainLyrics,
+                matchedTitle = cached.matchedTitle,
+                matchedArtist = cached.matchedArtist,
+                rawLrc = cached.rawLrc
+              )
+            } else null
+            Triple(fav, lyrics, storedOffset)
+          }
         }.getOrDefault(Triple(false, null, 0L))
       }
 
@@ -690,8 +718,10 @@ class PlaybackService : MediaSessionService() {
   }
 
   override fun onDestroy() {
+    AurixWidgetController.onLyricsSyncStateChanged = null
     monitorJob?.cancel()
     widgetTickerJob?.cancel()
+    lyricsWidgetSchedulerJob?.cancel()
     crossfadeJob?.cancel()
     skipFadeJob?.cancel()
     recoveryJob?.cancel()

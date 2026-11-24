@@ -267,4 +267,74 @@ class CrashFixStabilityTest {
       )
     )
   }
+
+  @Test
+  fun widgetLyricsScheduler_neverSkipsOrLagsBehindSong() {
+    val lines = listOf(
+      com.example.model.LyricLine(5_000L, "Line zero"),
+      com.example.model.LyricLine(10_000L, "Line one"),
+      com.example.model.LyricLine(14_000L, "Line two"),
+      com.example.model.LyricLine(18_500L, "Line three")
+    )
+    val leadMs = com.example.widget.AurixWidgetController.WIDGET_LYRIC_LEAD_MS
+    var posMs = 5_000L
+    var active = com.example.widget.AurixWidgetController.resolveSyncedLyricLines(
+      syncedLines = lines,
+      plainLyrics = null,
+      positionMs = posMs,
+      leadMs = leadMs
+    )
+    assertEquals(0, active.activeIndex)
+    assertEquals("Line zero", active.currentLine)
+
+    var slot = 0
+    for (expectedIdx in 1 until lines.size) {
+      val waitMs = com.example.widget.AurixWidgetController.computeDelayUntilNextLyricLineMsForLines(
+        syncedLines = lines,
+        positionMs = posMs,
+        lyricOffsetMs = 0L,
+        playbackSpeed = 1f,
+        leadMs = leadMs
+      )
+      assertTrue("Scheduler must return positive delay for line $expectedIdx", waitMs != null && waitMs > 0L)
+      posMs += waitMs!!
+
+      // Wake-up must arrive slightly ahead of vocal timestamp (never late behind the song)
+      assertTrue(
+        "Wake-up ($posMs) should not lag behind timestamp (${lines[expectedIdx].timestampMs})",
+        posMs <= lines[expectedIdx].timestampMs
+      )
+
+      // On the very first wake-up, resolver MUST advance to expectedIdx (zero skipped/delayed lines)
+      val nextSnap = com.example.widget.AurixWidgetController.resolveSyncedLyricLines(
+        syncedLines = lines,
+        plainLyrics = null,
+        positionMs = posMs,
+        leadMs = leadMs
+      )
+      assertEquals(expectedIdx, nextSnap.activeIndex)
+      assertEquals(lines[expectedIdx].text, nextSnap.currentLine)
+
+      // Verify ViewFlipper ping-pong alternation
+      val nextSlot = com.example.widget.AurixWidgetController.nextLyricFlipperSlot(
+        currentSlot = slot,
+        animateTransition = true,
+        reducedMotion = false
+      )
+      assertEquals(1 - slot, nextSlot)
+      slot = nextSlot
+      active = nextSnap
+    }
+
+    // After final line, scheduler returns null (zero polling)
+    assertNull(
+      com.example.widget.AurixWidgetController.computeDelayUntilNextLyricLineMsForLines(
+        syncedLines = lines,
+        positionMs = posMs,
+        lyricOffsetMs = 0L,
+        playbackSpeed = 1f,
+        leadMs = leadMs
+      )
+    )
+  }
 }

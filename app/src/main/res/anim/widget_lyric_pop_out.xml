@@ -2,20 +2,20 @@
 <set xmlns:android="http://schemas.android.com/apk/res/android"
     android:shareInterpolator="false">
 
-    <!-- pop_zoom outgoing line: crisp fade and subtle shrink -->
+    <!-- pop_zoom outgoing line: crisp fade and shrink -->
     <scale
-        android:duration="300"
+        android:duration="280"
         android:fromXScale="1.0"
         android:fromYScale="1.0"
-        android:interpolator="@android:interpolator/accelerate_quad"
-        android:pivotX="0%"
+        android:interpolator="@android:anim/accelerate_interpolator"
+        android:pivotX="12%"
         android:pivotY="50%"
-        android:toXScale="0.90"
-        android:toYScale="0.90" />
+        android:toXScale="0.86"
+        android:toYScale="0.86" />
 
     <alpha
-        android:duration="260"
+        android:duration="240"
         android:fromAlpha="1.0"
-        android:interpolator="@android:interpolator/accelerate_quad"
+        android:interpolator="@android:anim/accelerate_interpolator"
         android:toAlpha="0.0" />
 </set>
