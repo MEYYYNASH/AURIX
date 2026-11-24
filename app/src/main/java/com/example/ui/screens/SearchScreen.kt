@@ -1750,7 +1750,7 @@ fun SearchResultsArea(
             ) {
               OrbiView(
                 state = OrbiState.Dim,
-                size = 84.dp,
+                size = 56.dp,
                 runner = OrbiRunner.None,
                 reducedMotion = reducedMotion
               )
@@ -1793,7 +1793,7 @@ fun SearchResultsArea(
             ) {
               OrbiView(
                 state = OrbiState.Sad,
-                size = 88.dp,
+                size = 56.dp,
                 runner = OrbiRunner.None,
                 reducedMotion = reducedMotion
               )

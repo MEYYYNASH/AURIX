@@ -1142,7 +1142,8 @@ fun StatusRow(
   modifier: Modifier = Modifier,
   runner: OrbiRunner = OrbiRunner.Search,
   outcome: OrbiStatusOutcome = OrbiStatusOutcome.Loading,
-  orbiSize: Dp = 88.dp,
+  orbiSize: Dp = 34.dp,
+  showBottomLine: Boolean = false,
   reducedMotion: Boolean = false
 ) {
   val animationsEnabled = rememberOrbiAnimationsEnabled(reducedMotion)
@@ -1198,8 +1199,8 @@ fun StatusRow(
     anim
   }
 
-  // Thin cyan-to-violet line sliding along the bottom edge
-  val bottomLinePhase = if (!animationsEnabled) {
+  // Thin cyan-to-violet line sliding along the bottom edge (optional)
+  val bottomLinePhase = if (!animationsEnabled || !showBottomLine) {
     0.35f
   } else {
     val anim by infiniteTransition.animateFloat(
@@ -1222,9 +1223,9 @@ fun StatusRow(
     Row(
       modifier = Modifier
         .fillMaxWidth()
-        .padding(horizontal = 4.dp, vertical = 6.dp),
+        .padding(horizontal = 4.dp, vertical = 2.dp),
       verticalAlignment = Alignment.CenterVertically,
-      horizontalArrangement = Arrangement.spacedBy(12.dp)
+      horizontalArrangement = Arrangement.spacedBy(10.dp)
     ) {
       OrbiView(
         state = derivedOrbiState,
@@ -1277,30 +1278,30 @@ fun StatusRow(
                   1.0f to baseGrayBlue
                 ),
                 start = Offset(0f, 0f),
-                end = Offset(520f, 40f)
+                end = Offset(340f, 24f)
               )
 
               Row(
                 verticalAlignment = Alignment.Bottom,
-                horizontalArrangement = Arrangement.spacedBy(3.dp)
+                horizontalArrangement = Arrangement.spacedBy(1.5.dp)
               ) {
                 Text(
                   text = cleanLabel,
                   style = TextStyle(
                     brush = textBrush,
-                    fontSize = 22.sp,
-                    lineHeight = 28.sp,
+                    fontSize = 15.sp,
+                    lineHeight = 19.sp,
                     fontWeight = FontWeight.Bold
                   ),
-                  maxLines = 2,
+                  maxLines = 1,
                   overflow = TextOverflow.Ellipsis,
                   modifier = Modifier.weight(1f, fill = false)
                 )
 
-                // Three dots bouncing one after another (1.2s loop)
+                // Three mini dots bouncing one after another (1.2s loop)
                 Row(
-                  modifier = Modifier.padding(bottom = 5.dp, start = 2.dp),
-                  horizontalArrangement = Arrangement.spacedBy(3.5.dp),
+                  modifier = Modifier.padding(bottom = 3.dp, start = 1.5.dp),
+                  horizontalArrangement = Arrangement.spacedBy(2.dp),
                   verticalAlignment = Alignment.CenterVertically
                 ) {
                   for (dotIdx in 0 until 3) {
@@ -1315,10 +1316,10 @@ fun StatusRow(
                     Box(
                       modifier = Modifier
                         .graphicsLayer {
-                          translationY = -bounce * 5.dp.toPx()
-                          alpha = 0.50f + 0.50f * bounce
+                          translationY = -bounce * 3.dp.toPx()
+                          alpha = 0.60f + 0.40f * bounce
                         }
-                        .size(4.5.dp)
+                        .size(3.dp)
                         .clip(CircleShape)
                         .background(lerpColor(baseGrayBlue, shimmerPeak, bounce * 0.6f))
                     )
@@ -1333,11 +1334,11 @@ fun StatusRow(
                 text = targetOutcome.message,
                 style = TextStyle(
                   color = greenColor,
-                  fontSize = 22.sp,
-                  lineHeight = 28.sp,
+                  fontSize = 15.sp,
+                  lineHeight = 19.sp,
                   fontWeight = FontWeight.Bold
                 ),
-                maxLines = 2,
+                maxLines = 1,
                 overflow = TextOverflow.Ellipsis,
                 modifier = Modifier.blur(transitionBlurAnim.value.dp)
               )
@@ -1349,11 +1350,11 @@ fun StatusRow(
                 text = targetOutcome.message,
                 style = TextStyle(
                   color = redColor,
-                  fontSize = 22.sp,
-                  lineHeight = 28.sp,
+                  fontSize = 15.sp,
+                  lineHeight = 19.sp,
                   fontWeight = FontWeight.Bold
                 ),
-                maxLines = 2,
+                maxLines = 1,
                 overflow = TextOverflow.Ellipsis,
                 modifier = Modifier.blur(transitionBlurAnim.value.dp)
               )
@@ -1363,46 +1364,48 @@ fun StatusRow(
       }
     }
 
-    // Thin cyan-to-violet line sliding along the bottom edge
-    Canvas(
-      modifier = Modifier
-        .fillMaxWidth()
-        .padding(horizontal = 8.dp)
-        .height(2.dp)
-    ) {
-      val lineColors = when (outcome) {
-        is OrbiStatusOutcome.Success -> listOf(
-          Color.Transparent,
-          Color(0xFF34D399),
-          Color(0xFF22C55E),
-          Color.Transparent
-        )
-        is OrbiStatusOutcome.Error -> listOf(
-          Color.Transparent,
-          Color(0xFFFB7185),
-          Color(0xFFEF4444),
-          Color.Transparent
-        )
-        is OrbiStatusOutcome.Loading -> listOf(
-          Color.Transparent,
-          Color(0xFF5CE6FF),
-          lerpColor(Color(0xFF4F7CFF), accentColor, 0.35f),
-          Color(0xFF8B5CF6),
-          Color.Transparent
+    if (showBottomLine) {
+      // Optional thin cyan-to-violet line sliding along the bottom edge
+      Canvas(
+        modifier = Modifier
+          .fillMaxWidth()
+          .padding(horizontal = 8.dp)
+          .height(1.5.dp)
+      ) {
+        val lineColors = when (outcome) {
+          is OrbiStatusOutcome.Success -> listOf(
+            Color.Transparent,
+            Color(0xFF34D399),
+            Color(0xFF22C55E),
+            Color.Transparent
+          )
+          is OrbiStatusOutcome.Error -> listOf(
+            Color.Transparent,
+            Color(0xFFFB7185),
+            Color(0xFFEF4444),
+            Color.Transparent
+          )
+          is OrbiStatusOutcome.Loading -> listOf(
+            Color.Transparent,
+            Color(0xFF5CE6FF),
+            lerpColor(Color(0xFF4F7CFF), accentColor, 0.35f),
+            Color(0xFF8B5CF6),
+            Color.Transparent
+          )
+        }
+
+        val segmentW = size.width * 0.55f
+        val startX = -segmentW + bottomLinePhase * (size.width + segmentW)
+        drawRect(
+          brush = Brush.horizontalGradient(
+            colors = lineColors,
+            startX = startX,
+            endX = startX + segmentW
+          ),
+          topLeft = Offset(0f, 0f),
+          size = size
         )
       }
-
-      val segmentW = size.width * 0.55f
-      val startX = -segmentW + bottomLinePhase * (size.width + segmentW)
-      drawRect(
-        brush = Brush.horizontalGradient(
-          colors = lineColors,
-          startX = startX,
-          endX = startX + segmentW
-        ),
-        topLeft = Offset(0f, 0f),
-        size = size
-      )
     }
   }
 }
@@ -1416,7 +1419,7 @@ fun OrbiStatusRow(
   modifier: Modifier = Modifier,
   runner: OrbiRunner = OrbiRunner.Search,
   outcome: OrbiStatusOutcome = OrbiStatusOutcome.Loading,
-  orbiSize: Dp = 88.dp,
+  orbiSize: Dp = 34.dp,
   reducedMotion: Boolean = false
 ) {
   StatusRow(
@@ -1430,13 +1433,13 @@ fun OrbiStatusRow(
 }
 
 // =============================================================================
-// SKELETON ROW & ALBUM CARD PRIMITIVES (Sketch-style — NO background card box!)
+// SKELETON ROW & ALBUM CARD PRIMITIVES (Mini Sketch-style — NO background card box!)
 // =============================================================================
 
 /**
- * Sketch Skeleton Track Row:
+ * Mini Sketch Skeleton Track Row:
  * - NO outer card background or border box.
- * - Just the 52dp rounded cover, two text lines, and small circle floating directly on the screen.
+ * - Sleek 46dp rounded cover, two compact text lines, and small 20dp circle floating directly on the screen.
  * - Diagonal shimmer staggered ~110ms per row, entrance staggered 80ms apart.
  */
 @Composable
@@ -1451,44 +1454,44 @@ fun OrbiSkeletonTrackRow(
     modifier = modifier
       .fillMaxWidth()
       .orbiStaggeredRowEntrance(rowIndex = rowIndex, reducedMotion = reducedMotion)
-      .padding(horizontal = 4.dp, vertical = 6.dp),
+      .padding(horizontal = 6.dp, vertical = 4.dp),
     verticalAlignment = Alignment.CenterVertically,
-    horizontalArrangement = Arrangement.spacedBy(14.dp)
+    horizontalArrangement = Arrangement.spacedBy(12.dp)
   ) {
-    // 52dp cover skeleton
+    // 46dp compact cover skeleton
     Box(
       modifier = Modifier
-        .size(52.dp)
+        .size(46.dp)
         .shimmer(
           staggerIndex = rowIndex,
           reducedMotion = reducedMotion,
-          cornerRadius = 14.dp
+          cornerRadius = 12.dp
         )
     )
 
-    // Two text lines
+    // Two compact text lines
     Column(
       modifier = Modifier.weight(1f),
-      verticalArrangement = Arrangement.spacedBy(9.dp)
+      verticalArrangement = Arrangement.spacedBy(7.dp)
     ) {
       Box(
         modifier = Modifier
           .fillMaxWidth(titleWidthFraction)
-          .height(13.dp)
+          .height(11.dp)
           .shimmer(
             staggerIndex = rowIndex,
             reducedMotion = reducedMotion,
-            cornerRadius = 6.5.dp
+            cornerRadius = 5.5.dp
           )
       )
       Box(
         modifier = Modifier
           .fillMaxWidth(subtitleWidthFraction)
-          .height(9.5.dp)
+          .height(8.5.dp)
           .shimmer(
             staggerIndex = rowIndex,
             reducedMotion = reducedMotion,
-            cornerRadius = 5.dp
+            cornerRadius = 4.5.dp
           )
       )
     }
@@ -1496,18 +1499,18 @@ fun OrbiSkeletonTrackRow(
     // Small circle on the right
     Box(
       modifier = Modifier
-        .size(24.dp)
+        .size(20.dp)
         .shimmer(
           staggerIndex = rowIndex,
           reducedMotion = reducedMotion,
-          cornerRadius = 12.dp
+          cornerRadius = 10.dp
         )
     )
   }
 }
 
 /**
- * Sketch Skeleton Album Card for the Data Loading screen (Library / Home):
+ * Compact Sketch Skeleton Album Card for the Data Loading screen (Library / Home):
  * - NO outer card container background or border box; just the cover square and two text lines.
  */
 @Composable
@@ -1519,37 +1522,37 @@ fun OrbiSkeletonAlbumCard(
   Column(
     modifier = modifier
       .orbiStaggeredRowEntrance(rowIndex = cardIndex, reducedMotion = reducedMotion)
-      .padding(vertical = 4.dp),
-    verticalArrangement = Arrangement.spacedBy(8.dp)
+      .padding(vertical = 2.dp),
+    verticalArrangement = Arrangement.spacedBy(6.dp)
   ) {
     Box(
       modifier = Modifier
         .fillMaxWidth()
-        .height(96.dp)
+        .height(78.dp)
         .shimmer(
           staggerIndex = cardIndex,
           reducedMotion = reducedMotion,
-          cornerRadius = 16.dp
+          cornerRadius = 14.dp
         )
     )
     Box(
       modifier = Modifier
-        .fillMaxWidth(0.78f)
-        .height(12.dp)
+        .fillMaxWidth(0.76f)
+        .height(10.dp)
         .shimmer(
           staggerIndex = cardIndex,
           reducedMotion = reducedMotion,
-          cornerRadius = 6.dp
+          cornerRadius = 5.dp
         )
     )
     Box(
       modifier = Modifier
-        .fillMaxWidth(0.52f)
-        .height(9.dp)
+        .fillMaxWidth(0.50f)
+        .height(8.dp)
         .shimmer(
           staggerIndex = cardIndex,
           reducedMotion = reducedMotion,
-          cornerRadius = 4.5.dp
+          cornerRadius = 4.dp
         )
     )
   }
@@ -2020,7 +2023,7 @@ fun OrbiMascotPreviewScreen(
             color = MaterialTheme.colorScheme.onBackground
           )
           Text(
-            text = "1.9.3 • Canvas + Animatable • 60fps",
+            text = "1.9.4 • Canvas + Animatable • 60fps",
             style = MaterialTheme.typography.labelSmall,
             color = accentColor
           )
@@ -2337,15 +2340,15 @@ fun OrbiMascotPreviewScreen(
               )
               OrbiScenarioCard(
                 state = OrbiState.UpdateAvailable,
-                title = "Update 1.9.3 Available",
-                subtitle = "New Orbi mascot system, 5 custom launcher icons, and 60fps sketch skeleton shimmer.",
+                title = "Update 1.9.4 Available",
+                subtitle = "Mini Orbi loading row, 5 custom launcher icons, and compact 60fps sketch skeleton shimmer.",
                 runner = OrbiRunner.SyncDown,
                 badgeText = "UPDATE AVAILABLE",
                 reducedMotion = reducedMotion
               )
               OrbiScenarioCard(
                 state = OrbiState.UpdateDownloading,
-                title = "Downloading AURIX 1.9.3",
+                title = "Downloading AURIX 1.9.4",
                 subtitle = "Fetching signed APK package in the background...",
                 runner = OrbiRunner.SyncDown,
                 badgeText = "DOWNLOADING",
@@ -2363,7 +2366,7 @@ fun OrbiMascotPreviewScreen(
               OrbiScenarioCard(
                 state = OrbiState.UpdateSuccess,
                 title = "You're Up to Date!",
-                subtitle = "AURIX 1.9.3 installed cleanly. Orbi is hopping happy!",
+                subtitle = "AURIX 1.9.4 installed cleanly. Orbi is hopping happy!",
                 runner = OrbiRunner.None,
                 badgeText = "UPDATE SUCCESS",
                 reducedMotion = reducedMotion
