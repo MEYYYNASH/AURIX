@@ -140,7 +140,8 @@ fun NowPlayingSheet(
   openViewRequestTrigger: Int = 0,
   lyricsAnimationStyle: com.example.lyrics.LyricsAnimationStyle = com.example.lyrics.LyricsAnimationStyle.SLIDE_UP,
   developerModeEnabled: Boolean = false,
-  onOpenLyricsEditor: (() -> Unit)? = null
+  onOpenLyricsEditor: (() -> Unit)? = null,
+  widgetCustomizerConfig: com.example.widget.WidgetCustomizerConfig = com.example.widget.WidgetCustomizerConfig.DEFAULT
 ) {
   BackHandler { onClose() }
   LaunchedEffect(song.id) {
@@ -371,7 +372,9 @@ fun NowPlayingSheet(
             onRetryLyrics = onRetryLyrics,
             onShareLyrics = { showShareLyrics = true },
             developerModeEnabled = developerModeEnabled,
-            onOpenLyricsEditor = onOpenLyricsEditor
+            onOpenLyricsEditor = onOpenLyricsEditor,
+            widgetCustomizerConfig = widgetCustomizerConfig,
+            songArtworkUrl = song.artworkUrl
           )
         } else {
           Column(

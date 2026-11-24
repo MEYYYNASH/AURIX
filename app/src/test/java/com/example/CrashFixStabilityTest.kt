@@ -11,10 +11,10 @@ import org.junit.Test
 class CrashFixStabilityTest {
 
   @Test
-  fun release202_metadataAndVersionCodeAreConsistent() {
-    assertEquals("2.0.2", BuildConfig.VERSION_NAME)
-    assertEquals(20002, BuildConfig.VERSION_CODE)
-    assertTrue("Release 2.0.2 versionCode must exceed 2.0.1 (20001)", BuildConfig.VERSION_CODE > 20001)
+  fun release203_metadataAndVersionCodeAreConsistent() {
+    assertEquals("2.0.3", BuildConfig.VERSION_NAME)
+    assertEquals(20003, BuildConfig.VERSION_CODE)
+    assertTrue("Release 2.0.3 versionCode must exceed 2.0.2 (20002)", BuildConfig.VERSION_CODE > 20002)
     assertEquals(420, com.example.ui.screens.SELECT_BAR_OPEN_DURATION_MS)
     assertEquals(600, com.example.ui.screens.SELECT_CIRCLE_OPEN_DURATION_MS)
     assertEquals(380L, com.example.ui.screens.SELECT_CLOSE_CLEAR_DELAY_MS)
@@ -336,5 +336,57 @@ class CrashFixStabilityTest {
         leadMs = leadMs
       )
     )
+  }
+
+  @Test
+  fun widgetCustomizer_defaultsKeysSizeTiersAndDownsampling_areCorrect() {
+    val def = com.example.widget.WidgetCustomizerConfig.DEFAULT
+    assertEquals(true, def.samePhoto)
+    assertEquals(com.example.widget.WidgetFrameStyle.ROUNDED, def.frameStyle)
+    assertEquals("#43C7F4", def.frameColorHex)
+    assertEquals(com.example.widget.WidgetBgType.PHOTO, def.bgType)
+    assertEquals(30, def.blur)
+    assertEquals(100, def.darkness)
+    assertEquals(9, com.example.widget.WidgetFrameStyle.entries.size)
+    assertEquals(4, com.example.widget.WidgetFrameMotion.entries.size)
+    assertEquals(5, com.example.widget.WidgetBgType.entries.size)
+    assertEquals(6, com.example.widget.WidgetCustomizerConfig.FRAME_ACCENT_COLORS.size)
+    assertEquals(6, com.example.widget.WidgetCustomizerConfig.SOLID_BG_COLORS.size)
+
+    // Exact DataStore preference keys
+    assertEquals("same_photo", com.example.data.PreferencesManager.WIDGET_SAME_PHOTO.name)
+    assertEquals("frame_source", com.example.data.PreferencesManager.WIDGET_FRAME_SOURCE.name)
+    assertEquals("bg_source", com.example.data.PreferencesManager.WIDGET_BG_SOURCE.name)
+    assertEquals("frame_style", com.example.data.PreferencesManager.WIDGET_FRAME_STYLE.name)
+    assertEquals("frame_color", com.example.data.PreferencesManager.WIDGET_FRAME_COLOR.name)
+    assertEquals("corner", com.example.data.PreferencesManager.WIDGET_CORNER.name)
+    assertEquals("border", com.example.data.PreferencesManager.WIDGET_BORDER.name)
+    assertEquals("motion", com.example.data.PreferencesManager.WIDGET_MOTION.name)
+    assertEquals("bg_type", com.example.data.PreferencesManager.WIDGET_BG_TYPE.name)
+    assertEquals("bg_color", com.example.data.PreferencesManager.WIDGET_BG_COLOR.name)
+    assertEquals("blur", com.example.data.PreferencesManager.WIDGET_BLUR.name)
+    assertEquals("darkness", com.example.data.PreferencesManager.WIDGET_DARKNESS.name)
+
+    // Widget size tier classification (small / wide 2:1 / large)
+    assertEquals(
+      com.example.widget.WidgetSizeTier.SMALL,
+      com.example.widget.WidgetSizeTier.fromDimensionsDp(minWidthDp = 150, minHeightDp = 110)
+    )
+    assertEquals(
+      com.example.widget.WidgetSizeTier.WIDE,
+      com.example.widget.WidgetSizeTier.fromDimensionsDp(minWidthDp = 280, minHeightDp = 110)
+    )
+    assertEquals(
+      com.example.widget.WidgetSizeTier.LARGE,
+      com.example.widget.WidgetSizeTier.fromDimensionsDp(minWidthDp = 300, minHeightDp = 220)
+    )
+
+    // OOM-safe downsampling calculation
+    assertEquals(1, com.example.widget.WidgetPhotoStorage.computeInSampleSize(800, 600, 1024))
+    assertEquals(4, com.example.widget.WidgetPhotoStorage.computeInSampleSize(4096, 3072, 1024))
+    assertEquals(8, com.example.widget.WidgetPhotoStorage.computeInSampleSize(8192, 6144, 1024))
+    assertEquals(800, com.example.widget.WidgetPhotoStorage.CROP_OUTPUT_WIDTH)
+    assertEquals(400, com.example.widget.WidgetPhotoStorage.CROP_OUTPUT_HEIGHT)
+    assertEquals(90, com.example.widget.WidgetPhotoStorage.JPEG_QUALITY)
   }
 }

@@ -134,6 +134,10 @@ fun SettingsScreen(
   customLyricsList: List<com.example.data.CustomLyricsEntity> = emptyList(),
   customLyricsDraftCount: Int = 0,
   currentSongTitle: String? = null,
+  currentSongArtist: String? = null,
+  currentSongArtworkUrl: String? = null,
+  widgetCustomizerConfig: com.example.widget.WidgetCustomizerConfig = com.example.widget.WidgetCustomizerConfig.DEFAULT,
+  onOpenWidgetCustomizer: () -> Unit = {},
   onUnlockDeveloperMode: () -> Unit = {},
   onDeveloperModeEnabledChanged: (Boolean) -> Unit = {},
   onOpenCurrentSongLyricsEditor: () -> Unit = {},
@@ -958,6 +962,72 @@ fun SettingsScreen(
               tint = MaterialTheme.colorScheme.primary
             )
           }
+        }
+      }
+    }
+
+    // Widgets Glass Card (Settings > Widgets > Customize widget with live 2:1 preview)
+    item {
+      GlassCard(darkTheme = darkTheme, cornerRadius = 24.dp, modifier = Modifier.fillMaxWidth()) {
+        Column(
+          modifier = Modifier
+            .fillMaxWidth()
+            .clickable { onOpenWidgetCustomizer() }
+            .padding(18.dp)
+            .testTag("settings_widgets_customize_row"),
+          verticalArrangement = Arrangement.spacedBy(12.dp)
+        ) {
+          Row(
+            modifier = Modifier.fillMaxWidth(),
+            horizontalArrangement = Arrangement.SpaceBetween,
+            verticalAlignment = Alignment.CenterVertically
+          ) {
+            Column(modifier = Modifier.weight(1f)) {
+              Text(
+                text = stringResource(id = R.string.settings_widgets_section_title),
+                style = MaterialTheme.typography.titleMedium.copy(fontWeight = FontWeight.Bold, lineHeight = 24.sp),
+                color = MaterialTheme.colorScheme.onSurface
+              )
+              Text(
+                text = stringResource(id = R.string.settings_widgets_customize_title),
+                style = MaterialTheme.typography.bodyLarge.copy(fontWeight = FontWeight.SemiBold, lineHeight = 22.sp),
+                color = MaterialTheme.colorScheme.primary
+              )
+              Text(
+                text = stringResource(id = R.string.settings_widgets_customize_subtitle),
+                style = MaterialTheme.typography.bodySmall.copy(lineHeight = 18.sp),
+                color = MaterialTheme.colorScheme.onSurfaceVariant
+              )
+            }
+            Spacer(modifier = Modifier.width(10.dp))
+            Box(
+              modifier = Modifier
+                .size(40.dp)
+                .clip(RoundedCornerShape(14.dp))
+                .background(
+                  Brush.linearGradient(listOf(Color(0xFF43C7F4).copy(alpha = 0.22f), Color(0xFF7965FF).copy(alpha = 0.22f)))
+                ),
+              contentAlignment = Alignment.Center
+            ) {
+              Icon(
+                imageVector = Icons.Rounded.Widgets,
+                contentDescription = null,
+                tint = Color(0xFF43C7F4),
+                modifier = Modifier.size(22.dp)
+              )
+            }
+          }
+
+          SettingsWidgetPreviewThumb(
+            config = widgetCustomizerConfig,
+            artworkUrl = currentSongArtworkUrl,
+            songTitle = currentSongTitle.orEmpty(),
+            songArtist = currentSongArtist.orEmpty(),
+            reducedMotion = reducedMotion,
+            modifier = Modifier
+              .fillMaxWidth()
+              .testTag("settings_widget_live_preview")
+          )
         }
       }
     }

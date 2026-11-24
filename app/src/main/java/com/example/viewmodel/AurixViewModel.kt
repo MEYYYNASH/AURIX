@@ -226,6 +226,12 @@ class AurixViewModel(application: Application) : AndroidViewModel(application) {
   val customLyricsDraftCount: StateFlow<Int> = customLyricsRepository.draftCount
     .catchSafe(0)
     .stateIn(viewModelScope, SharingStarted.Eagerly, 0)
+  val widgetCustomizerConfig: StateFlow<com.example.widget.WidgetCustomizerConfig> =
+    prefsManager.widgetCustomizerConfig.stateIn(
+      viewModelScope,
+      SharingStarted.Eagerly,
+      com.example.widget.WidgetCustomizerConfig.DEFAULT
+    )
   val reducedMotion = prefsManager.reducedMotion.stateIn(viewModelScope, SharingStarted.Lazily, false)
   val onboardingCompleted = prefsManager.onboardingCompleted.stateIn(viewModelScope, SharingStarted.Eagerly, false)
   val githubOwner = prefsManager.githubOwner.stateIn(viewModelScope, SharingStarted.Lazily, "MEYYYNASH")
@@ -1465,6 +1471,47 @@ class AurixViewModel(application: Application) : AndroidViewModel(application) {
         }
       }
     }
+    viewModelScope.launch {
+      widgetCustomizerConfig.collectLatest { config ->
+        runCatching {
+          AurixWidgetController.syncWidgetCustomizerConfig(
+            context = appCtx,
+            config = config,
+            refreshWidgetsNow = true
+          )
+        }
+      }
+    }
+  }
+
+  fun saveWidgetCustomizerConfig(config: com.example.widget.WidgetCustomizerConfig) {
+    viewModelScope.launch {
+      val norm = config.normalized()
+      prefsManager.saveWidgetCustomizerConfig(norm)
+      AurixWidgetController.syncWidgetCustomizerConfig(
+        context = getApplication(),
+        config = norm,
+        refreshWidgetsNow = true
+      )
+    }
+  }
+
+  fun resetWidgetCustomizerConfig() {
+    viewModelScope.launch {
+      prefsManager.resetWidgetCustomizerConfig()
+      val defaultCfg = com.example.widget.WidgetCustomizerConfig.DEFAULT.copy(
+        photoRevision = System.currentTimeMillis()
+      )
+      AurixWidgetController.syncWidgetCustomizerConfig(
+        context = getApplication(),
+        config = defaultCfg,
+        refreshWidgetsNow = true
+      )
+    }
+  }
+
+  suspend fun rebuildWidgetBitmapNow(): Long {
+    return AurixWidgetController.rebuildLyricsWidgetBitmapNow(getApplication())
   }
 
   private data class PentaWidgetSettingsState(

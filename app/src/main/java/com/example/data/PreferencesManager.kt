@@ -72,6 +72,21 @@ class PreferencesManager(private val context: Context) {
     val DEVELOPER_MODE_UNLOCKED = booleanPreferencesKey("developer_mode_unlocked")
     val DEVELOPER_MODE_ENABLED = booleanPreferencesKey("developer_mode_enabled")
 
+    // Widget Customizer DataStore keys
+    val WIDGET_SAME_PHOTO = booleanPreferencesKey("same_photo")
+    val WIDGET_FRAME_SOURCE = stringPreferencesKey("frame_source")
+    val WIDGET_BG_SOURCE = stringPreferencesKey("bg_source")
+    val WIDGET_FRAME_STYLE = stringPreferencesKey("frame_style")
+    val WIDGET_FRAME_COLOR = stringPreferencesKey("frame_color")
+    val WIDGET_CORNER = intPreferencesKey("corner")
+    val WIDGET_BORDER = intPreferencesKey("border")
+    val WIDGET_MOTION = stringPreferencesKey("motion")
+    val WIDGET_BG_TYPE = stringPreferencesKey("bg_type")
+    val WIDGET_BG_COLOR = stringPreferencesKey("bg_color")
+    val WIDGET_BLUR = intPreferencesKey("blur")
+    val WIDGET_DARKNESS = intPreferencesKey("darkness")
+    val WIDGET_PHOTO_REV = longPreferencesKey("widget_photo_rev")
+
     fun decodeRecentSearches(raw: String?): List<String> {
       if (raw.isNullOrBlank()) return emptyList()
       return raw.split(RECENT_SEARCH_DELIMITER)
@@ -151,6 +166,24 @@ class PreferencesManager(private val context: Context) {
   }
   val developerModeEnabled: Flow<Boolean> = safeDataFlow.map { prefs ->
     (prefs[DEVELOPER_MODE_UNLOCKED] ?: false) && (prefs[DEVELOPER_MODE_ENABLED] ?: false)
+  }
+
+  val widgetCustomizerConfig: Flow<com.example.widget.WidgetCustomizerConfig> = safeDataFlow.map { prefs ->
+    com.example.widget.WidgetCustomizerConfig(
+      samePhoto = prefs[WIDGET_SAME_PHOTO] ?: com.example.widget.WidgetCustomizerConfig.DEFAULT_SAME_PHOTO,
+      frameSource = com.example.widget.WidgetPhotoSource.fromId(prefs[WIDGET_FRAME_SOURCE]),
+      bgSource = com.example.widget.WidgetPhotoSource.fromId(prefs[WIDGET_BG_SOURCE]),
+      frameStyle = com.example.widget.WidgetFrameStyle.fromId(prefs[WIDGET_FRAME_STYLE]),
+      frameColorHex = prefs[WIDGET_FRAME_COLOR] ?: com.example.widget.WidgetCustomizerConfig.DEFAULT_FRAME_COLOR_HEX,
+      cornerRadius = prefs[WIDGET_CORNER] ?: com.example.widget.WidgetCustomizerConfig.DEFAULT_CORNER,
+      borderWidth = prefs[WIDGET_BORDER] ?: com.example.widget.WidgetCustomizerConfig.DEFAULT_BORDER,
+      motion = com.example.widget.WidgetFrameMotion.fromId(prefs[WIDGET_MOTION]),
+      bgType = com.example.widget.WidgetBgType.fromId(prefs[WIDGET_BG_TYPE]),
+      bgColorHex = prefs[WIDGET_BG_COLOR] ?: com.example.widget.WidgetCustomizerConfig.DEFAULT_BG_COLOR_HEX,
+      blur = prefs[WIDGET_BLUR] ?: com.example.widget.WidgetCustomizerConfig.DEFAULT_BLUR,
+      darkness = prefs[WIDGET_DARKNESS] ?: com.example.widget.WidgetCustomizerConfig.DEFAULT_DARKNESS,
+      photoRevision = prefs[WIDGET_PHOTO_REV] ?: 0L
+    ).normalized()
   }
 
   suspend fun setThemeMode(mode: String) { context.dataStore.edit { it[THEME_MODE] = mode } }
@@ -328,5 +361,32 @@ class PreferencesManager(private val context: Context) {
       prefs[DEVELOPER_MODE_UNLOCKED] = true
       prefs[DEVELOPER_MODE_ENABLED] = enabled
     }
+  }
+
+  suspend fun saveWidgetCustomizerConfig(config: com.example.widget.WidgetCustomizerConfig) {
+    val norm = config.normalized()
+    context.dataStore.edit { prefs ->
+      prefs[WIDGET_SAME_PHOTO] = norm.samePhoto
+      prefs[WIDGET_FRAME_SOURCE] = norm.frameSource.id
+      prefs[WIDGET_BG_SOURCE] = norm.bgSource.id
+      prefs[WIDGET_FRAME_STYLE] = norm.frameStyle.id
+      prefs[WIDGET_FRAME_COLOR] = norm.frameColorHex
+      prefs[WIDGET_CORNER] = norm.cornerRadius
+      prefs[WIDGET_BORDER] = norm.borderWidth
+      prefs[WIDGET_MOTION] = norm.motion.id
+      prefs[WIDGET_BG_TYPE] = norm.bgType.id
+      prefs[WIDGET_BG_COLOR] = norm.bgColorHex
+      prefs[WIDGET_BLUR] = norm.blur
+      prefs[WIDGET_DARKNESS] = norm.darkness
+      prefs[WIDGET_PHOTO_REV] = norm.photoRevision
+    }
+  }
+
+  suspend fun resetWidgetCustomizerConfig() {
+    saveWidgetCustomizerConfig(
+      com.example.widget.WidgetCustomizerConfig.DEFAULT.copy(
+        photoRevision = System.currentTimeMillis()
+      )
+    )
   }
 }

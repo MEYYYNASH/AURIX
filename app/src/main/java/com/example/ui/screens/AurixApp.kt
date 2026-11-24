@@ -335,9 +335,11 @@ private fun AurixMainShell(
   var showNavPreviewSheet by remember { mutableStateOf(false) }
   var showDownloadQueueSheet by remember { mutableStateOf(false) }
   var showCustomLyricsEditor by remember { mutableStateOf(false) }
+  var showWidgetCustomizer by remember { mutableStateOf(false) }
   var isLibraryCreateAlbumOpen by remember { mutableStateOf(false) }
   val developerModeUnlocked by viewModel.developerModeUnlocked.collectAsStateWithLifecycle()
   val developerModeEnabled by viewModel.developerModeEnabled.collectAsStateWithLifecycle()
+  val widgetCustomizerConfig by viewModel.widgetCustomizerConfig.collectAsStateWithLifecycle()
   val allCustomLyrics by viewModel.allCustomLyrics.collectAsStateWithLifecycle()
   val customLyricsDraftCount by viewModel.customLyricsDraftCount.collectAsStateWithLifecycle()
   val downloadQueueItems by viewModel.downloadQueueItems.collectAsStateWithLifecycle()
@@ -397,6 +399,11 @@ private fun AurixMainShell(
         if (currentSong != null) {
           showNowPlaying = true
         }
+      }
+      com.example.data.AppNotificationHelper.SCREEN_WIDGET_CUSTOMIZER -> {
+        currentScreen = Screen.Settings
+        showNowPlaying = false
+        showWidgetCustomizer = true
       }
       else -> {
         showNowPlaying = false
@@ -1126,6 +1133,10 @@ private fun AurixMainShell(
               customLyricsList = allCustomLyrics,
               customLyricsDraftCount = customLyricsDraftCount,
               currentSongTitle = currentSong?.title,
+              currentSongArtist = currentSong?.artist,
+              currentSongArtworkUrl = currentSong?.artworkUrl,
+              widgetCustomizerConfig = widgetCustomizerConfig,
+              onOpenWidgetCustomizer = { showWidgetCustomizer = true },
               onUnlockDeveloperMode = { viewModel.unlockDeveloperMode() },
               onDeveloperModeEnabledChanged = { viewModel.setDeveloperModeEnabled(it) },
               onOpenCurrentSongLyricsEditor = {
@@ -1338,9 +1349,37 @@ private fun AurixMainShell(
             openViewRequestTrigger = nowPlayingOpenViewTrigger,
             lyricsAnimationStyle = appLyricsAnimStyle,
             developerModeEnabled = developerModeEnabled,
-            onOpenLyricsEditor = { showCustomLyricsEditor = true }
+            onOpenLyricsEditor = { showCustomLyricsEditor = true },
+            widgetCustomizerConfig = widgetCustomizerConfig
           )
         }
+      }
+
+      if (showWidgetCustomizer) {
+        val previewLyricSnap = remember(lyrics, currentPosition, lyricOffsetMs) {
+          com.example.widget.AurixWidgetController.resolveSyncedLyricLines(
+            syncedLines = lyrics?.synced,
+            plainLyrics = lyrics?.plain,
+            positionMs = currentPosition,
+            lyricOffsetMs = lyricOffsetMs,
+            noLyricsLabel = ""
+          )
+        }
+        WidgetCustomizerScreen(
+          initialConfig = widgetCustomizerConfig,
+          artworkUrl = currentSong?.artworkUrl,
+          songTitle = currentSong?.title.orEmpty(),
+          songArtist = currentSong?.artist.orEmpty(),
+          currentLyricLine = if (previewLyricSnap.hasLyrics) previewLyricSnap.currentLine else "",
+          nextLyricLine = if (previewLyricSnap.hasLyrics) previewLyricSnap.nextLine else "",
+          hasLyrics = previewLyricSnap.hasLyrics,
+          reducedMotion = reducedMotion,
+          developerModeEnabled = developerModeEnabled,
+          onSaveConfig = { viewModel.saveWidgetCustomizerConfig(it) },
+          onResetConfig = { viewModel.resetWidgetCustomizerConfig() },
+          onRebuildWidgetBitmap = { viewModel.rebuildWidgetBitmapNow() },
+          onClose = { showWidgetCustomizer = false }
+        )
       }
 
       val editorSong = currentSong
