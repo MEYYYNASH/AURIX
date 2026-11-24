@@ -20,18 +20,88 @@
         android:roundIcon="@mipmap/ic_launcher_round"
         android:supportsRtl="true"
         android:theme="@style/Theme.MyApplication">
+
         <activity
             android:name=".MainActivity"
             android:exported="true"
             android:launchMode="singleTop"
             android:label="@string/app_name"
-            android:theme="@style/Theme.Aurix.Starting">
+            android:theme="@style/Theme.Aurix.Starting" />
+
+        <!-- 1. Classic Orbi Launcher Icon (Enabled by default) -->
+        <activity-alias
+            android:name=".MainActivityAliasClassic"
+            android:enabled="true"
+            android:exported="true"
+            android:icon="@mipmap/ic_launcher_classic"
+            android:roundIcon="@mipmap/ic_launcher_classic_round"
+            android:label="@string/app_name"
+            android:targetActivity=".MainActivity">
             <intent-filter>
                 <action android:name="android.intent.action.MAIN" />
-
                 <category android:name="android.intent.category.LAUNCHER" />
             </intent-filter>
-        </activity>
+        </activity-alias>
+
+        <!-- 2. Midnight Orbi Launcher Icon -->
+        <activity-alias
+            android:name=".MainActivityAliasMidnight"
+            android:enabled="false"
+            android:exported="true"
+            android:icon="@mipmap/ic_launcher_midnight"
+            android:roundIcon="@mipmap/ic_launcher_midnight_round"
+            android:label="@string/app_name"
+            android:targetActivity=".MainActivity">
+            <intent-filter>
+                <action android:name="android.intent.action.MAIN" />
+                <category android:name="android.intent.category.LAUNCHER" />
+            </intent-filter>
+        </activity-alias>
+
+        <!-- 3. Ember Orbi Launcher Icon -->
+        <activity-alias
+            android:name=".MainActivityAliasEmber"
+            android:enabled="false"
+            android:exported="true"
+            android:icon="@mipmap/ic_launcher_ember"
+            android:roundIcon="@mipmap/ic_launcher_ember_round"
+            android:label="@string/app_name"
+            android:targetActivity=".MainActivity">
+            <intent-filter>
+                <action android:name="android.intent.action.MAIN" />
+                <category android:name="android.intent.category.LAUNCHER" />
+            </intent-filter>
+        </activity-alias>
+
+        <!-- 4. AMOLED Orbi Launcher Icon -->
+        <activity-alias
+            android:name=".MainActivityAliasAmoled"
+            android:enabled="false"
+            android:exported="true"
+            android:icon="@mipmap/ic_launcher_amoled"
+            android:roundIcon="@mipmap/ic_launcher_amoled_round"
+            android:label="@string/app_name"
+            android:targetActivity=".MainActivity">
+            <intent-filter>
+                <action android:name="android.intent.action.MAIN" />
+                <category android:name="android.intent.category.LAUNCHER" />
+            </intent-filter>
+        </activity-alias>
+
+        <!-- 5. Pearl Orbi Launcher Icon -->
+        <activity-alias
+            android:name=".MainActivityAliasPearl"
+            android:enabled="false"
+            android:exported="true"
+            android:icon="@mipmap/ic_launcher_pearl"
+            android:roundIcon="@mipmap/ic_launcher_pearl_round"
+            android:label="@string/app_name"
+            android:targetActivity=".MainActivity">
+            <intent-filter>
+                <action android:name="android.intent.action.MAIN" />
+                <category android:name="android.intent.category.LAUNCHER" />
+            </intent-filter>
+        </activity-alias>
 
         <service
             android:name=".playback.PlaybackService"

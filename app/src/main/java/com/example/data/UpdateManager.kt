@@ -162,10 +162,10 @@ class UpdateManager(
     private const val META_FILE_NAME = "aurix_update.apk.meta.json"
 
     val CURRENT_RELEASE_NOTES = listOf(
-      "Orbi Mascot Animation System (v1.9.3 Beta): Added OrbiView(state, size, runner) with white-lavender planet, -12° blinking/glancing eyes, -16° cyan-to-violet ring, glossy orbiting mini icons (Search, Music, Refresh, SyncUp, SyncDown), inline StatusRow with 2.2s text shimmer and finish crossfade, shared 60fps skeleton shimmer across Search and Home/Library loading screens, and interactive Orbi Animation Lab in Settings",
-      "Dark Glass Popup Menus & Delete Confirmation Redesign: Eliminated inner blur rectangle artifacts on song & album popup menus, redesigned the Album Track 3-dots menu with glass icon capsules and track header, and redesigned Delete Album / Song confirmation dialogs in Dark Glass",
-      "Library Genre Filtering & Categorization: Filter and browse tracks in My songs, Favorites, and Recent by genre chips with live track counts, toggle By Genre grouped category headers, or tap any track's inline genre pill",
-      "Custom Accent Color Picker & Dynamic Dark Glass Accents: Choose any custom accent color in Settings via interactive HSV sliders, hex code entry, or 16 curated swatches, and watch all Dark Glass glows, borders, top lines, chips, and gradient buttons adapt live"
+      "App Icon Picker & 5 Orbi Launcher Icons (v1.9.3): Switch between Classic, Midnight, Ember, AMOLED, and Pearl Orbi adaptive launcher icons in Settings > Appearance > App icon with Android 13+ monochrome themed icon layers, 512x512 Play Store PNG exports, confirmation bottom sheet, and Happy Orbi celebration",
+      "Frameless Sketch Skeletons & StatusRow Redesign: Redesigned StatusRow and track/album loading skeletons to float directly on the screen without opaque background cards, paired with 60fps shared diagonal shimmer and animated Settings header icon",
+      "Orbi Mascot Animation System: Added OrbiView(state, size, runner) with white-lavender planet, -12° blinking/glancing eyes, -16° cyan-to-violet ring, glossy orbiting mini icons (Search, Music, Refresh, SyncUp, SyncDown), and interactive Orbi Animation Lab in Settings",
+      "Dark Glass Popup Menus & Delete Confirmation Redesign: Eliminated inner blur rectangle artifacts on song & album popup menus and redesigned Delete Album / Song confirmation dialogs in Dark Glass"
     )
 
     fun parseVersionJson(rawJson: String): RemoteVersionInfo {

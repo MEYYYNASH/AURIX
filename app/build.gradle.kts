@@ -18,7 +18,7 @@ android {
     minSdk = 24
     targetSdk = 36
     versionCode = 10930
-    versionName = "1.9.3 Beta"
+    versionName = "1.9.3"
     buildConfigField("String", "RELEASE_DATE", "\"2026-11-23\"")
 
     testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"

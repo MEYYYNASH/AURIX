@@ -136,6 +136,7 @@ fun SettingsScreen(
   var showCrossfadeSheet by remember { mutableStateOf(false) }
   var showCustomAccentSheet by remember { mutableStateOf(false) }
   var showOrbiShowcaseSheet by remember { mutableStateOf(false) }
+  var selectedAppIcon by remember { mutableStateOf(com.example.data.IconManager.getCurrentIcon(context)) }
 
   val isPresetAccent = remember(currentAccentHex) {
     accents.any { (hex, _) ->
@@ -176,11 +177,13 @@ fun SettingsScreen(
           verticalAlignment = Alignment.CenterVertically,
           horizontalArrangement = Arrangement.spacedBy(12.dp)
         ) {
-          AurixBrandLogo(
-            size = 42.dp,
-            cornerRadius = 13.dp,
-            animated = false,
-            reducedMotion = reducedMotion
+          OrbiLauncherIconTile(
+            icon = selectedAppIcon,
+            size = 44.dp,
+            cornerRadius = 14.dp,
+            animated = true,
+            reducedMotion = reducedMotion,
+            modifier = Modifier.testTag("settings_header_orbi_icon")
           )
           Text(
             text = stringResource(id = R.string.settings_title),
@@ -394,6 +397,15 @@ fun SettingsScreen(
               }
             }
           }
+
+          HorizontalDivider(color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.08f))
+
+          AppIconPickerSection(
+            reducedMotion = reducedMotion,
+            onActiveIconChanged = { updatedIcon ->
+              selectedAppIcon = updatedIcon
+            }
+          )
         }
       }
     }
