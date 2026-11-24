@@ -138,7 +138,9 @@ fun NowPlayingSheet(
   spectrumBars: FloatArray = FloatArray(AudioSpectrumBus.BAR_COUNT),
   initialShowLyrics: Boolean = false,
   openViewRequestTrigger: Int = 0,
-  lyricsAnimationStyle: com.example.lyrics.LyricsAnimationStyle = com.example.lyrics.LyricsAnimationStyle.SLIDE_UP
+  lyricsAnimationStyle: com.example.lyrics.LyricsAnimationStyle = com.example.lyrics.LyricsAnimationStyle.SLIDE_UP,
+  developerModeEnabled: Boolean = false,
+  onOpenLyricsEditor: (() -> Unit)? = null
 ) {
   BackHandler { onClose() }
   LaunchedEffect(song.id) {
@@ -367,7 +369,9 @@ fun NowPlayingSheet(
             onAdjustOffset = onAdjustOffset,
             onResetOffset = onResetOffset,
             onRetryLyrics = onRetryLyrics,
-            onShareLyrics = { showShareLyrics = true }
+            onShareLyrics = { showShareLyrics = true },
+            developerModeEnabled = developerModeEnabled,
+            onOpenLyricsEditor = onOpenLyricsEditor
           )
         } else {
           Column(

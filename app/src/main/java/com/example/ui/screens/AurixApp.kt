@@ -334,7 +334,12 @@ private fun AurixMainShell(
   var songForAlbumPicker by remember { mutableStateOf<com.example.model.Song?>(null) }
   var showNavPreviewSheet by remember { mutableStateOf(false) }
   var showDownloadQueueSheet by remember { mutableStateOf(false) }
+  var showCustomLyricsEditor by remember { mutableStateOf(false) }
   var isLibraryCreateAlbumOpen by remember { mutableStateOf(false) }
+  val developerModeUnlocked by viewModel.developerModeUnlocked.collectAsStateWithLifecycle()
+  val developerModeEnabled by viewModel.developerModeEnabled.collectAsStateWithLifecycle()
+  val allCustomLyrics by viewModel.allCustomLyrics.collectAsStateWithLifecycle()
+  val customLyricsDraftCount by viewModel.customLyricsDraftCount.collectAsStateWithLifecycle()
   val downloadQueueItems by viewModel.downloadQueueItems.collectAsStateWithLifecycle()
   val playlistSelectionMode by viewModel.playlistSelectionMode.collectAsStateWithLifecycle()
   val selectedPlaylistTrackIds by viewModel.selectedPlaylistTrackIds.collectAsStateWithLifecycle()
@@ -1115,7 +1120,20 @@ private fun AurixMainShell(
               widgetLyricsAnim = widgetLyricsAnimStyle,
               onSelectLyricsAnimBoth = { viewModel.setLyricsAnimBoth(it) },
               onSelectLyricsAnimApp = { viewModel.setLyricsAnimApp(it) },
-              onSelectLyricsAnimWidget = { viewModel.setLyricsAnimWidget(it) }
+              onSelectLyricsAnimWidget = { viewModel.setLyricsAnimWidget(it) },
+              developerModeUnlocked = developerModeUnlocked,
+              developerModeEnabled = developerModeEnabled,
+              customLyricsList = allCustomLyrics,
+              customLyricsDraftCount = customLyricsDraftCount,
+              currentSongTitle = currentSong?.title,
+              onUnlockDeveloperMode = { viewModel.unlockDeveloperMode() },
+              onDeveloperModeEnabledChanged = { viewModel.setDeveloperModeEnabled(it) },
+              onOpenCurrentSongLyricsEditor = {
+                if (currentSong != null) {
+                  showCustomLyricsEditor = true
+                }
+              },
+              onDeleteCustomLyrics = { songId -> viewModel.deleteCustomLyrics(songId) }
             )
           }
         }
@@ -1318,9 +1336,39 @@ private fun AurixMainShell(
             spectrumBars = spectrumBars,
             initialShowLyrics = nowPlayingInitialShowLyrics,
             openViewRequestTrigger = nowPlayingOpenViewTrigger,
-            lyricsAnimationStyle = appLyricsAnimStyle
+            lyricsAnimationStyle = appLyricsAnimStyle,
+            developerModeEnabled = developerModeEnabled,
+            onOpenLyricsEditor = { showCustomLyricsEditor = true }
           )
         }
+      }
+
+      val editorSong = currentSong
+      if (showCustomLyricsEditor && editorSong != null) {
+        CustomLyricsEditorScreen(
+          song = editorSong,
+          currentLyrics = lyrics,
+          initialGlobalOffsetMs = lyricOffsetMs,
+          isPlaying = isPlaying,
+          playbackSpeed = playbackSpeed,
+          positionProvider = { viewModel.getLivePlaybackPositionMs() },
+          lyricsAnimationStyle = appLyricsAnimStyle,
+          reducedMotion = reducedMotion,
+          loadInitialCustomLrc = { viewModel.getCustomLyricsEntity(editorSong.id)?.lrcText },
+          loadDraft = { viewModel.getLyricsEditorDraft(editorSong.id) },
+          onAutoSaveDraft = { draft -> viewModel.saveLyricsEditorDraft(editorSong.id, draft) },
+          onClearDraft = { viewModel.clearLyricsEditorDraft(editorSong.id) },
+          onPlayPause = { viewModel.togglePlayPause() },
+          onSeekTo = { viewModel.seekTo(it) },
+          onSetPlaybackSpeed = { viewModel.setPlaybackSpeed(it) },
+          onSaveCustomLyrics = { lrcText, offsetMs ->
+            viewModel.saveCustomLyrics(editorSong, lrcText, offsetMs)
+          },
+          onDeleteCustomLyrics = {
+            viewModel.deleteCustomLyrics(editorSong.id, editorSong)
+          },
+          onClose = { showCustomLyricsEditor = false }
+        )
       }
 
       albumDetailSong?.let { detailTarget ->

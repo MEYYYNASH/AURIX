@@ -81,7 +81,8 @@ data class LyricsResult(
   val plain: String?,
   val matchedTitle: String? = null,
   val matchedArtist: String? = null,
-  val rawLrc: String? = null
+  val rawLrc: String? = null,
+  val isCustom: Boolean = false
 )
 
 enum class StreamDownloadMode {

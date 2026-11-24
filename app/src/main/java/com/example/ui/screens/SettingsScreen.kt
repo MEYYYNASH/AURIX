@@ -128,7 +128,16 @@ fun SettingsScreen(
   widgetLyricsAnim: com.example.lyrics.LyricsAnimationStyle = com.example.lyrics.LyricsAnimationStyle.SLIDE_UP,
   onSelectLyricsAnimBoth: (com.example.lyrics.LyricsAnimationStyle) -> Unit = {},
   onSelectLyricsAnimApp: (com.example.lyrics.LyricsAnimationStyle) -> Unit = {},
-  onSelectLyricsAnimWidget: (com.example.lyrics.LyricsAnimationStyle) -> Unit = {}
+  onSelectLyricsAnimWidget: (com.example.lyrics.LyricsAnimationStyle) -> Unit = {},
+  developerModeUnlocked: Boolean = false,
+  developerModeEnabled: Boolean = false,
+  customLyricsList: List<com.example.data.CustomLyricsEntity> = emptyList(),
+  customLyricsDraftCount: Int = 0,
+  currentSongTitle: String? = null,
+  onUnlockDeveloperMode: () -> Unit = {},
+  onDeveloperModeEnabledChanged: (Boolean) -> Unit = {},
+  onOpenCurrentSongLyricsEditor: () -> Unit = {},
+  onDeleteCustomLyrics: (String) -> Unit = {}
 ) {
   val context = LocalContext.current
   LaunchedEffect(Unit) {
@@ -151,6 +160,10 @@ fun SettingsScreen(
   var showOrbiShowcaseSheet by remember { mutableStateOf(false) }
   var showResetDynamicBgConfirmDialog by remember { mutableStateOf(false) }
   var showLyricsAnimationSheet by remember { mutableStateOf(false) }
+  var showDeveloperLyricsManagerSheet by remember { mutableStateOf(false) }
+  var buildNumberTapCount by remember { mutableIntStateOf(0) }
+  var lastBuildTapAtMs by remember { mutableLongStateOf(0L) }
+  var activeDevToast by remember { mutableStateOf<android.widget.Toast?>(null) }
   var selectedAppIcon by remember { mutableStateOf(com.example.data.IconManager.getCurrentIcon(context)) }
 
   val isPresetAccent = remember(currentAccentHex) {
@@ -995,6 +1008,122 @@ fun SettingsScreen(
       }
     }
 
+    // Developer Mode Glass Card (appears after unlocking; turning off hides tools without deleting anything)
+    if (developerModeUnlocked) {
+      item {
+        GlassCard(darkTheme = darkTheme, cornerRadius = 24.dp, modifier = Modifier.fillMaxWidth()) {
+          Column(
+            modifier = Modifier
+              .padding(vertical = 8.dp)
+              .testTag("settings_developer_section_card")
+          ) {
+            Row(
+              modifier = Modifier
+                .fillMaxWidth()
+                .padding(horizontal = 18.dp, vertical = 10.dp),
+              horizontalArrangement = Arrangement.SpaceBetween,
+              verticalAlignment = Alignment.CenterVertically
+            ) {
+              Column(modifier = Modifier.weight(1f)) {
+                Text(
+                  text = stringResource(id = R.string.dev_mode_title),
+                  style = MaterialTheme.typography.titleMedium.copy(fontWeight = FontWeight.Bold, lineHeight = 24.sp),
+                  color = MaterialTheme.colorScheme.onSurface
+                )
+                Text(
+                  text = stringResource(id = R.string.dev_mode_section_subtitle),
+                  style = MaterialTheme.typography.bodySmall.copy(lineHeight = 18.sp),
+                  color = MaterialTheme.colorScheme.onSurfaceVariant
+                )
+              }
+              Spacer(modifier = Modifier.width(12.dp))
+              Switch(
+                checked = developerModeEnabled,
+                onCheckedChange = onDeveloperModeEnabledChanged,
+                modifier = Modifier.testTag("settings_developer_mode_switch")
+              )
+            }
+
+            if (developerModeEnabled) {
+              HorizontalDivider(color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.08f))
+
+              Row(
+                modifier = Modifier
+                  .fillMaxWidth()
+                  .clickable { showDeveloperLyricsManagerSheet = true }
+                  .padding(horizontal = 18.dp, vertical = 12.dp)
+                  .testTag("settings_dev_custom_lyrics_row"),
+                horizontalArrangement = Arrangement.SpaceBetween,
+                verticalAlignment = Alignment.CenterVertically
+              ) {
+                Column(modifier = Modifier.weight(1f)) {
+                  Text(
+                    text = stringResource(id = R.string.dev_mode_custom_lyrics_manager_title),
+                    style = MaterialTheme.typography.bodyLarge.copy(fontWeight = FontWeight.Medium, lineHeight = 22.sp),
+                    color = MaterialTheme.colorScheme.onSurface
+                  )
+                  Text(
+                    text = stringResource(
+                      id = R.string.dev_mode_custom_lyrics_manager_summary,
+                      customLyricsList.size,
+                      customLyricsDraftCount
+                    ),
+                    style = MaterialTheme.typography.bodySmall.copy(lineHeight = 18.sp),
+                    color = MaterialTheme.colorScheme.primary
+                  )
+                }
+                Icon(
+                  imageVector = Icons.Rounded.Lyrics,
+                  contentDescription = null,
+                  tint = MaterialTheme.colorScheme.primary
+                )
+              }
+
+              if (!currentSongTitle.isNullOrBlank()) {
+                HorizontalDivider(color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.08f))
+                Row(
+                  modifier = Modifier
+                    .fillMaxWidth()
+                    .clickable { onOpenCurrentSongLyricsEditor() }
+                    .padding(horizontal = 18.dp, vertical = 12.dp)
+                    .testTag("settings_dev_edit_current_song_row"),
+                  horizontalArrangement = Arrangement.SpaceBetween,
+                  verticalAlignment = Alignment.CenterVertically
+                ) {
+                  Column(modifier = Modifier.weight(1f)) {
+                    Text(
+                      text = stringResource(id = R.string.dev_mode_edit_current_song_title),
+                      style = MaterialTheme.typography.bodyLarge.copy(fontWeight = FontWeight.Medium, lineHeight = 22.sp),
+                      color = MaterialTheme.colorScheme.onSurface
+                    )
+                    Text(
+                      text = stringResource(id = R.string.dev_mode_edit_current_song_sub, currentSongTitle),
+                      style = MaterialTheme.typography.bodySmall.copy(lineHeight = 18.sp),
+                      color = MaterialTheme.colorScheme.onSurfaceVariant,
+                      maxLines = 1,
+                      overflow = TextOverflow.Ellipsis
+                    )
+                  }
+                  Icon(
+                    imageVector = Icons.Rounded.Edit,
+                    contentDescription = null,
+                    tint = MaterialTheme.colorScheme.primary
+                  )
+                }
+              }
+            } else {
+              Text(
+                text = stringResource(id = R.string.dev_mode_hidden_preserved_note),
+                style = MaterialTheme.typography.bodySmall.copy(lineHeight = 18.sp),
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                modifier = Modifier.padding(start = 18.dp, end = 18.dp, bottom = 10.dp)
+              )
+            }
+          }
+        }
+      }
+    }
+
     // About Glass Card
     item {
       GlassCard(darkTheme = darkTheme, cornerRadius = 24.dp, modifier = Modifier.fillMaxWidth()) {
@@ -1017,7 +1146,102 @@ fun SettingsScreen(
             style = MaterialTheme.typography.bodyMedium.copy(lineHeight = 22.sp),
             color = MaterialTheme.colorScheme.onSurfaceVariant
           )
-          Spacer(modifier = Modifier.height(8.dp))
+
+          Spacer(modifier = Modifier.height(4.dp))
+
+          // Build number row: tap 7 times to unlock Developer mode
+          Surface(
+            onClick = {
+              val now = System.currentTimeMillis()
+              if (developerModeUnlocked) {
+                activeDevToast?.cancel()
+                val msg = if (developerModeEnabled) {
+                  context.getString(R.string.dev_mode_already_enabled_toast)
+                } else {
+                  context.getString(R.string.dev_mode_already_unlocked_hidden_toast)
+                }
+                activeDevToast = android.widget.Toast.makeText(context, msg, android.widget.Toast.LENGTH_SHORT).also { it.show() }
+                return@Surface
+              }
+              if (now - lastBuildTapAtMs > 3_500L) {
+                buildNumberTapCount = 0
+              }
+              lastBuildTapAtMs = now
+              buildNumberTapCount += 1
+              val remaining = 7 - buildNumberTapCount
+              activeDevToast?.cancel()
+              when {
+                remaining <= 0 -> {
+                  buildNumberTapCount = 0
+                  onUnlockDeveloperMode()
+                  activeDevToast = android.widget.Toast.makeText(
+                    context,
+                    context.getString(R.string.dev_mode_unlocked_toast),
+                    android.widget.Toast.LENGTH_SHORT
+                  ).also { it.show() }
+                }
+                remaining <= 5 -> {
+                  val msg = if (remaining == 1) {
+                    context.getString(R.string.dev_mode_taps_remaining_one)
+                  } else {
+                    context.getString(R.string.dev_mode_taps_remaining_plural, remaining)
+                  }
+                  activeDevToast = android.widget.Toast.makeText(
+                    context,
+                    msg,
+                    android.widget.Toast.LENGTH_SHORT
+                  ).also { it.show() }
+                }
+              }
+            },
+            shape = RoundedCornerShape(16.dp),
+            color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.05f),
+            border = androidx.compose.foundation.BorderStroke(1.dp, MaterialTheme.colorScheme.onSurface.copy(alpha = 0.10f)),
+            modifier = Modifier
+              .fillMaxWidth()
+              .minimumInteractiveComponentSize()
+              .testTag("settings_build_number_row")
+          ) {
+            Row(
+              modifier = Modifier
+                .fillMaxWidth()
+                .padding(horizontal = 14.dp, vertical = 12.dp),
+              horizontalArrangement = Arrangement.SpaceBetween,
+              verticalAlignment = Alignment.CenterVertically
+            ) {
+              Column(modifier = Modifier.weight(1f)) {
+                Text(
+                  text = stringResource(id = R.string.dev_mode_build_number_label),
+                  style = MaterialTheme.typography.bodyMedium.copy(fontWeight = FontWeight.SemiBold),
+                  color = MaterialTheme.colorScheme.onSurface
+                )
+                Text(
+                  text = stringResource(
+                    id = R.string.dev_mode_build_number_value,
+                    updateUiState.installed.versionName,
+                    updateUiState.installed.versionCode
+                  ),
+                  style = MaterialTheme.typography.bodySmall,
+                  color = MaterialTheme.colorScheme.onSurfaceVariant
+                )
+              }
+              if (developerModeEnabled) {
+                Surface(
+                  shape = CircleShape,
+                  color = MaterialTheme.colorScheme.primary.copy(alpha = 0.16f)
+                ) {
+                  Text(
+                    text = stringResource(id = R.string.dev_mode_title),
+                    style = MaterialTheme.typography.labelSmall.copy(fontWeight = FontWeight.Bold),
+                    color = MaterialTheme.colorScheme.primary,
+                    modifier = Modifier.padding(horizontal = 10.dp, vertical = 4.dp)
+                  )
+                }
+              }
+            }
+          }
+
+          Spacer(modifier = Modifier.height(6.dp))
           Surface(
             onClick = { showOrbiShowcaseSheet = true },
             shape = RoundedCornerShape(18.dp),
@@ -1058,6 +1282,15 @@ fun SettingsScreen(
         }
       }
     }
+  }
+
+  if (showDeveloperLyricsManagerSheet && developerModeEnabled) {
+    DeveloperCustomLyricsSheet(
+      customLyrics = customLyricsList,
+      onShareLrc = {},
+      onDeleteCustomLyrics = onDeleteCustomLyrics,
+      onDismiss = { showDeveloperLyricsManagerSheet = false }
+    )
   }
 
   if (showOrbiShowcaseSheet) {

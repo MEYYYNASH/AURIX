@@ -11,10 +11,10 @@ import org.junit.Test
 class CrashFixStabilityTest {
 
   @Test
-  fun release201_metadataAndVersionCodeAreConsistent() {
-    assertEquals("2.0.1", BuildConfig.VERSION_NAME)
-    assertEquals(20001, BuildConfig.VERSION_CODE)
-    assertTrue("Release 2.0.1 versionCode must exceed 2.0.0 (20000)", BuildConfig.VERSION_CODE > 20000)
+  fun release202_metadataAndVersionCodeAreConsistent() {
+    assertEquals("2.0.2", BuildConfig.VERSION_NAME)
+    assertEquals(20002, BuildConfig.VERSION_CODE)
+    assertTrue("Release 2.0.2 versionCode must exceed 2.0.1 (20001)", BuildConfig.VERSION_CODE > 20001)
     assertEquals(420, com.example.ui.screens.SELECT_BAR_OPEN_DURATION_MS)
     assertEquals(600, com.example.ui.screens.SELECT_CIRCLE_OPEN_DURATION_MS)
     assertEquals(380L, com.example.ui.screens.SELECT_CLOSE_CLEAR_DELAY_MS)
@@ -22,6 +22,62 @@ class CrashFixStabilityTest {
     assertEquals(5, com.example.data.OrbiAppIcon.entries.size)
     assertEquals(com.example.data.OrbiAppIcon.MIDNIGHT, com.example.data.OrbiAppIcon.fromId("midnight"))
     assertEquals(com.example.data.OrbiAppIcon.CLASSIC, com.example.data.OrbiAppIcon.fromId("unknown"))
+  }
+
+  @Test
+  fun customLyricsCodecAndDeveloperKeys_workDeterministicallyOffline() {
+    assertEquals("developer_mode_unlocked", com.example.data.PreferencesManager.DEVELOPER_MODE_UNLOCKED.name)
+    assertEquals("developer_mode_enabled", com.example.data.PreferencesManager.DEVELOPER_MODE_ENABLED.name)
+    assertEquals("custom", com.example.lyrics.LrcCodec.SOURCE_CUSTOM)
+    assertEquals("[00:00.00]", com.example.lyrics.LrcCodec.formatTimestamp(0L))
+    assertEquals("[01:05.43]", com.example.lyrics.LrcCodec.formatTimestamp(65_430L))
+    assertEquals("+0.4 s", com.example.lyrics.LrcCodec.formatOffsetSeconds(400L))
+    assertEquals("-1.2 s", com.example.lyrics.LrcCodec.formatOffsetSeconds(-1_200L))
+    assertEquals("0.0 s", com.example.lyrics.LrcCodec.formatOffsetSeconds(0L))
+
+    val rows = listOf(
+      com.example.lyrics.EditableLyricRow(1L, "First line", 12_340L),
+      com.example.lyrics.EditableLyricRow(2L, "សួស្តីពិភពលោក", 25_600L)
+    )
+    val lrc = com.example.lyrics.LrcCodec.writeLrc(
+      rows = rows,
+      title = "Time To Rise",
+      artist = "VannDa",
+      globalOffsetMs = 300L,
+      includeOffsetTag = true
+    )
+    assertTrue(lrc.contains("[ti:Time To Rise]"))
+    assertTrue(lrc.contains("[ar:VannDa]"))
+    assertTrue(lrc.contains("[offset:300]"))
+    assertTrue(lrc.contains("[00:12.34]First line"))
+    assertTrue(lrc.contains("[00:25.60]សួស្តីពិភពលោក"))
+
+    val (reparsed, reparsedOffset) = com.example.lyrics.LrcCodec.parseForEditor(lrc)
+    assertEquals(2, reparsed.size)
+    assertEquals(300L, reparsedOffset)
+    assertEquals(12_340L, reparsed[0].timestampMs)
+    assertEquals("First line", reparsed[0].text)
+    assertEquals(25_600L, reparsed[1].timestampMs)
+    assertEquals("សួស្តីពិភពលោក", reparsed[1].text)
+
+    // Merging text edits in Step 1 preserves existing timestamps on unchanged rows
+    val merged = com.example.lyrics.LrcCodec.mergeWriteTextWithExistingRows(
+      plainText = "First line\nInserted middle line\nសួស្តីពិភពលោក",
+      previousRows = rows
+    )
+    assertEquals(3, merged.size)
+    assertEquals(12_340L, merged[0].timestampMs)
+    assertEquals(null, merged[1].timestampMs)
+    assertEquals(25_600L, merged[2].timestampMs)
+
+    // Standard LrcParser round-trip confirms written custom LRC is valid synced LRC
+    val parsedDoc = com.example.lyrics.LrcParser.parse(lrc)
+    assertTrue(parsedDoc.isSynced)
+    assertEquals(2, parsedDoc.lines.size)
+
+    // CustomLyricsEntity default source is "custom"
+    val entity = com.example.data.CustomLyricsEntity(songId = "yt_1", lrcText = lrc)
+    assertEquals("custom", entity.source)
   }
 
   @Test

@@ -292,9 +292,10 @@ class UpdateManagerTest {
   }
 
   @Test
-  fun `app release metadata targets 2_0_1`() {
-    assertEquals("2.0.1", BuildConfig.VERSION_NAME)
-    assertEquals(20001, BuildConfig.VERSION_CODE)
+  fun `app release metadata targets 2_0_2`() {
+    assertEquals("2.0.2", BuildConfig.VERSION_NAME)
+    assertEquals(20002, BuildConfig.VERSION_CODE)
+    assertEquals(20002L, GitHubUpdater.deriveVersionCodeFromTag("v2.0.2"))
     assertEquals(20001L, GitHubUpdater.deriveVersionCodeFromTag("v2.0.1"))
     assertEquals(20000L, GitHubUpdater.deriveVersionCodeFromTag("v2.0.0"))
     assertEquals(10909L, GitHubUpdater.deriveVersionCodeFromTag("v1.9.9"))

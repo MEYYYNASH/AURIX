@@ -69,6 +69,8 @@ class PreferencesManager(private val context: Context) {
     val LIBRARY_RECENT_SEARCHES = stringPreferencesKey("library_recent_searches")
     val LYRICS_ANIM = stringPreferencesKey("lyrics_anim")
     val LYRICS_WIDGET_ANIM = stringPreferencesKey("lyrics_widget_anim")
+    val DEVELOPER_MODE_UNLOCKED = booleanPreferencesKey("developer_mode_unlocked")
+    val DEVELOPER_MODE_ENABLED = booleanPreferencesKey("developer_mode_enabled")
 
     fun decodeRecentSearches(raw: String?): List<String> {
       if (raw.isNullOrBlank()) return emptyList()
@@ -143,6 +145,12 @@ class PreferencesManager(private val context: Context) {
   }
   val lyricsWidgetAnim: Flow<String> = safeDataFlow.map { prefs ->
     com.example.lyrics.LyricsAnimationStyle.fromId(prefs[LYRICS_WIDGET_ANIM] ?: prefs[LYRICS_ANIM]).id
+  }
+  val developerModeUnlocked: Flow<Boolean> = safeDataFlow.map { prefs ->
+    prefs[DEVELOPER_MODE_UNLOCKED] ?: false
+  }
+  val developerModeEnabled: Flow<Boolean> = safeDataFlow.map { prefs ->
+    (prefs[DEVELOPER_MODE_UNLOCKED] ?: false) && (prefs[DEVELOPER_MODE_ENABLED] ?: false)
   }
 
   suspend fun setThemeMode(mode: String) { context.dataStore.edit { it[THEME_MODE] = mode } }
@@ -298,6 +306,27 @@ class PreferencesManager(private val context: Context) {
         prefs[LYRICS_ANIM] = com.example.lyrics.LyricsAnimationStyle.DEFAULT_ID
       }
       prefs[LYRICS_WIDGET_ANIM] = normalized
+    }
+  }
+
+  /**
+   * Unlocks Developer mode (after 7 Build number taps) and turns it on immediately.
+   */
+  suspend fun unlockDeveloperMode() {
+    context.dataStore.edit { prefs ->
+      prefs[DEVELOPER_MODE_UNLOCKED] = true
+      prefs[DEVELOPER_MODE_ENABLED] = true
+    }
+  }
+
+  /**
+   * Toggles Developer mode visibility on/off without ever deleting or resetting
+   * saved custom lyrics, drafts, offsets, or unlock status.
+   */
+  suspend fun setDeveloperModeEnabled(enabled: Boolean) {
+    context.dataStore.edit { prefs ->
+      prefs[DEVELOPER_MODE_UNLOCKED] = true
+      prefs[DEVELOPER_MODE_ENABLED] = enabled
     }
   }
 }

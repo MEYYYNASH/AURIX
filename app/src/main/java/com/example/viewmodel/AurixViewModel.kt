@@ -94,6 +94,7 @@ class AurixViewModel(application: Application) : AndroidViewModel(application) {
   private val prefsManager = PreferencesManager(application)
   private val database = AurixDatabase.getInstance(application)
   private val dao = database.aurixDao()
+  private val customLyricsRepository = CustomLyricsRepository(dao)
   private val analyticsRepository = ListeningAnalyticsRepository(dao)
   private val playSessionTracker = PlaySessionTracker()
 
@@ -209,6 +210,22 @@ class AurixViewModel(application: Application) : AndroidViewModel(application) {
     SharingStarted.Eagerly,
     com.example.lyrics.LyricsAnimationStyle.DEFAULT_ID
   )
+  val developerModeUnlocked: StateFlow<Boolean> = prefsManager.developerModeUnlocked.stateIn(
+    viewModelScope,
+    SharingStarted.Eagerly,
+    false
+  )
+  val developerModeEnabled: StateFlow<Boolean> = prefsManager.developerModeEnabled.stateIn(
+    viewModelScope,
+    SharingStarted.Eagerly,
+    false
+  )
+  val allCustomLyrics: StateFlow<List<CustomLyricsEntity>> = customLyricsRepository.allCustomLyrics
+    .catchSafe(emptyList())
+    .stateIn(viewModelScope, SharingStarted.Eagerly, emptyList())
+  val customLyricsDraftCount: StateFlow<Int> = customLyricsRepository.draftCount
+    .catchSafe(0)
+    .stateIn(viewModelScope, SharingStarted.Eagerly, 0)
   val reducedMotion = prefsManager.reducedMotion.stateIn(viewModelScope, SharingStarted.Lazily, false)
   val onboardingCompleted = prefsManager.onboardingCompleted.stateIn(viewModelScope, SharingStarted.Eagerly, false)
   val githubOwner = prefsManager.githubOwner.stateIn(viewModelScope, SharingStarted.Lazily, "MEYYYNASH")
@@ -1185,8 +1202,12 @@ class AurixViewModel(application: Application) : AndroidViewModel(application) {
   private val _lyricOffsetMs = MutableStateFlow(0L)
   val lyricOffsetMs: StateFlow<Long> = _lyricOffsetMs
 
-  val verifiedLyricsIds: StateFlow<Set<String>> = dao.observeVerifiedLyricsSongIds()
-    .map { it.toSet() }
+  val verifiedLyricsIds: StateFlow<Set<String>> = combine(
+    dao.observeVerifiedLyricsSongIds().catch { emit(emptyList()) },
+    customLyricsRepository.customLyricsSongIds.catch { emit(emptyList()) }
+  ) { cachedIds, customIds ->
+    (cachedIds + customIds).toSet()
+  }
     .catch { emit(emptySet()) }
     .stateIn(viewModelScope, SharingStarted.Eagerly, emptySet())
 
@@ -4556,6 +4577,132 @@ class AurixViewModel(application: Application) : AndroidViewModel(application) {
     }
   }
 
+  fun setSongLyricOffset(songId: String, offsetMs: Long) {
+    val clamped = offsetMs.coerceIn(
+      com.example.lyrics.LrcCodec.MIN_GLOBAL_OFFSET_MS,
+      com.example.lyrics.LrcCodec.MAX_GLOBAL_OFFSET_MS
+    )
+    if (_rawCurrentSong.value?.id == songId) {
+      _lyricOffsetMs.value = clamped
+    }
+    viewModelScope.launch(Dispatchers.IO) {
+      customLyricsRepository.saveGlobalOffsetMs(songId, clamped)
+    }
+  }
+
+  fun unlockDeveloperMode() {
+    safeLaunch(errorTitle = "Developer Mode Error", notifyUser = false) {
+      prefsManager.unlockDeveloperMode()
+    }
+  }
+
+  /**
+   * Toggles Developer mode UI visibility without deleting any saved custom lyrics,
+   * drafts, offsets, or unlock status. Re-enabling shows everything intact.
+   */
+  fun setDeveloperModeEnabled(enabled: Boolean) {
+    safeLaunch(errorTitle = "Developer Mode Error", notifyUser = false) {
+      prefsManager.setDeveloperModeEnabled(enabled)
+    }
+  }
+
+  suspend fun getCustomLyricsEntity(songId: String): CustomLyricsEntity? =
+    withContext(Dispatchers.IO) { customLyricsRepository.getCustomLyrics(songId) }
+
+  suspend fun getLyricsEditorDraft(songId: String): Pair<com.example.lyrics.LyricsEditorDraft, Long>? =
+    withContext(Dispatchers.IO) { customLyricsRepository.getDraft(songId) }
+
+  suspend fun getSongGlobalOffsetMs(songId: String): Long =
+    withContext(Dispatchers.IO) { customLyricsRepository.getGlobalOffsetMs(songId) }
+
+  fun saveLyricsEditorDraft(songId: String, draft: com.example.lyrics.LyricsEditorDraft) {
+    viewModelScope.launch(Dispatchers.IO) {
+      runCatching { customLyricsRepository.saveDraft(songId, draft) }
+    }
+  }
+
+  fun clearLyricsEditorDraft(songId: String) {
+    viewModelScope.launch(Dispatchers.IO) {
+      runCatching { customLyricsRepository.clearDraft(songId) }
+    }
+  }
+
+  fun saveCustomLyrics(
+    song: Song,
+    lrcText: String,
+    globalOffsetMs: Long
+  ) {
+    val appContext = localizedAppContext()
+    val trimmed = lrcText.trim()
+    if (trimmed.isEmpty()) return
+    val clampedOffset = globalOffsetMs.coerceIn(
+      com.example.lyrics.LrcCodec.MIN_GLOBAL_OFFSET_MS,
+      com.example.lyrics.LrcCodec.MAX_GLOBAL_OFFSET_MS
+    )
+    viewModelScope.launch {
+      withContext(Dispatchers.IO) {
+        customLyricsRepository.saveCustomLyrics(
+          songId = song.id,
+          lrcText = trimmed,
+          title = song.title,
+          artist = song.artist,
+          globalOffsetMs = clampedOffset
+        )
+      }
+      if (_rawCurrentSong.value?.id == song.id) {
+        _lyricOffsetMs.value = clampedOffset
+        _lyrics.value = buildLyricsResultFromCustom(trimmed, song)
+      }
+      runCatching {
+        Toast.makeText(
+          appContext,
+          appContext.getString(R.string.lyrics_editor_saved_toast),
+          Toast.LENGTH_SHORT
+        ).show()
+      }
+    }
+  }
+
+  fun deleteCustomLyrics(songId: String, fallbackSong: Song? = null) {
+    val appContext = localizedAppContext()
+    viewModelScope.launch {
+      withContext(Dispatchers.IO) {
+        customLyricsRepository.deleteCustomLyrics(songId)
+      }
+      val activeSong = _rawCurrentSong.value
+      if (activeSong != null && activeSong.id == songId) {
+        fetchLyrics(activeSong, forceRetry = false)
+      } else if (fallbackSong != null && activeSong?.id == fallbackSong.id) {
+        fetchLyrics(fallbackSong, forceRetry = false)
+      }
+      runCatching {
+        Toast.makeText(
+          appContext,
+          appContext.getString(R.string.lyrics_editor_deleted_toast),
+          Toast.LENGTH_SHORT
+        ).show()
+      }
+    }
+  }
+
+  private fun buildLyricsResultFromCustom(rawLrc: String, song: Song): LyricsResult {
+    val doc = LrcParser.parse(rawLrc)
+    val syncedLines = if (doc.isSynced) {
+      doc.lines.map { LyricLine(it.timestampMs, it.text) }
+    } else {
+      null
+    }
+    val plainText = doc.lines.joinToString("\n") { it.text }.ifBlank { rawLrc }
+    return LyricsResult(
+      synced = syncedLines,
+      plain = plainText,
+      matchedTitle = song.title,
+      matchedArtist = song.artist,
+      rawLrc = rawLrc,
+      isCustom = true
+    )
+  }
+
   fun retryLyrics() {
     _rawCurrentSong.value?.let { fetchLyrics(it, forceRetry = true) }
   }
@@ -4696,11 +4843,21 @@ class AurixViewModel(application: Application) : AndroidViewModel(application) {
       val songKey = LyricsMatcher.songIdentityKey(song)
 
       try {
+        // 1. Custom offline lyrics stored in Room ALWAYS take priority over LRCLIB
+        val customEntity = withContext(Dispatchers.IO) {
+          customLyricsRepository.getCustomLyrics(song.id)
+        }
+        val customRaw = customEntity?.lrcText?.takeIf { it.isNotBlank() }
+        if (customRaw != null) {
+          _lyrics.value = buildLyricsResultFromCustom(customRaw, song)
+          return@launch
+        }
+
         val activeControllerDurSec = mediaController
           ?.takeIf { it.currentMediaItem?.mediaId == song.id && it.duration > 0L }
           ?.duration?.div(1000L) ?: 0L
 
-        // Serve verified cache if available (reusing exact same result as LyricsTag)
+        // 2. Serve verified LRCLIB cache if available (reusing exact same result as LyricsTag)
         val cached = withContext(Dispatchers.IO) {
           dao.getLyricsCache(song.id) ?: dao.getLyricsCacheByKey(songKey)
         }

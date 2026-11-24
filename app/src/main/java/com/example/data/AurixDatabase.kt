@@ -131,6 +131,25 @@ data class BadLyricsEntity(
   val reportedAt: Long = System.currentTimeMillis()
 )
 
+@Entity(tableName = "custom_lyrics")
+data class CustomLyricsEntity(
+  @PrimaryKey val songId: String,
+  val lrcText: String,
+  val source: String = "custom",
+  val title: String = "",
+  val artist: String = "",
+  val updatedAt: Long = System.currentTimeMillis()
+)
+
+@Entity(tableName = "custom_lyrics_drafts")
+data class CustomLyricsDraftEntity(
+  @PrimaryKey val songId: String,
+  val draftJson: String,
+  val step: Int = 0,
+  val globalOffsetMs: Long = 0L,
+  val updatedAt: Long = System.currentTimeMillis()
+)
+
 @Entity(tableName = "play_logs")
 data class PlayLogEntity(
   @PrimaryKey(autoGenerate = true) val id: Long = 0,
@@ -379,6 +398,36 @@ interface AurixDao {
 
   @Query("DELETE FROM bad_lyrics")
   suspend fun clearAllBadLyrics()
+
+  @Query("SELECT songId FROM custom_lyrics WHERE TRIM(lrcText) != ''")
+  fun observeCustomLyricsSongIds(): Flow<List<String>>
+
+  @Query("SELECT * FROM custom_lyrics ORDER BY updatedAt DESC")
+  fun observeAllCustomLyrics(): Flow<List<CustomLyricsEntity>>
+
+  @Query("SELECT * FROM custom_lyrics WHERE songId = :songId LIMIT 1")
+  fun observeCustomLyrics(songId: String): Flow<CustomLyricsEntity?>
+
+  @Query("SELECT * FROM custom_lyrics WHERE songId = :songId LIMIT 1")
+  suspend fun getCustomLyrics(songId: String): CustomLyricsEntity?
+
+  @Insert(onConflict = OnConflictStrategy.REPLACE)
+  suspend fun upsertCustomLyrics(entity: CustomLyricsEntity)
+
+  @Query("DELETE FROM custom_lyrics WHERE songId = :songId")
+  suspend fun deleteCustomLyrics(songId: String)
+
+  @Query("SELECT * FROM custom_lyrics_drafts WHERE songId = :songId LIMIT 1")
+  suspend fun getCustomLyricsDraft(songId: String): CustomLyricsDraftEntity?
+
+  @Query("SELECT COUNT(*) FROM custom_lyrics_drafts")
+  fun observeCustomLyricsDraftCount(): Flow<Int>
+
+  @Insert(onConflict = OnConflictStrategy.REPLACE)
+  suspend fun upsertCustomLyricsDraft(draft: CustomLyricsDraftEntity)
+
+  @Query("DELETE FROM custom_lyrics_drafts WHERE songId = :songId")
+  suspend fun deleteCustomLyricsDraft(songId: String)
 
   @Query("SELECT * FROM play_logs ORDER BY playedAt DESC")
   fun observePlayLogs(): Flow<List<PlayLogEntity>>
@@ -756,6 +805,36 @@ val AURIX_MIGRATION_8_9 = object : Migration(8, 9) {
   }
 }
 
+val AURIX_MIGRATION_9_10 = object : Migration(9, 10) {
+  override fun migrate(db: SupportSQLiteDatabase) {
+    db.execSQL(
+      """
+      CREATE TABLE IF NOT EXISTS `custom_lyrics` (
+        `songId` TEXT NOT NULL,
+        `lrcText` TEXT NOT NULL,
+        `source` TEXT NOT NULL DEFAULT 'custom',
+        `title` TEXT NOT NULL DEFAULT '',
+        `artist` TEXT NOT NULL DEFAULT '',
+        `updatedAt` INTEGER NOT NULL,
+        PRIMARY KEY(`songId`)
+      )
+      """.trimIndent()
+    )
+    db.execSQL(
+      """
+      CREATE TABLE IF NOT EXISTS `custom_lyrics_drafts` (
+        `songId` TEXT NOT NULL,
+        `draftJson` TEXT NOT NULL,
+        `step` INTEGER NOT NULL DEFAULT 0,
+        `globalOffsetMs` INTEGER NOT NULL DEFAULT 0,
+        `updatedAt` INTEGER NOT NULL,
+        PRIMARY KEY(`songId`)
+      )
+      """.trimIndent()
+    )
+  }
+}
+
 @Database(
   entities = [
     FavoriteSongEntity::class,
@@ -764,6 +843,8 @@ val AURIX_MIGRATION_8_9 = object : Migration(8, 9) {
     LyricOffsetEntity::class,
     LyricsCacheEntity::class,
     BadLyricsEntity::class,
+    CustomLyricsEntity::class,
+    CustomLyricsDraftEntity::class,
     PlayLogEntity::class,
     SongMetadataEntity::class,
     SongFeedbackEntity::class,
@@ -773,7 +854,7 @@ val AURIX_MIGRATION_8_9 = object : Migration(8, 9) {
     AlbumTrackEntity::class,
     DeletedAlbumEntity::class
   ],
-  version = 9,
+  version = 10,
   exportSchema = false
 )
 abstract class AurixDatabase : RoomDatabase() {
@@ -798,7 +879,8 @@ abstract class AurixDatabase : RoomDatabase() {
             AURIX_MIGRATION_5_6,
             AURIX_MIGRATION_6_7,
             AURIX_MIGRATION_7_8,
-            AURIX_MIGRATION_8_9
+            AURIX_MIGRATION_8_9,
+            AURIX_MIGRATION_9_10
           )
           .fallbackToDestructiveMigration(true)
           .fallbackToDestructiveMigrationOnDowngrade(true)
