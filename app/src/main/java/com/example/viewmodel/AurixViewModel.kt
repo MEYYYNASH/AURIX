@@ -178,6 +178,26 @@ class AurixViewModel(application: Application) : AndroidViewModel(application) {
     LocaleHelper.getPersistedLanguage(application)
   )
   val dynamicBg = prefsManager.dynamicBg.stateIn(viewModelScope, SharingStarted.Lazily, true)
+  val dynamicBgDim: StateFlow<Float> = prefsManager.dynamicBgDim.stateIn(
+    viewModelScope,
+    SharingStarted.Eagerly,
+    PreferencesManager.DEFAULT_DYNAMIC_BG_DIM
+  )
+  val dynamicBgGlass: StateFlow<Float> = prefsManager.dynamicBgGlass.stateIn(
+    viewModelScope,
+    SharingStarted.Eagerly,
+    PreferencesManager.DEFAULT_DYNAMIC_BG_GLASS
+  )
+  val dynamicBgBlur: StateFlow<Float> = prefsManager.dynamicBgBlur.stateIn(
+    viewModelScope,
+    SharingStarted.Eagerly,
+    PreferencesManager.DEFAULT_DYNAMIC_BG_BLUR
+  )
+  val libraryRecentSearches: StateFlow<List<String>> = prefsManager.libraryRecentSearches.stateIn(
+    viewModelScope,
+    SharingStarted.Eagerly,
+    emptyList()
+  )
   val reducedMotion = prefsManager.reducedMotion.stateIn(viewModelScope, SharingStarted.Lazily, false)
   val onboardingCompleted = prefsManager.onboardingCompleted.stateIn(viewModelScope, SharingStarted.Eagerly, false)
   val githubOwner = prefsManager.githubOwner.stateIn(viewModelScope, SharingStarted.Lazily, "MEYYYNASH")
@@ -4839,6 +4859,31 @@ class AurixViewModel(application: Application) : AndroidViewModel(application) {
     safeLaunch(notifyUser = false) { prefsManager.setLanguage(normalized) }
   }
   fun setDynamicBg(enabled: Boolean) { safeLaunch(notifyUser = false) { prefsManager.setDynamicBg(enabled) } }
+  fun setDynamicBgDim(value: Float) { safeLaunch(notifyUser = false) { prefsManager.setDynamicBgDim(value) } }
+  fun setDynamicBgGlass(value: Float) { safeLaunch(notifyUser = false) { prefsManager.setDynamicBgGlass(value) } }
+  fun setDynamicBgBlur(value: Float) { safeLaunch(notifyUser = false) { prefsManager.setDynamicBgBlur(value) } }
+  fun resetDynamicBgCustomization() {
+    val appContext = localizedAppContext()
+    safeLaunch(notifyUser = false) {
+      prefsManager.resetDynamicBgCustomization()
+      runCatching {
+        Toast.makeText(
+          appContext,
+          appContext.getString(R.string.settings_dynamic_bg_reset_toast),
+          Toast.LENGTH_SHORT
+        ).show()
+      }
+    }
+  }
+  fun recordLibraryRecentSearch(query: String) {
+    safeLaunch(notifyUser = false) { prefsManager.addLibraryRecentSearch(query) }
+  }
+  fun removeLibraryRecentSearch(query: String) {
+    safeLaunch(notifyUser = false) { prefsManager.removeLibraryRecentSearch(query) }
+  }
+  fun clearLibraryRecentSearches() {
+    safeLaunch(notifyUser = false) { prefsManager.clearLibraryRecentSearches() }
+  }
   fun setReducedMotion(enabled: Boolean) { safeLaunch(notifyUser = false) { prefsManager.setReducedMotion(enabled) } }
   fun setNavStyle(style: String) { safeLaunch(notifyUser = false) { prefsManager.setNavStyle(style) } }
   fun setAutoCleanYoutubeTitles(enabled: Boolean) { safeLaunch(notifyUser = false) { prefsManager.setAutoCleanYoutubeTitles(enabled) } }

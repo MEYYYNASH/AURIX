@@ -558,4 +558,22 @@
     <string name="library_genre_clear_filter">All genres</string>
     <string name="library_genre_empty_title">No %1$s tracks yet</string>
     <string name="library_genre_empty_sub">No tracks in this tab match the %1$s genre filter. Try another genre or reset the filter.</string>
+    <string name="library_search_placeholder">Search songs, artists, or albums in Library…</string>
+    <string name="library_search_clear_cd">Clear library search</string>
+    <string name="library_recent_searches_title">Recent searches</string>
+    <string name="library_recent_searches_clear">Clear</string>
+    <string name="library_recent_searches_empty">Your last 5 library searches will appear here</string>
+    <string name="library_recent_search_remove_cd">Remove recent search</string>
+    <string name="library_search_no_matches_title">No matches for \"%1$s\"</string>
+    <string name="library_search_no_matches_sub">Try searching by another song title, artist name, album, or genre.</string>
+    <string name="settings_dynamic_bg_customize_title">Customize Dim, Glass &amp; Blur</string>
+    <string name="settings_dynamic_bg_dim_label">Dim level</string>
+    <string name="settings_dynamic_bg_glass_label">Glass level</string>
+    <string name="settings_dynamic_bg_blur_label">Blur level</string>
+    <string name="settings_dynamic_bg_reset_button">Reset to default</string>
+    <string name="settings_dynamic_bg_reset_confirm_title">Reset to default?</string>
+    <string name="settings_dynamic_bg_reset_confirm_msg">Are you sure you want to reset Dim, Glass level, and Blur level back to their default settings?</string>
+    <string name="settings_dynamic_bg_reset_confirm_yes">Reset</string>
+    <string name="settings_dynamic_bg_reset_confirm_no">Cancel</string>
+    <string name="settings_dynamic_bg_reset_toast">Dynamic artwork background reset to default</string>
 </resources>

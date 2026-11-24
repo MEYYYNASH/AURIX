@@ -349,6 +349,10 @@ private fun AurixMainShell(
   val newForYouItems by viewModel.newForYouItems.collectAsStateWithLifecycle()
   val recentPlayEntries by viewModel.recentPlayEntries.collectAsStateWithLifecycle()
   val recentlyAddedSongs by viewModel.recentlyAddedSongs.collectAsStateWithLifecycle()
+  val dynamicBgDim by viewModel.dynamicBgDim.collectAsStateWithLifecycle()
+  val dynamicBgGlass by viewModel.dynamicBgGlass.collectAsStateWithLifecycle()
+  val dynamicBgBlur by viewModel.dynamicBgBlur.collectAsStateWithLifecycle()
+  val libraryRecentSearches by viewModel.libraryRecentSearches.collectAsStateWithLifecycle()
 
   val isNowPlayingOpen = showNowPlaying && currentSong != null
   val pendingNotificationNav by viewModel.pendingNotificationNav.collectAsStateWithLifecycle()
@@ -427,6 +431,15 @@ private fun AurixMainShell(
     retainedSheetSong = currentSong
   }
 
+  val dynamicBgCustomization = remember(dynamicBgDim, dynamicBgGlass, dynamicBgBlur) {
+    DynamicBgCustomization(
+      dimLevel = dynamicBgDim,
+      glassLevel = dynamicBgGlass,
+      blurRadiusDp = dynamicBgBlur
+    )
+  }
+
+  CompositionLocalProvider(LocalDynamicBgCustomization provides dynamicBgCustomization) {
   Box(
     modifier = Modifier
       .fillMaxSize()
@@ -999,6 +1012,10 @@ private fun AurixMainShell(
               },
               onAddSongToAlbumClick = { song -> songForAlbumPicker = song },
               onCreateSheetVisibilityChanged = { isLibraryCreateAlbumOpen = it },
+              recentSearches = libraryRecentSearches,
+              onRecordRecentSearch = { viewModel.recordLibraryRecentSearch(it) },
+              onRemoveRecentSearch = { viewModel.removeLibraryRecentSearch(it) },
+              onClearRecentSearches = { viewModel.clearLibraryRecentSearches() },
               onSongClick = { song ->
                 val listQueue = when (libraryTab) {
                   0 -> localSongs
@@ -1055,7 +1072,14 @@ private fun AurixMainShell(
               nowPlayingVisualizerEnabled = nowPlayingVisualizerEnabled,
               onNowPlayingVisualizerChanged = { viewModel.setNowPlayingVisualizerEnabled(it) },
               autoCleanYoutubeTitles = autoCleanYoutubeTitles,
-              onAutoCleanYoutubeTitlesChanged = { viewModel.setAutoCleanYoutubeTitles(it) }
+              onAutoCleanYoutubeTitlesChanged = { viewModel.setAutoCleanYoutubeTitles(it) },
+              dynamicBgDim = dynamicBgDim,
+              dynamicBgGlass = dynamicBgGlass,
+              dynamicBgBlur = dynamicBgBlur,
+              onDynamicBgDimChanged = { viewModel.setDynamicBgDim(it) },
+              onDynamicBgGlassChanged = { viewModel.setDynamicBgGlass(it) },
+              onDynamicBgBlurChanged = { viewModel.setDynamicBgBlur(it) },
+              onResetDynamicBgCustomization = { viewModel.resetDynamicBgCustomization() }
             )
           }
         }
@@ -1436,6 +1460,7 @@ private fun AurixMainShell(
         )
       }
     }
+  }
 }
 
 fun parseHexColor(hex: String, darkTheme: Boolean = false): Color {

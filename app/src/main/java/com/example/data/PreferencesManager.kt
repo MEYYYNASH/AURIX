@@ -6,6 +6,7 @@ import androidx.datastore.preferences.core.Preferences
 import androidx.datastore.preferences.core.booleanPreferencesKey
 import androidx.datastore.preferences.core.edit
 import androidx.datastore.preferences.core.emptyPreferences
+import androidx.datastore.preferences.core.floatPreferencesKey
 import androidx.datastore.preferences.core.intPreferencesKey
 import androidx.datastore.preferences.core.longPreferencesKey
 import androidx.datastore.preferences.core.stringPreferencesKey
@@ -27,10 +28,19 @@ val Context.dataStore by preferencesDataStore(
 
 class PreferencesManager(private val context: Context) {
   companion object {
+    const val DEFAULT_DYNAMIC_BG_DIM = 0.45f
+    const val DEFAULT_DYNAMIC_BG_GLASS = 0.75f
+    const val DEFAULT_DYNAMIC_BG_BLUR = 68f
+    const val MAX_LIBRARY_RECENT_SEARCHES = 5
+    private const val RECENT_SEARCH_DELIMITER = "\u001F"
+
     val THEME_MODE = stringPreferencesKey("theme_mode")
     val ACCENT_COLOR = stringPreferencesKey("accent_color")
     val LANGUAGE = stringPreferencesKey("language")
     val DYNAMIC_BG = booleanPreferencesKey("dynamic_bg")
+    val DYNAMIC_BG_DIM = floatPreferencesKey("dynamic_bg_dim")
+    val DYNAMIC_BG_GLASS = floatPreferencesKey("dynamic_bg_glass")
+    val DYNAMIC_BG_BLUR = floatPreferencesKey("dynamic_bg_blur")
     val REDUCED_MOTION = booleanPreferencesKey("reduced_motion")
     val ONBOARDING_COMPLETED = booleanPreferencesKey("onboarding_completed")
     val GITHUB_OWNER = stringPreferencesKey("github_owner")
@@ -50,6 +60,32 @@ class PreferencesManager(private val context: Context) {
     val NAV_STYLE = stringPreferencesKey("nav_style")
     val AUTO_CLEAN_YOUTUBE_TITLES = booleanPreferencesKey("auto_clean_youtube_titles")
     val NOW_PLAYING_VISUALIZER_ENABLED = booleanPreferencesKey("now_playing_visualizer_enabled")
+    val LIBRARY_RECENT_SEARCHES = stringPreferencesKey("library_recent_searches")
+
+    fun decodeRecentSearches(raw: String?): List<String> {
+      if (raw.isNullOrBlank()) return emptyList()
+      return raw.split(RECENT_SEARCH_DELIMITER)
+        .map { it.trim() }
+        .filter { it.isNotEmpty() }
+        .distinctBy { it.lowercase() }
+        .take(MAX_LIBRARY_RECENT_SEARCHES)
+    }
+
+    fun encodeRecentSearches(items: List<String>): String {
+      return items
+        .map { it.replace(RECENT_SEARCH_DELIMITER, " ").trim() }
+        .filter { it.isNotEmpty() }
+        .distinctBy { it.lowercase() }
+        .take(MAX_LIBRARY_RECENT_SEARCHES)
+        .joinToString(RECENT_SEARCH_DELIMITER)
+    }
+
+    fun updateRecentSearchesList(existing: List<String>, newQuery: String): List<String> {
+      val cleaned = newQuery.replace(RECENT_SEARCH_DELIMITER, " ").trim()
+      if (cleaned.isEmpty()) return existing.take(MAX_LIBRARY_RECENT_SEARCHES)
+      val withoutDuplicate = existing.filterNot { it.equals(cleaned, ignoreCase = true) }
+      return (listOf(cleaned) + withoutDuplicate).take(MAX_LIBRARY_RECENT_SEARCHES)
+    }
   }
 
   private val safeDataFlow: Flow<Preferences> = context.dataStore.data.catch { exception ->
@@ -61,6 +97,15 @@ class PreferencesManager(private val context: Context) {
   val accentColor: Flow<String> = safeDataFlow.map { prefs -> prefs[ACCENT_COLOR] ?: "#007AFF" }
   val language: Flow<String> = safeDataFlow.map { prefs -> prefs[LANGUAGE] ?: "en" }
   val dynamicBg: Flow<Boolean> = safeDataFlow.map { prefs -> prefs[DYNAMIC_BG] ?: true }
+  val dynamicBgDim: Flow<Float> = safeDataFlow.map { prefs ->
+    (prefs[DYNAMIC_BG_DIM] ?: DEFAULT_DYNAMIC_BG_DIM).coerceIn(0.05f, 0.90f)
+  }
+  val dynamicBgGlass: Flow<Float> = safeDataFlow.map { prefs ->
+    (prefs[DYNAMIC_BG_GLASS] ?: DEFAULT_DYNAMIC_BG_GLASS).coerceIn(0.20f, 1.00f)
+  }
+  val dynamicBgBlur: Flow<Float> = safeDataFlow.map { prefs ->
+    (prefs[DYNAMIC_BG_BLUR] ?: DEFAULT_DYNAMIC_BG_BLUR).coerceIn(12f, 100f)
+  }
   val reducedMotion: Flow<Boolean> = safeDataFlow.map { prefs -> prefs[REDUCED_MOTION] ?: false }
   val onboardingCompleted: Flow<Boolean> = safeDataFlow.map { prefs -> prefs[ONBOARDING_COMPLETED] ?: false }
   val githubOwner: Flow<String> = safeDataFlow.map { prefs -> prefs[GITHUB_OWNER] ?: "MEYYYNASH" }
@@ -82,11 +127,55 @@ class PreferencesManager(private val context: Context) {
   val navStyle: Flow<String> = safeDataFlow.map { prefs -> prefs[NAV_STYLE] ?: "classic" }
   val autoCleanYoutubeTitles: Flow<Boolean> = safeDataFlow.map { prefs -> prefs[AUTO_CLEAN_YOUTUBE_TITLES] ?: true }
   val nowPlayingVisualizerEnabled: Flow<Boolean> = safeDataFlow.map { prefs -> prefs[NOW_PLAYING_VISUALIZER_ENABLED] ?: true }
+  val libraryRecentSearches: Flow<List<String>> = safeDataFlow.map { prefs ->
+    decodeRecentSearches(prefs[LIBRARY_RECENT_SEARCHES])
+  }
 
   suspend fun setThemeMode(mode: String) { context.dataStore.edit { it[THEME_MODE] = mode } }
   suspend fun setAccentColor(color: String) { context.dataStore.edit { it[ACCENT_COLOR] = color } }
   suspend fun setLanguage(lang: String) { context.dataStore.edit { it[LANGUAGE] = lang } }
   suspend fun setDynamicBg(enabled: Boolean) { context.dataStore.edit { it[DYNAMIC_BG] = enabled } }
+  suspend fun setDynamicBgDim(value: Float) {
+    context.dataStore.edit { it[DYNAMIC_BG_DIM] = value.coerceIn(0.05f, 0.90f) }
+  }
+  suspend fun setDynamicBgGlass(value: Float) {
+    context.dataStore.edit { it[DYNAMIC_BG_GLASS] = value.coerceIn(0.20f, 1.00f) }
+  }
+  suspend fun setDynamicBgBlur(value: Float) {
+    context.dataStore.edit { it[DYNAMIC_BG_BLUR] = value.coerceIn(12f, 100f) }
+  }
+  suspend fun resetDynamicBgCustomization() {
+    context.dataStore.edit { prefs ->
+      prefs[DYNAMIC_BG_DIM] = DEFAULT_DYNAMIC_BG_DIM
+      prefs[DYNAMIC_BG_GLASS] = DEFAULT_DYNAMIC_BG_GLASS
+      prefs[DYNAMIC_BG_BLUR] = DEFAULT_DYNAMIC_BG_BLUR
+    }
+  }
+  suspend fun addLibraryRecentSearch(query: String) {
+    val cleaned = query.trim()
+    if (cleaned.isEmpty()) return
+    context.dataStore.edit { prefs ->
+      val current = decodeRecentSearches(prefs[LIBRARY_RECENT_SEARCHES])
+      val updated = updateRecentSearchesList(current, cleaned)
+      prefs[LIBRARY_RECENT_SEARCHES] = encodeRecentSearches(updated)
+    }
+  }
+  suspend fun removeLibraryRecentSearch(query: String) {
+    context.dataStore.edit { prefs ->
+      val current = decodeRecentSearches(prefs[LIBRARY_RECENT_SEARCHES])
+      val updated = current.filterNot { it.equals(query.trim(), ignoreCase = true) }
+      if (updated.isEmpty()) {
+        prefs.remove(LIBRARY_RECENT_SEARCHES)
+      } else {
+        prefs[LIBRARY_RECENT_SEARCHES] = encodeRecentSearches(updated)
+      }
+    }
+  }
+  suspend fun clearLibraryRecentSearches() {
+    context.dataStore.edit { prefs ->
+      prefs.remove(LIBRARY_RECENT_SEARCHES)
+    }
+  }
   suspend fun setReducedMotion(enabled: Boolean) { context.dataStore.edit { it[REDUCED_MOTION] = enabled } }
   suspend fun setOnboardingCompleted(completed: Boolean) { context.dataStore.edit { it[ONBOARDING_COMPLETED] = completed } }
   suspend fun setGithubOwner(owner: String) { context.dataStore.edit { it[GITHUB_OWNER] = owner } }

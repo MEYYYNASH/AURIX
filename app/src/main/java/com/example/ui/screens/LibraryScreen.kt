@@ -7,13 +7,16 @@ import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.PickVisualMediaRequest
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.animation.AnimatedContent
+import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.core.Animatable
 import androidx.compose.animation.core.CubicBezierEasing
 import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.animation.core.snap
 import androidx.compose.animation.core.tween
+import androidx.compose.animation.expandVertically
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
+import androidx.compose.animation.shrinkVertically
 import androidx.compose.animation.slideInHorizontally
 import androidx.compose.animation.slideOutHorizontally
 import androidx.compose.animation.togetherWith
@@ -37,6 +40,9 @@ import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.lazy.itemsIndexed
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.foundation.text.BasicTextField
+import androidx.compose.foundation.text.KeyboardActions
+import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.rounded.Add
 import androidx.compose.material.icons.rounded.AddPhotoAlternate
@@ -54,8 +60,10 @@ import androidx.compose.material.icons.rounded.History
 import androidx.compose.material.icons.rounded.LibraryMusic
 import androidx.compose.material.icons.rounded.MusicNote
 import androidx.compose.material.icons.rounded.NightlightRound
+import androidx.compose.material.icons.rounded.NorthWest
 import androidx.compose.material.icons.rounded.Piano
 import androidx.compose.material.icons.rounded.PlayArrow
+import androidx.compose.material.icons.rounded.Search
 import androidx.compose.material.icons.rounded.TouchApp
 import androidx.compose.material.icons.rounded.Whatshot
 import androidx.compose.material3.*
@@ -63,6 +71,10 @@ import androidx.compose.runtime.*
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.focus.onFocusChanged
+import androidx.compose.ui.graphics.SolidColor
+import androidx.compose.ui.platform.LocalFocusManager
+import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.ui.draw.alpha
 import androidx.compose.ui.draw.blur
 import androidx.compose.ui.draw.clip
@@ -189,10 +201,15 @@ fun LibraryScreen(
   onDeleteAlbum: (AlbumInfo, Boolean) -> Unit = { _, _ -> },
   onAddSongToAlbumClick: ((Song) -> Unit)? = null,
   onCreateSheetVisibilityChanged: (Boolean) -> Unit = {},
+  recentSearches: List<String> = emptyList(),
+  onRecordRecentSearch: (String) -> Unit = {},
+  onRemoveRecentSearch: (String) -> Unit = {},
+  onClearRecentSearches: () -> Unit = {},
   onSongClick: (Song) -> Unit,
   onFavoriteClick: (Song) -> Unit
 ) {
   val context = LocalContext.current
+  val focusManager = LocalFocusManager.current
   val isInspection = LocalInspectionMode.current
   val systemAnimatorScale = remember(context, isInspection) {
     if (isInspection) 1f
@@ -206,6 +223,9 @@ fun LibraryScreen(
   }
   val effectiveReducedMotion = reducedMotion || systemAnimatorScale <= 0f
   val coroutineScope = rememberCoroutineScope()
+
+  var librarySearchQuery by rememberSaveable { mutableStateOf("") }
+  var isSearchFocused by remember { mutableStateOf(false) }
 
   var pendingPhotoSongId by remember { mutableStateOf<String?>(null) }
   var songPendingDelete by remember { mutableStateOf<Song?>(null) }
@@ -455,7 +475,266 @@ fun LibraryScreen(
       }
     }
 
-    Spacer(modifier = Modifier.height(12.dp))
+    Spacer(modifier = Modifier.height(10.dp))
+
+    // Library Search Bar + Last 5 Recent Search History section when tapped/focused
+    val searchBorderColor = when {
+      isSearchFocused -> MaterialTheme.colorScheme.primary.copy(alpha = 0.72f)
+      darkTheme -> Color.White.copy(alpha = 0.14f)
+      else -> Color(0xFF64748B).copy(alpha = 0.18f)
+    }
+    val searchBgColor = if (darkTheme) {
+      Color(0xFF151E32).copy(alpha = 0.72f)
+    } else {
+      Color.White.copy(alpha = 0.82f)
+    }
+
+    Surface(
+      shape = RoundedCornerShape(18.dp),
+      color = searchBgColor,
+      border = BorderStroke(1.dp, searchBorderColor),
+      modifier = Modifier
+        .fillMaxWidth()
+        .testTag("library_search_bar_container")
+    ) {
+      Row(
+        modifier = Modifier
+          .fillMaxWidth()
+          .defaultMinSize(minHeight = 46.dp)
+          .padding(horizontal = 14.dp, vertical = 8.dp),
+        verticalAlignment = Alignment.CenterVertically,
+        horizontalArrangement = Arrangement.spacedBy(10.dp)
+      ) {
+        Icon(
+          imageVector = Icons.Rounded.Search,
+          contentDescription = null,
+          tint = if (isSearchFocused || librarySearchQuery.isNotBlank()) {
+            MaterialTheme.colorScheme.primary
+          } else {
+            MaterialTheme.colorScheme.onSurfaceVariant
+          },
+          modifier = Modifier.size(19.dp)
+        )
+
+        Box(
+          modifier = Modifier.weight(1f),
+          contentAlignment = Alignment.CenterStart
+        ) {
+          if (librarySearchQuery.isEmpty()) {
+            Text(
+              text = stringResource(id = R.string.library_search_placeholder),
+              style = MaterialTheme.typography.bodyMedium.copy(fontSize = 13.5.sp),
+              color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.75f),
+              maxLines = 1,
+              overflow = TextOverflow.Ellipsis
+            )
+          }
+          BasicTextField(
+            value = librarySearchQuery,
+            onValueChange = { librarySearchQuery = it },
+            singleLine = true,
+            textStyle = MaterialTheme.typography.bodyMedium.copy(
+              fontSize = 13.5.sp,
+              fontWeight = FontWeight.Medium,
+              color = MaterialTheme.colorScheme.onSurface
+            ),
+            cursorBrush = SolidColor(MaterialTheme.colorScheme.primary),
+            keyboardOptions = KeyboardOptions(imeAction = ImeAction.Search),
+            keyboardActions = KeyboardActions(
+              onSearch = {
+                val trimmed = librarySearchQuery.trim()
+                if (trimmed.isNotEmpty()) {
+                  onRecordRecentSearch(trimmed)
+                }
+                isSearchFocused = false
+                focusManager.clearFocus()
+              }
+            ),
+            modifier = Modifier
+              .fillMaxWidth()
+              .onFocusChanged { focusState ->
+                if ( isSearchFocused && !focusState.isFocused ) {
+                  val trimmed = librarySearchQuery.trim()
+                  if (trimmed.isNotEmpty()) {
+                    onRecordRecentSearch(trimmed)
+                  }
+                }
+                isSearchFocused = focusState.isFocused
+              }
+              .testTag("library_search_input")
+          )
+        }
+
+        if (librarySearchQuery.isNotEmpty() || isSearchFocused) {
+          IconButton(
+            onClick = {
+              val trimmed = librarySearchQuery.trim()
+              if (trimmed.isNotEmpty()) {
+                librarySearchQuery = ""
+              } else {
+                isSearchFocused = false
+                focusManager.clearFocus()
+              }
+            },
+            modifier = Modifier
+              .size(28.dp)
+              .testTag("library_search_clear_button")
+          ) {
+            Icon(
+              imageVector = Icons.Rounded.Close,
+              contentDescription = stringResource(id = R.string.library_search_clear_cd),
+              tint = MaterialTheme.colorScheme.onSurfaceVariant,
+              modifier = Modifier.size(16.dp)
+            )
+          }
+        }
+      }
+    }
+
+    val lastFiveRecentSearches = remember(recentSearches) {
+      recentSearches.take(com.example.data.PreferencesManager.MAX_LIBRARY_RECENT_SEARCHES)
+    }
+
+    AnimatedVisibility(
+      visible = isSearchFocused,
+      enter = if (effectiveReducedMotion) fadeIn(snap()) else expandVertically(tween(220)) + fadeIn(tween(180)),
+      exit = if (effectiveReducedMotion) fadeOut(snap()) else shrinkVertically(tween(180)) + fadeOut(tween(140))
+    ) {
+      Surface(
+        shape = RoundedCornerShape(18.dp),
+        color = if (darkTheme) Color(0xFF131B2E).copy(alpha = 0.88f) else Color.White.copy(alpha = 0.92f),
+        border = BorderStroke(
+          1.dp,
+          if (darkTheme) Color.White.copy(alpha = 0.12f) else Color(0xFF64748B).copy(alpha = 0.16f)
+        ),
+        modifier = Modifier
+          .fillMaxWidth()
+          .padding(top = 6.dp)
+          .testTag("library_recent_searches_section")
+      ) {
+        Column(
+          modifier = Modifier
+            .fillMaxWidth()
+            .padding(horizontal = 12.dp, vertical = 10.dp),
+          verticalArrangement = Arrangement.spacedBy(4.dp)
+        ) {
+          Row(
+            modifier = Modifier.fillMaxWidth(),
+            horizontalArrangement = Arrangement.SpaceBetween,
+            verticalAlignment = Alignment.CenterVertically
+          ) {
+            Row(
+              verticalAlignment = Alignment.CenterVertically,
+              horizontalArrangement = Arrangement.spacedBy(6.dp)
+            ) {
+              Icon(
+                imageVector = Icons.Rounded.History,
+                contentDescription = null,
+                tint = MaterialTheme.colorScheme.primary,
+                modifier = Modifier.size(15.dp)
+              )
+              Text(
+                text = "${stringResource(id = R.string.library_recent_searches_title)} (${lastFiveRecentSearches.size}/5)",
+                style = MaterialTheme.typography.labelMedium.copy(fontWeight = FontWeight.Bold),
+                color = MaterialTheme.colorScheme.onSurface
+              )
+            }
+
+            if (lastFiveRecentSearches.isNotEmpty()) {
+              Text(
+                text = stringResource(id = R.string.library_recent_searches_clear),
+                style = MaterialTheme.typography.labelMedium.copy(fontWeight = FontWeight.Bold),
+                color = MaterialTheme.colorScheme.primary,
+                modifier = Modifier
+                  .clip(RoundedCornerShape(8.dp))
+                  .clickable { onClearRecentSearches() }
+                  .padding(horizontal = 8.dp, vertical = 4.dp)
+                  .testTag("library_recent_searches_clear_button")
+              )
+            }
+          }
+
+          if (lastFiveRecentSearches.isEmpty()) {
+            Text(
+              text = stringResource(id = R.string.library_recent_searches_empty),
+              style = MaterialTheme.typography.bodySmall.copy(fontSize = 12.sp),
+              color = MaterialTheme.colorScheme.onSurfaceVariant,
+              modifier = Modifier
+                .padding(vertical = 4.dp, horizontal = 2.dp)
+                .testTag("library_recent_searches_empty_text")
+            )
+          } else {
+            lastFiveRecentSearches.forEachIndexed { index, recentItem ->
+              Row(
+                modifier = Modifier
+                  .fillMaxWidth()
+                  .clip(RoundedCornerShape(12.dp))
+                  .clickable {
+                    librarySearchQuery = recentItem
+                    onRecordRecentSearch(recentItem)
+                    isSearchFocused = false
+                    focusManager.clearFocus()
+                  }
+                  .padding(horizontal = 8.dp, vertical = 6.dp)
+                  .testTag("library_recent_search_item_$index"),
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.SpaceBetween
+              ) {
+                Row(
+                  modifier = Modifier.weight(1f),
+                  verticalAlignment = Alignment.CenterVertically,
+                  horizontalArrangement = Arrangement.spacedBy(8.dp)
+                ) {
+                  Icon(
+                    imageVector = Icons.Rounded.History,
+                    contentDescription = null,
+                    tint = MaterialTheme.colorScheme.onSurfaceVariant,
+                    modifier = Modifier.size(16.dp)
+                  )
+                  Text(
+                    text = recentItem,
+                    style = MaterialTheme.typography.bodyMedium.copy(
+                      fontSize = 13.sp,
+                      fontWeight = FontWeight.Medium
+                    ),
+                    color = MaterialTheme.colorScheme.onSurface,
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis
+                  )
+                }
+
+                Row(
+                  verticalAlignment = Alignment.CenterVertically,
+                  horizontalArrangement = Arrangement.spacedBy(2.dp)
+                ) {
+                  Icon(
+                    imageVector = Icons.Rounded.NorthWest,
+                    contentDescription = null,
+                    tint = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.65f),
+                    modifier = Modifier.size(14.dp)
+                  )
+                  IconButton(
+                    onClick = { onRemoveRecentSearch(recentItem) },
+                    modifier = Modifier
+                      .size(26.dp)
+                      .testTag("library_recent_search_remove_$index")
+                  ) {
+                    Icon(
+                      imageVector = Icons.Rounded.Close,
+                      contentDescription = stringResource(id = R.string.library_recent_search_remove_cd),
+                      tint = MaterialTheme.colorScheme.onSurfaceVariant,
+                      modifier = Modifier.size(14.dp)
+                    )
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    }
+
+    Spacer(modifier = Modifier.height(10.dp))
 
     GlassSegmentedBar(
       options = listOf(
@@ -525,6 +804,35 @@ fun LibraryScreen(
         },
         label = "library_tab_content"
       ) { activeTab ->
+        val normalizedSearchQuery = librarySearchQuery.trim()
+        val displayAlbums = remember(albums, normalizedSearchQuery) {
+          if (normalizedSearchQuery.isEmpty()) {
+            albums
+          } else {
+            albums.filter { album ->
+              album.title.contains(normalizedSearchQuery, ignoreCase = true) ||
+                album.artist.contains(normalizedSearchQuery, ignoreCase = true) ||
+                album.year.contains(normalizedSearchQuery, ignoreCase = true) ||
+                album.tracks.any { track ->
+                  track.title.contains(normalizedSearchQuery, ignoreCase = true) ||
+                    track.artist.contains(normalizedSearchQuery, ignoreCase = true)
+                }
+            }
+          }
+        }
+        val handleAlbumClickWithSearchRecord: (AlbumInfo) -> Unit = { album ->
+          if (normalizedSearchQuery.isNotEmpty()) {
+            onRecordRecentSearch(normalizedSearchQuery)
+          }
+          onAlbumClick(album)
+        }
+        val handleSongClickWithSearchRecord: (Song) -> Unit = { song ->
+          if (normalizedSearchQuery.isNotEmpty()) {
+            onRecordRecentSearch(normalizedSearchQuery)
+          }
+          onSongClick(song)
+        }
+
         if (activeTab == 3) {
           if (albums.isEmpty()) {
             Box(
@@ -593,6 +901,48 @@ fun LibraryScreen(
                 }
               }
             }
+          } else if (displayAlbums.isEmpty() && normalizedSearchQuery.isNotEmpty()) {
+            Box(
+              modifier = Modifier
+                .fillMaxSize()
+                .padding(bottom = 110.dp),
+              contentAlignment = Alignment.Center
+            ) {
+              GlassCard(
+                darkTheme = darkTheme,
+                cornerRadius = 26.dp,
+                modifier = Modifier
+                  .fillMaxWidth()
+                  .testTag("library_search_empty_card")
+              ) {
+                Column(
+                  modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(horizontal = 24.dp, vertical = 26.dp),
+                  horizontalAlignment = Alignment.CenterHorizontally,
+                  verticalArrangement = Arrangement.spacedBy(12.dp)
+                ) {
+                  Icon(
+                    imageVector = Icons.Rounded.Search,
+                    contentDescription = null,
+                    tint = MaterialTheme.colorScheme.primary,
+                    modifier = Modifier.size(32.dp)
+                  )
+                  Text(
+                    text = stringResource(id = R.string.library_search_no_matches_title, normalizedSearchQuery),
+                    style = MaterialTheme.typography.titleMedium.copy(fontWeight = FontWeight.Bold),
+                    color = MaterialTheme.colorScheme.onSurface,
+                    textAlign = TextAlign.Center
+                  )
+                  Text(
+                    text = stringResource(id = R.string.library_search_no_matches_sub),
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    textAlign = TextAlign.Center
+                  )
+                }
+              }
+            }
           } else {
             // 3-Column Frameless Album Grid matching the 3-column reference photo
             val gridEase = CubicBezierEasing(0.22f, 1f, 0.36f, 1f)
@@ -636,7 +986,7 @@ fun LibraryScreen(
                 }
               }
               items(
-                items = albums,
+                items = displayAlbums,
                 key = { it.albumId }
               ) { album ->
                 val isFlyingTarget = flyingCoverPayload?.albumId == album.albumId
@@ -652,7 +1002,7 @@ fun LibraryScreen(
                       pulsingAlbumId = null
                     }
                   },
-                  onClick = { onAlbumClick(album) },
+                  onClick = { handleAlbumClickWithSearchRecord(album) },
                   onLongClick = { albumPendingHoldOptions = album },
                   modifier = Modifier.animateItem(
                     fadeInSpec = if (effectiveReducedMotion) snap() else tween(260, easing = gridEase),
@@ -664,10 +1014,21 @@ fun LibraryScreen(
             }
           }
         } else {
-          val currentList = when (activeTab) {
+          val rawTabList = when (activeTab) {
             0 -> localSongs
             1 -> favorites
             else -> recentlyPlayed
+          }
+          val currentList = remember(rawTabList, normalizedSearchQuery) {
+            if (normalizedSearchQuery.isEmpty()) {
+              rawTabList
+            } else {
+              rawTabList.filter { song ->
+                song.title.contains(normalizedSearchQuery, ignoreCase = true) ||
+                  song.artist.contains(normalizedSearchQuery, ignoreCase = true) ||
+                  resolveLibraryTrackGenre(song).contains(normalizedSearchQuery, ignoreCase = true)
+              }
+            }
           }
 
           var selectedGenre by rememberSaveable(activeTab) { mutableStateOf(GENRE_FILTER_ALL) }
@@ -709,7 +1070,7 @@ fun LibraryScreen(
             }
           }
 
-          if (currentList.isEmpty() && albums.isEmpty()) {
+          if (rawTabList.isEmpty() && albums.isEmpty()) {
             Box(
               modifier = Modifier
                 .fillMaxSize()
@@ -787,6 +1148,48 @@ fun LibraryScreen(
                 }
               }
             }
+          } else if (normalizedSearchQuery.isNotEmpty() && currentList.isEmpty() && displayAlbums.isEmpty()) {
+            Box(
+              modifier = Modifier
+                .fillMaxSize()
+                .padding(bottom = 110.dp),
+              contentAlignment = Alignment.Center
+            ) {
+              GlassCard(
+                darkTheme = darkTheme,
+                cornerRadius = 26.dp,
+                modifier = Modifier
+                  .fillMaxWidth()
+                  .testTag("library_search_empty_card")
+              ) {
+                Column(
+                  modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(horizontal = 24.dp, vertical = 26.dp),
+                  horizontalAlignment = Alignment.CenterHorizontally,
+                  verticalArrangement = Arrangement.spacedBy(12.dp)
+                ) {
+                  Icon(
+                    imageVector = Icons.Rounded.Search,
+                    contentDescription = null,
+                    tint = MaterialTheme.colorScheme.primary,
+                    modifier = Modifier.size(32.dp)
+                  )
+                  Text(
+                    text = stringResource(id = R.string.library_search_no_matches_title, normalizedSearchQuery),
+                    style = MaterialTheme.typography.titleMedium.copy(fontWeight = FontWeight.Bold),
+                    color = MaterialTheme.colorScheme.onSurface,
+                    textAlign = TextAlign.Center
+                  )
+                  Text(
+                    text = stringResource(id = R.string.library_search_no_matches_sub),
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    textAlign = TextAlign.Center
+                  )
+                }
+              }
+            }
           } else {
             Column(modifier = Modifier.fillMaxSize()) {
               if (currentList.isNotEmpty()) {
@@ -807,7 +1210,7 @@ fun LibraryScreen(
                   },
                   onToggleGroupByGenre = { groupByGenre = !groupByGenre },
                   onPlayFilteredGenre = {
-                    filteredPairs.firstOrNull()?.first?.let(onSongClick)
+                    filteredPairs.firstOrNull()?.first?.let(handleSongClickWithSearchRecord)
                   },
                   onClearGenreFilter = { selectedGenre = GENRE_FILTER_ALL }
                 )
@@ -880,7 +1283,7 @@ fun LibraryScreen(
                   // Unified 3-Column Frameless Albums Row above the Track List (matching the reference photo)
                   item(key = "unified_3col_albums_showcase") {
                     LibraryUnifiedAlbumsRow(
-                      albums = albums,
+                      albums = displayAlbums,
                       darkTheme = darkTheme,
                       reducedMotion = effectiveReducedMotion,
                       flyingAlbumId = flyingCoverPayload?.albumId,
@@ -889,7 +1292,7 @@ fun LibraryScreen(
                       onPulseFinished = { id ->
                         if (pulsingAlbumId == id) pulsingAlbumId = null
                       },
-                      onAlbumClick = onAlbumClick,
+                      onAlbumClick = handleAlbumClickWithSearchRecord,
                       onAlbumLongClick = { albumPendingHoldOptions = it },
                       onCreateAlbumClick = { showCreateAlbumDialog = true },
                       onSeeAllAlbumsClick = { onTabSelected(3) },
@@ -914,7 +1317,7 @@ fun LibraryScreen(
                             }
                           },
                           onPlayCategory = {
-                            genreSongs.firstOrNull()?.let(onSongClick)
+                            genreSongs.firstOrNull()?.let(handleSongClickWithSearchRecord)
                           },
                           modifier = Modifier.testTag("library_genre_header_$genreKey")
                         )
@@ -939,7 +1342,7 @@ fun LibraryScreen(
                             }
                           },
                           onCheckLyrics = onCheckLyrics,
-                          onSongClick = { onSongClick(song) },
+                          onSongClick = { handleSongClickWithSearchRecord(song) },
                           onFavoriteClick = { onFavoriteClick(song) },
                           onAddToAlbumClick = onAddSongToAlbumClick?.let { callback -> { callback(song) } },
                           onEditPhotoClick = if (activeTab == 0) {
@@ -981,7 +1384,7 @@ fun LibraryScreen(
                           }
                         },
                         onCheckLyrics = onCheckLyrics,
-                        onSongClick = { onSongClick(song) },
+                        onSongClick = { handleSongClickWithSearchRecord(song) },
                         onFavoriteClick = { onFavoriteClick(song) },
                         onAddToAlbumClick = onAddSongToAlbumClick?.let { callback -> { callback(song) } },
                         onEditPhotoClick = if (activeTab == 0) {

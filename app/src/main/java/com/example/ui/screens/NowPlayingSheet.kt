@@ -194,6 +194,10 @@ fun NowPlayingSheet(
       .clickable(interactionSource = rootInteraction, indication = null) {}
   ) {
     val maxDetailsSheetHeight = (maxHeight * 0.55f).coerceAtLeast(300.dp)
+    val bgCustom = LocalDynamicBgCustomization.current
+    val npBlurDp = (bgCustom.blurRadiusDp * 0.80f).coerceIn(12f, 92f).dp
+    val npDimRatio = (bgCustom.dimLevel / com.example.data.PreferencesManager.DEFAULT_DYNAMIC_BG_DIM)
+      .coerceIn(0.15f, 1.95f)
     // True Dynamic Artwork Background sampled from actual album cover colors + blurred drifting art
     if (bgAlpha > 0.01f) {
       Box(modifier = Modifier.fillMaxSize().alpha(bgAlpha)) {
@@ -207,7 +211,7 @@ fun NowPlayingSheet(
               .fillMaxSize()
               .offset(x = activeBgShiftX.dp)
               .scale(activeBgScale)
-              .blur(54.dp)
+              .blur(npBlurDp)
           )
         }
         Box(
@@ -246,9 +250,9 @@ fun NowPlayingSheet(
             .background(
               Brush.verticalGradient(
                 colors = listOf(
-                  Color(0xFF090C14).copy(alpha = 0.32f),
-                  Color(0xFF090C14).copy(alpha = 0.42f),
-                  Color(0xFF080A11).copy(alpha = 0.72f)
+                  Color(0xFF090C14).copy(alpha = (0.32f * npDimRatio).coerceIn(0.06f, 0.86f)),
+                  Color(0xFF090C14).copy(alpha = (0.42f * npDimRatio).coerceIn(0.08f, 0.90f)),
+                  Color(0xFF080A11).copy(alpha = (0.72f * npDimRatio).coerceIn(0.16f, 0.96f))
                 )
               )
             )

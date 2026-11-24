@@ -455,4 +455,22 @@
     <string name="library_genre_clear_filter">គ្រប់ប្រភេទ</string>
     <string name="library_genre_empty_title">មិនទាន់មានបទ %1$s ទេ</string>
     <string name="library_genre_empty_sub">មិនមានបទក្នុងផ្ទាំងនេះត្រូវនឹងប្រភេទ %1$s ទេ។ សូមជ្រើសប្រភេទផ្សេង ឬកំណត់ឡើងវិញ។</string>
+    <string name="library_search_placeholder">ស្វែងរកបទចម្រៀង សិល្បករ ឬអាល់ប៊ុមក្នុងបណ្ណាល័យ…</string>
+    <string name="library_search_clear_cd">សម្អាតការស្វែងរកក្នុងបណ្ណាល័យ</string>
+    <string name="library_recent_searches_title">ការស្វែងរកថ្មីៗ</string>
+    <string name="library_recent_searches_clear">សម្អាត</string>
+    <string name="library_recent_searches_empty">ការស្វែងរក ៥ ចុងក្រោយរបស់អ្នកនឹងបង្ហាញនៅទីនេះ</string>
+    <string name="library_recent_search_remove_cd">លុបការស្វែងរកថ្មីៗ</string>
+    <string name="library_search_no_matches_title">មិនមានលទ្ធផលសម្រាប់ \"%1$s\"</string>
+    <string name="library_search_no_matches_sub">សូមសាកល្បងស្វែងរកតាមចំណងជើងបទ ឈ្មោះសិល្បករ អាល់ប៊ុម ឬប្រភេទភ្លេងផ្សេង។</string>
+    <string name="settings_dynamic_bg_customize_title">កែសម្រួលកម្រិតងងឹត កម្រិតកញ្ចក់ និងកម្រិត Blur</string>
+    <string name="settings_dynamic_bg_dim_label">កម្រិតងងឹត (Dim)</string>
+    <string name="settings_dynamic_bg_glass_label">កម្រិតកញ្ចក់</string>
+    <string name="settings_dynamic_bg_blur_label">កម្រិត Blur</string>
+    <string name="settings_dynamic_bg_reset_button">កំណត់ទៅរាងដើមវិញ</string>
+    <string name="settings_dynamic_bg_reset_confirm_title">កំណត់ទៅជារាងដើមវិញ?</string>
+    <string name="settings_dynamic_bg_reset_confirm_msg">តើអ្នកប្រាកដថានឹងធ្វើវាទៅជារាងដើមវិញមែនទេ? (កម្រិតងងឹត កម្រិតកញ្ចក់ និងកម្រិត Blur នឹងត្រឡប់ទៅលំនាំដើម)</string>
+    <string name="settings_dynamic_bg_reset_confirm_yes">ធ្វើទៅជារាងដើម</string>
+    <string name="settings_dynamic_bg_reset_confirm_no">បោះបង់</string>
+    <string name="settings_dynamic_bg_reset_toast">បានកំណត់ផ្ទៃខាងក្រោយទៅជារាងដើមវិញរួចរាល់</string>
 </resources>

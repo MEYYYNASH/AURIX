@@ -11,10 +11,10 @@ import org.junit.Test
 class CrashFixStabilityTest {
 
   @Test
-  fun release196_metadataAndVersionCodeAreConsistent() {
-    assertEquals("1.9.6", BuildConfig.VERSION_NAME)
-    assertEquals(10960, BuildConfig.VERSION_CODE)
-    assertTrue("Release 1.9.6 versionCode must exceed 1.9.5 (10950)", BuildConfig.VERSION_CODE > 10950)
+  fun release197_metadataAndVersionCodeAreConsistent() {
+    assertEquals("1.9.7", BuildConfig.VERSION_NAME)
+    assertEquals(10970, BuildConfig.VERSION_CODE)
+    assertTrue("Release 1.9.7 versionCode must exceed 1.9.6 (10960)", BuildConfig.VERSION_CODE > 10960)
     assertEquals(420, com.example.ui.screens.SELECT_BAR_OPEN_DURATION_MS)
     assertEquals(600, com.example.ui.screens.SELECT_CIRCLE_OPEN_DURATION_MS)
     assertEquals(380L, com.example.ui.screens.SELECT_CLOSE_CLEAR_DELAY_MS)
@@ -22,6 +22,28 @@ class CrashFixStabilityTest {
     assertEquals(5, com.example.data.OrbiAppIcon.entries.size)
     assertEquals(com.example.data.OrbiAppIcon.MIDNIGHT, com.example.data.OrbiAppIcon.fromId("midnight"))
     assertEquals(com.example.data.OrbiAppIcon.CLASSIC, com.example.data.OrbiAppIcon.fromId("unknown"))
+  }
+
+  @Test
+  fun libraryRecentSearches_capsAtLastFiveAndDeduplicatesCaseInsensitively() {
+    var history = emptyList<String>()
+    listOf("VannDa", "Doja Cat", "Kali Uchis", "The Weeknd", "SZA", "Joji").forEach { query ->
+      history = com.example.data.PreferencesManager.updateRecentSearchesList(history, query)
+    }
+    assertEquals(5, history.size)
+    assertEquals(listOf("Joji", "SZA", "The Weeknd", "Kali Uchis", "Doja Cat"), history)
+
+    // Re-searching an existing item (case-insensitive) moves it to the top and keeps 5 items
+    history = com.example.data.PreferencesManager.updateRecentSearchesList(history, "kali uchis")
+    assertEquals(listOf("kali uchis", "Joji", "SZA", "The Weeknd", "Doja Cat"), history)
+
+    val encoded = com.example.data.PreferencesManager.encodeRecentSearches(history)
+    val decoded = com.example.data.PreferencesManager.decodeRecentSearches(encoded)
+    assertEquals(history, decoded)
+
+    assertEquals(0.45f, com.example.data.PreferencesManager.DEFAULT_DYNAMIC_BG_DIM, 0.0001f)
+    assertEquals(0.75f, com.example.data.PreferencesManager.DEFAULT_DYNAMIC_BG_GLASS, 0.0001f)
+    assertEquals(68f, com.example.data.PreferencesManager.DEFAULT_DYNAMIC_BG_BLUR, 0.0001f)
   }
 
   @Test

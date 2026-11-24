@@ -363,6 +363,15 @@ fun EqualizerBars(
   }
 }
 
+@Immutable
+data class DynamicBgCustomization(
+  val dimLevel: Float = com.example.data.PreferencesManager.DEFAULT_DYNAMIC_BG_DIM,
+  val glassLevel: Float = com.example.data.PreferencesManager.DEFAULT_DYNAMIC_BG_GLASS,
+  val blurRadiusDp: Float = com.example.data.PreferencesManager.DEFAULT_DYNAMIC_BG_BLUR
+)
+
+val LocalDynamicBgCustomization = compositionLocalOf { DynamicBgCustomization() }
+
 @Composable
 fun GlassCard(
   modifier: Modifier = Modifier,
@@ -370,32 +379,45 @@ fun GlassCard(
   cornerRadius: Dp = 24.dp,
   content: @Composable ColumnScope.() -> Unit
 ) {
+  val custom = LocalDynamicBgCustomization.current
+  val glassScale = (custom.glassLevel / com.example.data.PreferencesManager.DEFAULT_DYNAMIC_BG_GLASS)
+    .coerceIn(0.28f, 1.32f)
   val shape = RoundedCornerShape(cornerRadius)
   val glassBrush = if (darkTheme) {
     Brush.linearGradient(
       colors = listOf(
-        Color(0xFF212D46).copy(alpha = 0.78f),
-        Color(0xFF151E32).copy(alpha = 0.68f),
-        Color(0xFF101728).copy(alpha = 0.76f)
+        Color(0xFF212D46).copy(alpha = (0.78f * glassScale).coerceIn(0.18f, 0.96f)),
+        Color(0xFF151E32).copy(alpha = (0.68f * glassScale).coerceIn(0.15f, 0.92f)),
+        Color(0xFF101728).copy(alpha = (0.76f * glassScale).coerceIn(0.18f, 0.95f))
       )
     )
   } else {
     Brush.linearGradient(
       colors = listOf(
-        Color.White.copy(alpha = 0.90f),
-        Color(0xFFF3F6FF).copy(alpha = 0.76f),
-        Color.White.copy(alpha = 0.84f)
+        Color.White.copy(alpha = (0.90f * glassScale).coerceIn(0.24f, 0.98f)),
+        Color(0xFFF3F6FF).copy(alpha = (0.76f * glassScale).coerceIn(0.20f, 0.94f)),
+        Color.White.copy(alpha = (0.84f * glassScale).coerceIn(0.22f, 0.96f))
       )
     )
   }
   val borderBrush = Brush.verticalGradient(
     colors = if (darkTheme) {
-      listOf(Color.White.copy(alpha = 0.32f), Color.White.copy(alpha = 0.12f), Color.White.copy(alpha = 0.05f))
+      listOf(
+        Color.White.copy(alpha = (0.32f * glassScale).coerceIn(0.10f, 0.52f)),
+        Color.White.copy(alpha = (0.12f * glassScale).coerceIn(0.04f, 0.24f)),
+        Color.White.copy(alpha = (0.05f * glassScale).coerceIn(0.02f, 0.12f))
+      )
     } else {
-      listOf(Color.White, Color.White.copy(alpha = 0.68f), Color.White.copy(alpha = 0.42f))
+      listOf(
+        Color.White.copy(alpha = (1.0f * glassScale).coerceIn(0.35f, 1.0f)),
+        Color.White.copy(alpha = (0.68f * glassScale).coerceIn(0.22f, 0.90f)),
+        Color.White.copy(alpha = (0.42f * glassScale).coerceIn(0.14f, 0.65f))
+      )
     }
   )
-  val topSpecular = Color.White.copy(alpha = if (darkTheme) 0.42f else 0.98f)
+  val topSpecular = Color.White.copy(
+    alpha = ((if (darkTheme) 0.42f else 0.98f) * glassScale).coerceIn(0.12f, 1.0f)
+  )
 
   Box(
     modifier = modifier
@@ -451,23 +473,34 @@ fun GlassSegmentedBar(
   reducedMotion: Boolean = false
 ) {
   if (options.isEmpty()) return
-  val barBg = if (darkTheme) Color(0xFF151E32).copy(alpha = 0.72f) else Color.White.copy(alpha = 0.74f)
-  val barBorder = if (darkTheme) Color.White.copy(alpha = 0.22f) else Color.White.copy(alpha = 0.96f)
+  val custom = LocalDynamicBgCustomization.current
+  val glassScale = (custom.glassLevel / com.example.data.PreferencesManager.DEFAULT_DYNAMIC_BG_GLASS)
+    .coerceIn(0.32f, 1.30f)
+  val barBg = if (darkTheme) {
+    Color(0xFF151E32).copy(alpha = (0.72f * glassScale).coerceIn(0.22f, 0.94f))
+  } else {
+    Color.White.copy(alpha = (0.74f * glassScale).coerceIn(0.26f, 0.96f))
+  }
+  val barBorder = if (darkTheme) {
+    Color.White.copy(alpha = (0.22f * glassScale).coerceIn(0.08f, 0.38f))
+  } else {
+    Color.White.copy(alpha = (0.96f * glassScale).coerceIn(0.36f, 1.0f))
+  }
   val primaryAccent = MaterialTheme.colorScheme.primary
   val pillBrush = if (darkTheme) {
     Brush.linearGradient(
       colors = listOf(
-        Color(0xFF33466B).copy(alpha = 0.95f),
+        Color(0xFF33466B).copy(alpha = (0.95f * glassScale).coerceIn(0.35f, 0.98f)),
         primaryAccent.copy(alpha = 0.34f),
-        Color(0xFF24324E).copy(alpha = 0.96f)
+        Color(0xFF24324E).copy(alpha = (0.96f * glassScale).coerceIn(0.36f, 0.98f))
       )
     )
   } else {
     Brush.linearGradient(
       colors = listOf(
-        Color.White.copy(alpha = 0.98f),
+        Color.White.copy(alpha = (0.98f * glassScale).coerceIn(0.45f, 1.0f)),
         primaryAccent.copy(alpha = 0.12f),
-        Color.White.copy(alpha = 0.95f)
+        Color.White.copy(alpha = (0.95f * glassScale).coerceIn(0.42f, 0.99f))
       )
     )
   }
@@ -620,8 +653,15 @@ fun DynamicArtworkBackdrop(
   reducedMotion: Boolean,
   modifier: Modifier = Modifier
 ) {
+  val custom = LocalDynamicBgCustomization.current
+  val effectiveBlurDp = custom.blurRadiusDp.coerceIn(12f, 100f).dp
+  val dimLevel = custom.dimLevel.coerceIn(0.05f, 0.90f)
+  // Scale dim factor relative to default 0.45f so user adjustments visibly brighten or darken the ambient glow
+  val dimRatio = (dimLevel / com.example.data.PreferencesManager.DEFAULT_DYNAMIC_BG_DIM).coerceIn(0.12f, 2.0f)
+  val glowBoost = (1.18f - (dimLevel - 0.25f) * 0.55f).coerceIn(0.45f, 1.35f)
+
   val accentColor = MaterialTheme.colorScheme.primary
-  val targetAlpha = if (enabled && song != null) (if (darkTheme) 0.78f else 0.56f) else 0f
+  val targetAlpha = if (enabled && song != null) (if (darkTheme) 0.84f else 0.62f) else 0f
   val animatedAlpha by animateFloatAsState(
     targetValue = targetAlpha,
     animationSpec = if (reducedMotion) snap() else tween(durationMillis = 750),
@@ -683,7 +723,7 @@ fun DynamicArtworkBackdrop(
         .fillMaxSize()
         .background(
           Brush.radialGradient(
-            colors = listOf(accentColor.copy(alpha = 0.20f), Color.Transparent),
+            colors = listOf(accentColor.copy(alpha = (0.20f * glowBoost).coerceIn(0.06f, 0.34f)), Color.Transparent),
             radius = 950f
           )
         )
@@ -701,7 +741,7 @@ fun DynamicArtworkBackdrop(
               .fillMaxSize()
               .offset(x = activeOffsetX.dp)
               .scale(activeScale)
-              .blur(68.dp)
+              .blur(effectiveBlurDp)
           )
         }
         Box(
@@ -710,8 +750,8 @@ fun DynamicArtworkBackdrop(
             .background(
               Brush.radialGradient(
                 colors = listOf(
-                  c1.copy(alpha = if (darkTheme) 0.56f else 0.42f),
-                  c2.copy(alpha = if (darkTheme) 0.36f else 0.28f),
+                  c1.copy(alpha = ((if (darkTheme) 0.56f else 0.42f) * glowBoost).coerceIn(0.14f, 0.78f)),
+                  c2.copy(alpha = ((if (darkTheme) 0.36f else 0.28f) * glowBoost).coerceIn(0.10f, 0.56f)),
                   Color.Transparent
                 ),
                 center = Offset(240f, 320f),
@@ -726,15 +766,15 @@ fun DynamicArtworkBackdrop(
               Brush.verticalGradient(
                 colors = if (darkTheme) {
                   listOf(
-                    Color(0xFF0B0F1A).copy(alpha = 0.36f),
-                    Color(0xFF0B0F1A).copy(alpha = 0.50f),
-                    Color(0xFF080B14).copy(alpha = 0.68f)
+                    Color(0xFF0B0F1A).copy(alpha = (0.36f * dimRatio).coerceIn(0.05f, 0.88f)),
+                    Color(0xFF0B0F1A).copy(alpha = (0.50f * dimRatio).coerceIn(0.08f, 0.92f)),
+                    Color(0xFF080B14).copy(alpha = (0.68f * dimRatio).coerceIn(0.12f, 0.96f))
                   )
                 } else {
                   listOf(
-                    Color(0xFFF3F6FF).copy(alpha = 0.42f),
-                    Color(0xFFF3F6FF).copy(alpha = 0.52f),
-                    Color(0xFFEBF0FF).copy(alpha = 0.62f)
+                    Color(0xFFF3F6FF).copy(alpha = (0.42f * dimRatio).coerceIn(0.06f, 0.88f)),
+                    Color(0xFFF3F6FF).copy(alpha = (0.52f * dimRatio).coerceIn(0.10f, 0.92f)),
+                    Color(0xFFEBF0FF).copy(alpha = (0.62f * dimRatio).coerceIn(0.14f, 0.95f))
                   )
                 }
               )
@@ -757,6 +797,11 @@ fun DynamicArtGlassBackdropLayer(
   scrimAlpha: Float = if (darkTheme) 0.58f else 0.72f,
   modifier: Modifier = Modifier
 ) {
+  val custom = LocalDynamicBgCustomization.current
+  val blurScale = (custom.blurRadiusDp / com.example.data.PreferencesManager.DEFAULT_DYNAMIC_BG_BLUR).coerceIn(0.25f, 1.5f)
+  val glassScale = (custom.glassLevel / com.example.data.PreferencesManager.DEFAULT_DYNAMIC_BG_GLASS).coerceIn(0.30f, 1.30f)
+  val effectiveBlurRadius = (blurRadius.value * blurScale).coerceIn(6f, 80f).dp
+  val effectiveScrimAlpha = (scrimAlpha * glassScale).coerceIn(0.18f, 0.94f)
   val layerAlpha by animateFloatAsState(
     targetValue = if (enabled && song != null) 1f else 0f,
     animationSpec = if (reducedMotion) snap() else tween(450),
@@ -785,7 +830,7 @@ fun DynamicArtGlassBackdropLayer(
               .matchParentSize()
               .scale(1.18f)
               .alpha(artAlpha)
-              .then(if (blurRadius > 0.dp) Modifier.blur(blurRadius) else Modifier)
+              .then(if (effectiveBlurRadius > 0.dp) Modifier.blur(effectiveBlurRadius) else Modifier)
           )
         }
         Box(
@@ -821,8 +866,8 @@ fun DynamicArtGlassBackdropLayer(
       modifier = Modifier
         .matchParentSize()
         .background(
-          if (darkTheme) Color(0xFF0C1222).copy(alpha = scrimAlpha)
-          else Color.White.copy(alpha = scrimAlpha)
+          if (darkTheme) Color(0xFF0C1222).copy(alpha = effectiveScrimAlpha)
+          else Color.White.copy(alpha = effectiveScrimAlpha)
         )
     )
   }
