@@ -10,10 +10,16 @@ import android.graphics.Paint
 import android.graphics.Rect
 import android.graphics.RectF
 import android.graphics.Shader
+import android.graphics.Typeface
 import android.media.ExifInterface
 import android.net.Uri
+import android.text.Layout
+import android.text.StaticLayout
+import android.text.TextPaint
+import android.text.TextUtils
 import android.util.LruCache
 import androidx.core.content.ContextCompat
+import androidx.core.content.res.ResourcesCompat
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.ImageBitmap
 import androidx.compose.ui.graphics.asImageBitmap
@@ -31,6 +37,36 @@ import java.io.FileOutputStream
 import kotlin.math.max
 import kotlin.math.min
 import kotlin.math.roundToInt
+
+enum class CoverStudioPalette(
+  val id: String,
+  val startColorInt: Int,
+  val midColorInt: Int,
+  val endColorInt: Int
+) {
+  AURORA("aurora", 0xFF0E2A47.toInt(), 0xFF2B4C8C.toInt(), 0xFF7B4DFF.toInt()),
+  INDIGO("indigo", 0xFF0D1026.toInt(), 0xFF24245C.toInt(), 0xFF4F46E5.toInt()),
+  SUNSET("sunset", 0xFF3A1230.toInt(), 0xFFB8336A.toInt(), 0xFFFF8A5B.toInt()),
+  EMERALD("emerald", 0xFF072227.toInt(), 0xFF0F6B5C.toInt(), 0xFF34D399.toInt()),
+  OBSIDIAN("obsidian", 0xFF090B12.toInt(), 0xFF1E2438.toInt(), 0xFF38425E.toInt()),
+  CORAL("coral", 0xFF2D1436.toInt(), 0xFF7C3AED.toInt(), 0xFFFB7185.toInt());
+
+  companion object {
+    fun fromId(id: String?): CoverStudioPalette =
+      entries.firstOrNull { it.id.equals(id, ignoreCase = true) } ?: AURORA
+  }
+}
+
+enum class CoverStudioLayout(val id: String) {
+  CENTER("center"),
+  EDITORIAL("editorial"),
+  MONOGRAM("monogram");
+
+  companion object {
+    fun fromId(id: String?): CoverStudioLayout =
+      entries.firstOrNull { it.id.equals(id, ignoreCase = true) } ?: CENTER
+  }
+}
 
 data class CachedBannerVisual(
   val blurredBitmap: ImageBitmap,
@@ -526,6 +562,294 @@ object AlbumCoverStorage {
         if (!outBitmap.isRecycled) outBitmap.recycle()
       }
     }
+  }
+
+  suspend fun renderAndSaveStudioCover(
+    context: Context,
+    albumId: String,
+    title: String,
+    subtitle: String,
+    paletteId: String,
+    layoutId: String,
+    backdropSource: String?,
+    blurAmount: Float
+  ): Result<String> = withContext(Dispatchers.IO) {
+    runCatching {
+      val size = COVER_OUTPUT_SIZE_PX
+      val sizeF = size.toFloat()
+      val palette = CoverStudioPalette.fromId(paletteId)
+      val layoutStyle = CoverStudioLayout.fromId(layoutId)
+      val outBitmap = Bitmap.createBitmap(size, size, Bitmap.Config.ARGB_8888)
+      val srcBitmap = if (!backdropSource.isNullOrBlank() && backdropSource != APP_ICON_ARTWORK) {
+        loadBitmapForUi(context, backdropSource, targetSize = 512)
+      } else null
+
+      try {
+        val canvas = Canvas(outBitmap)
+
+        // 1. Base gradient layer
+        val basePaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
+          shader = LinearGradient(
+            0f, 0f, sizeF, sizeF,
+            intArrayOf(palette.startColorInt, palette.midColorInt, palette.endColorInt),
+            floatArrayOf(0f, 0.52f, 1f),
+            Shader.TileMode.CLAMP
+          )
+        }
+        canvas.drawRect(0f, 0f, sizeF, sizeF, basePaint)
+
+        // 2. Optional blurred artwork backdrop blended smoothly underneath
+        if (srcBitmap != null && !srcBitmap.isRecycled) {
+          val blurred = blurBitmapFast(srcBitmap, blurAmount.coerceIn(0f, 1f))
+          val srcRect = computeCenterCropSrcRect(
+            srcWidth = blurred.width,
+            srcHeight = blurred.height,
+            dstWidth = sizeF,
+            dstHeight = sizeF
+          )
+          val artPaint = Paint(Paint.ANTI_ALIAS_FLAG or Paint.FILTER_BITMAP_FLAG).apply {
+            alpha = 185
+          }
+          canvas.drawBitmap(blurred, srcRect, RectF(0f, 0f, sizeF, sizeF), artPaint)
+          if (blurred !== srcBitmap && !blurred.isRecycled) blurred.recycle()
+
+          // Harmonize backdrop with a translucent gradient veil
+          val veilPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
+            shader = LinearGradient(
+              0f, 0f, sizeF, sizeF,
+              intArrayOf(
+                android.graphics.Color.argb(148, android.graphics.Color.red(palette.startColorInt), android.graphics.Color.green(palette.startColorInt), android.graphics.Color.blue(palette.startColorInt)),
+                android.graphics.Color.argb(198, android.graphics.Color.red(palette.endColorInt), android.graphics.Color.green(palette.endColorInt), android.graphics.Color.blue(palette.endColorInt))
+              ),
+              null,
+              Shader.TileMode.CLAMP
+            )
+          }
+          canvas.drawRect(0f, 0f, sizeF, sizeF, veilPaint)
+        }
+
+        // 3. Soft ambient radial highlight & subtle border sheen
+        val glowPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
+          shader = android.graphics.RadialGradient(
+            sizeF * 0.22f, sizeF * 0.18f, sizeF * 0.72f,
+            intArrayOf(0x38FFFFFF, 0x00FFFFFF),
+            floatArrayOf(0f, 1f),
+            Shader.TileMode.CLAMP
+          )
+        }
+        canvas.drawRect(0f, 0f, sizeF, sizeF, glowPaint)
+
+        // 4. Minimalist Typography (supports Khmer via Noto Sans Khmer)
+        val cleanTitle = title.trim().ifBlank { "AURIX" }
+        val cleanSubtitle = subtitle.trim()
+        val hasKhmer = cleanTitle.any { it.code in 0x1780..0x17FF } || cleanSubtitle.any { it.code in 0x1780..0x17FF }
+        val baseTypeface = if (hasKhmer) {
+          runCatching { ResourcesCompat.getFont(context, R.font.noto_sans_khmer) }.getOrNull() ?: Typeface.DEFAULT
+        } else {
+          Typeface.create(Typeface.SANS_SERIF, Typeface.BOLD)
+        }
+
+        val titlePaint = TextPaint(Paint.ANTI_ALIAS_FLAG).apply {
+          color = android.graphics.Color.WHITE
+          typeface = Typeface.create(baseTypeface, Typeface.BOLD)
+          textSize = when (layoutStyle) {
+            CoverStudioLayout.MONOGRAM -> 260f
+            CoverStudioLayout.CENTER -> if (cleanTitle.length > 14) 84f else 108f
+            CoverStudioLayout.EDITORIAL -> if (cleanTitle.length > 16) 76f else 96f
+          }
+          setShadowLayer(22f, 0f, 8f, 0x66000000)
+        }
+        val subPaint = TextPaint(Paint.ANTI_ALIAS_FLAG).apply {
+          color = 0xCCFFFFFF.toInt()
+          typeface = Typeface.create(baseTypeface, Typeface.NORMAL)
+          textSize = 40f
+          letterSpacing = 0.06f
+        }
+
+        val padding = 92f
+        val maxTextWidth = (sizeF - padding * 2f).roundToInt().coerceAtLeast(200)
+
+        when (layoutStyle) {
+          CoverStudioLayout.CENTER -> {
+            val titleLayout = StaticLayout.Builder
+              .obtain(cleanTitle, 0, cleanTitle.length, titlePaint, maxTextWidth)
+              .setAlignment(Layout.Alignment.ALIGN_CENTER)
+              .setMaxLines(2)
+              .setEllipsize(TextUtils.TruncateAt.END)
+              .setLineSpacing(8f, 1.12f)
+              .build()
+            val subH = if (cleanSubtitle.isNotBlank()) 64f else 0f
+            val totalH = titleLayout.height + subH
+            val startY = (sizeF - totalH) * 0.5f
+            canvas.save()
+            canvas.translate(padding, startY)
+            titleLayout.draw(canvas)
+            canvas.restore()
+
+            if (cleanSubtitle.isNotBlank()) {
+              val subLayout = StaticLayout.Builder
+                .obtain(cleanSubtitle.uppercase(), 0, cleanSubtitle.length, subPaint, maxTextWidth)
+                .setAlignment(Layout.Alignment.ALIGN_CENTER)
+                .setMaxLines(1)
+                .setEllipsize(TextUtils.TruncateAt.END)
+                .build()
+              canvas.save()
+              canvas.translate(padding, startY + titleLayout.height + 24f)
+              subLayout.draw(canvas)
+              canvas.restore()
+            }
+          }
+
+          CoverStudioLayout.EDITORIAL -> {
+            // Subtle bottom gradient scrim for editorial legibility
+            val scrim = Paint(Paint.ANTI_ALIAS_FLAG).apply {
+              shader = LinearGradient(
+                0f, sizeF * 0.45f, 0f, sizeF,
+                intArrayOf(0x00000000, 0xB8060A14.toInt()),
+                null,
+                Shader.TileMode.CLAMP
+              )
+            }
+            canvas.drawRect(0f, sizeF * 0.45f, sizeF, sizeF, scrim)
+
+            // Small accent pill bar above title
+            val pillPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply { color = 0xE6FFFFFF.toInt() }
+            canvas.drawRoundRect(RectF(padding, sizeF - 340f, padding + 96f, sizeF - 328f), 6f, 6f, pillPaint)
+
+            val titleLayout = StaticLayout.Builder
+              .obtain(cleanTitle, 0, cleanTitle.length, titlePaint, maxTextWidth)
+              .setAlignment(Layout.Alignment.ALIGN_NORMAL)
+              .setMaxLines(2)
+              .setEllipsize(TextUtils.TruncateAt.END)
+              .setLineSpacing(6f, 1.1f)
+              .build()
+            val titleTop = (sizeF - 145f - titleLayout.height).coerceAtLeast(sizeF * 0.46f)
+            canvas.save()
+            canvas.translate(padding, titleTop)
+            titleLayout.draw(canvas)
+            canvas.restore()
+
+            if (cleanSubtitle.isNotBlank()) {
+              val subLayout = StaticLayout.Builder
+                .obtain(cleanSubtitle, 0, cleanSubtitle.length, subPaint, maxTextWidth)
+                .setAlignment(Layout.Alignment.ALIGN_NORMAL)
+                .setMaxLines(1)
+                .setEllipsize(TextUtils.TruncateAt.END)
+                .build()
+              canvas.save()
+              canvas.translate(padding, sizeF - 118f)
+              subLayout.draw(canvas)
+              canvas.restore()
+            }
+          }
+
+          CoverStudioLayout.MONOGRAM -> {
+            val monogram = buildMonogramText(cleanTitle)
+            // Glass circle badge in center
+            val ringR = sizeF * 0.28f
+            val cx = sizeF * 0.5f
+            val cy = sizeF * 0.46f
+            val badgeFill = Paint(Paint.ANTI_ALIAS_FLAG).apply { color = 0x24FFFFFF }
+            val badgeStroke = Paint(Paint.ANTI_ALIAS_FLAG).apply {
+              style = Paint.Style.STROKE
+              strokeWidth = 4f
+              color = 0x55FFFFFF
+            }
+            canvas.drawCircle(cx, cy, ringR, badgeFill)
+            canvas.drawCircle(cx, cy, ringR, badgeStroke)
+
+            val monoPaint = TextPaint(titlePaint).apply {
+              textAlign = Paint.Align.CENTER
+              textSize = if (monogram.length == 1) 240f else 188f
+            }
+            val fm = monoPaint.fontMetrics
+            val textY = cy - (fm.ascent + fm.descent) * 0.5f
+            canvas.drawText(monogram, cx, textY, monoPaint)
+
+            val footerTitlePaint = TextPaint(subPaint).apply {
+              textSize = 46f
+              typeface = Typeface.create(baseTypeface, Typeface.BOLD)
+              color = android.graphics.Color.WHITE
+            }
+            val footerLayout = StaticLayout.Builder
+              .obtain(cleanTitle, 0, cleanTitle.length, footerTitlePaint, maxTextWidth)
+              .setAlignment(Layout.Alignment.ALIGN_CENTER)
+              .setMaxLines(1)
+              .setEllipsize(TextUtils.TruncateAt.END)
+              .build()
+            canvas.save()
+            canvas.translate(padding, sizeF * 0.80f)
+            footerLayout.draw(canvas)
+            canvas.restore()
+          }
+        }
+
+        writeAlbumCoverBitmap(context, albumId, outBitmap)
+      } finally {
+        if (srcBitmap != null && !srcBitmap.isRecycled) srcBitmap.recycle()
+        if (!outBitmap.isRecycled) outBitmap.recycle()
+      }
+    }
+  }
+
+  fun buildMonogramText(title: String): String {
+    val words = title.trim().split(Regex("\\s+")).filter { it.isNotBlank() }
+    return when {
+      words.isEmpty() -> "A"
+      words.size == 1 -> words[0].take(2).uppercase()
+      else -> "${words[0].first()}${words[1].first()}".uppercase()
+    }
+  }
+
+  private fun blurBitmapFast(source: Bitmap, amount: Float): Bitmap {
+    val clamped = amount.coerceIn(0f, 1f)
+    if (clamped <= 0.02f) return source
+    val smallSize = (180 - (clamped * 116f).roundToInt()).coerceIn(44, 180)
+    val scaled = Bitmap.createScaledBitmap(source, smallSize, smallSize, true)
+    val mutable = if (scaled.isMutable && scaled.config == Bitmap.Config.ARGB_8888) {
+      scaled
+    } else {
+      scaled.copy(Bitmap.Config.ARGB_8888, true).also {
+        if (scaled !== source) scaled.recycle()
+      }
+    }
+    val w = mutable.width
+    val h = mutable.height
+    val radius = (2 + (clamped * 10f).roundToInt()).coerceIn(2, 12)
+    val pixels = IntArray(w * h)
+    val temp = IntArray(w * h)
+    mutable.getPixels(pixels, 0, w, 0, 0, w, h)
+    repeat(2) {
+      for (y in 0 until h) {
+        val row = y * w
+        for (x in 0 until w) {
+          var r = 0; var g = 0; var b = 0; var c = 0
+          for (ix in max(0, x - radius)..kotlin.math.min(w - 1, x + radius)) {
+            val px = pixels[row + ix]
+            r += (px shr 16) and 0xFF
+            g += (px shr 8) and 0xFF
+            b += px and 0xFF
+            c++
+          }
+          temp[row + x] = (0xFF shl 24) or ((r / c) shl 16) or ((g / c) shl 8) or (b / c)
+        }
+      }
+      for (x in 0 until w) {
+        for (y in 0 until h) {
+          var r = 0; var g = 0; var b = 0; var c = 0
+          for (iy in max(0, y - radius)..kotlin.math.min(h - 1, y + radius)) {
+            val px = temp[iy * w + x]
+            r += (px shr 16) and 0xFF
+            g += (px shr 8) and 0xFF
+            b += px and 0xFF
+            c++
+          }
+          pixels[y * w + x] = (0xFF shl 24) or ((r / c) shl 16) or ((g / c) shl 8) or (b / c)
+        }
+      }
+    }
+    mutable.setPixels(pixels, 0, w, 0, 0, w, h)
+    return mutable
   }
 
   private fun writeAlbumCoverBitmap(

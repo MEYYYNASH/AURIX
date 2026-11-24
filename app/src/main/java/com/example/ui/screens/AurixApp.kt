@@ -336,10 +336,14 @@ private fun AurixMainShell(
   var showDownloadQueueSheet by remember { mutableStateOf(false) }
   var showCustomLyricsEditor by remember { mutableStateOf(false) }
   var showWidgetCustomizer by remember { mutableStateOf(false) }
+  var showOrbiCompanionSheet by remember { mutableStateOf(false) }
+  var showAmbientStandby by remember { mutableStateOf(false) }
   var isLibraryCreateAlbumOpen by remember { mutableStateOf(false) }
   val developerModeUnlocked by viewModel.developerModeUnlocked.collectAsStateWithLifecycle()
   val developerModeEnabled by viewModel.developerModeEnabled.collectAsStateWithLifecycle()
   val widgetCustomizerConfig by viewModel.widgetCustomizerConfig.collectAsStateWithLifecycle()
+  val orbiThemeId by viewModel.orbiCompanionTheme.collectAsStateWithLifecycle()
+  val standbyVinylStyle by viewModel.standbyVinylStyle.collectAsStateWithLifecycle()
   val allCustomLyrics by viewModel.allCustomLyrics.collectAsStateWithLifecycle()
   val customLyricsDraftCount by viewModel.customLyricsDraftCount.collectAsStateWithLifecycle()
   val downloadQueueItems by viewModel.downloadQueueItems.collectAsStateWithLifecycle()
@@ -630,26 +634,69 @@ private fun AurixMainShell(
               onOpenDailyDiscovery = { currentScreen = Screen.PlaylistDetail("daily_discovery") },
               onOpenFavoritesMix = { currentScreen = Screen.PlaylistDetail("favorites_mix") },
               onOpenRecentlyAdded = { currentScreen = Screen.PlaylistDetail("recently_added") },
+              orbiMood = remember(currentSong, isPlaying, sleepMinutes, sleepEndOfTrack) {
+                resolveOrbiMood(
+                  song = currentSong,
+                  isPlaying = isPlaying,
+                  sleepTimerActive = sleepMinutes > 0 || sleepEndOfTrack
+                )
+              },
+              orbiTheme = remember(orbiThemeId) { OrbiCompanionTheme.fromId(orbiThemeId) },
+              onOpenOrbiCompanion = { showOrbiCompanionSheet = true },
               onSongClick = { song, queue -> viewModel.playSong(song, queue) },
               onFavoriteClick = { viewModel.toggleFavorite(it) }
             )
-            is Screen.Insights -> MusicInsightsScreen(
-              musicDna = musicDna,
-              mostPlayedFilter = mostPlayedFilter,
-              mostPlayed = mostPlayed,
-              trendingTracks = trendingTracks,
-              risingArtists = risingArtists,
-              currentSong = currentSong,
-              isPlaying = isPlaying,
-              darkTheme = darkTheme,
-              reducedMotion = reducedMotion,
-              verifiedLyricsIds = verifiedLyricsIds,
-              onBack = { currentScreen = Screen.Home },
-              onSelectMostPlayedFilter = { viewModel.setMostPlayedFilter(it) },
-              onCheckLyrics = { viewModel.ensureLyricsVerified(it) },
-              onSongClick = { song, queue -> viewModel.playSong(song, queue) },
-              onFavoriteClick = { viewModel.toggleFavorite(it) }
-            )
+            is Screen.Insights -> {
+              val insightsOrbiMood = remember(currentSong, isPlaying, sleepMinutes, sleepEndOfTrack) {
+                resolveOrbiMood(
+                  song = currentSong,
+                  isPlaying = isPlaying,
+                  sleepTimerActive = sleepMinutes > 0 || sleepEndOfTrack
+                )
+              }
+              val insightsOrbiTheme = remember(orbiThemeId) { OrbiCompanionTheme.fromId(orbiThemeId) }
+              val insightsOrbiBadges = remember(musicDna, favorites, recentlyPlayed, recentPlayEntries) {
+                val totalPlays = maxOf(musicDna.totalQualifiedPlays, recentPlayEntries.size, recentlyPlayed.size)
+                val uniqueArtists = maxOf(
+                  musicDna.favoriteArtists.size,
+                  (recentlyPlayed + favorites)
+                    .map { it.artist.trim().lowercase() }
+                    .filter { it.isNotBlank() }
+                    .distinct()
+                    .size
+                )
+                val dominantSignal = musicDna.moodDistribution.firstOrNull()?.mood
+                  ?: musicDna.topGenres.firstOrNull()?.genre
+                  ?: ""
+                computeOrbiMilestoneBadges(
+                  totalPlays = totalPlays,
+                  favoritesCount = favorites.size,
+                  uniqueArtistsCount = uniqueArtists,
+                  dominantMoodOrGenre = dominantSignal
+                )
+              }
+              MusicInsightsScreen(
+                musicDna = musicDna,
+                mostPlayedFilter = mostPlayedFilter,
+                mostPlayed = mostPlayed,
+                trendingTracks = trendingTracks,
+                risingArtists = risingArtists,
+                currentSong = currentSong,
+                isPlaying = isPlaying,
+                darkTheme = darkTheme,
+                reducedMotion = reducedMotion,
+                verifiedLyricsIds = verifiedLyricsIds,
+                orbiMood = insightsOrbiMood,
+                orbiTheme = insightsOrbiTheme,
+                orbiBadges = insightsOrbiBadges,
+                onSelectOrbiTheme = { theme -> viewModel.setOrbiCompanionTheme(theme.id) },
+                onBack = { currentScreen = Screen.Home },
+                onSelectMostPlayedFilter = { viewModel.setMostPlayedFilter(it) },
+                onCheckLyrics = { viewModel.ensureLyricsVerified(it) },
+                onSongClick = { song, queue -> viewModel.playSong(song, queue) },
+                onFavoriteClick = { viewModel.toggleFavorite(it) }
+              )
+            }
             is Screen.PlaylistDetail -> {
               when {
                 screen.key == "tiktok_viral_charts" -> {
@@ -938,6 +985,17 @@ private fun AurixMainShell(
               onSaveCoverMix = { sources ->
                 viewModel.saveAlbumCoverMix(activeAlbumInfo.albumId, sources)
               },
+              onSaveCoverStudio = { title, subtitle, paletteId, layoutId, backdropSource, blurAmount ->
+                viewModel.saveAlbumCoverStudio(
+                  albumId = activeAlbumInfo.albumId,
+                  title = title,
+                  subtitle = subtitle,
+                  paletteId = paletteId,
+                  layoutId = layoutId,
+                  backdropSource = backdropSource,
+                  blurAmount = blurAmount
+                )
+              },
               onSaveCoverAppIcon = { viewModel.saveAlbumCoverAppIcon(activeAlbumInfo.albumId) },
               onResetCover = { viewModel.resetAlbumCover(activeAlbumInfo.albumId) }
             )
@@ -1137,6 +1195,7 @@ private fun AurixMainShell(
               currentSongArtworkUrl = currentSong?.artworkUrl,
               widgetCustomizerConfig = widgetCustomizerConfig,
               onOpenWidgetCustomizer = { showWidgetCustomizer = true },
+              onOpenStandby = { showAmbientStandby = true },
               onUnlockDeveloperMode = { viewModel.unlockDeveloperMode() },
               onDeveloperModeEnabledChanged = { viewModel.setDeveloperModeEnabled(it) },
               onOpenCurrentSongLyricsEditor = {
@@ -1350,9 +1409,73 @@ private fun AurixMainShell(
             lyricsAnimationStyle = appLyricsAnimStyle,
             developerModeEnabled = developerModeEnabled,
             onOpenLyricsEditor = { showCustomLyricsEditor = true },
+            onOpenStandby = { showAmbientStandby = true },
             widgetCustomizerConfig = widgetCustomizerConfig
           )
         }
+      }
+
+      if (showOrbiCompanionSheet) {
+        val sheetOrbiMood = remember(currentSong, isPlaying, sleepMinutes, sleepEndOfTrack) {
+          resolveOrbiMood(
+            song = currentSong,
+            isPlaying = isPlaying,
+            sleepTimerActive = sleepMinutes > 0 || sleepEndOfTrack
+          )
+        }
+        val sheetOrbiTheme = remember(orbiThemeId) { OrbiCompanionTheme.fromId(orbiThemeId) }
+        val sheetOrbiBadges = remember(musicDna, favorites, recentlyPlayed, recentPlayEntries) {
+          val totalPlays = maxOf(musicDna.totalQualifiedPlays, recentPlayEntries.size, recentlyPlayed.size)
+          val uniqueArtists = maxOf(
+            musicDna.favoriteArtists.size,
+            (recentlyPlayed + favorites)
+              .map { it.artist.trim().lowercase() }
+              .filter { it.isNotBlank() }
+              .distinct()
+              .size
+          )
+          val dominantSignal = musicDna.moodDistribution.firstOrNull()?.mood
+            ?: musicDna.topGenres.firstOrNull()?.genre
+            ?: ""
+          computeOrbiMilestoneBadges(
+            totalPlays = totalPlays,
+            favoritesCount = favorites.size,
+            uniqueArtistsCount = uniqueArtists,
+            dominantMoodOrGenre = dominantSignal
+          )
+        }
+        OrbiCompanionSheet(
+          mood = sheetOrbiMood,
+          selectedTheme = sheetOrbiTheme,
+          badges = sheetOrbiBadges,
+          isPlaying = isPlaying,
+          reducedMotion = reducedMotion,
+          darkTheme = darkTheme,
+          onSelectTheme = { theme -> viewModel.setOrbiCompanionTheme(theme.id) },
+          onOpenInsights = {
+            showOrbiCompanionSheet = false
+            currentScreen = Screen.Insights
+          },
+          onDismiss = { showOrbiCompanionSheet = false }
+        )
+      }
+
+      if (showAmbientStandby) {
+        AmbientStandbyScreen(
+          song = currentSong,
+          isPlaying = isPlaying,
+          positionProvider = { viewModel.getLivePlaybackPositionMs() },
+          lyricsResult = lyrics,
+          lyricOffsetMs = lyricOffsetMs,
+          spectrumBars = spectrumBars,
+          vinylStyle = standbyVinylStyle,
+          reducedMotion = reducedMotion,
+          onToggleVinylStyle = { isVinyl -> viewModel.setStandbyVinylStyle(isVinyl) },
+          onPlayPause = { viewModel.togglePlayPause() },
+          onNext = { viewModel.nextTrack() },
+          onPrevious = { viewModel.previousTrack() },
+          onClose = { showAmbientStandby = false }
+        )
       }
 
       if (showWidgetCustomizer) {

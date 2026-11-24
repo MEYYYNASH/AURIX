@@ -1,15 +1,15 @@
 {
-  "versionName": "2.0.4",
-  "versionCode": 20004,
+  "versionName": "2.1.0",
+  "versionCode": 20100,
   "releaseDate": "2026-11-24",
-  "apkUrl": "https://github.com/MEYYYNASH/AURIX/releases/download/v2.0.4/AURIX-v2.0.4.apk",
-  "sha256": "f8d8a89672e783b9a24529ef7787df37ef2c280425f25c13cfd48611079adea9",
+  "apkUrl": "https://github.com/MEYYYNASH/AURIX/releases/download/v2.1.0/AURIX-v2.1.0.apk",
+  "sha256": "e651ee65d36bbb45ae95e79f8c1a8848145e54817bb13838aaf1a6c1182cf00d",
   "mandatory": false,
   "notes": [
-    "Widget Photo Picker, Smooth Widget Animations & Clean Lyrics UI (v2.0.4): Fixed Photo Picker HEIC/AVIF & single-use gallery streams, fixed Home Screen Lyrics widget line animations with Binder-safe RGB_565 & Khmer bitmaps, removed floating overlay from Lyrics screen, and cleaned up the TAP Sync button styling",
+    "Orbi Companion, Standby Desk Clock & Cover Blur Studio (v2.1.0): Added Interactive Orbi Mini-Companion in Home header & Music Insights that reacts to your listening mood (headphones for Lo-fi, shades for Phonk, sleepy moon late at night, heart glow, party spark) and unlocks 6 Orbi themes from real listening milestones; added Full-Screen OLED Standby Desk Clock Player with giant clock, real battery/charging pill, spinning vinyl or clean cover art, live synced lyrics & subtle visualizer; upgraded Edit Album Cover with Cover Blur Studio (6 palettes, blurred artwork backdrop, Minimal/Editorial/Monogram typography with Khmer font support) and 1-tap Auto 2×2 collage",
+    "Widget Photo Picker, Smooth Widget Animations & Clean Lyrics UI (v2.0.4): Fixed Widget Customizer Photo Picker on HEIC/AVIF and single-use gallery streams (single-read temp file + ImageDecoder + automatic GetContent fallback), fixed Home Screen Lyrics widget line transition animations by keeping composite & Khmer bitmaps well below the 1 MB Binder IPC limit (RGB_565 + self-relative slide transitions), removed the floating circle overlay from the Lyrics screen for an uncluttered reading view, and cleaned up the TAP Sync button styling in the Custom Lyrics Editor",
     "Widget Customizer & Live Settings Preview (v2.0.3): Added Settings > Widgets > Customize widget with live 2:1 preview, 9 Frame styles, 5 Backgrounds, Blur & Darkness sliders, and fixed 2:1 Background Cropper",
-    "Developer Mode & Offline Custom Lyrics Editor (v2.0.2): Tap Build number 7 times in Settings > About to unlock Developer mode with Write & TAP Sync editor, .lrc/.txt import/export, and Room offline priority over LRCLIB",
-    "Lyrics Animation Picker & 5 Transition Styles (v2.0.1): Settings > Lyrics > Lyrics animation sheet with 5 looping live-preview cards and Both/App/Widget targeting"
+    "Developer Mode & Offline Custom Lyrics Editor (v2.0.2): Tap Build number 7 times in Settings > About to unlock Developer mode with Write & TAP Sync editor, .lrc/.txt import/export, and Room offline priority over LRCLIB"
   ],
-  "releasePageUrl": "https://github.com/MEYYYNASH/AURIX/releases/tag/v2.0.4"
+  "releasePageUrl": "https://github.com/MEYYYNASH/AURIX/releases/tag/v2.1.0"
 }

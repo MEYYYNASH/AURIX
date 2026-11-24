@@ -33,6 +33,7 @@ data class Song(
 enum class CustomCoverMode(val id: String) {
   PHOTO("PHOTO"),
   MIX("MIX"),
+  STUDIO("STUDIO"),
   APP_ICON("APP_ICON");
 
   companion object {

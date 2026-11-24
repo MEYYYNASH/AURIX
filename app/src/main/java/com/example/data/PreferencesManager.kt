@@ -87,6 +87,10 @@ class PreferencesManager(private val context: Context) {
     val WIDGET_DARKNESS = intPreferencesKey("darkness")
     val WIDGET_PHOTO_REV = longPreferencesKey("widget_photo_rev")
 
+    // Orbi Companion & Ambient Standby Mode keys
+    val ORBI_COMPANION_THEME = stringPreferencesKey("orbi_companion_theme")
+    val STANDBY_VINYL_STYLE = booleanPreferencesKey("standby_vinyl_style")
+
     fun decodeRecentSearches(raw: String?): List<String> {
       if (raw.isNullOrBlank()) return emptyList()
       return raw.split(RECENT_SEARCH_DELIMITER)
@@ -157,6 +161,12 @@ class PreferencesManager(private val context: Context) {
   }
   val lyricsAnim: Flow<String> = safeDataFlow.map { prefs ->
     com.example.lyrics.LyricsAnimationStyle.fromId(prefs[LYRICS_ANIM]).id
+  }
+  val orbiCompanionTheme: Flow<String> = safeDataFlow.map { prefs ->
+    prefs[ORBI_COMPANION_THEME] ?: "aurora"
+  }
+  val standbyVinylStyle: Flow<Boolean> = safeDataFlow.map { prefs ->
+    prefs[STANDBY_VINYL_STYLE] ?: true
   }
   val lyricsWidgetAnim: Flow<String> = safeDataFlow.map { prefs ->
     com.example.lyrics.LyricsAnimationStyle.fromId(prefs[LYRICS_WIDGET_ANIM] ?: prefs[LYRICS_ANIM]).id
@@ -388,5 +398,17 @@ class PreferencesManager(private val context: Context) {
         photoRevision = System.currentTimeMillis()
       )
     )
+  }
+
+  suspend fun setOrbiCompanionTheme(themeId: String) {
+    context.dataStore.edit { prefs ->
+      prefs[ORBI_COMPANION_THEME] = themeId
+    }
+  }
+
+  suspend fun setStandbyVinylStyle(isVinyl: Boolean) {
+    context.dataStore.edit { prefs ->
+      prefs[STANDBY_VINYL_STYLE] = isVinyl
+    }
   }
 }

@@ -776,4 +776,64 @@
     <string name="wc_dev_rebuild_bitmap_sub">Clear cache &amp; measure Canvas render time</string>
     <string name="wc_dev_exported_toast">Widget settings JSON copied</string>
     <string name="wc_dev_rebuilt_toast">Widget bitmap rebuilt in %1$d ms</string>
+
+    <!-- Orbi Mini-Companion & Mood Badges (v2.1.0) -->
+    <string name="orbi_companion_title">Orbi Companion</string>
+    <string name="orbi_companion_subtitle">Reacts to your music &amp; unlocks themes</string>
+    <string name="orbi_companion_cd">Open Orbi companion</string>
+    <string name="orbi_mood_lofi">Lo-fi Chill · Headphones on</string>
+    <string name="orbi_mood_phonk">High Energy · Shades on</string>
+    <string name="orbi_mood_night">Late Night · Sleepy Moon</string>
+    <string name="orbi_mood_romantic">Soft &amp; Heartfelt · Glow</string>
+    <string name="orbi_mood_party">Upbeat Vibe · Spark</string>
+    <string name="orbi_mood_idle">Ready to listen</string>
+    <string name="orbi_themes_title">Orbi Themes</string>
+    <string name="orbi_badges_title">Milestone Badges</string>
+    <string name="orbi_badges_progress">%1$d of %2$d unlocked</string>
+    <string name="orbi_badge_locked">Locked</string>
+    <string name="orbi_badge_unlocked">Unlocked</string>
+    <string name="orbi_open_insights">View all in Insights</string>
+    <string name="orbi_theme_aurora">Aurora</string>
+    <string name="orbi_theme_midnight">Midnight</string>
+    <string name="orbi_theme_mint">Mint Cloud</string>
+    <string name="orbi_theme_rose">Rose Velvet</string>
+    <string name="orbi_theme_sunset">Sunset Gold</string>
+    <string name="orbi_theme_prismatic">Prismatic</string>
+    <string name="orbi_badge_first_beat">First Beat</string>
+    <string name="orbi_badge_first_beat_req">Play your first song</string>
+    <string name="orbi_badge_night_owl">Night Owl</string>
+    <string name="orbi_badge_night_owl_req">Listen late at night or 5+ plays</string>
+    <string name="orbi_badge_chill_drifter">Chill Drifter</string>
+    <string name="orbi_badge_chill_drifter_req">10+ plays or Chill vibe</string>
+    <string name="orbi_badge_heart_collector">Heart Collector</string>
+    <string name="orbi_badge_heart_collector_req">Like 5+ songs</string>
+    <string name="orbi_badge_artist_explorer">Artist Explorer</string>
+    <string name="orbi_badge_artist_explorer_req">Explore 5+ unique artists</string>
+    <string name="orbi_badge_aurix_legend">AURIX Legend</string>
+    <string name="orbi_badge_aurix_legend_req">Reach 30+ plays</string>
+
+    <!-- Ambient Standby Mode / Desk Clock Player (v2.1.0) -->
+    <string name="standby_title">Standby Desk Clock</string>
+    <string name="standby_subtitle">Full-screen OLED clock, spinning vinyl &amp; live lyrics</string>
+    <string name="standby_open_cd">Open Standby Desk Clock</string>
+    <string name="standby_exit_cd">Exit Standby Mode</string>
+    <string name="standby_style_vinyl">Vinyl</string>
+    <string name="standby_style_art">Cover</string>
+    <string name="standby_charging">Charging · %1$d%%</string>
+    <string name="standby_battery">%1$d%%</string>
+    <string name="standby_tap_hint">Tap anywhere for controls</string>
+    <string name="standby_no_track">Nothing playing</string>
+
+    <!-- Custom Playlist Cover Collage & Blur Studio (v2.1.0) -->
+    <string name="edit_cover_tab_studio">Studio</string>
+    <string name="edit_cover_mix_auto_fill">Auto 2×2</string>
+    <string name="edit_cover_studio_palette">Color Palette</string>
+    <string name="edit_cover_studio_layout">Layout</string>
+    <string name="edit_cover_studio_layout_center">Minimal</string>
+    <string name="edit_cover_studio_layout_editorial">Editorial</string>
+    <string name="edit_cover_studio_layout_monogram">Monogram</string>
+    <string name="edit_cover_studio_blur_backdrop">Blur artwork backdrop</string>
+    <string name="edit_cover_studio_blur_label">Blur</string>
+    <string name="edit_cover_studio_title_label">Cover title</string>
+    <string name="edit_cover_studio_saved">Studio cover saved</string>
 </resources>

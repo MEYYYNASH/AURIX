@@ -141,6 +141,7 @@ fun NowPlayingSheet(
   lyricsAnimationStyle: com.example.lyrics.LyricsAnimationStyle = com.example.lyrics.LyricsAnimationStyle.SLIDE_UP,
   developerModeEnabled: Boolean = false,
   onOpenLyricsEditor: (() -> Unit)? = null,
+  onOpenStandby: () -> Unit = {},
   widgetCustomizerConfig: com.example.widget.WidgetCustomizerConfig = com.example.widget.WidgetCustomizerConfig.DEFAULT
 ) {
   BackHandler { onClose() }
@@ -323,11 +324,24 @@ fun NowPlayingSheet(
           }
         }
 
-        IconButton(
-          onClick = { showDetails = true },
-          modifier = Modifier.minimumInteractiveComponentSize().testTag("np_details_button")
-        ) {
-          Icon(Icons.Rounded.MoreVert, contentDescription = stringResource(id = R.string.np_details_cd), tint = Color.White)
+        Row(verticalAlignment = Alignment.CenterVertically) {
+          IconButton(
+            onClick = onOpenStandby,
+            modifier = Modifier.minimumInteractiveComponentSize().testTag("np_standby_button")
+          ) {
+            Icon(
+              imageVector = Icons.Rounded.Schedule,
+              contentDescription = stringResource(id = R.string.standby_open_cd),
+              tint = Color.White.copy(alpha = 0.88f),
+              modifier = Modifier.size(22.dp)
+            )
+          }
+          IconButton(
+            onClick = { showDetails = true },
+            modifier = Modifier.minimumInteractiveComponentSize().testTag("np_details_button")
+          ) {
+            Icon(Icons.Rounded.MoreVert, contentDescription = stringResource(id = R.string.np_details_cd), tint = Color.White)
+          }
         }
       }
 

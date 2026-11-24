@@ -48,8 +48,10 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.rounded.Add
+import androidx.compose.material.icons.rounded.AutoAwesome
 import androidx.compose.material.icons.rounded.Close
 import androidx.compose.material.icons.rounded.DragIndicator
+import androidx.compose.material.icons.rounded.GridView
 import androidx.compose.material.icons.rounded.MusicNote
 import androidx.compose.material.icons.rounded.PhotoLibrary
 import androidx.compose.material.icons.rounded.Refresh
@@ -58,9 +60,13 @@ import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.ModalBottomSheet
+import androidx.compose.material3.OutlinedTextField
+import androidx.compose.material3.OutlinedTextFieldDefaults
 import androidx.compose.material3.Slider
 import androidx.compose.material3.SliderDefaults
 import androidx.compose.material3.Surface
+import androidx.compose.material3.Switch
+import androidx.compose.material3.SwitchDefaults
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.material3.minimumInteractiveComponentSize
@@ -75,6 +81,7 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.blur
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.draw.drawBehind
 import androidx.compose.ui.draw.shadow
@@ -103,6 +110,9 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import coil.compose.AsyncImage
 import com.example.R
+import com.example.data.AlbumCoverStorage
+import com.example.data.CoverStudioLayout
+import com.example.data.CoverStudioPalette
 import com.example.model.APP_ICON_ARTWORK
 import com.example.model.AlbumInfo
 import com.example.model.CustomCoverMode
@@ -116,6 +126,14 @@ fun EditAlbumCoverSheet(
   onDismiss: () -> Unit,
   onSavePhoto: (imageUri: String, offsetXFraction: Float, offsetYFraction: Float, zoom: Float) -> Unit,
   onSaveMix: (imageSources: List<String>) -> Unit,
+  onSaveStudio: (
+    title: String,
+    subtitle: String,
+    paletteId: String,
+    layoutId: String,
+    backdropSource: String?,
+    blurAmount: Float
+  ) -> Unit = { _, _, _, _, _, _ -> },
   onSaveAppIcon: () -> Unit,
   onResetCover: () -> Unit
 ) {
@@ -143,6 +161,7 @@ fun EditAlbumCoverSheet(
       onDismiss = onDismiss,
       onSavePhoto = onSavePhoto,
       onSaveMix = onSaveMix,
+      onSaveStudio = onSaveStudio,
       onSaveAppIcon = onSaveAppIcon,
       onResetCover = onResetCover
     )
@@ -156,6 +175,14 @@ internal fun EditAlbumCoverSheetContent(
   onDismiss: () -> Unit,
   onSavePhoto: (imageUri: String, offsetXFraction: Float, offsetYFraction: Float, zoom: Float) -> Unit,
   onSaveMix: (imageSources: List<String>) -> Unit,
+  onSaveStudio: (
+    title: String,
+    subtitle: String,
+    paletteId: String,
+    layoutId: String,
+    backdropSource: String?,
+    blurAmount: Float
+  ) -> Unit = { _, _, _, _, _, _ -> },
   onSaveAppIcon: () -> Unit,
   onResetCover: () -> Unit
 ) {
@@ -208,24 +235,31 @@ internal fun EditAlbumCoverSheetContent(
     mutableStateOf(albumInfo.customCoverMode == CustomCoverMode.APP_ICON)
   }
 
-  val singlePhotoLauncher = rememberLauncherForActivityResult(
-    contract = ActivityResultContracts.PickVisualMedia()
-  ) { uri ->
-    if (uri != null) {
-      selectedPhotoUri = uri.toString()
+  // Blur Studio state
+  var studioTitle by remember(albumInfo.albumId) { mutableStateOf(albumInfo.title.take(36)) }
+  var studioPalette by remember(albumInfo.albumId) { mutableStateOf(CoverStudioPalette.AURORA) }
+  var studioLayout by remember(albumInfo.albumId) { mutableStateOf(CoverStudioLayout.CENTER) }
+  var studioUseBackdrop by remember(albumInfo.albumId) {
+    mutableStateOf(trackCoverCandidates.isNotEmpty())
+  }
+  var studioBlurAmount by remember(albumInfo.albumId) { mutableFloatStateOf(0.55f) }
+  val studioBackdropSource = remember(trackCoverCandidates, studioUseBackdrop) {
+    if (studioUseBackdrop) trackCoverCandidates.firstOrNull() else null
+  }
+
+  fun handleSinglePhotoResult(uriStr: String?) {
+    if (!uriStr.isNullOrBlank()) {
+      selectedPhotoUri = uriStr
       photoOffsetX = 0f
       photoOffsetY = 0f
       photoZoom = 1f
     }
   }
 
-  val mixPhotoLauncher = rememberLauncherForActivityResult(
-    contract = ActivityResultContracts.PickVisualMedia()
-  ) { uri ->
+  fun handleMixPhotoResult(uriStr: String?) {
     val targetIdx = activeSlotTarget
     activeSlotTarget = -1
-    if (uri != null) {
-      val uriStr = uri.toString()
+    if (!uriStr.isNullOrBlank()) {
       if (targetIdx in 0 until mixImages.size) {
         mixImages[targetIdx] = uriStr
         mixMaxErrorVisible = false
@@ -238,9 +272,46 @@ internal fun EditAlbumCoverSheetContent(
     }
   }
 
+  val singlePhotoFallback = rememberLauncherForActivityResult(
+    contract = ActivityResultContracts.GetContent()
+  ) { uri -> handleSinglePhotoResult(uri?.toString()) }
+
+  val singlePhotoLauncher = rememberLauncherForActivityResult(
+    contract = ActivityResultContracts.PickVisualMedia()
+  ) { uri -> handleSinglePhotoResult(uri?.toString()) }
+
+  val mixPhotoFallback = rememberLauncherForActivityResult(
+    contract = ActivityResultContracts.GetContent()
+  ) { uri -> handleMixPhotoResult(uri?.toString()) }
+
+  val mixPhotoLauncher = rememberLauncherForActivityResult(
+    contract = ActivityResultContracts.PickVisualMedia()
+  ) { uri -> handleMixPhotoResult(uri?.toString()) }
+
+  fun launchSinglePhotoPicker() {
+    runCatching {
+      singlePhotoLauncher.launch(
+        PickVisualMediaRequest(ActivityResultContracts.PickVisualMedia.ImageOnly)
+      )
+    }.onFailure {
+      runCatching { singlePhotoFallback.launch("image/*") }
+    }
+  }
+
+  fun launchMixPhotoPicker() {
+    runCatching {
+      mixPhotoLauncher.launch(
+        PickVisualMediaRequest(ActivityResultContracts.PickVisualMedia.ImageOnly)
+      )
+    }.onFailure {
+      runCatching { mixPhotoFallback.launch("image/*") }
+    }
+  }
+
   val canSave = when (selectedMode) {
     CustomCoverMode.PHOTO -> selectedPhotoUri.isNotBlank()
     CustomCoverMode.MIX -> mixImages.isNotEmpty()
+    CustomCoverMode.STUDIO -> true
     CustomCoverMode.APP_ICON -> appIconArmed || selectedMode == CustomCoverMode.APP_ICON
   }
 
@@ -396,6 +467,17 @@ internal fun EditAlbumCoverSheetContent(
             MixCollagePreview(images = mixImages)
           }
 
+          CustomCoverMode.STUDIO -> {
+            StudioCoverPreview(
+              title = studioTitle.ifBlank { albumInfo.title },
+              subtitle = albumInfo.artist.ifBlank { "AURIX" },
+              palette = studioPalette,
+              layout = studioLayout,
+              backdropSource = studioBackdropSource,
+              blurAmount = studioBlurAmount
+            )
+          }
+
           CustomCoverMode.APP_ICON -> {
             Box(
               modifier = Modifier
@@ -463,11 +545,7 @@ internal fun EditAlbumCoverSheetContent(
             stringResource(id = R.string.edit_cover_change_photo)
           },
           icon = Icons.Rounded.PhotoLibrary,
-          onClick = {
-            singlePhotoLauncher.launch(
-              PickVisualMediaRequest(ActivityResultContracts.PickVisualMedia.ImageOnly)
-            )
-          },
+          onClick = { launchSinglePhotoPicker() },
           modifier = Modifier
             .fillMaxWidth()
             .testTag("edit_cover_choose_photo_button")
@@ -680,23 +758,40 @@ internal fun EditAlbumCoverSheetContent(
             .padding(12.dp),
           verticalArrangement = Arrangement.spacedBy(10.dp)
         ) {
-          GlassPillActionButton(
-            label = stringResource(id = R.string.edit_cover_mix_gallery),
-            icon = Icons.Rounded.PhotoLibrary,
-            onClick = {
-              if (activeSlotTarget !in 0 until mixImages.size && mixImages.size >= 4) {
-                mixMaxErrorVisible = true
-              } else {
-                mixMaxErrorVisible = false
-                mixPhotoLauncher.launch(
-                  PickVisualMediaRequest(ActivityResultContracts.PickVisualMedia.ImageOnly)
-                )
-              }
-            },
-            modifier = Modifier
-              .fillMaxWidth()
-              .testTag("edit_cover_mix_add_gallery")
-          )
+          Row(
+            modifier = Modifier.fillMaxWidth(),
+            horizontalArrangement = Arrangement.spacedBy(8.dp)
+          ) {
+            GlassPillActionButton(
+              label = stringResource(id = R.string.edit_cover_mix_gallery),
+              icon = Icons.Rounded.PhotoLibrary,
+              onClick = {
+                if (activeSlotTarget !in 0 until mixImages.size && mixImages.size >= 4) {
+                  mixMaxErrorVisible = true
+                } else {
+                  mixMaxErrorVisible = false
+                  launchMixPhotoPicker()
+                }
+              },
+              modifier = Modifier
+                .weight(1f)
+                .testTag("edit_cover_mix_add_gallery")
+            )
+            if (trackCoverCandidates.size >= 2) {
+              GlassPillActionButton(
+                label = stringResource(id = R.string.edit_cover_mix_auto_fill),
+                icon = Icons.Rounded.GridView,
+                isHighlighted = true,
+                onClick = {
+                  mixImages.clear()
+                  mixImages.addAll(trackCoverCandidates.take(4))
+                  activeSlotTarget = -1
+                  mixMaxErrorVisible = false
+                },
+                modifier = Modifier.testTag("edit_cover_mix_auto_fill_button")
+              )
+            }
+          }
 
           if (trackCoverCandidates.isNotEmpty()) {
             Text(
@@ -742,6 +837,175 @@ internal fun EditAlbumCoverSheetContent(
               }
             }
           }
+        }
+      }
+
+      CustomCoverMode.STUDIO -> {
+        Column(
+          modifier = Modifier
+            .fillMaxWidth()
+            .clip(RoundedCornerShape(20.dp))
+            .background(Color.White.copy(alpha = 0.05f))
+            .border(1.dp, AlbumDesignTokens.Border, RoundedCornerShape(20.dp))
+            .padding(14.dp),
+          verticalArrangement = Arrangement.spacedBy(12.dp)
+        ) {
+          // 6 curated gradient palette swatches
+          Row(
+            modifier = Modifier.fillMaxWidth(),
+            horizontalArrangement = Arrangement.SpaceBetween,
+            verticalAlignment = Alignment.CenterVertically
+          ) {
+            Text(
+              text = stringResource(id = R.string.edit_cover_studio_palette),
+              fontFamily = AlbumDesignTokens.OutfitFontFamily,
+              fontSize = 12.sp,
+              fontWeight = FontWeight.SemiBold,
+              color = AlbumDesignTokens.DimText
+            )
+            Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+              CoverStudioPalette.entries.forEach { pal ->
+                val isSelected = pal == studioPalette
+                Box(
+                  modifier = Modifier
+                    .size(30.dp)
+                    .clip(CircleShape)
+                    .background(
+                      Brush.linearGradient(
+                        listOf(Color(pal.startColorInt), Color(pal.midColorInt), Color(pal.endColorInt))
+                      )
+                    )
+                    .border(
+                      width = if (isSelected) 2.dp else 1.dp,
+                      color = if (isSelected) Color.White else Color.White.copy(alpha = 0.22f),
+                      shape = CircleShape
+                    )
+                    .clickable(role = Role.RadioButton) { studioPalette = pal }
+                    .testTag("edit_cover_studio_palette_${pal.id}")
+                )
+              }
+            }
+          }
+
+          // 3 minimalist typography layouts
+          Row(
+            modifier = Modifier.fillMaxWidth(),
+            horizontalArrangement = Arrangement.spacedBy(8.dp)
+          ) {
+            val layouts = listOf(
+              CoverStudioLayout.CENTER to stringResource(id = R.string.edit_cover_studio_layout_center),
+              CoverStudioLayout.EDITORIAL to stringResource(id = R.string.edit_cover_studio_layout_editorial),
+              CoverStudioLayout.MONOGRAM to stringResource(id = R.string.edit_cover_studio_layout_monogram)
+            )
+            layouts.forEach { (layout, label) ->
+              val selected = layout == studioLayout
+              Box(
+                modifier = Modifier
+                  .weight(1f)
+                  .sizeIn(minHeight = 38.dp)
+                  .clip(CircleShape)
+                  .background(
+                    if (selected) AlbumDesignTokens.Accent.copy(alpha = 0.20f)
+                    else Color.White.copy(alpha = 0.05f)
+                  )
+                  .border(
+                    width = 1.dp,
+                    color = if (selected) AlbumDesignTokens.Accent.copy(alpha = 0.65f) else AlbumDesignTokens.Border,
+                    shape = CircleShape
+                  )
+                  .clickable(role = Role.RadioButton) { studioLayout = layout }
+                  .testTag("edit_cover_studio_layout_${layout.id}"),
+                contentAlignment = Alignment.Center
+              ) {
+                Text(
+                  text = label,
+                  fontFamily = AlbumDesignTokens.OutfitFontFamily,
+                  fontSize = 12.sp,
+                  fontWeight = if (selected) FontWeight.Bold else FontWeight.Medium,
+                  color = if (selected) Color.White else AlbumDesignTokens.DimText,
+                  maxLines = 1,
+                  overflow = TextOverflow.Ellipsis
+                )
+              }
+            }
+          }
+
+          // Optional blurred artwork backdrop
+          if (trackCoverCandidates.isNotEmpty()) {
+            Row(
+              modifier = Modifier.fillMaxWidth(),
+              horizontalArrangement = Arrangement.SpaceBetween,
+              verticalAlignment = Alignment.CenterVertically
+            ) {
+              Text(
+                text = stringResource(id = R.string.edit_cover_studio_blur_backdrop),
+                fontFamily = AlbumDesignTokens.OutfitFontFamily,
+                fontSize = 13.sp,
+                fontWeight = FontWeight.Medium,
+                color = AlbumDesignTokens.Text
+              )
+              Switch(
+                checked = studioUseBackdrop,
+                onCheckedChange = { studioUseBackdrop = it },
+                colors = SwitchDefaults.colors(
+                  checkedThumbColor = Color.White,
+                  checkedTrackColor = AlbumDesignTokens.Accent
+                ),
+                modifier = Modifier.testTag("edit_cover_studio_blur_switch")
+              )
+            }
+            if (studioUseBackdrop) {
+              Row(
+                modifier = Modifier.fillMaxWidth(),
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.spacedBy(10.dp)
+              ) {
+                Text(
+                  text = stringResource(id = R.string.edit_cover_studio_blur_label),
+                  fontFamily = AlbumDesignTokens.OutfitFontFamily,
+                  fontSize = 12.sp,
+                  color = AlbumDesignTokens.DimText
+                )
+                Slider(
+                  value = studioBlurAmount,
+                  onValueChange = { studioBlurAmount = it },
+                  valueRange = 0.1f..1f,
+                  colors = SliderDefaults.colors(
+                    thumbColor = Color.White,
+                    activeTrackColor = AlbumDesignTokens.Accent,
+                    inactiveTrackColor = Color.White.copy(alpha = 0.16f)
+                  ),
+                  modifier = Modifier.weight(1f)
+                )
+              }
+            }
+          }
+
+          // Editable cover title
+          OutlinedTextField(
+            value = studioTitle,
+            onValueChange = { if (it.length <= 36) studioTitle = it },
+            singleLine = true,
+            label = {
+              Text(
+                text = stringResource(id = R.string.edit_cover_studio_title_label),
+                fontSize = 12.sp
+              )
+            },
+            shape = RoundedCornerShape(14.dp),
+            colors = OutlinedTextFieldDefaults.colors(
+              focusedTextColor = AlbumDesignTokens.Text,
+              unfocusedTextColor = AlbumDesignTokens.Text,
+              focusedBorderColor = AlbumDesignTokens.Accent,
+              unfocusedBorderColor = AlbumDesignTokens.Border,
+              focusedLabelColor = AlbumDesignTokens.Accent,
+              unfocusedLabelColor = AlbumDesignTokens.DimText,
+              cursorColor = AlbumDesignTokens.Accent
+            ),
+            modifier = Modifier
+              .fillMaxWidth()
+              .testTag("edit_cover_studio_title_input")
+          )
         }
       }
 
@@ -823,6 +1087,17 @@ internal fun EditAlbumCoverSheetContent(
                   onSaveMix(mixImages.toList())
                   onDismiss()
                 }
+              }
+              CustomCoverMode.STUDIO -> {
+                onSaveStudio(
+                  studioTitle.ifBlank { albumInfo.title },
+                  albumInfo.artist.ifBlank { "AURIX" },
+                  studioPalette.id,
+                  studioLayout.id,
+                  studioBackdropSource,
+                  studioBlurAmount
+                )
+                onDismiss()
               }
               CustomCoverMode.APP_ICON -> {
                 onSaveAppIcon()
@@ -971,6 +1246,7 @@ private fun EditCoverModeTabs(
   val tabs = listOf(
     CustomCoverMode.PHOTO to stringResource(id = R.string.edit_cover_tab_photo),
     CustomCoverMode.MIX to stringResource(id = R.string.edit_cover_tab_mix),
+    CustomCoverMode.STUDIO to stringResource(id = R.string.edit_cover_tab_studio),
     CustomCoverMode.APP_ICON to stringResource(id = R.string.edit_cover_tab_app_icon)
   )
   val colorSpec = if (reducedMotion) snap<Color>() else tween<Color>(durationMillis = 220, easing = FastOutSlowInEasing)
@@ -989,6 +1265,7 @@ private fun EditCoverModeTabs(
       val tag = when (mode) {
         CustomCoverMode.PHOTO -> "edit_cover_tab_photo"
         CustomCoverMode.MIX -> "edit_cover_tab_mix"
+        CustomCoverMode.STUDIO -> "edit_cover_tab_studio"
         CustomCoverMode.APP_ICON -> "edit_cover_tab_app_icon"
       }
       val pillBg by animateColorAsState(
@@ -1021,12 +1298,170 @@ private fun EditCoverModeTabs(
         Text(
           text = label,
           fontFamily = AlbumDesignTokens.OutfitFontFamily,
-          fontSize = 13.sp,
+          fontSize = 12.sp,
           fontWeight = if (selected) FontWeight.Bold else FontWeight.Medium,
           color = textColor,
           maxLines = 1,
           overflow = TextOverflow.Ellipsis
         )
+      }
+    }
+  }
+}
+
+@Composable
+private fun StudioCoverPreview(
+  title: String,
+  subtitle: String,
+  palette: CoverStudioPalette,
+  layout: CoverStudioLayout,
+  backdropSource: String?,
+  blurAmount: Float
+) {
+  val startColor = Color(palette.startColorInt)
+  val midColor = Color(palette.midColorInt)
+  val endColor = Color(palette.endColorInt)
+  val cleanTitle = title.trim().ifBlank { "AURIX" }
+
+  Box(
+    modifier = Modifier
+      .fillMaxSize()
+      .background(Brush.linearGradient(listOf(startColor, midColor, endColor)))
+  ) {
+    if (!backdropSource.isNullOrBlank() && backdropSource != APP_ICON_ARTWORK) {
+      AsyncImage(
+        model = backdropSource,
+        contentDescription = null,
+        contentScale = ContentScale.Crop,
+        modifier = Modifier
+          .fillMaxSize()
+          .blur((blurAmount * 18f).dp)
+          .graphicsLayer { alpha = 0.72f }
+      )
+      Box(
+        modifier = Modifier
+          .fillMaxSize()
+          .background(
+            Brush.linearGradient(
+              listOf(startColor.copy(alpha = 0.56f), endColor.copy(alpha = 0.76f))
+            )
+          )
+      )
+    }
+
+    when (layout) {
+      CoverStudioLayout.CENTER -> {
+        Column(
+          modifier = Modifier
+            .fillMaxSize()
+            .padding(16.dp),
+          horizontalAlignment = Alignment.CenterHorizontally,
+          verticalArrangement = Arrangement.Center
+        ) {
+          Text(
+            text = cleanTitle,
+            fontFamily = AlbumDesignTokens.OutfitFontFamily,
+            fontSize = if (cleanTitle.length > 14) 16.sp else 20.sp,
+            fontWeight = FontWeight.ExtraBold,
+            color = Color.White,
+            textAlign = TextAlign.Center,
+            maxLines = 2,
+            overflow = TextOverflow.Ellipsis
+          )
+          if (subtitle.isNotBlank()) {
+            Spacer(modifier = Modifier.height(4.dp))
+            Text(
+              text = subtitle.uppercase(),
+              fontSize = 9.sp,
+              letterSpacing = 1.sp,
+              color = Color.White.copy(alpha = 0.78f),
+              maxLines = 1,
+              overflow = TextOverflow.Ellipsis
+            )
+          }
+        }
+      }
+
+      CoverStudioLayout.EDITORIAL -> {
+        Box(
+          modifier = Modifier
+            .fillMaxSize()
+            .background(
+              Brush.verticalGradient(
+                listOf(Color.Transparent, Color(0xB8060A14)),
+                startY = 120f
+              )
+            )
+        )
+        Column(
+          modifier = Modifier
+            .align(Alignment.BottomStart)
+            .padding(16.dp),
+          verticalArrangement = Arrangement.spacedBy(4.dp)
+        ) {
+          Box(
+            modifier = Modifier
+              .width(22.dp)
+              .height(3.dp)
+              .clip(CircleShape)
+              .background(Color.White.copy(alpha = 0.9f))
+          )
+          Text(
+            text = cleanTitle,
+            fontFamily = AlbumDesignTokens.OutfitFontFamily,
+            fontSize = 16.sp,
+            fontWeight = FontWeight.ExtraBold,
+            color = Color.White,
+            maxLines = 2,
+            overflow = TextOverflow.Ellipsis
+          )
+          if (subtitle.isNotBlank()) {
+            Text(
+              text = subtitle,
+              fontSize = 10.sp,
+              color = Color.White.copy(alpha = 0.78f),
+              maxLines = 1,
+              overflow = TextOverflow.Ellipsis
+            )
+          }
+        }
+      }
+
+      CoverStudioLayout.MONOGRAM -> {
+        Column(
+          modifier = Modifier
+            .fillMaxSize()
+            .padding(14.dp),
+          horizontalAlignment = Alignment.CenterHorizontally,
+          verticalArrangement = Arrangement.Center
+        ) {
+          Box(
+            modifier = Modifier
+              .size(86.dp)
+              .clip(CircleShape)
+              .background(Color.White.copy(alpha = 0.16f))
+              .border(1.5.dp, Color.White.copy(alpha = 0.38f), CircleShape),
+            contentAlignment = Alignment.Center
+          ) {
+            Text(
+              text = AlbumCoverStorage.buildMonogramText(cleanTitle),
+              fontFamily = AlbumDesignTokens.OutfitFontFamily,
+              fontSize = 30.sp,
+              fontWeight = FontWeight.Black,
+              color = Color.White
+            )
+          }
+          Spacer(modifier = Modifier.height(10.dp))
+          Text(
+            text = cleanTitle,
+            fontFamily = AlbumDesignTokens.OutfitFontFamily,
+            fontSize = 12.sp,
+            fontWeight = FontWeight.Bold,
+            color = Color.White.copy(alpha = 0.92f),
+            maxLines = 1,
+            overflow = TextOverflow.Ellipsis
+          )
+        }
       }
     }
   }

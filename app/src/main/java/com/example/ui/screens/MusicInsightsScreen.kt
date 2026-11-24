@@ -67,6 +67,10 @@ fun MusicInsightsScreen(
   darkTheme: Boolean,
   reducedMotion: Boolean,
   verifiedLyricsIds: Set<String> = emptySet(),
+  orbiMood: OrbiMood = OrbiMood.CLASSIC_IDLE,
+  orbiTheme: OrbiCompanionTheme = OrbiCompanionTheme.AURORA,
+  orbiBadges: List<OrbiMilestoneBadge> = emptyList(),
+  onSelectOrbiTheme: (OrbiCompanionTheme) -> Unit = {},
   onBack: () -> Unit,
   onSelectMostPlayedFilter: (MostPlayedFilter) -> Unit,
   onCheckLyrics: (Song) -> Unit,
@@ -74,6 +78,7 @@ fun MusicInsightsScreen(
   onFavoriteClick: (Song) -> Unit
 ) {
   var showDnaCard by rememberSaveable { mutableStateOf(true) }
+  var showOrbiCard by rememberSaveable { mutableStateOf(true) }
   var showMostPlayedCard by rememberSaveable { mutableStateOf(true) }
   var showTrendingCard by rememberSaveable { mutableStateOf(true) }
   var showRisingArtistsCard by rememberSaveable { mutableStateOf(true) }
@@ -153,6 +158,23 @@ fun MusicInsightsScreen(
         isExpanded = showDnaCard,
         onToggleExpand = { showDnaCard = !showDnaCard }
       )
+    }
+
+    // 1b. Orbi Companion & Milestone Badges Card
+    if (orbiBadges.isNotEmpty()) {
+      item {
+        OrbiCompanionInsightsCard(
+          mood = orbiMood,
+          selectedTheme = orbiTheme,
+          badges = orbiBadges,
+          isPlaying = isPlaying,
+          darkTheme = darkTheme,
+          reducedMotion = reducedMotion,
+          isExpanded = showOrbiCard,
+          onToggleExpand = { showOrbiCard = !showOrbiCard },
+          onSelectTheme = onSelectOrbiTheme
+        )
+      }
     }
 
     // 2. Most Played Card (Week / Month / All time)

@@ -11,10 +11,10 @@ import org.junit.Test
 class CrashFixStabilityTest {
 
   @Test
-  fun release204_metadataAndVersionCodeAreConsistent() {
-    assertEquals("2.0.4", BuildConfig.VERSION_NAME)
-    assertEquals(20004, BuildConfig.VERSION_CODE)
-    assertTrue("Release 2.0.4 versionCode must exceed 2.0.3 (20003)", BuildConfig.VERSION_CODE > 20003)
+  fun release210_metadataAndVersionCodeAreConsistent() {
+    assertEquals("2.1.0", BuildConfig.VERSION_NAME)
+    assertEquals(20100, BuildConfig.VERSION_CODE)
+    assertTrue("Release 2.1.0 versionCode must exceed 2.0.4 (20004)", BuildConfig.VERSION_CODE > 20004)
     assertEquals(420, com.example.ui.screens.SELECT_BAR_OPEN_DURATION_MS)
     assertEquals(600, com.example.ui.screens.SELECT_CIRCLE_OPEN_DURATION_MS)
     assertEquals(380L, com.example.ui.screens.SELECT_CLOSE_CLEAR_DELAY_MS)
@@ -392,5 +392,73 @@ class CrashFixStabilityTest {
     assertEquals(800, com.example.widget.WidgetPhotoStorage.CROP_OUTPUT_WIDTH)
     assertEquals(400, com.example.widget.WidgetPhotoStorage.CROP_OUTPUT_HEIGHT)
     assertEquals(90, com.example.widget.WidgetPhotoStorage.JPEG_QUALITY)
+  }
+
+  @Test
+  fun orbiCompanionStandbyAndCoverStudio_v210LogicIsDeterministic() {
+    // Preference keys
+    assertEquals("orbi_companion_theme", com.example.data.PreferencesManager.ORBI_COMPANION_THEME.name)
+    assertEquals("standby_vinyl_style", com.example.data.PreferencesManager.STANDBY_VINYL_STYLE.name)
+    assertEquals(6, com.example.ui.screens.OrbiCompanionTheme.entries.size)
+    assertEquals(com.example.ui.screens.OrbiCompanionTheme.AURORA, com.example.ui.screens.OrbiCompanionTheme.fromId("unknown"))
+
+    // Orbi mood reactivity
+    val lofiSong = Song("s1", "Midnight Lo-Fi Study", "Chillhop", "", 180L, "")
+    val phonkSong = Song("s2", "Tokyo Drift Phonk", "Kordhell", "", 140L, "")
+    val loveSong = Song("s3", "Soft Love Ballad", "SZA", "", 210L, "")
+
+    assertEquals(
+      com.example.ui.screens.OrbiMood.LOFI_HEADPHONES,
+      com.example.ui.screens.resolveOrbiMood(lofiSong, isPlaying = true, sleepTimerActive = false, hourOfDay = 14)
+    )
+    assertEquals(
+      com.example.ui.screens.OrbiMood.PHONK_SHADES,
+      com.example.ui.screens.resolveOrbiMood(phonkSong, isPlaying = true, sleepTimerActive = false, hourOfDay = 15)
+    )
+    assertEquals(
+      com.example.ui.screens.OrbiMood.ROMANTIC_HEART,
+      com.example.ui.screens.resolveOrbiMood(loveSong, isPlaying = true, sleepTimerActive = false, hourOfDay = 16)
+    )
+    assertEquals(
+      com.example.ui.screens.OrbiMood.NIGHT_SLEEPY,
+      com.example.ui.screens.resolveOrbiMood(lofiSong, isPlaying = true, sleepTimerActive = true, hourOfDay = 14)
+    )
+    assertEquals(
+      com.example.ui.screens.OrbiMood.NIGHT_SLEEPY,
+      com.example.ui.screens.resolveOrbiMood(null, isPlaying = false, sleepTimerActive = false, hourOfDay = 23)
+    )
+
+    // Milestone badges & theme unlock gating
+    val starterBadges = com.example.ui.screens.computeOrbiMilestoneBadges(
+      totalPlays = 0,
+      favoritesCount = 0,
+      uniqueArtistsCount = 0,
+      dominantMoodOrGenre = "",
+      hourOfDay = 12
+    )
+    assertEquals(6, starterBadges.size)
+    assertTrue(starterBadges.none { it.unlocked })
+    assertTrue(com.example.ui.screens.isOrbiThemeUnlocked(com.example.ui.screens.OrbiCompanionTheme.AURORA, starterBadges))
+    org.junit.Assert.assertFalse(
+      com.example.ui.screens.isOrbiThemeUnlocked(com.example.ui.screens.OrbiCompanionTheme.PRISMATIC, starterBadges)
+    )
+
+    val veteranBadges = com.example.ui.screens.computeOrbiMilestoneBadges(
+      totalPlays = 35,
+      favoritesCount = 8,
+      uniqueArtistsCount = 7,
+      dominantMoodOrGenre = "Chill",
+      hourOfDay = 23
+    )
+    assertTrue(veteranBadges.all { it.unlocked })
+    assertTrue(com.example.ui.screens.isOrbiThemeUnlocked(com.example.ui.screens.OrbiCompanionTheme.PRISMATIC, veteranBadges))
+
+    // Cover Blur Studio palettes, layouts & monogram helper
+    assertEquals(6, com.example.data.CoverStudioPalette.entries.size)
+    assertEquals(3, com.example.data.CoverStudioLayout.entries.size)
+    assertEquals(com.example.model.CustomCoverMode.STUDIO, com.example.model.CustomCoverMode.fromId("STUDIO"))
+    assertEquals("LN", com.example.data.AlbumCoverStorage.buildMonogramText("Late Night"))
+    assertEquals("AU", com.example.data.AlbumCoverStorage.buildMonogramText("Aurix"))
+    assertEquals("A", com.example.data.AlbumCoverStorage.buildMonogramText("   "))
   }
 }

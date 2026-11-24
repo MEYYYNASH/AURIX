@@ -112,6 +112,9 @@ fun HomeScreen(
   onOpenDailyDiscovery: () -> Unit = {},
   onOpenFavoritesMix: () -> Unit = {},
   onOpenRecentlyAdded: () -> Unit = {},
+  orbiMood: OrbiMood = OrbiMood.CLASSIC_IDLE,
+  orbiTheme: OrbiCompanionTheme = OrbiCompanionTheme.AURORA,
+  onOpenOrbiCompanion: () -> Unit = {},
   onSongClick: (Song, List<Song>) -> Unit,
   onFavoriteClick: (Song) -> Unit
 ) {
@@ -188,11 +191,14 @@ fun HomeScreen(
             verticalAlignment = Alignment.CenterVertically,
             horizontalArrangement = Arrangement.spacedBy(12.dp)
           ) {
-            AurixBrandLogo(
-              size = 42.dp,
-              cornerRadius = 13.dp,
-              animated = true,
-              reducedMotion = reducedMotion
+            OrbiCompanionAvatar(
+              mood = orbiMood,
+              theme = orbiTheme,
+              isPlaying = isPlaying,
+              reducedMotion = reducedMotion,
+              size = 44.dp,
+              onClick = onOpenOrbiCompanion,
+              modifier = Modifier.testTag("home_orbi_avatar")
             )
             Column(verticalArrangement = Arrangement.spacedBy(2.dp)) {
               Text(

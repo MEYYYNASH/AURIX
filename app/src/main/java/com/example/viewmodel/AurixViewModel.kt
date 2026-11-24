@@ -244,6 +244,10 @@ class AurixViewModel(application: Application) : AndroidViewModel(application) {
     .stateIn(viewModelScope, SharingStarted.Eagerly, true)
   val nowPlayingVisualizerEnabled: StateFlow<Boolean> = prefsManager.nowPlayingVisualizerEnabled
     .stateIn(viewModelScope, SharingStarted.Eagerly, true)
+  val orbiCompanionTheme: StateFlow<String> = prefsManager.orbiCompanionTheme
+    .stateIn(viewModelScope, SharingStarted.Eagerly, "aurora")
+  val standbyVinylStyle: StateFlow<Boolean> = prefsManager.standbyVinylStyle
+    .stateIn(viewModelScope, SharingStarted.Eagerly, true)
   val spectrumBars: StateFlow<FloatArray> = AudioSpectrumBus.bars
 
   // Search-Only Mode & YouTube Analyze/Download States
@@ -4184,6 +4188,50 @@ class AurixViewModel(application: Application) : AndroidViewModel(application) {
     }
   }
 
+  fun saveAlbumCoverStudio(
+    albumId: String,
+    title: String,
+    subtitle: String,
+    paletteId: String,
+    layoutId: String,
+    backdropSource: String?,
+    blurAmount: Float
+  ) {
+    val appContext = getApplication<Application>()
+    viewModelScope.launch {
+      val prev = dao.getAlbumCover(albumId)
+      val result = AlbumCoverStorage.renderAndSaveStudioCover(
+        context = appContext,
+        albumId = albumId,
+        title = title,
+        subtitle = subtitle,
+        paletteId = paletteId,
+        layoutId = layoutId,
+        backdropSource = backdropSource,
+        blurAmount = blurAmount
+      )
+      result.onSuccess { savedPath ->
+        AlbumCoverStorage.deleteManagedAlbumCover(appContext, prev?.coverPath)
+        AlbumBannerCache.clear()
+        dao.upsertAlbumCover(
+          AlbumCoverEntity(
+            albumId = albumId,
+            coverPath = savedPath,
+            mode = CustomCoverMode.STUDIO.id,
+            sourceUris = listOfNotNull(paletteId, layoutId, backdropSource).joinToString("\n")
+          )
+        )
+        Toast.makeText(
+          appContext,
+          appContext.getString(R.string.edit_cover_studio_saved),
+          Toast.LENGTH_SHORT
+        ).show()
+      }.onFailure {
+        Toast.makeText(appContext, "Unable to save studio cover", Toast.LENGTH_SHORT).show()
+      }
+    }
+  }
+
   fun resetAlbumCover(albumId: String) {
     val appContext = getApplication<Application>()
     viewModelScope.launch {
@@ -5267,6 +5315,8 @@ class AurixViewModel(application: Application) : AndroidViewModel(application) {
   fun setNavStyle(style: String) { safeLaunch(notifyUser = false) { prefsManager.setNavStyle(style) } }
   fun setAutoCleanYoutubeTitles(enabled: Boolean) { safeLaunch(notifyUser = false) { prefsManager.setAutoCleanYoutubeTitles(enabled) } }
   fun setNowPlayingVisualizerEnabled(enabled: Boolean) { safeLaunch(notifyUser = false) { prefsManager.setNowPlayingVisualizerEnabled(enabled) } }
+  fun setOrbiCompanionTheme(themeId: String) { safeLaunch(notifyUser = false) { prefsManager.setOrbiCompanionTheme(themeId) } }
+  fun setStandbyVinylStyle(isVinyl: Boolean) { safeLaunch(notifyUser = false) { prefsManager.setStandbyVinylStyle(isVinyl) } }
   fun setOnboardingCompleted(completed: Boolean) { safeLaunch(notifyUser = false) { prefsManager.setOnboardingCompleted(completed) } }
   fun setGithubOwner(owner: String) { safeLaunch(notifyUser = false) { prefsManager.setGithubOwner(owner) } }
   fun setGithubRepo(repo: String) { safeLaunch(notifyUser = false) { prefsManager.setGithubRepo(repo) } }

@@ -191,6 +191,14 @@ fun AlbumTrackListSection(
   onDeleteAlbum: ((alsoDeleteLocalSongs: Boolean) -> Unit)? = null,
   onSaveCoverPhoto: (imageUri: String, offsetXFraction: Float, offsetYFraction: Float, zoom: Float) -> Unit = { _, _, _, _ -> },
   onSaveCoverMix: (imageSources: List<String>) -> Unit = {},
+  onSaveCoverStudio: (
+    title: String,
+    subtitle: String,
+    paletteId: String,
+    layoutId: String,
+    backdropSource: String?,
+    blurAmount: Float
+  ) -> Unit = { _, _, _, _, _, _ -> },
   onSaveCoverAppIcon: () -> Unit = {},
   onResetCover: () -> Unit = {},
   modifier: Modifier = Modifier
@@ -482,6 +490,7 @@ fun AlbumTrackListSection(
       onDismiss = { showEditCoverSheet = false },
       onSavePhoto = onSaveCoverPhoto,
       onSaveMix = onSaveCoverMix,
+      onSaveStudio = onSaveCoverStudio,
       onSaveAppIcon = onSaveCoverAppIcon,
       onResetCover = onResetCover
     )

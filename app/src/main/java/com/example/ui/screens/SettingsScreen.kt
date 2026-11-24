@@ -138,6 +138,7 @@ fun SettingsScreen(
   currentSongArtworkUrl: String? = null,
   widgetCustomizerConfig: com.example.widget.WidgetCustomizerConfig = com.example.widget.WidgetCustomizerConfig.DEFAULT,
   onOpenWidgetCustomizer: () -> Unit = {},
+  onOpenStandby: () -> Unit = {},
   onUnlockDeveloperMode: () -> Unit = {},
   onDeveloperModeEnabledChanged: (Boolean) -> Unit = {},
   onOpenCurrentSongLyricsEditor: () -> Unit = {},
@@ -1028,6 +1029,51 @@ fun SettingsScreen(
               .fillMaxWidth()
               .testTag("settings_widget_live_preview")
           )
+        }
+      }
+    }
+
+    // Standby Desk Clock Glass Card (OLED Full-Screen Player)
+    item {
+      GlassCard(darkTheme = darkTheme, cornerRadius = 24.dp, modifier = Modifier.fillMaxWidth()) {
+        Row(
+          modifier = Modifier
+            .fillMaxWidth()
+            .clickable { onOpenStandby() }
+            .padding(18.dp)
+            .testTag("settings_standby_row"),
+          horizontalArrangement = Arrangement.SpaceBetween,
+          verticalAlignment = Alignment.CenterVertically
+        ) {
+          Column(modifier = Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(2.dp)) {
+            Text(
+              text = stringResource(id = R.string.standby_title),
+              style = MaterialTheme.typography.titleMedium.copy(fontWeight = FontWeight.Bold, lineHeight = 24.sp),
+              color = MaterialTheme.colorScheme.onSurface
+            )
+            Text(
+              text = stringResource(id = R.string.standby_subtitle),
+              style = MaterialTheme.typography.bodySmall.copy(lineHeight = 18.sp),
+              color = MaterialTheme.colorScheme.onSurfaceVariant
+            )
+          }
+          Spacer(modifier = Modifier.width(12.dp))
+          Box(
+            modifier = Modifier
+              .size(40.dp)
+              .clip(RoundedCornerShape(14.dp))
+              .background(
+                Brush.linearGradient(listOf(Color(0xFF6366F1).copy(alpha = 0.24f), Color(0xFF22D3EE).copy(alpha = 0.22f)))
+              ),
+            contentAlignment = Alignment.Center
+          ) {
+            Icon(
+              imageVector = Icons.Rounded.Schedule,
+              contentDescription = stringResource(id = R.string.standby_open_cd),
+              tint = Color(0xFF43C7F4),
+              modifier = Modifier.size(22.dp)
+            )
+          }
         }
       }
     }

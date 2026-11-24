@@ -673,4 +673,64 @@
     <string name="wc_dev_rebuild_bitmap_sub">សម្អាតឃ្លាំងសម្ងាត់ និងវាស់ពេលវេលាបង្កើត</string>
     <string name="wc_dev_exported_toast">បានចម្លងការកំណត់វិដ្ជិត JSON</string>
     <string name="wc_dev_rebuilt_toast">បានបង្កើតរូបវិដ្ជិតឡើងវិញក្នុង %1$d ms</string>
+
+    <!-- Orbi Mini-Companion & Mood Badges (v2.1.0) -->
+    <string name="orbi_companion_title">ដៃគូ Orbi</string>
+    <string name="orbi_companion_subtitle">ឆ្លើយតបតាមចម្រៀង និងដោះសោរូបរាង</string>
+    <string name="orbi_companion_cd">បើកដៃគូ Orbi</string>
+    <string name="orbi_mood_lofi">Lo-fi ស្រាលស្រទន់ · ពាក់កាស</string>
+    <string name="orbi_mood_phonk">ថាមពលខ្លាំង · ពាក់វ៉ែនតាខ្មៅ</string>
+    <string name="orbi_mood_night">យប់ជ្រៅ · ព្រះច័ន្ទងងុយគេង</string>
+    <string name="orbi_mood_romantic">មនោសញ្ចេតនា · ពន្លឺបេះដូង</string>
+    <string name="orbi_mood_party">សប្បាយរីករាយ · ពន្លឺតន្ត្រី</string>
+    <string name="orbi_mood_idle">ត្រៀមខ្លួនស្ដាប់ចម្រៀង</string>
+    <string name="orbi_themes_title">រូបរាង Orbi</string>
+    <string name="orbi_badges_title">ស្លាកសញ្ញាសមិទ្ធផល</string>
+    <string name="orbi_badges_progress">ដោះសោ %1$d ក្នុងចំណោម %2$d</string>
+    <string name="orbi_badge_locked">ជាប់សោ</string>
+    <string name="orbi_badge_unlocked">បានដោះសោ</string>
+    <string name="orbi_open_insights">មើលទាំងអស់ក្នុងស្ថិតិតន្ត្រី</string>
+    <string name="orbi_theme_aurora">អូរ៉ូរ៉ា</string>
+    <string name="orbi_theme_midnight">កណ្ដាលអធ្រាត្រ</string>
+    <string name="orbi_theme_mint">ពពកបៃតង</string>
+    <string name="orbi_theme_rose">កុលាប</string>
+    <string name="orbi_theme_sunset">មាសថ្ងៃលិច</string>
+    <string name="orbi_theme_prismatic">ឥន្ទធនូ</string>
+    <string name="orbi_badge_first_beat">ចង្វាក់ដំបូង</string>
+    <string name="orbi_badge_first_beat_req">ចាក់បទចម្រៀងដំបូងរបស់អ្នក</string>
+    <string name="orbi_badge_night_owl">អ្នកស្ដាប់ពេលយប់</string>
+    <string name="orbi_badge_night_owl_req">ស្ដាប់ពេលយប់ជ្រៅ ឬ 5+ ដង</string>
+    <string name="orbi_badge_chill_drifter">អ្នកស្ដាប់បទស្រាល</string>
+    <string name="orbi_badge_chill_drifter_req">ចាក់ 10+ ដង ឬបទបែប Chill</string>
+    <string name="orbi_badge_heart_collector">អ្នកប្រមូលបេះដូង</string>
+    <string name="orbi_badge_heart_collector_req">ចូលចិត្តបទចម្រៀង 5+ បទ</string>
+    <string name="orbi_badge_artist_explorer">អ្នករុករកសិល្បករ</string>
+    <string name="orbi_badge_artist_explorer_req">ស្ដាប់សិល្បករផ្សេងគ្នា 5+ នាក់</string>
+    <string name="orbi_badge_aurix_legend">ជើងឯក AURIX</string>
+    <string name="orbi_badge_aurix_legend_req">ចាក់ចម្រៀងបាន 30+ ដង</string>
+
+    <!-- Ambient Standby Mode / Desk Clock Player (v2.1.0) -->
+    <string name="standby_title">នាឡិកាតុ Standby</string>
+    <string name="standby_subtitle">អេក្រង់ OLED ពេញ នាឡិកា ឌីសវីនីល និងទំនុកច្រៀងផ្ទាល់</string>
+    <string name="standby_open_cd">បើកនាឡិកាតុ Standby</string>
+    <string name="standby_exit_cd">ចាកចេញពី Standby</string>
+    <string name="standby_style_vinyl">ឌីសវីនីល</string>
+    <string name="standby_style_art">រូបភាព</string>
+    <string name="standby_charging">កំពុងសាកថ្ម · %1$d%%</string>
+    <string name="standby_battery">%1$d%%</string>
+    <string name="standby_tap_hint">ប៉ះអេក្រង់ដើម្បីបង្ហាញប៊ូតុង</string>
+    <string name="standby_no_track">មិនមានបទកំពុងចាក់</string>
+
+    <!-- Custom Playlist Cover Collage & Blur Studio (v2.1.0) -->
+    <string name="edit_cover_tab_studio">ស្ទូឌីយោ</string>
+    <string name="edit_cover_mix_auto_fill">រៀប 2×2 ស្វ័យប្រវត្តិ</string>
+    <string name="edit_cover_studio_palette">ពណ៌ផ្ទៃ</string>
+    <string name="edit_cover_studio_layout">រចនាប័ទ្ម</string>
+    <string name="edit_cover_studio_layout_center">សាមញ្ញ</string>
+    <string name="edit_cover_studio_layout_editorial">ទស្សនាវដ្តី</string>
+    <string name="edit_cover_studio_layout_monogram">អក្សរកាត់</string>
+    <string name="edit_cover_studio_blur_backdrop">ផ្ទៃរូបភាពព្រិល</string>
+    <string name="edit_cover_studio_blur_label">កម្រិតព្រិល</string>
+    <string name="edit_cover_studio_title_label">ចំណងជើងគម្រប</string>
+    <string name="edit_cover_studio_saved">បានរក្សាទុកគម្របស្ទូឌីយោ</string>
 </resources>
