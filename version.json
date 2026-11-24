@@ -3,13 +3,13 @@
   "versionCode": 20002,
   "releaseDate": "2026-11-24",
   "apkUrl": "https://github.com/MEYYYNASH/AURIX/releases/download/v2.0.2/AURIX-v2.0.2.apk",
-  "sha256": "",
+  "sha256": "e651ee65d36bbb45ae95e79f8c1a8848145e54817bb13838aaf1a6c1182cf00d",
   "mandatory": false,
   "notes": [
-    "Developer Mode & Offline Custom Lyrics Editor (v2.0.2): Tap Build number 7 times in Settings > About to unlock Developer mode (ម៉ូដអ្នកអភិវឌ្ឍន៍) with a non-destructive hide/show switch (turning off hides developer tools without losing saved custom lyrics or drafts), Add/Edit lyrics buttons in the Lyrics screen, 2-step Write & TAP Sync editor with .lrc/.txt import, Play/Pause/-3s/Prev line/Undo/0.75x-1x speed, [mm:ss.xx] ±0.1s fine adjustment, -5s..+5s per-song global offset, live animation Preview mode, Room offline storage with priority over LRCLIB, .lrc export/share, auto-save drafts, unsaved confirmation, and full EN/KM localization",
-    "Lyrics Animation Picker & 5 Transition Styles (v2.0.1): Added Settings > Lyrics > Lyrics animation sheet with 5 looping live-preview cards (Slide Up, Blur Fade, Karaoke Fill, Typewriter, Pop Zoom), Both/App/Widget targeting (apply the same animation or different animations for App Lyrics vs Home Screen Widget), Replay Preview button, DataStore persistence (lyrics_anim), zero-polling exact LRC timestamp widget scheduling, Share Card live animation preview, system Remove Animations support, and full EN/KM localization",
+    "Lyrics Animation Picker & 5 Transition Styles (v2.0.2): Added Settings > Lyrics > Lyrics animation sheet with 5 looping live-preview cards (Slide Up, Blur Fade, Karaoke Fill, Typewriter, Pop Zoom), Both/App/Widget targeting (same animation or different animations for App Lyrics vs Widget), Replay Preview button, DataStore persistence (lyrics_anim), zero-polling exact LRC timestamp widget scheduling, Share Card live animation preview, system Remove Animations support, and full EN/KM localization",
     "Smooth Animated Lyrics Widget (v2.0.0): Added native 60fps/120fps glide-up, fade, and subtle scale entrance animations whenever each synced lyric line transitions in the AURIX Lyrics home screen widget using flicker-free partial RemoteViews updates",
-    "Sculpted Frosted-Glass Widget Redesign (v1.9.9): Redesigned both Lyrics and Music home screen widgets with true-dp 24dp clipped glass corners, smart letterbox-free album art cropping, vibrant edge-to-edge centerCrop Ambient glow, crisp 1dp specular rim, glowing active lyric accent bar, 3-bar waveform Lyrics pill + Orbi mark, and mini rounded album art footer"
+    "Sculpted Frosted-Glass Widget Redesign (v1.9.9): Redesigned both Lyrics and Music home screen widgets with true-dp 24dp clipped glass corners, smart letterbox-free album art cropping, vibrant edge-to-edge centerCrop Ambient glow, crisp 1dp specular rim, glowing active lyric accent bar, 3-bar waveform Lyrics pill + Orbi mark, and mini rounded album art footer",
+    "Home Screen Music & Lyrics Widgets + Shared Ambient Album Glow (v1.9.8): Added 4\u00d72 Music widget and 4\u00d72 Synced Lyrics widget powered by pre-rendered cached Ambient Album Glow synced with Settings Dim, Glass level, and Blur level plus EN/KM localization"
   ],
   "releasePageUrl": "https://github.com/MEYYYNASH/AURIX/releases/tag/v2.0.2"
 }
