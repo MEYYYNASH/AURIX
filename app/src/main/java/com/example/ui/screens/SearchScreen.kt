@@ -1095,9 +1095,7 @@ private fun YoutubeLinkGlassPane(
 
     if (isAnalyzingYoutube) {
       item {
-        GlassCard(
-          darkTheme = darkTheme,
-          cornerRadius = 26.dp,
+        Box(
           modifier = Modifier
             .fillMaxWidth()
             .semantics {
@@ -1106,28 +1104,12 @@ private fun YoutubeLinkGlassPane(
             }
             .testTag("youtube_analyzing_orbit_loader")
         ) {
-          Column(
-            modifier = Modifier
-              .fillMaxWidth()
-              .padding(vertical = 42.dp, horizontal = 24.dp),
-            horizontalAlignment = Alignment.CenterHorizontally,
-            verticalArrangement = Arrangement.spacedBy(14.dp)
-          ) {
-            OrbitLoader(
-              size = 80.dp,
-              ringColor = OrbitRingDefault,
-              planetColor = OrbitPlanetDefault,
-              eyeColor = OrbitEyeDefault,
-              cometColor = AurixTealAccent,
-              reducedMotion = reducedMotion
-            )
-            Text(
-              text = stringResource(id = R.string.search_loading_link),
-              style = MaterialTheme.typography.bodySmall.copy(fontWeight = FontWeight.Medium),
-              color = MaterialTheme.colorScheme.onSurfaceVariant,
-              textAlign = TextAlign.Center
-            )
-          }
+          StatusRow(
+            text = stringResource(id = R.string.search_loading_link),
+            runner = OrbiRunner.Search,
+            outcome = OrbiStatusOutcome.Loading,
+            reducedMotion = reducedMotion
+          )
         }
       }
     } else if (youtubePlaylist != null) {
@@ -1766,14 +1748,11 @@ fun SearchResultsArea(
               horizontalAlignment = Alignment.CenterHorizontally,
               verticalArrangement = Arrangement.spacedBy(12.dp)
             ) {
-              OrbitLoader(
-                size = 78.dp,
-                ringColor = OrbitRingDefault,
-                planetColor = OrbitPlanetDefault,
-                eyeColor = OrbitEyeDefault,
-                reducedMotion = true,
-                isStatic = true,
-                showComet = false
+              OrbiView(
+                state = OrbiState.Dim,
+                size = 84.dp,
+                runner = OrbiRunner.None,
+                reducedMotion = reducedMotion
               )
               Text(
                 text = stringResource(id = R.string.search_no_results_title),
@@ -1812,14 +1791,14 @@ fun SearchResultsArea(
               horizontalAlignment = Alignment.CenterHorizontally,
               verticalArrangement = Arrangement.spacedBy(16.dp)
             ) {
-              Icon(
-                imageVector = Icons.Rounded.ErrorOutline,
-                contentDescription = null,
-                tint = MaterialTheme.colorScheme.error,
-                modifier = Modifier.size(32.dp)
+              OrbiView(
+                state = OrbiState.Sad,
+                size = 88.dp,
+                runner = OrbiRunner.None,
+                reducedMotion = reducedMotion
               )
               Text(
-                text = state.message.ifBlank { "Search failed. Check your connection." },
+                text = state.message.ifBlank { "Can't reach YouTube" },
                 style = MaterialTheme.typography.bodyMedium.copy(fontWeight = FontWeight.Medium),
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
                 textAlign = TextAlign.Center
@@ -2760,106 +2739,18 @@ private fun SearchResultsErrorPreview() {
 
 @Composable
 private fun SearchSkeletonLoadingView(
-  darkTheme: Boolean,
+  @Suppress("UNUSED_PARAMETER") darkTheme: Boolean,
   reducedMotion: Boolean,
   modeText: String
 ) {
-  val infiniteTransition = rememberInfiniteTransition(label = "search_skeleton")
-  val alphaAnim by infiniteTransition.animateFloat(
-    initialValue = 0.45f,
-    targetValue = 0.90f,
-    animationSpec = infiniteRepeatable(
-      animation = tween(durationMillis = 900, easing = LinearEasing),
-      repeatMode = RepeatMode.Reverse
-    ),
-    label = "skeleton_alpha"
-  )
-  val currentAlpha = if (reducedMotion) 0.65f else alphaAnim
-  val placeholderBase = if (darkTheme) Color(0xFF2B3852) else Color(0xFFCBD5E1)
-  val barWidths = remember { listOf(0.84f, 0.68f, 0.50f, 0.84f, 0.78f) }
-
-  Column(
+  OrbiSearchLoadingScreen(
+    statusText = modeText,
+    runner = OrbiRunner.Search,
+    outcome = OrbiStatusOutcome.Loading,
+    showSearchBarWithCaret = false,
+    reducedMotion = reducedMotion,
     modifier = Modifier
       .fillMaxSize()
-      .padding(top = 4.dp),
-    verticalArrangement = Arrangement.spacedBy(8.dp)
-  ) {
-    Row(
-      modifier = Modifier
-        .fillMaxWidth()
-        .padding(horizontal = 6.dp, vertical = 4.dp),
-      verticalAlignment = Alignment.CenterVertically,
-      horizontalArrangement = Arrangement.spacedBy(10.dp)
-    ) {
-      OrbitLoader(
-        size = 28.dp,
-        ringColor = OrbitRingDefault,
-        planetColor = OrbitPlanetDefault,
-        eyeColor = OrbitEyeDefault,
-        cometColor = AurixTealAccent,
-        reducedMotion = reducedMotion
-      )
-      Text(
-        text = modeText,
-        style = MaterialTheme.typography.labelLarge.copy(fontWeight = FontWeight.SemiBold),
-        color = MaterialTheme.colorScheme.onSurfaceVariant,
-        maxLines = 1,
-        overflow = TextOverflow.Ellipsis
-      )
-    }
-
-    barWidths.forEach { titleFraction ->
-      Box(
-        modifier = Modifier
-          .fillMaxWidth()
-          .padding(bottom = 5.dp)
-      ) {
-        Box(
-          modifier = Modifier
-            .fillMaxWidth()
-            .standaloneNavyCardSurface(darkTheme = darkTheme)
-            .clip(RoundedCornerShape(34.dp))
-            .padding(horizontal = 14.dp, vertical = 12.dp)
-        ) {
-          Row(
-            modifier = Modifier.fillMaxWidth(),
-            verticalAlignment = Alignment.CenterVertically,
-            horizontalArrangement = Arrangement.spacedBy(12.dp)
-          ) {
-            Box(
-              modifier = Modifier
-                .size(56.dp)
-                .clip(RoundedCornerShape(16.dp))
-                .background(placeholderBase.copy(alpha = 0.85f * currentAlpha))
-            )
-            Column(
-              modifier = Modifier.weight(1f),
-              verticalArrangement = Arrangement.spacedBy(10.dp)
-            ) {
-              Box(
-                modifier = Modifier
-                  .fillMaxWidth(fraction = titleFraction)
-                  .height(14.dp)
-                  .clip(RoundedCornerShape(7.dp))
-                  .background(placeholderBase.copy(alpha = 0.82f * currentAlpha))
-              )
-              Box(
-                modifier = Modifier
-                  .fillMaxWidth(fraction = 0.50f)
-                  .height(10.dp)
-                  .clip(RoundedCornerShape(5.dp))
-                  .background(placeholderBase.copy(alpha = 0.65f * currentAlpha))
-              )
-            }
-            Box(
-              modifier = Modifier
-                .size(44.dp)
-                .clip(CircleShape)
-                .background(placeholderBase.copy(alpha = 0.78f * currentAlpha))
-            )
-          }
-        }
-      }
-    }
-  }
+      .padding(top = 4.dp)
+  )
 }

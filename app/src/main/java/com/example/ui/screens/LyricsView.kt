@@ -48,20 +48,17 @@ fun LyricsView(
   val noLyricsLocalized = stringResource(id = R.string.no_lyrics_found)
   if (lyricsResult == null) {
     Box(
-      modifier = modifier.fillMaxSize(),
+      modifier = modifier
+        .fillMaxSize()
+        .padding(horizontal = 20.dp),
       contentAlignment = Alignment.Center
     ) {
-      Column(
-        horizontalAlignment = Alignment.CenterHorizontally,
-        verticalArrangement = Arrangement.spacedBy(12.dp)
-      ) {
-        CircularProgressIndicator(color = Color.White, strokeWidth = 3.dp)
-        Text(
-          text = "Loading synced lyrics...",
-          style = MaterialTheme.typography.bodySmall,
-          color = Color.White.copy(alpha = 0.72f)
-        )
-      }
+      StatusRow(
+        text = "Finding lyrics",
+        runner = OrbiRunner.Music,
+        outcome = OrbiStatusOutcome.Loading,
+        reducedMotion = reducedMotion
+      )
     }
     return
   }

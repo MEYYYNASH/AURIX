@@ -273,26 +273,16 @@ fun YoutubeFormatPickerSheet(
         // Dynamic Body
         when (state) {
           is YoutubeFormatSheetState.Loading -> {
-            Column(
+            Box(
               modifier = Modifier
                 .fillMaxWidth()
-                .padding(vertical = 28.dp),
-              horizontalAlignment = Alignment.CenterHorizontally,
-              verticalArrangement = Arrangement.spacedBy(12.dp)
+                .padding(vertical = 12.dp)
             ) {
-              OrbitLoader(
-                size = 72.dp,
-                ringColor = OrbitRingDefault,
-                planetColor = OrbitPlanetDefault,
-                eyeColor = OrbitEyeDefault,
-                cometColor = AurixTealAccent,
-                reducedMotion = reducedMotion
-              )
-              Text(
+              StatusRow(
                 text = stringResource(id = R.string.yt_fetching_formats),
-                style = MaterialTheme.typography.bodySmall.copy(fontWeight = FontWeight.Medium),
-                color = MaterialTheme.colorScheme.onSurfaceVariant,
-                textAlign = TextAlign.Center
+                runner = OrbiRunner.SyncDown,
+                outcome = OrbiStatusOutcome.Loading,
+                reducedMotion = reducedMotion
               )
             }
           }
@@ -308,11 +298,11 @@ fun YoutubeFormatPickerSheet(
                 horizontalAlignment = Alignment.CenterHorizontally,
                 verticalArrangement = Arrangement.spacedBy(12.dp)
               ) {
-                Icon(
-                  imageVector = Icons.Rounded.ErrorOutline,
-                  contentDescription = null,
-                  tint = MaterialTheme.colorScheme.error,
-                  modifier = Modifier.size(30.dp)
+                OrbiView(
+                  state = OrbiState.Sad,
+                  size = 76.dp,
+                  runner = OrbiRunner.None,
+                  reducedMotion = reducedMotion
                 )
                 Text(
                   text = state.message,

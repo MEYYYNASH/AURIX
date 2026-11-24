@@ -162,10 +162,10 @@ class UpdateManager(
     private const val META_FILE_NAME = "aurix_update.apk.meta.json"
 
     val CURRENT_RELEASE_NOTES = listOf(
-      "Dark Glass Popup Menus & Delete Confirmation Redesign (v1.9.2): Eliminated inner blur rectangle artifacts on song & album popup menus, redesigned the Album Track 3-dots menu with glass icon capsules and track header, and redesigned Delete Album / Song confirmation dialogs in Dark Glass",
+      "Orbi Mascot Animation System (v1.9.3 Beta): Added OrbiView(state, size, runner) with white-lavender planet, -12° blinking/glancing eyes, -16° cyan-to-violet ring, glossy orbiting mini icons (Search, Music, Refresh, SyncUp, SyncDown), inline StatusRow with 2.2s text shimmer and finish crossfade, shared 60fps skeleton shimmer across Search and Home/Library loading screens, and interactive Orbi Animation Lab in Settings",
+      "Dark Glass Popup Menus & Delete Confirmation Redesign: Eliminated inner blur rectangle artifacts on song & album popup menus, redesigned the Album Track 3-dots menu with glass icon capsules and track header, and redesigned Delete Album / Song confirmation dialogs in Dark Glass",
       "Library Genre Filtering & Categorization: Filter and browse tracks in My songs, Favorites, and Recent by genre chips with live track counts, toggle By Genre grouped category headers, or tap any track's inline genre pill",
-      "Custom Accent Color Picker & Dynamic Dark Glass Accents: Choose any custom accent color in Settings via interactive HSV sliders, hex code entry, or 16 curated swatches, and watch all Dark Glass glows, borders, top lines, chips, and gradient buttons adapt live",
-      "App Update & Release Card: Restyled in #0A0810 dark glass with dynamic accent radial glows, gradient version hero, code chip, dual status tiles, and verified shield indicator"
+      "Custom Accent Color Picker & Dynamic Dark Glass Accents: Choose any custom accent color in Settings via interactive HSV sliders, hex code entry, or 16 curated swatches, and watch all Dark Glass glows, borders, top lines, chips, and gradient buttons adapt live"
     )
 
     fun parseVersionJson(rawJson: String): RemoteVersionInfo {

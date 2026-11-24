@@ -350,7 +350,7 @@ fun AurixLaunchOverlay(
           val dotFadeIn = ((ringDrawProgress.value - 0.35f) / 0.35f).coerceIn(0f, 1f)
           val trailSteps = 14
 
-          rotate(degrees = -12f, pivot = Offset(cx, cy)) {
+          rotate(degrees = -16f, pivot = Offset(cx, cy)) {
             // PASS 1 (BEHIND PLANET): Back half of self-drawing orbit ring (sin < 0)
             drawEllipticalArcSegments(
               cx = cx,
@@ -378,48 +378,74 @@ fun AurixLaunchOverlay(
                 darkTheme = darkTheme
               )
             }
+          }
 
-            // PASS 2 (PLANET): Subtle shadow + white circle + blinking/glancing oval eyes
-            drawCircle(
-              color = Color.Black.copy(alpha = if (darkTheme) 0.36f else 0.10f),
-              radius = planetRadius * 1.03f,
-              center = Offset(cx, cy + planetRadius * 0.08f)
-            )
-            drawCircle(
-              color = Color.White,
-              radius = planetRadius,
-              center = Offset(cx, cy)
-            )
-            if (!darkTheme) {
-              drawCircle(
-                color = Color(0xFFD5D8E2).copy(alpha = 0.7f),
-                radius = planetRadius,
-                center = Offset(cx, cy),
-                style = androidx.compose.ui.graphics.drawscope.Stroke(width = 1.dp.toPx())
-              )
-            }
+          // PASS 2 (PLANET): White-lavender vertical gradient (white to #9F9EF4) + -12 deg tilted oval eyes with highlights
+          drawCircle(
+            color = Color.Black.copy(alpha = if (darkTheme) 0.36f else 0.12f),
+            radius = planetRadius * 1.03f,
+            center = Offset(cx, cy + planetRadius * 0.08f)
+          )
+          drawCircle(
+            brush = Brush.verticalGradient(
+              colors = listOf(
+                Color.White,
+                Color(0xFFE7E7FD),
+                Color(0xFF9F9EF4)
+              ),
+              startY = cy - planetRadius,
+              endY = cy + planetRadius
+            ),
+            radius = planetRadius,
+            center = Offset(cx, cy)
+          )
+          drawCircle(
+            color = Color.White.copy(alpha = 0.55f),
+            radius = planetRadius,
+            center = Offset(cx, cy),
+            style = androidx.compose.ui.graphics.drawscope.Stroke(width = 1.dp.toPx())
+          )
 
-            // Simple black oval eyes slightly above center, a little apart
-            val eyeOffsetX = planetRadius * 0.215f
-            val eyeCenterY = cy - planetRadius * 0.21f
-            val glanceShiftPx = eyeGlanceX.value * (planetRadius * 0.11f)
-            val eyeWidth = planetRadius * 0.245f
-            val eyeHeight = (planetRadius * 0.42f) * eyeBlinkScale.value.coerceAtLeast(0.06f)
+          rotate(degrees = -12f, pivot = Offset(cx, cy)) {
+            val eyeOffsetX = planetRadius * 0.26f
+            val eyeCenterY = cy - planetRadius * 0.15f
+            val glanceShiftPx = eyeGlanceX.value * (planetRadius * 0.14f)
+            val eyeWidth = planetRadius * 0.25f
+            val eyeHeight = (planetRadius * 0.46f) * eyeBlinkScale.value.coerceAtLeast(0.06f)
             val cornerR = eyeWidth * 0.5f
 
+            val leftCx = cx - eyeOffsetX + glanceShiftPx
+            val rightCx = cx + eyeOffsetX + glanceShiftPx
+
             drawRoundRect(
               color = PlanetEyeDark,
-              topLeft = Offset(cx - eyeOffsetX + glanceShiftPx - eyeWidth / 2f, eyeCenterY - eyeHeight / 2f),
+              topLeft = Offset(leftCx - eyeWidth / 2f, eyeCenterY - eyeHeight / 2f),
               size = Size(eyeWidth, eyeHeight),
               cornerRadius = CornerRadius(cornerR, cornerR)
             )
             drawRoundRect(
               color = PlanetEyeDark,
-              topLeft = Offset(cx + eyeOffsetX + glanceShiftPx - eyeWidth / 2f, eyeCenterY - eyeHeight / 2f),
+              topLeft = Offset(rightCx - eyeWidth / 2f, eyeCenterY - eyeHeight / 2f),
               size = Size(eyeWidth, eyeHeight),
               cornerRadius = CornerRadius(cornerR, cornerR)
             )
 
+            if (eyeBlinkScale.value > 0.45f) {
+              val hlRadius = eyeWidth * 0.19f
+              drawCircle(
+                color = Color.White.copy(alpha = 0.94f),
+                radius = hlRadius,
+                center = Offset(leftCx - eyeWidth * 0.14f, eyeCenterY - eyeHeight * 0.20f)
+              )
+              drawCircle(
+                color = Color.White.copy(alpha = 0.94f),
+                radius = hlRadius,
+                center = Offset(rightCx - eyeWidth * 0.14f, eyeCenterY - eyeHeight * 0.20f)
+              )
+            }
+          }
+
+          rotate(degrees = -16f, pivot = Offset(cx, cy)) {
             // PASS 3 (IN FRONT OF PLANET): Front half of self-drawing orbit ring (sin >= 0)
             drawEllipticalArcSegments(
               cx = cx,

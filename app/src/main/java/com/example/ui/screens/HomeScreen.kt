@@ -261,11 +261,10 @@ fun HomeScreen(
                 .testTag("home_refresh_feed_button")
             ) {
               if (isLoadingFeatured) {
-                OrbitLoader(
-                  size = 28.dp,
-                  cardColor = iconBg,
-                  ringColor = if (darkTheme) OrbitRingDefault else Color(0xFF3A3C48),
-                  planetColor = if (darkTheme) OrbitPlanetDefault else Color.White,
+                OrbiView(
+                  state = OrbiState.Scanning,
+                  size = 30.dp,
+                  runner = OrbiRunner.Refresh,
                   reducedMotion = reducedMotion
                 )
               } else {
@@ -1049,31 +1048,16 @@ fun HomeScreen(
                     }
 
                     DailyCardState.LOADING -> {
-                      Column(
+                      Box(
                         modifier = Modifier
                           .fillMaxWidth()
-                          .height(220.dp)
-                          .clip(cardShape)
-                          .background(cardBgColor)
-                          .border(1.dp, cardBorderColor, cardShape)
-                          .padding(horizontal = 24.dp),
-                        horizontalAlignment = Alignment.CenterHorizontally,
-                        verticalArrangement = Arrangement.Center
+                          .testTag("home_daily_orbit_loader")
                       ) {
-                        OrbitLoader(
-                          size = 64.dp,
-                          cardColor = cardBgColor,
-                          ringColor = if (darkTheme) OrbitRingDefault else Color(0xFF3A3C48),
-                          planetColor = if (darkTheme) OrbitPlanetDefault else Color.White,
-                          reducedMotion = reducedMotion,
-                          modifier = Modifier.testTag("home_daily_orbit_loader")
-                        )
-                        Spacer(modifier = Modifier.height(12.dp))
-                        Text(
-                          text = stringResource(id = R.string.home_refreshing_title),
-                          style = MaterialTheme.typography.titleSmall.copy(fontWeight = FontWeight.Bold),
-                          color = MaterialTheme.colorScheme.onSurface,
-                          textAlign = TextAlign.Center
+                        OrbiDataLoadingScreen(
+                          statusText = stringResource(id = R.string.home_refreshing_title),
+                          runner = OrbiRunner.Refresh,
+                          outcome = OrbiStatusOutcome.Loading,
+                          reducedMotion = reducedMotion
                         )
                       }
                     }

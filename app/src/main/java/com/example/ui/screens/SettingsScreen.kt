@@ -135,6 +135,7 @@ fun SettingsScreen(
   var showEqualizerSheet by remember { mutableStateOf(false) }
   var showCrossfadeSheet by remember { mutableStateOf(false) }
   var showCustomAccentSheet by remember { mutableStateOf(false) }
+  var showOrbiShowcaseSheet by remember { mutableStateOf(false) }
 
   val isPresetAccent = remember(currentAccentHex) {
     accents.any { (hex, _) ->
@@ -741,9 +742,55 @@ fun SettingsScreen(
             style = MaterialTheme.typography.bodyMedium.copy(lineHeight = 22.sp),
             color = MaterialTheme.colorScheme.onSurfaceVariant
           )
+          Spacer(modifier = Modifier.height(8.dp))
+          Surface(
+            onClick = { showOrbiShowcaseSheet = true },
+            shape = RoundedCornerShape(18.dp),
+            color = MaterialTheme.colorScheme.primary.copy(alpha = 0.14f),
+            border = androidx.compose.foundation.BorderStroke(1.dp, MaterialTheme.colorScheme.primary.copy(alpha = 0.35f)),
+            modifier = Modifier
+              .fillMaxWidth()
+              .minimumInteractiveComponentSize()
+              .testTag("settings_open_orbi_preview_button")
+          ) {
+            Row(
+              modifier = Modifier
+                .fillMaxWidth()
+                .padding(horizontal = 14.dp, vertical = 12.dp),
+              verticalAlignment = Alignment.CenterVertically,
+              horizontalArrangement = Arrangement.spacedBy(12.dp)
+            ) {
+              OrbiView(
+                state = OrbiState.Scanning,
+                size = 44.dp,
+                runner = OrbiRunner.Music,
+                reducedMotion = reducedMotion
+              )
+              Column(modifier = Modifier.weight(1f)) {
+                Text(
+                  text = "Orbi Mascot Animation Lab",
+                  style = MaterialTheme.typography.titleSmall.copy(fontWeight = FontWeight.Bold),
+                  color = MaterialTheme.colorScheme.onSurface
+                )
+                Text(
+                  text = "Preview all Orbi states, orbiting mini icons, status rows & skeletons",
+                  style = MaterialTheme.typography.bodySmall,
+                  color = MaterialTheme.colorScheme.onSurfaceVariant
+                )
+              }
+            }
+          }
         }
       }
     }
+  }
+
+  if (showOrbiShowcaseSheet) {
+    OrbiMascotShowcaseSheet(
+      darkTheme = darkTheme,
+      reducedMotion = reducedMotion,
+      onDismiss = { showOrbiShowcaseSheet = false }
+    )
   }
 
   if (showReleaseNotesSheet) {

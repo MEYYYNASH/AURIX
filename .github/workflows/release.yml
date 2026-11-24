@@ -10,9 +10,9 @@ on:
   workflow_dispatch:
     inputs:
       tag:
-        description: 'Release tag (e.g. v1.9.2)'
+        description: 'Release tag (e.g. v1.9.3-beta)'
         required: false
-        default: 'v1.9.2'
+        default: 'v1.9.3-beta'
 
 permissions:
   contents: write
@@ -51,14 +51,14 @@ jobs:
           elif [ "${{ github.ref_type }}" = "tag" ]; then
             RELEASE_TAG="${{ github.ref_name }}"
           else
-            VERSION=$(grep -m1 'versionName' app/build.gradle.kts | sed -E 's/.*"([^"]+)".*/\1/')
-            RELEASE_TAG="v${VERSION:-1.9.2}"
+            VERSION=$(grep -m1 'versionName' app/build.gradle.kts | sed -E 's/.*"([^"]+)".*/\1/' | tr '[:upper:]' '[:lower:]' | tr ' ' '-')
+            RELEASE_TAG="v${VERSION:-1.9.3-beta}"
           fi
           VCODE=$(grep -m1 'versionCode' app/build.gradle.kts | sed -E 's/[^0-9]*([0-9]+).*/\1/')
           RDATE=$(grep -m1 'RELEASE_DATE' app/build.gradle.kts | sed -E 's/.*\\"([^\\"]+)\\".*/\1/')
           echo "RELEASE_TAG=${RELEASE_TAG}" >> "$GITHUB_ENV"
           echo "RELEASE_VERSION=${RELEASE_TAG#v}" >> "$GITHUB_ENV"
-          echo "RELEASE_VERSION_CODE=${VCODE:-10920}" >> "$GITHUB_ENV"
+          echo "RELEASE_VERSION_CODE=${VCODE:-10930}" >> "$GITHUB_ENV"
           echo "RELEASE_DATE=${RDATE:-$(date -u +%Y-%m-%d)}" >> "$GITHUB_ENV"
 
       - name: Ensure keystores exist
@@ -98,10 +98,10 @@ jobs:
             "sha256": os.environ["APK_SHA256"],
             "mandatory": False,
             "notes": [
-              f"Dark Glass Popup Menus & Delete Confirmation Redesign ({tag}): Eliminated inner blur rectangle artifacts on song & album popup menus, redesigned the Album Track 3-dots menu with glass icon capsules and track header, and redesigned Delete Album / Song confirmation dialogs in Dark Glass",
+              f"Orbi Mascot Animation System ({tag}): Added OrbiView(state, size, runner) with white-lavender planet, -12° blinking/glancing eyes, -16° cyan-to-violet ring, glossy orbiting mini icons (Search, Music, Refresh, SyncUp, SyncDown), inline StatusRow with 2.2s text shimmer and finish crossfade, shared 60fps skeleton shimmer across Search and Home/Library loading screens, and interactive Orbi Animation Lab in Settings",
+              "Dark Glass Popup Menus & Delete Confirmation Redesign: Eliminated inner blur rectangle artifacts on song & album popup menus, redesigned the Album Track 3-dots menu with glass icon capsules and track header, and redesigned Delete Album / Song confirmation dialogs in Dark Glass",
               "Library Genre Filtering & Categorization: Filter and browse tracks in My songs, Favorites, and Recent by genre chips with live track counts, toggle By Genre grouped category headers, or tap any track's inline genre pill",
-              "Custom Accent Color Picker & Dynamic Dark Glass Accents: Choose any custom accent color in Settings via interactive HSV sliders, hex code entry, or 16 curated swatches, and watch all Dark Glass glows, borders, top lines, chips, and gradient buttons adapt live",
-              "App Update & Release Card: Restyled in #0A0810 dark glass with dynamic accent radial glows, gradient version hero, code chip, dual status tiles, and verified shield indicator"
+              "Custom Accent Color Picker & Dynamic Dark Glass Accents: Choose any custom accent color in Settings via interactive HSV sliders, hex code entry, or 16 curated swatches, and watch all Dark Glass glows, borders, top lines, chips, and gradient buttons adapt live"
             ],
             "releasePageUrl": f"https://github.com/{repo}/releases/tag/{tag}"
           }
