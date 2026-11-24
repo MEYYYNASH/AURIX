@@ -85,6 +85,9 @@ fun ShareLyricsSheet(
   song: Song,
   lyricsResult: LyricsResult?,
   currentPositionMs: Long,
+  positionProvider: () -> Long = { currentPositionMs },
+  isPlaying: Boolean = false,
+  lyricsAnimationStyle: com.example.lyrics.LyricsAnimationStyle = com.example.lyrics.LyricsAnimationStyle.SLIDE_UP,
   lyricOffsetMs: Long = 0L,
   reducedMotion: Boolean = false,
   onDismiss: () -> Unit
@@ -331,9 +334,17 @@ fun ShareLyricsSheet(
               .fillMaxWidth(),
             contentAlignment = Alignment.Center
           ) {
+            val selectedLineTimestamps = remember(parsedLyrics, selectedIndices) {
+              selectedIndices.sorted().mapNotNull { idx -> parsedLyrics.getOrNull(idx)?.timestampMs }
+            }
             ShareLyricsCard(
               data = shareCardData,
               reducedMotion = reducedMotion,
+              lyricsAnimationStyle = lyricsAnimationStyle,
+              isPlaying = isPlaying,
+              positionProvider = positionProvider,
+              lyricOffsetMs = lyricOffsetMs,
+              selectedLineTimestampsMs = selectedLineTimestamps,
               modifier = Modifier
                 .fillMaxWidth()
                 .aspectRatio(

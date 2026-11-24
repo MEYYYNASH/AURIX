@@ -199,6 +199,16 @@ class AurixViewModel(application: Application) : AndroidViewModel(application) {
     SharingStarted.Eagerly,
     emptyList()
   )
+  val lyricsAnim: StateFlow<String> = prefsManager.lyricsAnim.stateIn(
+    viewModelScope,
+    SharingStarted.Eagerly,
+    com.example.lyrics.LyricsAnimationStyle.DEFAULT_ID
+  )
+  val lyricsWidgetAnim: StateFlow<String> = prefsManager.lyricsWidgetAnim.stateIn(
+    viewModelScope,
+    SharingStarted.Eagerly,
+    com.example.lyrics.LyricsAnimationStyle.DEFAULT_ID
+  )
   val reducedMotion = prefsManager.reducedMotion.stateIn(viewModelScope, SharingStarted.Lazily, false)
   val onboardingCompleted = prefsManager.onboardingCompleted.stateIn(viewModelScope, SharingStarted.Eagerly, false)
   val githubOwner = prefsManager.githubOwner.stateIn(viewModelScope, SharingStarted.Lazily, "MEYYYNASH")
@@ -1413,9 +1423,10 @@ class AurixViewModel(application: Application) : AndroidViewModel(application) {
         themeMode,
         language,
         dynamicBg,
-        reducedMotion
-      ) { theme, lang, glowEnabled, reduced ->
-        QuadWidgetSettingsState(theme, lang, glowEnabled, reduced)
+        reducedMotion,
+        lyricsWidgetAnim
+      ) { theme, lang, glowEnabled, reduced, widgetAnim ->
+        PentaWidgetSettingsState(theme, lang, glowEnabled, reduced, widgetAnim)
       }.collectLatest { settings ->
         runCatching {
           AurixWidgetController.syncAmbientGlowAndSettings(
@@ -1427,6 +1438,7 @@ class AurixViewModel(application: Application) : AndroidViewModel(application) {
             themeMode = settings.theme,
             language = settings.lang,
             reducedMotion = settings.reducedMotion,
+            lyricsWidgetAnimStyle = settings.widgetAnim,
             refreshWidgetsNow = true
           )
         }
@@ -1434,11 +1446,12 @@ class AurixViewModel(application: Application) : AndroidViewModel(application) {
     }
   }
 
-  private data class QuadWidgetSettingsState(
+  private data class PentaWidgetSettingsState(
     val theme: String,
     val lang: String,
     val glowEnabled: Boolean,
-    val reducedMotion: Boolean
+    val reducedMotion: Boolean,
+    val widgetAnim: String
   )
 
   private data class QuadWidgetPlayerState(
@@ -5022,6 +5035,31 @@ class AurixViewModel(application: Application) : AndroidViewModel(application) {
     safeLaunch(notifyUser = false) { prefsManager.clearLibraryRecentSearches() }
   }
   fun setReducedMotion(enabled: Boolean) { safeLaunch(notifyUser = false) { prefsManager.setReducedMotion(enabled) } }
+  fun setLyricsAnimBoth(style: com.example.lyrics.LyricsAnimationStyle) {
+    safeLaunch(notifyUser = false) {
+      prefsManager.setLyricsAnimBoth(style.id)
+      AurixWidgetController.syncAmbientGlowAndSettings(
+        context = getApplication(),
+        lyricsWidgetAnimStyle = style.id,
+        refreshWidgetsNow = true
+      )
+    }
+  }
+  fun setLyricsAnimApp(style: com.example.lyrics.LyricsAnimationStyle) {
+    safeLaunch(notifyUser = false) {
+      prefsManager.setLyricsAnimApp(style.id)
+    }
+  }
+  fun setLyricsAnimWidget(style: com.example.lyrics.LyricsAnimationStyle) {
+    safeLaunch(notifyUser = false) {
+      prefsManager.setLyricsAnimWidget(style.id)
+      AurixWidgetController.syncAmbientGlowAndSettings(
+        context = getApplication(),
+        lyricsWidgetAnimStyle = style.id,
+        refreshWidgetsNow = true
+      )
+    }
+  }
   fun setNavStyle(style: String) { safeLaunch(notifyUser = false) { prefsManager.setNavStyle(style) } }
   fun setAutoCleanYoutubeTitles(enabled: Boolean) { safeLaunch(notifyUser = false) { prefsManager.setAutoCleanYoutubeTitles(enabled) } }
   fun setNowPlayingVisualizerEnabled(enabled: Boolean) { safeLaunch(notifyUser = false) { prefsManager.setNowPlayingVisualizerEnabled(enabled) } }

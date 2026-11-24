@@ -51,6 +51,7 @@ class PlaybackService : MediaSessionService() {
   private val serviceScope = CoroutineScope(SupervisorJob() + Dispatchers.Main.immediate)
   private var monitorJob: Job? = null
   private var widgetTickerJob: Job? = null
+  private var lyricsWidgetSchedulerJob: Job? = null
   private var crossfadeJob: Job? = null
   private var skipFadeJob: Job? = null
   private var recoveryJob: Job? = null
@@ -175,6 +176,32 @@ class PlaybackService : MediaSessionService() {
         }
         if (mediaItem != null) {
           syncMediaItemToWidgets(player, mediaItem)
+        }
+      }
+
+      override fun onPositionDiscontinuity(
+        oldPosition: Player.PositionInfo,
+        newPosition: Player.PositionInfo,
+        reason: Int
+      ) {
+        if (player.isPlaying) {
+          val pos = player.currentPosition.coerceAtLeast(0L)
+          val dur = player.duration.takeIf { it > 0L } ?: 0L
+          AurixWidgetController.onPlaybackProgressTick(
+            context = this@PlaybackService,
+            positionMs = pos,
+            durationMs = dur,
+            isPlaying = true,
+            allowMusicUpdate = AurixWidgetController.hasMusicWidgets(this@PlaybackService),
+            allowLyricsUpdate = AurixWidgetController.hasLyricsWidgets(this@PlaybackService)
+          )
+          scheduleNextLyricsWidgetTransition(player)
+        }
+      }
+
+      override fun onPlaybackParametersChanged(playbackParameters: androidx.media3.common.PlaybackParameters) {
+        if (player.isPlaying) {
+          scheduleNextLyricsWidgetTransition(player)
         }
       }
 
@@ -408,6 +435,8 @@ class PlaybackService : MediaSessionService() {
   private fun updateWidgetPlayStateAndTicker(player: ExoPlayer, isPlaying: Boolean) {
     widgetTickerJob?.cancel()
     widgetTickerJob = null
+    lyricsWidgetSchedulerJob?.cancel()
+    lyricsWidgetSchedulerJob = null
 
     val snapshot = AurixWidgetController.readSnapshot(this)
     if (snapshot.songId.isNotBlank()) {
@@ -419,41 +448,82 @@ class PlaybackService : MediaSessionService() {
           positionMs = pos,
           durationMs = dur,
           isPlaying = true,
-          allowMusicUpdate = true
+          allowMusicUpdate = AurixWidgetController.hasMusicWidgets(this),
+          allowLyricsUpdate = AurixWidgetController.hasLyricsWidgets(this)
         )
       } else {
-        // Persist paused state and update Play/Pause icon once, then stop ticker to save battery
+        // Persist paused state and update Play/Pause icon once, then stop all widget jobs to save battery
         val prefs = applicationContext.getSharedPreferences("aurix_widget_snapshot_prefs", Context.MODE_PRIVATE)
         prefs.edit()
           .putBoolean("is_playing", false)
           .putLong("position_ms", pos)
           .apply()
-        AurixWidgetController.refreshAllWidgetsAsync(this, refreshMusic = true, refreshLyrics = false)
+        if (AurixWidgetController.hasMusicWidgets(this)) {
+          AurixWidgetController.refreshAllWidgetsAsync(this, refreshMusic = true, refreshLyrics = false)
+        }
       }
     }
 
     if (isPlaying) {
-      widgetTickerJob = serviceScope.launch {
-        var lastMusicPushMs = SystemClock.elapsedRealtime()
-        while (isActive) {
-          delay(350L)
-          val active = mainPlayer ?: break
-          if (!active.isPlaying) break
-          val pos = active.currentPosition.coerceAtLeast(0L)
-          val dur = active.duration.takeIf { it > 0L } ?: 0L
-          val nowMs = SystemClock.elapsedRealtime()
-          val shouldUpdateMusic = (nowMs - lastMusicPushMs) >= 1_000L
-          if (shouldUpdateMusic) {
-            lastMusicPushMs = nowMs
+      // Music widget progress bar ticks ~1s while playing ONLY if a Music widget is installed
+      if (AurixWidgetController.hasMusicWidgets(this)) {
+        widgetTickerJob = serviceScope.launch {
+          while (isActive) {
+            delay(1_000L)
+            val active = mainPlayer ?: break
+            if (!active.isPlaying) break
+            if (!AurixWidgetController.hasMusicWidgets(this@PlaybackService)) break
+            val pos = active.currentPosition.coerceAtLeast(0L)
+            val dur = active.duration.takeIf { it > 0L } ?: 0L
+            AurixWidgetController.onPlaybackProgressTick(
+              context = this@PlaybackService,
+              positionMs = pos,
+              durationMs = dur,
+              isPlaying = true,
+              allowMusicUpdate = true,
+              allowLyricsUpdate = false
+            )
           }
-          AurixWidgetController.onPlaybackProgressTick(
-            context = this@PlaybackService,
-            positionMs = pos,
-            durationMs = dur,
-            isPlaying = true,
-            allowMusicUpdate = shouldUpdateMusic
-          )
         }
+      }
+
+      // Lyrics widget uses zero-polling exact LRC timestamp scheduling
+      scheduleNextLyricsWidgetTransition(player)
+    }
+  }
+
+  private fun scheduleNextLyricsWidgetTransition(player: ExoPlayer) {
+    lyricsWidgetSchedulerJob?.cancel()
+    lyricsWidgetSchedulerJob = null
+    if (!player.isPlaying) return
+    if (!AurixWidgetController.hasLyricsWidgets(this)) return
+
+    lyricsWidgetSchedulerJob = serviceScope.launch {
+      while (isActive) {
+        val active = mainPlayer ?: break
+        if (!active.isPlaying) break
+        if (!AurixWidgetController.hasLyricsWidgets(this@PlaybackService)) break
+        val pos = active.currentPosition.coerceAtLeast(0L)
+        val speed = active.playbackParameters.speed.coerceIn(0.25f, 4.0f)
+        val waitMs = AurixWidgetController.computeDelayUntilNextLyricLineMs(
+          context = this@PlaybackService,
+          positionMs = pos,
+          playbackSpeed = speed
+        ) ?: break
+        delay(waitMs)
+
+        val current = mainPlayer ?: break
+        if (!current.isPlaying) break
+        val newPos = current.currentPosition.coerceAtLeast(0L)
+        val newDur = current.duration.takeIf { it > 0L } ?: 0L
+        AurixWidgetController.onPlaybackProgressTick(
+          context = this@PlaybackService,
+          positionMs = newPos,
+          durationMs = newDur,
+          isPlaying = true,
+          allowMusicUpdate = false,
+          allowLyricsUpdate = true
+        )
       }
     }
   }
@@ -512,6 +582,9 @@ class PlaybackService : MediaSessionService() {
         lyricsResult = lyricsResult,
         lyricOffsetMs = offsetMs
       )
+      if (player.isPlaying) {
+        scheduleNextLyricsWidgetTransition(player)
+      }
     }
   }
 

@@ -10,9 +10,9 @@ on:
   workflow_dispatch:
     inputs:
       tag:
-        description: 'Release tag (e.g. v2.0.0)'
+        description: 'Release tag (e.g. v2.0.1)'
         required: false
-        default: 'v2.0.0'
+        default: 'v2.0.1'
 
 permissions:
   contents: write
@@ -52,13 +52,13 @@ jobs:
             RELEASE_TAG="${{ github.ref_name }}"
           else
             VERSION=$(grep -m1 'versionName' app/build.gradle.kts | sed -E 's/.*"([^"]+)".*/\1/' | tr '[:upper:]' '[:lower:]' | tr ' ' '-')
-            RELEASE_TAG="v${VERSION:-2.0.0}"
+            RELEASE_TAG="v${VERSION:-2.0.1}"
           fi
           VCODE=$(grep -m1 'versionCode' app/build.gradle.kts | sed -E 's/[^0-9]*([0-9]+).*/\1/')
           RDATE=$(grep -m1 'RELEASE_DATE' app/build.gradle.kts | sed -E 's/.*\\"([^\\"]+)\\".*/\1/')
           echo "RELEASE_TAG=${RELEASE_TAG}" >> "$GITHUB_ENV"
           echo "RELEASE_VERSION=${RELEASE_TAG#v}" >> "$GITHUB_ENV"
-          echo "RELEASE_VERSION_CODE=${VCODE:-20000}" >> "$GITHUB_ENV"
+          echo "RELEASE_VERSION_CODE=${VCODE:-20001}" >> "$GITHUB_ENV"
           echo "RELEASE_DATE=${RDATE:-$(date -u +%Y-%m-%d)}" >> "$GITHUB_ENV"
 
       - name: Ensure keystores exist
@@ -98,10 +98,10 @@ jobs:
             "sha256": os.environ["APK_SHA256"],
             "mandatory": False,
             "notes": [
-              f"Smooth Animated Lyrics Widget ({tag}): Added native 60fps/120fps glide-up, fade, and subtle scale entrance animations whenever each synced lyric line transitions in the AURIX Lyrics home screen widget using flicker-free partial RemoteViews updates, beat-accurate 350ms LRC line detection (while keeping Music widget progress throttled to ~1s and zero polling when paused), and full Reduced Motion accessibility support",
-              "Sculpted Frosted-Glass Widget Redesign (v1.9.9): Redesigned both Lyrics and Music home screen widgets with true-dp 24dp clipped glass corners (zero corner stretching), smart letterbox-free album art cropping and vibrant edge-to-edge centerCrop Ambient glow, crisp 1dp specular perimeter rim, glowing cyan-to-violet active lyric accent bar, sleek 3-bar waveform Lyrics pill + Orbi mark, mini rounded album art footer with bold Title · Artist styling, and precision-proportioned frosted glass control buttons",
-              "Home Screen Music & Lyrics Widgets + Shared Ambient Album Glow (v1.9.8): Added 4×2 Music widget and 4×2 Synced Lyrics widget powered by pre-rendered cached Ambient Album Glow synced with Settings Dim (0–90%, default 40%), Glass level (0–100%, default 50%), and Blur level (0–100%, default 60%) plus EN/KM localization",
-              "Library Recent Search History & Customizable Dynamic Artwork Background (v1.9.7): Added Library search bar with last-5 recent search history on tap/focus, plus custom Dim, Glass level (កម្រិតកញ្ចក់), and Blur level (កម្រិត Blur) controls with localized EN/KM Reset-to-Default confirmation dialog"
+              f"Lyrics Animation Picker & 5 Transition Styles ({tag}): Added Settings > Lyrics > Lyrics animation sheet with 5 looping live-preview cards (Slide Up, Blur Fade, Karaoke Fill, Typewriter, Pop Zoom), Both/App/Widget targeting (same animation or different animations for App Lyrics vs Widget), Replay Preview button, DataStore persistence (lyrics_anim), zero-polling exact LRC timestamp widget scheduling, Share Card live animation preview, system Remove Animations support, and full EN/KM localization",
+              "Smooth Animated Lyrics Widget (v2.0.0): Added native 60fps/120fps glide-up, fade, and subtle scale entrance animations whenever each synced lyric line transitions in the AURIX Lyrics home screen widget using flicker-free partial RemoteViews updates",
+              "Sculpted Frosted-Glass Widget Redesign (v1.9.9): Redesigned both Lyrics and Music home screen widgets with true-dp 24dp clipped glass corners, smart letterbox-free album art cropping, vibrant edge-to-edge centerCrop Ambient glow, crisp 1dp specular rim, glowing active lyric accent bar, 3-bar waveform Lyrics pill + Orbi mark, and mini rounded album art footer",
+              "Home Screen Music & Lyrics Widgets + Shared Ambient Album Glow (v1.9.8): Added 4×2 Music widget and 4×2 Synced Lyrics widget powered by pre-rendered cached Ambient Album Glow synced with Settings Dim, Glass level, and Blur level plus EN/KM localization"
             ],
             "releasePageUrl": f"https://github.com/{repo}/releases/tag/{tag}"
           }
@@ -127,10 +127,10 @@ jobs:
             mandatory: false
 
             What's New in AURIX ${{ env.RELEASE_TAG }}:
-            - Smooth Animated Lyrics Widget: Native 60fps/120fps glide-up, fade, and subtle scale entrance animations whenever each synced lyric line changes in the AURIX Lyrics widget via flicker-free partial RemoteViews updates, beat-accurate 350ms LRC line detection (Music progress stays throttled at ~1s and stops on pause), and Reduced Motion support
+            - Lyrics Animation Picker & 5 Transition Styles: Settings > Lyrics > Lyrics animation opens a bottom sheet with 5 looping live-preview cards (Slide Up, Blur Fade, Karaoke Fill, Typewriter, Pop Zoom), Both/App/Widget targeting (apply the same animation or different animations for App Lyrics vs Home Screen Widget), Replay Preview button, zero-polling exact LRC timestamp widget scheduling, Share Card live animation preview, and EN/KM localization
+            - Smooth Animated Lyrics Widget (v2.0.0): Native 60fps/120fps ViewFlipper line transitions with zero-flicker partial RemoteViews updates
             - Sculpted Frosted-Glass Widget Redesign (v1.9.9): True-dp 24dp clipped glass corners, smart letterbox-free album art cropping, vibrant edge-to-edge Ambient glow, crisp 1dp specular rim, glowing active lyric accent bar, 3-bar waveform Lyrics badge + Orbi mark, and mini rounded album cover footer
-            - Home Screen Music & Lyrics Widgets + Shared Ambient Album Glow (v1.9.8): 4×2 Music and Synced Lyrics widgets powered by shared Settings Ambient glow (Dim 0–90% default 40%, Glass 0–100% default 50%, Blur 0–100% default 60%) and EN/KM localization
-            - Library Recent Search History & Customizable Dynamic Artwork Background (v1.9.7): Library search bar with last-5 recent searches plus customizable Ambient glow sliders and Reset-to-Default confirmation dialog
+            - Home Screen Music & Lyrics Widgets + Shared Ambient Album Glow (v1.9.8): 4×2 Music and Synced Lyrics widgets powered by shared Settings Ambient glow and EN/KM localization
           files: |
             app/build/outputs/apk/release/app-release.apk
             AURIX-${{ env.RELEASE_TAG }}.apk

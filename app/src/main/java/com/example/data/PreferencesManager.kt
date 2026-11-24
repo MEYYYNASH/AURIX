@@ -67,6 +67,8 @@ class PreferencesManager(private val context: Context) {
     val AUTO_CLEAN_YOUTUBE_TITLES = booleanPreferencesKey("auto_clean_youtube_titles")
     val NOW_PLAYING_VISUALIZER_ENABLED = booleanPreferencesKey("now_playing_visualizer_enabled")
     val LIBRARY_RECENT_SEARCHES = stringPreferencesKey("library_recent_searches")
+    val LYRICS_ANIM = stringPreferencesKey("lyrics_anim")
+    val LYRICS_WIDGET_ANIM = stringPreferencesKey("lyrics_widget_anim")
 
     fun decodeRecentSearches(raw: String?): List<String> {
       if (raw.isNullOrBlank()) return emptyList()
@@ -135,6 +137,12 @@ class PreferencesManager(private val context: Context) {
   val nowPlayingVisualizerEnabled: Flow<Boolean> = safeDataFlow.map { prefs -> prefs[NOW_PLAYING_VISUALIZER_ENABLED] ?: true }
   val libraryRecentSearches: Flow<List<String>> = safeDataFlow.map { prefs ->
     decodeRecentSearches(prefs[LIBRARY_RECENT_SEARCHES])
+  }
+  val lyricsAnim: Flow<String> = safeDataFlow.map { prefs ->
+    com.example.lyrics.LyricsAnimationStyle.fromId(prefs[LYRICS_ANIM]).id
+  }
+  val lyricsWidgetAnim: Flow<String> = safeDataFlow.map { prefs ->
+    com.example.lyrics.LyricsAnimationStyle.fromId(prefs[LYRICS_WIDGET_ANIM] ?: prefs[LYRICS_ANIM]).id
   }
 
   suspend fun setThemeMode(mode: String) { context.dataStore.edit { it[THEME_MODE] = mode } }
@@ -261,6 +269,35 @@ class PreferencesManager(private val context: Context) {
   suspend fun setNowPlayingVisualizerEnabled(enabled: Boolean) {
     context.dataStore.edit { prefs ->
       prefs[NOW_PLAYING_VISUALIZER_ENABLED] = enabled
+    }
+  }
+
+  suspend fun setLyricsAnimBoth(styleId: String) {
+    val normalized = com.example.lyrics.LyricsAnimationStyle.fromId(styleId).id
+    context.dataStore.edit { prefs ->
+      prefs[LYRICS_ANIM] = normalized
+      prefs[LYRICS_WIDGET_ANIM] = normalized
+    }
+  }
+
+  suspend fun setLyricsAnimApp(styleId: String) {
+    val normalized = com.example.lyrics.LyricsAnimationStyle.fromId(styleId).id
+    context.dataStore.edit { prefs ->
+      // Preserve current widget style if it was previously inheriting lyrics_anim
+      if (prefs[LYRICS_WIDGET_ANIM] == null) {
+        prefs[LYRICS_WIDGET_ANIM] = com.example.lyrics.LyricsAnimationStyle.fromId(prefs[LYRICS_ANIM]).id
+      }
+      prefs[LYRICS_ANIM] = normalized
+    }
+  }
+
+  suspend fun setLyricsAnimWidget(styleId: String) {
+    val normalized = com.example.lyrics.LyricsAnimationStyle.fromId(styleId).id
+    context.dataStore.edit { prefs ->
+      if (prefs[LYRICS_ANIM] == null) {
+        prefs[LYRICS_ANIM] = com.example.lyrics.LyricsAnimationStyle.DEFAULT_ID
+      }
+      prefs[LYRICS_WIDGET_ANIM] = normalized
     }
   }
 }

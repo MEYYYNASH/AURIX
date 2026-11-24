@@ -123,7 +123,12 @@ fun SettingsScreen(
   onDynamicBgGlassChanged: (Float) -> Unit = {},
   onDynamicBgBlurChanged: (Float) -> Unit = {},
   onDynamicBgSliderReleased: () -> Unit = {},
-  onResetDynamicBgCustomization: () -> Unit = {}
+  onResetDynamicBgCustomization: () -> Unit = {},
+  appLyricsAnim: com.example.lyrics.LyricsAnimationStyle = com.example.lyrics.LyricsAnimationStyle.SLIDE_UP,
+  widgetLyricsAnim: com.example.lyrics.LyricsAnimationStyle = com.example.lyrics.LyricsAnimationStyle.SLIDE_UP,
+  onSelectLyricsAnimBoth: (com.example.lyrics.LyricsAnimationStyle) -> Unit = {},
+  onSelectLyricsAnimApp: (com.example.lyrics.LyricsAnimationStyle) -> Unit = {},
+  onSelectLyricsAnimWidget: (com.example.lyrics.LyricsAnimationStyle) -> Unit = {}
 ) {
   val context = LocalContext.current
   LaunchedEffect(Unit) {
@@ -145,6 +150,7 @@ fun SettingsScreen(
   var showCustomAccentSheet by remember { mutableStateOf(false) }
   var showOrbiShowcaseSheet by remember { mutableStateOf(false) }
   var showResetDynamicBgConfirmDialog by remember { mutableStateOf(false) }
+  var showLyricsAnimationSheet by remember { mutableStateOf(false) }
   var selectedAppIcon by remember { mutableStateOf(com.example.data.IconManager.getCurrentIcon(context)) }
 
   val isPresetAccent = remember(currentAccentHex) {
@@ -888,6 +894,61 @@ fun SettingsScreen(
       }
     }
 
+    // Lyrics Glass Card (Settings > Lyrics > Lyrics animation)
+    item {
+      GlassCard(darkTheme = darkTheme, cornerRadius = 24.dp, modifier = Modifier.fillMaxWidth()) {
+        Column(modifier = Modifier.padding(vertical = 8.dp)) {
+          Text(
+            text = stringResource(id = R.string.settings_lyrics_section_title),
+            style = MaterialTheme.typography.titleMedium.copy(fontWeight = FontWeight.Bold, lineHeight = 24.sp),
+            color = MaterialTheme.colorScheme.onSurface,
+            modifier = Modifier.padding(horizontal = 18.dp, vertical = 8.dp)
+          )
+
+          Row(
+            modifier = Modifier
+              .fillMaxWidth()
+              .clickable { showLyricsAnimationSheet = true }
+              .padding(horizontal = 18.dp, vertical = 12.dp)
+              .testTag("settings_lyrics_animation_row"),
+            horizontalArrangement = Arrangement.SpaceBetween,
+            verticalAlignment = Alignment.CenterVertically
+          ) {
+            Column(modifier = Modifier.weight(1f)) {
+              Text(
+                text = stringResource(id = R.string.settings_lyrics_anim_title),
+                style = MaterialTheme.typography.bodyLarge.copy(fontWeight = FontWeight.Medium, lineHeight = 22.sp),
+                color = MaterialTheme.colorScheme.onSurface
+              )
+              val animSummary = if (appLyricsAnim == widgetLyricsAnim) {
+                stringResource(
+                  id = R.string.settings_lyrics_anim_summary_both,
+                  lyricsAnimDisplayName(appLyricsAnim)
+                )
+              } else {
+                stringResource(
+                  id = R.string.settings_lyrics_anim_summary_split,
+                  lyricsAnimDisplayName(appLyricsAnim),
+                  lyricsAnimDisplayName(widgetLyricsAnim)
+                )
+              }
+              Text(
+                text = animSummary,
+                style = MaterialTheme.typography.bodySmall.copy(lineHeight = 18.sp),
+                color = MaterialTheme.colorScheme.primary
+              )
+            }
+            Spacer(modifier = Modifier.width(10.dp))
+            Icon(
+              imageVector = Icons.Rounded.Lyrics,
+              contentDescription = null,
+              tint = MaterialTheme.colorScheme.primary
+            )
+          }
+        }
+      }
+    }
+
     // Language Glass Card
     item {
       GlassCard(darkTheme = darkTheme, cornerRadius = 24.dp, modifier = Modifier.fillMaxWidth()) {
@@ -1115,6 +1176,19 @@ fun SettingsScreen(
           )
         }
       }
+    )
+  }
+
+  if (showLyricsAnimationSheet) {
+    LyricsAnimationSheet(
+      appLyricsAnim = appLyricsAnim,
+      widgetLyricsAnim = widgetLyricsAnim,
+      reducedMotion = reducedMotion,
+      darkTheme = darkTheme,
+      onSelectBoth = onSelectLyricsAnimBoth,
+      onSelectApp = onSelectLyricsAnimApp,
+      onSelectWidget = onSelectLyricsAnimWidget,
+      onDismiss = { showLyricsAnimationSheet = false }
     )
   }
 }

@@ -92,7 +92,8 @@ data class WidgetSnapshotState(
   val lyricsFlipperSlot: Int = 0,
   val prevLyricLine: String = "",
   val prevNextLyricLine: String = "",
-  val reducedMotion: Boolean = false
+  val reducedMotion: Boolean = false,
+  val lyricsWidgetAnimStyle: String = com.example.lyrics.LyricsAnimationStyle.DEFAULT_ID
 )
 
 object AurixWidgetController {
@@ -167,6 +168,50 @@ object AurixWidgetController {
     } else {
       safeCurrent
     }
+  }
+
+  fun resolveLyricsWidgetLayoutRes(styleId: String, reducedMotion: Boolean): Int {
+    if (reducedMotion) return R.layout.widget_aurix_lyrics_instant
+    return when (com.example.lyrics.LyricsAnimationStyle.fromId(styleId).widgetEffectiveStyle()) {
+      com.example.lyrics.LyricsAnimationStyle.BLUR_FADE -> R.layout.widget_aurix_lyrics_fade
+      com.example.lyrics.LyricsAnimationStyle.POP_ZOOM -> R.layout.widget_aurix_lyrics_pop
+      else -> R.layout.widget_aurix_lyrics
+    }
+  }
+
+  fun hasMusicWidgets(context: Context): Boolean {
+    return runCatching {
+      val manager = AppWidgetManager.getInstance(context.applicationContext)
+      manager.getAppWidgetIds(ComponentName(context.applicationContext, AurixMusicWidgetProvider::class.java)).isNotEmpty()
+    }.getOrDefault(false)
+  }
+
+  fun hasLyricsWidgets(context: Context): Boolean {
+    return runCatching {
+      val manager = AppWidgetManager.getInstance(context.applicationContext)
+      manager.getAppWidgetIds(ComponentName(context.applicationContext, AurixLyricsWidgetProvider::class.java)).isNotEmpty()
+    }.getOrDefault(false)
+  }
+
+  /**
+   * Computes exact delay (ms) until the next synced LRC line begins so PlaybackService
+   * can schedule a single wake-up per lyric line with zero polling.
+   * Returns null when the current track has no further synced LRC lines.
+   */
+  fun computeDelayUntilNextLyricLineMs(
+    context: Context,
+    positionMs: Long,
+    playbackSpeed: Float = 1f
+  ): Long? {
+    val snapshot = readSnapshot(context.applicationContext)
+    if (snapshot.songId.isBlank() || snapshot.rawLrc.isBlank()) return null
+    val synced = parseRawLrcLines(snapshot.rawLrc)
+    if (synced.isEmpty()) return null
+    val queryPos = (positionMs + snapshot.lyricOffsetMs + 150L).coerceAtLeast(0L)
+    val nextLine = synced.firstOrNull { it.timestampMs > queryPos } ?: return null
+    val deltaTrackMs = (nextLine.timestampMs - queryPos).coerceAtLeast(16L)
+    val safeSpeed = playbackSpeed.coerceIn(0.25f, 4.0f)
+    return (deltaTrackMs / safeSpeed).toLong().coerceAtLeast(32L)
   }
 
   private fun isReducedMotionActive(context: Context, appReducedMotion: Boolean): Boolean {
@@ -274,7 +319,10 @@ object AurixWidgetController {
       lyricsFlipperSlot = prefs.getInt("lyrics_flipper_slot", 0).coerceIn(0, 1),
       prevLyricLine = prefs.getString("prev_lyric_line", "").orEmpty(),
       prevNextLyricLine = prefs.getString("prev_next_lyric_line", "").orEmpty(),
-      reducedMotion = prefs.getBoolean("reduced_motion", false)
+      reducedMotion = prefs.getBoolean("reduced_motion", false),
+      lyricsWidgetAnimStyle = com.example.lyrics.LyricsAnimationStyle.fromId(
+        prefs.getString("lyrics_widget_anim", null)
+      ).id
     )
   }
 
@@ -306,6 +354,7 @@ object AurixWidgetController {
       .putString("prev_lyric_line", state.prevLyricLine)
       .putString("prev_next_lyric_line", state.prevNextLyricLine)
       .putBoolean("reduced_motion", state.reducedMotion)
+      .putString("lyrics_widget_anim", state.lyricsWidgetAnimStyle)
       .apply()
   }
 
@@ -402,7 +451,8 @@ object AurixWidgetController {
     positionMs: Long,
     durationMs: Long,
     isPlaying: Boolean,
-    allowMusicUpdate: Boolean = true
+    allowMusicUpdate: Boolean = true,
+    allowLyricsUpdate: Boolean = true
   ) {
     if (!isPlaying) return
     val appCtx = context.applicationContext
@@ -411,17 +461,20 @@ object AurixWidgetController {
 
     val localizedCtx = LocaleHelper.wrapBaseContext(appCtx, current.language)
     val noLyricsLabel = localizedCtx.getString(R.string.widget_no_lyrics_for_song)
-    val syncedList = parseRawLrcLines(current.rawLrc)
-    val lyricSnap = resolveSyncedLyricLines(
-      syncedLines = syncedList,
-      plainLyrics = current.plainLyrics,
-      positionMs = positionMs,
-      lyricOffsetMs = current.lyricOffsetMs,
-      noLyricsLabel = noLyricsLabel
-    )
+    val syncedList = if (allowLyricsUpdate) parseRawLrcLines(current.rawLrc) else emptyList()
+    val lyricSnap = if (allowLyricsUpdate) {
+      resolveSyncedLyricLines(
+        syncedLines = syncedList,
+        plainLyrics = current.plainLyrics,
+        positionMs = positionMs,
+        lyricOffsetMs = current.lyricOffsetMs,
+        noLyricsLabel = noLyricsLabel
+      )
+    } else null
 
-    val lineChanged = lyricSnap.activeIndex != current.activeLyricIndex ||
-      lyricSnap.currentLine != current.currentLyricLine
+    val lineChanged = lyricSnap != null &&
+      lyricSnap.hasLyrics &&
+      (lyricSnap.activeIndex != current.activeLyricIndex || lyricSnap.currentLine != current.currentLyricLine)
 
     if (!lineChanged && !allowMusicUpdate) return
 
@@ -437,10 +490,10 @@ object AurixWidgetController {
       isPlaying = true,
       positionMs = positionMs.coerceAtLeast(0L),
       durationMs = effectiveDur,
-      hasLyrics = lyricSnap.hasLyrics,
-      currentLyricLine = lyricSnap.currentLine,
-      nextLyricLine = lyricSnap.nextLine,
-      activeLyricIndex = lyricSnap.activeIndex,
+      hasLyrics = lyricSnap?.hasLyrics ?: current.hasLyrics,
+      currentLyricLine = lyricSnap?.currentLine ?: current.currentLyricLine,
+      nextLyricLine = lyricSnap?.nextLine ?: current.nextLyricLine,
+      activeLyricIndex = lyricSnap?.activeIndex ?: current.activeLyricIndex,
       lyricsFlipperSlot = nextSlot,
       prevLyricLine = if (lineChanged) current.currentLyricLine else current.prevLyricLine,
       prevNextLyricLine = if (lineChanged) current.nextLyricLine else current.prevNextLyricLine
@@ -478,6 +531,7 @@ object AurixWidgetController {
     themeMode: String? = null,
     language: String? = null,
     reducedMotion: Boolean? = null,
+    lyricsWidgetAnimStyle: String? = null,
     refreshWidgetsNow: Boolean = true
   ) {
     val appCtx = context.applicationContext
@@ -497,6 +551,10 @@ object AurixWidgetController {
       )
     } else null
 
+    val resolvedAnim = lyricsWidgetAnimStyle?.let {
+      com.example.lyrics.LyricsAnimationStyle.fromId(it).id
+    } ?: current.lyricsWidgetAnimStyle
+
     val updated = current.copy(
       ambientGlowEnabled = ambientGlowEnabled ?: current.ambientGlowEnabled,
       dimLevel = (dimLevel ?: current.dimLevel).coerceIn(0f, 0.90f),
@@ -505,6 +563,7 @@ object AurixWidgetController {
       themeMode = themeMode ?: current.themeMode,
       language = nextLang,
       reducedMotion = reducedMotion ?: current.reducedMotion,
+      lyricsWidgetAnimStyle = resolvedAnim,
       currentLyricLine = lyricSnap?.currentLine ?: current.currentLyricLine,
       nextLyricLine = lyricSnap?.nextLine ?: current.nextLyricLine,
       hasLyrics = lyricSnap?.hasLyrics ?: current.hasLyrics
@@ -517,7 +576,7 @@ object AurixWidgetController {
 
   /**
    * Uses partiallyUpdateAppWidget to write ONLY the incoming ViewFlipper slot and call
-   * setDisplayedChild(targetSlot), triggering the hardware-accelerated slide-up/fade-in/out
+   * setDisplayedChild(targetSlot), triggering the hardware-accelerated XML in/out
    * transition on the launcher without flickering or reloading the ambient glow background.
    */
   private fun animateLyricsLineTransitionAsync(context: Context, state: WidgetSnapshotState) {
@@ -534,21 +593,24 @@ object AurixWidgetController {
         val mutedTextColor = if (isLight) COLOR_MUTED_LIGHT else 0xA6FFFFFF.toInt()
         val noLyricsLabel = localizedCtx.getString(R.string.widget_no_lyrics_for_song)
         val hasLyrics = state.hasLyrics && state.currentLyricLine.isNotBlank()
-        val displayCurrentLine = if (hasLyrics) state.currentLyricLine else noLyricsLabel
-        val displayNextLine = if (hasLyrics) state.nextLyricLine else ""
-        val currentColor = if (hasLyrics) primaryTextColor else mutedTextColor
+        // Songs without lyrics show no animation and no tag
+        if (!hasLyrics) return@launch
+        val displayCurrentLine = state.currentLyricLine
+        val displayNextLine = state.nextLyricLine
         val targetSlot = state.lyricsFlipperSlot.coerceIn(0, 1)
+        val reduceMotion = isReducedMotionActive(appCtx, state.reducedMotion)
+        val layoutRes = resolveLyricsWidgetLayoutRes(state.lyricsWidgetAnimStyle, reduceMotion)
 
-        val partialViews = RemoteViews(appCtx.packageName, R.layout.widget_aurix_lyrics)
+        val partialViews = RemoteViews(appCtx.packageName, layoutRes)
         bindLyricsFlipperSlot(
           context = appCtx,
           views = partialViews,
           slotIndex = targetSlot,
           currentLine = displayCurrentLine,
           nextLine = displayNextLine,
-          hasLyrics = hasLyrics,
+          hasLyrics = true,
           language = state.language,
-          primaryTextColor = currentColor,
+          primaryTextColor = primaryTextColor,
           mutedTextColor = mutedTextColor
         )
         partialViews.setDisplayedChild(R.id.widget_lyrics_flipper, targetSlot)
@@ -823,7 +885,9 @@ object AurixWidgetController {
     roundedArt: Bitmap
   ): RemoteViews {
     val localizedCtx = LocaleHelper.wrapBaseContext(context, state.language)
-    val views = RemoteViews(context.packageName, R.layout.widget_aurix_lyrics)
+    val reduceMotion = isReducedMotionActive(context, state.reducedMotion)
+    val layoutRes = resolveLyricsWidgetLayoutRes(state.lyricsWidgetAnimStyle, reduceMotion)
+    val views = RemoteViews(context.packageName, layoutRes)
     val isLight = isLightThemeActive(context, state.themeMode) && !state.ambientGlowEnabled
     val primaryTextColor = if (isLight) COLOR_TEXT_LIGHT else COLOR_TEXT_DARK
     val mutedTextColor = if (isLight) COLOR_MUTED_LIGHT else 0xA6FFFFFF.toInt()

@@ -11,10 +11,10 @@ import org.junit.Test
 class CrashFixStabilityTest {
 
   @Test
-  fun release200_metadataAndVersionCodeAreConsistent() {
-    assertEquals("2.0.0", BuildConfig.VERSION_NAME)
-    assertEquals(20000, BuildConfig.VERSION_CODE)
-    assertTrue("Release 2.0.0 versionCode must exceed 1.9.9 (10990)", BuildConfig.VERSION_CODE > 10990)
+  fun release201_metadataAndVersionCodeAreConsistent() {
+    assertEquals("2.0.1", BuildConfig.VERSION_NAME)
+    assertEquals(20001, BuildConfig.VERSION_CODE)
+    assertTrue("Release 2.0.1 versionCode must exceed 2.0.0 (20000)", BuildConfig.VERSION_CODE > 20000)
     assertEquals(420, com.example.ui.screens.SELECT_BAR_OPEN_DURATION_MS)
     assertEquals(600, com.example.ui.screens.SELECT_CIRCLE_OPEN_DURATION_MS)
     assertEquals(380L, com.example.ui.screens.SELECT_CLOSE_CLEAR_DELAY_MS)
@@ -22,6 +22,51 @@ class CrashFixStabilityTest {
     assertEquals(5, com.example.data.OrbiAppIcon.entries.size)
     assertEquals(com.example.data.OrbiAppIcon.MIDNIGHT, com.example.data.OrbiAppIcon.fromId("midnight"))
     assertEquals(com.example.data.OrbiAppIcon.CLASSIC, com.example.data.OrbiAppIcon.fromId("unknown"))
+  }
+
+  @Test
+  fun lyricsAnimation_stylesKeysAndWidgetFallbackAreConsistent() {
+    assertEquals("lyrics_anim", com.example.data.PreferencesManager.LYRICS_ANIM.name)
+    assertEquals("lyrics_widget_anim", com.example.data.PreferencesManager.LYRICS_WIDGET_ANIM.name)
+    assertEquals(5, com.example.lyrics.LyricsAnimationStyle.entries.size)
+    assertEquals(com.example.lyrics.LyricsAnimationStyle.SLIDE_UP, com.example.lyrics.LyricsAnimationStyle.fromId(null))
+    assertEquals(com.example.lyrics.LyricsAnimationStyle.SLIDE_UP, com.example.lyrics.LyricsAnimationStyle.fromId("unknown"))
+    assertEquals(com.example.lyrics.LyricsAnimationStyle.BLUR_FADE, com.example.lyrics.LyricsAnimationStyle.fromId("blur_fade"))
+    assertEquals(com.example.lyrics.LyricsAnimationStyle.KARAOKE_FILL, com.example.lyrics.LyricsAnimationStyle.fromId("karaoke_fill"))
+    assertEquals(com.example.lyrics.LyricsAnimationStyle.TYPEWRITER, com.example.lyrics.LyricsAnimationStyle.fromId("typewriter"))
+    assertEquals(com.example.lyrics.LyricsAnimationStyle.POP_ZOOM, com.example.lyrics.LyricsAnimationStyle.fromId("pop_zoom"))
+
+    // Widget fallback: karaoke_fill and typewriter fall back to slide_up; others remain native
+    assertTrue(com.example.lyrics.LyricsAnimationStyle.KARAOKE_FILL.isWidgetFallback)
+    assertTrue(com.example.lyrics.LyricsAnimationStyle.TYPEWRITER.isWidgetFallback)
+    org.junit.Assert.assertFalse(com.example.lyrics.LyricsAnimationStyle.SLIDE_UP.isWidgetFallback)
+    org.junit.Assert.assertFalse(com.example.lyrics.LyricsAnimationStyle.BLUR_FADE.isWidgetFallback)
+    org.junit.Assert.assertFalse(com.example.lyrics.LyricsAnimationStyle.POP_ZOOM.isWidgetFallback)
+    assertEquals(
+      com.example.lyrics.LyricsAnimationStyle.SLIDE_UP,
+      com.example.lyrics.LyricsAnimationStyle.KARAOKE_FILL.widgetEffectiveStyle()
+    )
+    assertEquals(
+      com.example.lyrics.LyricsAnimationStyle.SLIDE_UP,
+      com.example.lyrics.LyricsAnimationStyle.TYPEWRITER.widgetEffectiveStyle()
+    )
+    assertEquals(
+      com.example.lyrics.LyricsAnimationStyle.BLUR_FADE,
+      com.example.lyrics.LyricsAnimationStyle.BLUR_FADE.widgetEffectiveStyle()
+    )
+    assertEquals(
+      com.example.lyrics.LyricsAnimationStyle.POP_ZOOM,
+      com.example.lyrics.LyricsAnimationStyle.POP_ZOOM.widgetEffectiveStyle()
+    )
+
+    // Widget layout mapping for all 5 styles and Reduced Motion instant fallback
+    assertEquals(R.layout.widget_aurix_lyrics, com.example.widget.AurixWidgetController.resolveLyricsWidgetLayoutRes("slide_up", false))
+    assertEquals(R.layout.widget_aurix_lyrics_fade, com.example.widget.AurixWidgetController.resolveLyricsWidgetLayoutRes("blur_fade", false))
+    assertEquals(R.layout.widget_aurix_lyrics, com.example.widget.AurixWidgetController.resolveLyricsWidgetLayoutRes("karaoke_fill", false))
+    assertEquals(R.layout.widget_aurix_lyrics, com.example.widget.AurixWidgetController.resolveLyricsWidgetLayoutRes("typewriter", false))
+    assertEquals(R.layout.widget_aurix_lyrics_pop, com.example.widget.AurixWidgetController.resolveLyricsWidgetLayoutRes("pop_zoom", false))
+    assertEquals(R.layout.widget_aurix_lyrics_instant, com.example.widget.AurixWidgetController.resolveLyricsWidgetLayoutRes("pop_zoom", true))
+    assertEquals(R.layout.widget_aurix_lyrics_instant, com.example.widget.AurixWidgetController.resolveLyricsWidgetLayoutRes("slide_up", true))
   }
 
   @Test

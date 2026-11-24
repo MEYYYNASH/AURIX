@@ -23,7 +23,11 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.viewinterop.AndroidView
+import androidx.lifecycle.Lifecycle
+import androidx.lifecycle.LifecycleEventObserver
+import androidx.lifecycle.compose.LocalLifecycleOwner
 import com.example.R
+import com.example.lyrics.LyricsAnimationStyle
 import com.example.lyrics.SyncedLyricsView
 import com.example.model.LyricsResult
 import java.util.Locale
@@ -35,6 +39,8 @@ fun LyricsView(
   positionProvider: () -> Long = { currentPositionMs },
   lyricOffsetMs: Long = 0L,
   isPreviewClip: Boolean = false,
+  isPlaying: Boolean = true,
+  lyricsAnimationStyle: LyricsAnimationStyle = LyricsAnimationStyle.SLIDE_UP,
   accentColor: Color = Color.White,
   reducedMotion: Boolean = false,
   onLineClick: (Long) -> Unit,
@@ -148,6 +154,22 @@ fun LyricsView(
   val latestOffsetMs by rememberUpdatedState(lyricOffsetMs)
   val latestIsPreview by rememberUpdatedState(isPreviewClip)
 
+  val lifecycleOwner = LocalLifecycleOwner.current
+  var isAppForeground by remember {
+    mutableStateOf(lifecycleOwner.lifecycle.currentState.isAtLeast(Lifecycle.State.RESUMED))
+  }
+  DisposableEffect(lifecycleOwner) {
+    val observer = LifecycleEventObserver { _, event ->
+      when (event) {
+        Lifecycle.Event.ON_RESUME -> isAppForeground = true
+        Lifecycle.Event.ON_PAUSE, Lifecycle.Event.ON_STOP -> isAppForeground = false
+        else -> Unit
+      }
+    }
+    lifecycleOwner.lifecycle.addObserver(observer)
+    onDispose { lifecycleOwner.lifecycle.removeObserver(observer) }
+  }
+
   Box(modifier = modifier.fillMaxSize()) {
     AndroidView(
       modifier = Modifier
@@ -170,10 +192,15 @@ fun LyricsView(
         view.offsetMs = lyricOffsetMs
         view.setStyleColors(accentColor.toArgb(), android.graphics.Color.WHITE)
         view.setReducedMotion(reducedMotion)
+        view.setAnimationStyle(lyricsAnimationStyle)
+        view.setPlaybackAndForeground(playing = isPlaying, foreground = isAppForeground)
         if (rawLyricsText.isNullOrBlank()) {
           view.clear()
         } else {
           view.setLyrics(rawLyricsText)
+          if (!isPlaying && isAppForeground) {
+            view.syncPositionOnce()
+          }
         }
       },
       onRelease = { view ->

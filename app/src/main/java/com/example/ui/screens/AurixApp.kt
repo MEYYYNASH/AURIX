@@ -277,6 +277,14 @@ private fun AurixMainShell(
   val downloadedSongIds by viewModel.downloadedSongIds.collectAsStateWithLifecycle()
   val githubOwner by viewModel.githubOwner.collectAsStateWithLifecycle()
   val githubRepo by viewModel.githubRepo.collectAsStateWithLifecycle()
+  val lyricsAnimId by viewModel.lyricsAnim.collectAsStateWithLifecycle()
+  val lyricsWidgetAnimId by viewModel.lyricsWidgetAnim.collectAsStateWithLifecycle()
+  val appLyricsAnimStyle = remember(lyricsAnimId) {
+    com.example.lyrics.LyricsAnimationStyle.fromId(lyricsAnimId)
+  }
+  val widgetLyricsAnimStyle = remember(lyricsWidgetAnimId) {
+    com.example.lyrics.LyricsAnimationStyle.fromId(lyricsWidgetAnimId)
+  }
 
   val featuredTracks by viewModel.featuredTracks.collectAsStateWithLifecycle()
   val isLoadingFeatured by viewModel.isLoadingFeatured.collectAsStateWithLifecycle()
@@ -1102,7 +1110,12 @@ private fun AurixMainShell(
               onDynamicBgGlassChanged = { viewModel.setDynamicBgGlass(it) },
               onDynamicBgBlurChanged = { viewModel.setDynamicBgBlur(it) },
               onDynamicBgSliderReleased = { viewModel.onDynamicBgSliderReleased() },
-              onResetDynamicBgCustomization = { viewModel.resetDynamicBgCustomization() }
+              onResetDynamicBgCustomization = { viewModel.resetDynamicBgCustomization() },
+              appLyricsAnim = appLyricsAnimStyle,
+              widgetLyricsAnim = widgetLyricsAnimStyle,
+              onSelectLyricsAnimBoth = { viewModel.setLyricsAnimBoth(it) },
+              onSelectLyricsAnimApp = { viewModel.setLyricsAnimApp(it) },
+              onSelectLyricsAnimWidget = { viewModel.setLyricsAnimWidget(it) }
             )
           }
         }
@@ -1304,7 +1317,8 @@ private fun AurixMainShell(
             onToggleVisualizer = { viewModel.setNowPlayingVisualizerEnabled(it) },
             spectrumBars = spectrumBars,
             initialShowLyrics = nowPlayingInitialShowLyrics,
-            openViewRequestTrigger = nowPlayingOpenViewTrigger
+            openViewRequestTrigger = nowPlayingOpenViewTrigger,
+            lyricsAnimationStyle = appLyricsAnimStyle
           )
         }
       }

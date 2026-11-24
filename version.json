@@ -1,15 +1,15 @@
 {
-  "versionName": "2.0.0",
-  "versionCode": 20000,
+  "versionName": "2.0.1",
+  "versionCode": 20001,
   "releaseDate": "2026-11-24",
-  "apkUrl": "https://github.com/MEYYYNASH/AURIX/releases/download/v2.0.0/AURIX-v2.0.0.apk",
-  "sha256": "8760af292b2285b72e3bf119ecacd88f67eeb4bbff493eacc8c1de7274b95260",
+  "apkUrl": "https://github.com/MEYYYNASH/AURIX/releases/download/v2.0.1/AURIX-v2.0.1.apk",
+  "sha256": "",
   "mandatory": false,
   "notes": [
-    "Smooth Animated Lyrics Widget (v2.0.0): Added native 60fps/120fps glide-up, fade, and subtle scale entrance animations whenever each synced lyric line transitions in the AURIX Lyrics home screen widget using flicker-free partial RemoteViews updates, beat-accurate 350ms LRC line detection (while keeping Music widget progress throttled to ~1s and zero polling when paused), and full Reduced Motion accessibility support",
-    "Sculpted Frosted-Glass Widget Redesign (v1.9.9): Redesigned both Lyrics and Music home screen widgets with true-dp 24dp clipped glass corners (zero corner stretching), smart letterbox-free album art cropping and vibrant edge-to-edge centerCrop Ambient glow, crisp 1dp specular perimeter rim, glowing cyan-to-violet active lyric accent bar, sleek 3-bar waveform Lyrics pill + Orbi mark, mini rounded album art footer with bold Title \u00b7 Artist styling, and precision-proportioned frosted glass control buttons",
-    "Home Screen Music & Lyrics Widgets + Shared Ambient Album Glow (v1.9.8): Added 4\u00d72 Music widget and 4\u00d72 Synced Lyrics widget powered by pre-rendered cached Ambient Album Glow synced with Settings Dim (0\u201390%, default 40%), Glass level (0\u2013100%, default 50%), and Blur level (0\u2013100%, default 60%) plus EN/KM localization",
-    "Library Recent Search History & Customizable Dynamic Artwork Background (v1.9.7): Added Library search bar with last-5 recent search history on tap/focus, plus custom Dim, Glass level (\u1780\u1798\u17d2\u179a\u17b7\u178f\u1780\u1789\u17d2\u1785\u1780\u17cb), and Blur level (\u1780\u1798\u17d2\u179a\u17b7\u178f Blur) controls with localized EN/KM Reset-to-Default confirmation dialog"
+    "Lyrics Animation Picker & 5 Transition Styles (v2.0.1): Added Settings > Lyrics > Lyrics animation sheet with 5 looping live-preview cards (Slide Up, Blur Fade, Karaoke Fill, Typewriter, Pop Zoom), Both/App/Widget targeting (apply the same animation or different animations for App Lyrics vs Home Screen Widget), Replay Preview button, DataStore persistence (lyrics_anim), zero-polling exact LRC timestamp widget scheduling, Share Card live animation preview, system Remove Animations support, and full EN/KM localization",
+    "Smooth Animated Lyrics Widget (v2.0.0): Added native 60fps/120fps glide-up, fade, and subtle scale entrance animations whenever each synced lyric line transitions in the AURIX Lyrics home screen widget using flicker-free partial RemoteViews updates",
+    "Sculpted Frosted-Glass Widget Redesign (v1.9.9): Redesigned both Lyrics and Music home screen widgets with true-dp 24dp clipped glass corners, smart letterbox-free album art cropping, vibrant edge-to-edge centerCrop Ambient glow, crisp 1dp specular rim, glowing active lyric accent bar, 3-bar waveform Lyrics pill + Orbi mark, and mini rounded album art footer",
+    "Home Screen Music & Lyrics Widgets + Shared Ambient Album Glow (v1.9.8): Added 4×2 Music widget and 4×2 Synced Lyrics widget powered by pre-rendered cached Ambient Album Glow synced with Settings Dim, Glass level, and Blur level plus EN/KM localization"
   ],
-  "releasePageUrl": "https://github.com/MEYYYNASH/AURIX/releases/tag/v2.0.0"
+  "releasePageUrl": "https://github.com/MEYYYNASH/AURIX/releases/tag/v2.0.1"
 }

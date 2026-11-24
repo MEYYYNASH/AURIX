@@ -19,6 +19,7 @@ import android.graphics.Shader
 import android.graphics.Typeface
 import android.graphics.text.LineBreakConfig
 import android.net.Uri
+import android.graphics.BlurMaskFilter
 import android.os.Build
 import android.os.Environment
 import android.provider.MediaStore
@@ -37,17 +38,29 @@ import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.DisposableEffect
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableLongStateOf
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
+import androidx.compose.runtime.withFrameNanos
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.draw.shadow
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.nativeCanvas
 import androidx.compose.ui.graphics.toArgb
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.unit.dp
 import androidx.core.content.FileProvider
 import androidx.core.graphics.ColorUtils
+import androidx.lifecycle.Lifecycle
+import androidx.lifecycle.LifecycleEventObserver
+import androidx.lifecycle.compose.LocalLifecycleOwner
 import androidx.palette.graphics.Palette
+import com.example.lyrics.LyricsAnimationStyle
 import com.example.ui.screens.artworkHueColors
 import java.io.File
 import java.io.FileOutputStream
@@ -59,6 +72,7 @@ import kotlin.math.min
 import kotlin.math.roundToInt
 import kotlin.math.sin
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.isActive
 import kotlinx.coroutines.withContext
 
 enum class ShareCardMode {
@@ -102,16 +116,52 @@ data class ShareCardData(
   val brandName: String = "AURIX MUSIC"
 )
 
+data class ShareCardLyricsAnimFrame(
+  val style: LyricsAnimationStyle,
+  val activeLineIndex: Int,
+  val previousLineIndex: Int,
+  val elapsedMs: Long,
+  val lineDurationMs: Long,
+  val caretVisible: Boolean
+)
+
 /**
- * Reusable Compose card preview with a 200ms theme crossfade and a 20-second looping mesh drift
- * (disabled when [reducedMotion] is true; exported 1080px PNG is always static).
+ * Reusable Compose card preview with a 200ms theme crossfade, a 20-second looping mesh drift,
+ * and live synced-lyrics line-change animation driven by playback position while playing
+ * (paused when player pauses or app goes to background; exported 1080px PNG is always static).
  */
 @Composable
 fun ShareLyricsCard(
   data: ShareCardData,
   reducedMotion: Boolean = false,
+  lyricsAnimationStyle: LyricsAnimationStyle = LyricsAnimationStyle.SLIDE_UP,
+  isPlaying: Boolean = false,
+  positionProvider: () -> Long = { 0L },
+  lyricOffsetMs: Long = 0L,
+  selectedLineTimestampsMs: List<Long?> = emptyList(),
   modifier: Modifier = Modifier
 ) {
+  val context = LocalContext.current
+  val lifecycleOwner = LocalLifecycleOwner.current
+  var isAppForeground by remember {
+    mutableStateOf(lifecycleOwner.lifecycle.currentState.isAtLeast(Lifecycle.State.RESUMED))
+  }
+  DisposableEffect(lifecycleOwner) {
+    val observer = LifecycleEventObserver { _, event ->
+      when (event) {
+        Lifecycle.Event.ON_RESUME -> isAppForeground = true
+        Lifecycle.Event.ON_PAUSE, Lifecycle.Event.ON_STOP -> isAppForeground = false
+        else -> Unit
+      }
+    }
+    lifecycleOwner.lifecycle.addObserver(observer)
+    onDispose { lifecycleOwner.lifecycle.removeObserver(observer) }
+  }
+
+  val motionDisabled = remember(reducedMotion, isAppForeground) {
+    LyricsAnimationStyle.isMotionDisabled(context, reducedMotion)
+  }
+
   val infiniteTransition = rememberInfiniteTransition(label = "share_card_mesh_drift")
   val driftPhase by infiniteTransition.animateFloat(
     initialValue = 0f,
@@ -123,7 +173,85 @@ fun ShareLyricsCard(
     label = "mesh_phase"
   )
 
-  val activePhase = if (reducedMotion) 0f else driftPhase
+  val activePhase = if (motionDisabled || !isAppForeground) 0f else driftPhase
+
+  val shouldAnimateLyrics = !motionDisabled &&
+    isPlaying &&
+    isAppForeground &&
+    data.mode == ShareCardMode.LYRICS &&
+    data.selectedLines.isNotEmpty()
+
+  var animFrame by remember { mutableStateOf<ShareCardLyricsAnimFrame?>(null) }
+  var frozenPositionMs by remember { mutableLongStateOf(positionProvider()) }
+
+  LaunchedEffect(shouldAnimateLyrics, lyricsAnimationStyle, data.selectedLines, selectedLineTimestampsMs, lyricOffsetMs) {
+    if (!shouldAnimateLyrics) {
+      if (motionDisabled || data.mode != ShareCardMode.LYRICS || data.selectedLines.isEmpty()) {
+        animFrame = null
+      }
+      return@LaunchedEffect
+    }
+    val lineCount = data.selectedLines.size.coerceAtMost(5)
+    val syncedStarts = selectedLineTimestampsMs.take(lineCount)
+    val hasValidSyncedTimestamps = syncedStarts.size == lineCount && syncedStarts.all { it != null }
+    val baseStartPos = (positionProvider() + lyricOffsetMs).coerceAtLeast(0L)
+    var lastActiveIdx = -1
+    var prevActiveIdx = -1
+
+    while (isActive) {
+      val frameNanos = withFrameNanos { it }
+      val posMs = (positionProvider() + lyricOffsetMs).coerceAtLeast(0L)
+      frozenPositionMs = posMs
+
+      val activeIdx: Int
+      val elapsedMs: Long
+      val lineDurMs: Long
+
+      if (hasValidSyncedTimestamps) {
+        val starts = syncedStarts.map { it!! }
+        val firstTs = starts.first()
+        val lastEndTs = starts.last() + 3400L
+        if (posMs in firstTs..lastEndTs) {
+          var found = 0
+          for (i in starts.indices) {
+            if (starts[i] <= posMs + 150L) found = i
+          }
+          activeIdx = found
+          val curStart = starts[found]
+          val nextStart = starts.getOrNull(found + 1) ?: (curStart + 3200L)
+          elapsedMs = (posMs - curStart).coerceAtLeast(0L)
+          lineDurMs = (nextStart - curStart).coerceIn(700L, 10_000L)
+        } else {
+          // Selected lines are from another part of the track: step through them smoothly in playback time
+          val cycleStepMs = 2600L
+          val rel = (posMs - baseStartPos).coerceAtLeast(0L)
+          activeIdx = ((rel / cycleStepMs) % lineCount).toInt()
+          elapsedMs = rel % cycleStepMs
+          lineDurMs = cycleStepMs
+        }
+      } else {
+        val cycleStepMs = 2600L
+        val rel = (posMs - baseStartPos).coerceAtLeast(0L)
+        activeIdx = ((rel / cycleStepMs) % lineCount).toInt()
+        elapsedMs = rel % cycleStepMs
+        lineDurMs = cycleStepMs
+      }
+
+      if (activeIdx != lastActiveIdx) {
+        if (lastActiveIdx >= 0) prevActiveIdx = lastActiveIdx
+        lastActiveIdx = activeIdx
+      }
+
+      animFrame = ShareCardLyricsAnimFrame(
+        style = lyricsAnimationStyle,
+        activeLineIndex = activeIdx,
+        previousLineIndex = prevActiveIdx,
+        elapsedMs = elapsedMs,
+        lineDurationMs = lineDurMs,
+        caretVisible = ((frameNanos / 460_000_000L) % 2L == 0L)
+      )
+    }
+  }
 
   Crossfade(
     targetState = data.theme,
@@ -148,7 +276,8 @@ fun ShareLyricsCard(
         widthPx = w,
         heightPx = h,
         data = themedData,
-        driftPhaseRadians = activePhase
+        driftPhaseRadians = activePhase,
+        lyricsAnimFrame = if (motionDisabled) null else animFrame
       )
     }
   }
@@ -404,7 +533,8 @@ object ShareCardRenderer {
     widthPx: Int,
     heightPx: Int,
     data: ShareCardData,
-    driftPhaseRadians: Float = 0f
+    driftPhaseRadians: Float = 0f,
+    lyricsAnimFrame: ShareCardLyricsAnimFrame? = null
   ) {
     if (widthPx <= 0 || heightPx <= 0) return
     val scale = widthPx / 1080f
@@ -457,7 +587,8 @@ object ShareCardRenderer {
           padTop = padTop,
           padBottom = padBottom,
           footerHeight = footerHeight,
-          data = data
+          data = data,
+          lyricsAnimFrame = lyricsAnimFrame
         )
       } else {
         drawSongMode(
@@ -782,7 +913,8 @@ object ShareCardRenderer {
     padTop: Float,
     padBottom: Float,
     footerHeight: Float,
-    data: ShareCardData
+    data: ShareCardData,
+    lyricsAnimFrame: ShareCardLyricsAnimFrame? = null
   ) {
     // 4. TYPOGRAPHY & CARD CONTENT:
     // Header row: album art 48dp (144px at 1080w) with 14dp radius (42px),
@@ -940,12 +1072,209 @@ object ShareCardRenderer {
 
     val startY = lyricsTopLimit + ((availableHeight - totalLyricsHeight).coerceAtLeast(0f) * 0.44f)
     var currentY = startY
-    for (layout in chosenLayouts) {
-      canvas.save()
-      canvas.translate(padH, currentY)
-      layout.draw(canvas)
-      canvas.restore()
+    val caretPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
+      color = android.graphics.Color.parseColor("#43C7F4")
+      style = Paint.Style.FILL
+    }
+    for (index in chosenLayouts.indices) {
+      val layout = chosenLayouts[index]
+      val rawLineText = cleanedLines.getOrElse(index) { layout.text.toString() }
+      if (lyricsAnimFrame == null) {
+        canvas.save()
+        canvas.translate(padH, currentY)
+        layout.draw(canvas)
+        canvas.restore()
+      } else {
+        drawAnimatedShareLyricLine(
+          canvas = canvas,
+          baseLayout = layout,
+          basePaint = lyricPaint,
+          lineText = rawLineText,
+          availableWidth = availableWidth,
+          padH = padH,
+          topY = currentY,
+          scale = scale,
+          lineIndex = index,
+          frame = lyricsAnimFrame,
+          caretPaint = caretPaint
+        )
+      }
       currentY += layout.height + chosenLineGap
+    }
+  }
+
+  private fun drawAnimatedShareLyricLine(
+    canvas: Canvas,
+    baseLayout: StaticLayout,
+    basePaint: TextPaint,
+    lineText: String,
+    availableWidth: Int,
+    padH: Float,
+    topY: Float,
+    scale: Float,
+    lineIndex: Int,
+    frame: ShareCardLyricsAnimFrame,
+    caretPaint: Paint
+  ) {
+    val isActive = lineIndex == frame.activeLineIndex
+    val isPrev = lineIndex == frame.previousLineIndex && !isActive
+
+    if (!isActive) {
+      val dimAlpha = if (isPrev && frame.style == LyricsAnimationStyle.SLIDE_UP) {
+        val p = (frame.elapsedMs.toFloat() / 460f).coerceIn(0f, 1f)
+        val a = (1f - 0.50f * p).coerceIn(0.45f, 1f)
+        val blurPx = (sin(p * Math.PI).toFloat() * 10f * scale).coerceAtLeast(0f)
+        val prevPaint = TextPaint(basePaint).apply {
+          alpha = (a * 255f).roundToInt().coerceIn(0, 255)
+          maskFilter = if (blurPx > 0.6f) BlurMaskFilter(blurPx, BlurMaskFilter.Blur.NORMAL) else null
+        }
+        val prevLayout = buildStaticLayout(lineText, prevPaint, availableWidth, Layout.Alignment.ALIGN_NORMAL, 1.20f)
+        canvas.save()
+        canvas.translate(padH, topY)
+        prevLayout.draw(canvas)
+        canvas.restore()
+        return
+      } else {
+        0.48f
+      }
+      val inactivePaint = TextPaint(basePaint).apply {
+        alpha = (dimAlpha * 255f).roundToInt().coerceIn(0, 255)
+      }
+      val inactiveLayout = buildStaticLayout(lineText, inactivePaint, availableWidth, Layout.Alignment.ALIGN_NORMAL, 1.20f)
+      canvas.save()
+      canvas.translate(padH, topY)
+      inactiveLayout.draw(canvas)
+      canvas.restore()
+      return
+    }
+
+    when (frame.style) {
+      LyricsAnimationStyle.SLIDE_UP -> {
+        val raw = (frame.elapsedMs.toFloat() / 550f).coerceIn(0f, 1f)
+        val eased = 1f - (1f - raw) * (1f - raw) * (1f - raw)
+        val ty = (72f * scale) * (1f - eased) // 24dp at 1080w
+        val p = TextPaint(basePaint).apply { alpha = (eased * 255f).roundToInt().coerceIn(0, 255) }
+        val l = buildStaticLayout(lineText, p, availableWidth, Layout.Alignment.ALIGN_NORMAL, 1.20f)
+        canvas.save()
+        canvas.translate(padH, topY + ty)
+        l.draw(canvas)
+        canvas.restore()
+      }
+      LyricsAnimationStyle.BLUR_FADE -> {
+        val raw = (frame.elapsedMs.toFloat() / 700f).coerceIn(0f, 1f)
+        val eased = 1f - (1f - raw) * (1f - raw) * (1f - raw)
+        val inv = 1f - eased
+        val blurPx = (30f * scale) * inv // 10dp at 1080w
+        val p = TextPaint(basePaint).apply {
+          alpha = (eased * 255f).roundToInt().coerceIn(0, 255)
+          letterSpacing = -0.01f + 0.08f * inv
+          maskFilter = if (blurPx > 0.6f) BlurMaskFilter(blurPx, BlurMaskFilter.Blur.NORMAL) else null
+        }
+        val l = buildStaticLayout(lineText, p, availableWidth, Layout.Alignment.ALIGN_NORMAL, 1.20f)
+        canvas.save()
+        canvas.translate(padH, topY)
+        l.draw(canvas)
+        canvas.restore()
+      }
+      LyricsAnimationStyle.KARAOKE_FILL -> {
+        val progress = (frame.elapsedMs.toFloat() / frame.lineDurationMs.coerceAtLeast(500L).toFloat()).coerceIn(0f, 1f)
+        val dimPaint = TextPaint(basePaint).apply {
+          color = android.graphics.Color.argb(89, 255, 255, 255) // 35% dim white
+          clearShadowLayer()
+        }
+        val dimLayout = buildStaticLayout(lineText, dimPaint, availableWidth, Layout.Alignment.ALIGN_NORMAL, 1.20f)
+        canvas.save()
+        canvas.translate(padH, topY)
+        dimLayout.draw(canvas)
+
+        val lineCount = baseLayout.lineCount
+        var totalW = 0f
+        val widths = FloatArray(lineCount)
+        for (i in 0 until lineCount) {
+          widths[i] = baseLayout.getLineWidth(i).coerceAtLeast(1f)
+          totalW += widths[i]
+        }
+        var rem = totalW * progress
+        for (i in 0 until lineCount) {
+          if (rem <= 0f) break
+          val lw = widths[i]
+          val lineLeft = baseLayout.getLineLeft(i)
+          val clipRight = if (rem >= lw) availableWidth.toFloat() else (lineLeft + rem)
+          rem -= lw
+          canvas.save()
+          canvas.clipRect(0f, baseLayout.getLineTop(i).toFloat(), clipRight, baseLayout.getLineBottom(i).toFloat())
+          baseLayout.draw(canvas)
+          canvas.restore()
+        }
+        canvas.restore()
+      }
+      LyricsAnimationStyle.TYPEWRITER -> {
+        val typeDur = min(1400L, frame.lineDurationMs).coerceAtLeast(450L)
+        val progress = (frame.elapsedMs.toFloat() / typeDur.toFloat()).coerceIn(0f, 1f)
+        val boundaries = mutableListOf(0)
+        val bi = BreakIterator.getCharacterInstance()
+        bi.setText(lineText)
+        var pos = bi.next()
+        while (pos != BreakIterator.DONE) {
+          boundaries.add(pos)
+          pos = bi.next()
+        }
+        val targetIdx = ((boundaries.size - 1) * progress).roundToInt().coerceIn(0, boundaries.lastIndex)
+        val safeReveal = boundaries[targetIdx].coerceIn(0, lineText.length)
+
+        canvas.save()
+        canvas.translate(padH, topY)
+        var caretX = 0f
+        var caretTop = 0f
+        var caretBottom = baseLayout.getLineBottom(0).toFloat()
+        if (safeReveal > 0) {
+          for (i in 0 until baseLayout.lineCount) {
+            val lStart = baseLayout.getLineStart(i)
+            val lEnd = baseLayout.getLineEnd(i)
+            if (safeReveal <= lStart) break
+            val top = baseLayout.getLineTop(i).toFloat()
+            val bottom = baseLayout.getLineBottom(i).toFloat()
+            val clipRight = if (safeReveal >= lEnd) {
+              caretX = baseLayout.getLineRight(i)
+              caretTop = top + 4f * scale
+              caretBottom = bottom - 4f * scale
+              availableWidth.toFloat()
+            } else {
+              val x = baseLayout.getPrimaryHorizontal(safeReveal)
+              caretX = x
+              caretTop = top + 4f * scale
+              caretBottom = bottom - 4f * scale
+              x
+            }
+            canvas.save()
+            canvas.clipRect(0f, top, clipRight.coerceIn(0f, availableWidth.toFloat()), bottom)
+            baseLayout.draw(canvas)
+            canvas.restore()
+          }
+        }
+        if (frame.caretVisible) {
+          val cw = (7f * scale).coerceAtLeast(3f)
+          val cx = (caretX + 4f * scale).coerceAtMost((availableWidth - cw).coerceAtLeast(0f))
+          canvas.drawRoundRect(cx, caretTop, cx + cw, caretBottom, cw * 0.5f, cw * 0.5f, caretPaint)
+        }
+        canvas.restore()
+      }
+      LyricsAnimationStyle.POP_ZOOM -> {
+        val raw = (frame.elapsedMs.toFloat() / 600f).coerceIn(0f, 1f)
+        // Overshoot formula matching Android OvershootInterpolator(tension = 1.35f)
+        val t = raw - 1f
+        val tension = 1.35f
+        val overshoot = t * t * ((tension + 1f) * t + tension) + 1f
+        val scaleFactor = (0.6f + 0.4f * overshoot).coerceAtLeast(0.6f)
+        val alphaVal = raw.coerceIn(0f, 1f)
+        val p = TextPaint(basePaint).apply { alpha = (alphaVal * 255f).roundToInt().coerceIn(0, 255) }
+        val l = buildStaticLayout(lineText, p, availableWidth, Layout.Alignment.ALIGN_NORMAL, 1.20f)
+        canvas.save()
+        canvas.translate(padH, topY)
+        canvas.scale(scaleFactor, scaleFactor, 0f, l.height * 0.5f)
+        l.draw(canvas)
+        canvas.restore()
+      }
     }
   }
 

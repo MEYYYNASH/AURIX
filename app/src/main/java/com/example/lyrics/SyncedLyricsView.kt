@@ -51,6 +51,8 @@ class SyncedLyricsView @JvmOverloads constructor(
   var offsetMs: Long = 0L
 
   private var reducedMotionOverride: Boolean? = null
+  private var isPlayingNow: Boolean = true
+  private var isForegroundActive: Boolean = true
   private var currentRawLrc: String? = null
   private var document = ParsedLyricsDocument(emptyList(), isSynced = false)
 
@@ -279,6 +281,36 @@ class SyncedLyricsView @JvmOverloads constructor(
     applyReducedMotionFlag()
   }
 
+  fun setAnimationStyle(style: LyricsAnimationStyle) {
+    adapter.setAnimationStyle(style)
+    if (document.isSynced && document.lines.isNotEmpty() && isAttachedToWindow) {
+      runCatching { tickFrame(0.016f) }
+    }
+  }
+
+  fun setPlaybackAndForeground(playing: Boolean, foreground: Boolean) {
+    val changed = isPlayingNow != playing || isForegroundActive != foreground
+    isPlayingNow = playing
+    isForegroundActive = foreground
+    adapter.setPlaybackAndForeground(playing, foreground)
+    if (!changed) return
+    if (playing && foreground && document.isSynced && document.lines.isNotEmpty() && isAttachedToWindow) {
+      startFrameLoop()
+    } else {
+      stopFrameLoop()
+      if (foreground && document.isSynced && document.lines.isNotEmpty() && isAttachedToWindow) {
+        // Perform one static alignment tick when pausing so position stays accurate without polling
+        runCatching { tickFrame(0.016f) }
+      }
+    }
+  }
+
+  fun syncPositionOnce() {
+    if (document.isSynced && document.lines.isNotEmpty() && isAttachedToWindow) {
+      runCatching { tickFrame(0.016f) }
+    }
+  }
+
   fun setLyrics(lrcText: String?) {
     if (lrcText == currentRawLrc && document.lines.isNotEmpty()) return
     currentRawLrc = lrcText
@@ -300,7 +332,11 @@ class SyncedLyricsView @JvmOverloads constructor(
 
     if (parsed.isSynced && isAttachedToWindow) {
       runCatching { tickFrame(0.016f) }
-      startFrameLoop()
+      if (isPlayingNow && isForegroundActive) {
+        startFrameLoop()
+      } else {
+        stopFrameLoop()
+      }
     } else {
       stopFrameLoop()
     }
@@ -327,7 +363,10 @@ class SyncedLyricsView @JvmOverloads constructor(
     super.onAttachedToWindow()
     applyReducedMotionFlag()
     if (document.isSynced && document.lines.isNotEmpty()) {
-      startFrameLoop()
+      runCatching { tickFrame(0.016f) }
+      if (isPlayingNow && isForegroundActive) {
+        startFrameLoop()
+      }
     }
   }
 
@@ -475,9 +514,15 @@ class SyncedLyricsView @JvmOverloads constructor(
       }
     }
 
-    if (newIndex in lines.indices && lines[newIndex].words.isNotEmpty()) {
-      val holder = recyclerView.findViewHolderForAdapterPosition(newIndex) as? SyncedLyricsAdapter.LyricViewHolder
-      holder?.updateWordProgress(effectivePos)
+    if (newIndex in lines.indices) {
+      val style = adapter.getAnimationStyle()
+      val needsProgress = lines[newIndex].words.isNotEmpty() ||
+        style == LyricsAnimationStyle.KARAOKE_FILL ||
+        style == LyricsAnimationStyle.TYPEWRITER
+      if (needsProgress) {
+        val holder = recyclerView.findViewHolderForAdapterPosition(newIndex) as? SyncedLyricsAdapter.LyricViewHolder
+        holder?.updatePlaybackProgress(effectivePos, isPlayingNow && isForegroundActive)
+      }
     }
   }
 

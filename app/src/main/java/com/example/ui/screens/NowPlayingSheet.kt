@@ -137,7 +137,8 @@ fun NowPlayingSheet(
   onToggleVisualizer: (Boolean) -> Unit = {},
   spectrumBars: FloatArray = FloatArray(AudioSpectrumBus.BAR_COUNT),
   initialShowLyrics: Boolean = false,
-  openViewRequestTrigger: Int = 0
+  openViewRequestTrigger: Int = 0,
+  lyricsAnimationStyle: com.example.lyrics.LyricsAnimationStyle = com.example.lyrics.LyricsAnimationStyle.SLIDE_UP
 ) {
   BackHandler { onClose() }
   LaunchedEffect(song.id) {
@@ -357,6 +358,8 @@ fun NowPlayingSheet(
             positionProvider = positionProvider,
             lyricOffsetMs = lyricOffsetMs,
             isPreviewClip = isPreviewClip,
+            isPlaying = isPlaying,
+            lyricsAnimationStyle = lyricsAnimationStyle,
             accentColor = c1,
             reducedMotion = reducedMotion,
             onLineClick = onLineClick,
@@ -996,6 +999,9 @@ fun NowPlayingSheet(
         song = song,
         lyricsResult = lyricsResult,
         currentPositionMs = positionProvider(),
+        positionProvider = positionProvider,
+        isPlaying = isPlaying,
+        lyricsAnimationStyle = lyricsAnimationStyle,
         lyricOffsetMs = lyricOffsetMs,
         reducedMotion = reducedMotion,
         onDismiss = { showShareLyrics = false }
