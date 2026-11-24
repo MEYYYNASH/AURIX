@@ -162,10 +162,10 @@ class UpdateManager(
     private const val META_FILE_NAME = "aurix_update.apk.meta.json"
 
     val CURRENT_RELEASE_NOTES = listOf(
-      "Mini Inline Orbi Loading & Compact Sketch Skeletons (v1.9.4): Scaled StatusRow / OrbiStatusRow down to a sleek 34dp mini planet with a glowing orbiting bead, 15sp bold shimmer text, 3dp bouncing dots, and compact 46dp frameless sketch track skeletons",
+      "Smooth Playlist Select Mode Open/Close & Tap Motion (v1.9.5): Added 420ms ease-out selection bar expansion, 600ms spring-overshoot selection circle roll-in (-120° to 0°), 46dp card glide with 35ms/20ms visible-row stagger, 300ms Select/Done button slide, #43C7F4 spring pop + 250ms white checkmark stroke draw, 2.5dp accent card outline, and 380ms delayed close clear",
+      "Mini Inline Orbi Loading & Compact Sketch Skeletons: Scaled StatusRow / OrbiStatusRow down to a sleek 34dp mini planet with a glowing orbiting bead, 15sp bold shimmer text, 3dp bouncing dots, and compact 46dp frameless sketch track skeletons",
       "App Icon Picker & 5 Orbi Launcher Icons: Switch between Classic, Midnight, Ember, AMOLED, and Pearl Orbi adaptive launcher icons in Settings > Appearance > App icon with Android 13+ monochrome themed icon layers, 512x512 Play Store PNG exports, confirmation bottom sheet, and Happy Orbi celebration",
-      "Orbi Mascot Animation System: Added OrbiView(state, size, runner) with white-lavender planet, -12° blinking/glancing eyes, -16° cyan-to-violet ring, glossy orbiting mini icons (Search, Music, Refresh, SyncUp, SyncDown), and interactive Orbi Animation Lab in Settings",
-      "Dark Glass Popup Menus & Delete Confirmation Redesign: Eliminated inner blur rectangle artifacts on song & album popup menus and redesigned Delete Album / Song confirmation dialogs in Dark Glass"
+      "Orbi Mascot Animation System: Added OrbiView(state, size, runner) with white-lavender planet, -12° blinking/glancing eyes, -16° cyan-to-violet ring, glossy orbiting mini icons (Search, Music, Refresh, SyncUp, SyncDown), and interactive Orbi Animation Lab in Settings"
     )
 
     fun parseVersionJson(rawJson: String): RemoteVersionInfo {

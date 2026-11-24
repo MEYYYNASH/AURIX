@@ -8,7 +8,9 @@ import androidx.compose.animation.AnimatedContent
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.SizeTransform
 import androidx.compose.animation.animateColorAsState
+import androidx.compose.animation.core.Animatable
 import androidx.compose.animation.core.CubicBezierEasing
+import androidx.compose.animation.core.Easing
 import androidx.compose.animation.core.LinearEasing
 import androidx.compose.animation.core.RepeatMode
 import androidx.compose.animation.core.Spring
@@ -28,8 +30,10 @@ import androidx.compose.animation.shrinkVertically
 import androidx.compose.animation.slideInHorizontally
 import androidx.compose.animation.slideInVertically
 import androidx.compose.animation.slideOutHorizontally
+import androidx.compose.animation.slideOutVertically
 import androidx.compose.animation.togetherWith
 import androidx.compose.foundation.BorderStroke
+import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.LocalIndication
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
@@ -62,6 +66,7 @@ import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.layout.windowInsetsPadding
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.itemsIndexed
+import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
@@ -109,6 +114,7 @@ import androidx.compose.material3.minimumInteractiveComponentSize
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.saveable.rememberSaveable
@@ -119,15 +125,21 @@ import androidx.compose.ui.draw.alpha
 import androidx.compose.ui.draw.blur
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.draw.drawBehind
+import androidx.compose.ui.draw.drawWithContent
 import androidx.compose.ui.focus.onFocusChanged
 import androidx.compose.ui.geometry.CornerRadius
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.geometry.Size
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.Path
+import androidx.compose.ui.graphics.StrokeCap
+import androidx.compose.ui.graphics.StrokeJoin
+import androidx.compose.ui.graphics.TransformOrigin
 import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.layout.ContentScale
+import androidx.compose.ui.layout.layout
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalInspectionMode
 import androidx.compose.ui.platform.LocalSoftwareKeyboardController
@@ -159,6 +171,108 @@ import com.example.model.YoutubeFormatSheetState
 import com.example.model.YoutubePlaylistResult
 import com.example.ui.theme.AurixTheme
 import java.util.Locale
+import kotlin.math.abs
+import kotlin.math.hypot
+import kotlin.math.roundToInt
+import kotlinx.coroutines.delay
+import kotlinx.coroutines.launch
+
+// =============================================================================
+// PLAYLIST SELECT MODE MOTION CONSTANTS (Easy to change)
+// =============================================================================
+
+/** 1. "0 selected" bar open/close durations, slide offset, and scale. */
+const val SELECT_BAR_OPEN_DURATION_MS = 420
+const val SELECT_BAR_CLOSE_DURATION_MS = 380
+val SELECT_BAR_SLIDE_OFFSET_Y = (-14).dp
+const val SELECT_BAR_INITIAL_SCALE = 0.97f
+
+/** 2. Selection circle open/close durations, slide offset, scale, and rotation. */
+const val SELECT_CIRCLE_OPEN_DURATION_MS = 600
+const val SELECT_CIRCLE_CLOSE_DURATION_MS = 380
+val SELECT_CIRCLE_SLIDE_OFFSET_X = (-26).dp
+const val SELECT_CIRCLE_INITIAL_SCALE = 0.3f
+const val SELECT_CIRCLE_INITIAL_ROTATION_DEG = -120f
+
+/** 3. Song card horizontal glide right shift & durations. */
+const val SELECT_CARD_OPEN_DURATION_MS = 600
+const val SELECT_CARD_CLOSE_DURATION_MS = 380
+val SELECT_CARD_SHIFT_X = 46.dp
+
+/** 4. Row stagger parameters (only first 8 visible rows staggered; rows below 0ms). */
+const val SELECT_MAX_STAGGERED_VISIBLE_ROWS = 8
+const val SELECT_OPEN_STAGGER_DELAY_MS = 35
+const val SELECT_CLOSE_STAGGER_DELAY_MS = 20
+
+/** 5. "Select" <-> "Done" button transition duration & close clear delay. */
+const val SELECT_BUTTON_TRANSITION_DURATION_MS = 300
+const val SELECT_CLOSE_CLEAR_DELAY_MS = 380L
+
+/** 6. Tap a song in Select mode: circle fill #43C7F4, pop, checkmark stroke, card outline, counter bump. */
+val SelectCheckAccentColor = Color(0xFF43C7F4)
+val SelectButtonLightBlue = Color(0xFF2F8BFF)
+
+const val SELECT_CHECK_POP_DURATION_MS = 300
+const val SELECT_CHECK_POP_PEAK_SCALE = 1.28f
+const val SELECT_CHECK_POP_SPRING_DAMPING = 0.50f
+const val SELECT_CHECK_POP_SPRING_STIFFNESS = 520f
+const val SELECT_CHECK_STROKE_DURATION_MS = 250
+
+val SELECT_CARD_OUTLINE_WIDTH = 2.5.dp
+const val SELECT_CARD_OUTLINE_FADE_DURATION_MS = 220
+
+const val SELECT_COUNTER_BUMP_DURATION_MS = 260
+const val SELECT_COUNTER_BUMP_PEAK_SCALE = 1.25f
+
+/** Ease-out cubic-bezier(0.22, 1, 0.36, 1) for bar expansion and card glide. */
+val SelectEaseOut = CubicBezierEasing(0.22f, 1.0f, 0.36f, 1.0f)
+
+/** Slight spring overshoot cubic-bezier(0.34, 1.3, 0.64, 1) for the selection circle roll-in. */
+val SelectCircleOvershootEasing = Easing { fraction ->
+  evaluateCubicBezierOvershoot(0.34f, 1.3f, 0.64f, 1.0f, fraction)
+}
+
+private fun evaluateCubicBezierOvershoot(
+  x1: Float,
+  y1: Float,
+  x2: Float,
+  y2: Float,
+  t: Float
+): Float {
+  val clampedT = t.coerceIn(0f, 1f)
+  if (clampedT <= 0f) return 0f
+  if (clampedT >= 1f) return 1f
+  var low = 0f
+  var high = 1f
+  var u = clampedT
+  repeat(10) {
+    val inv = 1f - u
+    val bx = 3f * inv * inv * u * x1 + 3f * inv * u * u * x2 + u * u * u
+    val diff = bx - clampedT
+    if (abs(diff) < 1e-4f) return@repeat
+    if (diff < 0f) low = u else high = u
+    u = 0.5f * (low + high)
+  }
+  val inv = 1f - u
+  return 3f * inv * inv * u * y1 + 3f * inv * u * u * y2 + u * u * u
+}
+
+@Composable
+private fun rememberSelectEffectiveReduceMotion(reducedMotion: Boolean): Boolean {
+  val context = LocalContext.current
+  val isInspection = LocalInspectionMode.current
+  val animatorScale = remember(context, isInspection) {
+    if (isInspection) 1f
+    else runCatching {
+      Settings.Global.getFloat(
+        context.contentResolver,
+        Settings.Global.ANIMATOR_DURATION_SCALE,
+        1f
+      )
+    }.getOrDefault(1f)
+  }
+  return reducedMotion || animatorScale <= 0.05f
+}
 
 @Composable
 fun SearchScreen(
@@ -885,8 +999,53 @@ private fun YoutubeLinkGlassPane(
   val inputBorder = if (darkTheme) Color.White.copy(alpha = 0.22f) else Color.White
   val pasteBg = if (darkTheme) Color.White.copy(alpha = 0.10f) else Color.White.copy(alpha = 0.85f)
   var showYoutubeGuide by rememberSaveable { mutableStateOf(true) }
+  val effectiveReduceMotion = rememberSelectEffectiveReduceMotion(reducedMotion)
+  val lazyListState = rememberLazyListState()
+
+  // Hold selected track IDs for 380ms on close so checkmarks and counter remain intact until close finishes
+  var displayedSelectedTrackIds by remember { mutableStateOf(selectedPlaylistTrackIds) }
+  LaunchedEffect(playlistSelectionMode, selectedPlaylistTrackIds, effectiveReduceMotion) {
+    if (playlistSelectionMode) {
+      displayedSelectedTrackIds = selectedPlaylistTrackIds
+    } else if (selectedPlaylistTrackIds.isNotEmpty()) {
+      displayedSelectedTrackIds = selectedPlaylistTrackIds
+    } else {
+      val holdMs = if (effectiveReduceMotion) 1L else SELECT_CLOSE_CLEAR_DELAY_MS
+      delay(holdMs)
+      if (!playlistSelectionMode) {
+        displayedSelectedTrackIds = emptySet()
+      }
+    }
+  }
+
+  // Snapshot the first visible playlist song index at the start of each open/close transition
+  val firstVisiblePlaylistSongIndex = remember(playlistSelectionMode) {
+    val firstSongItem = lazyListState.layoutInfo.visibleItemsInfo.firstOrNull { info ->
+      (info.key as? String)?.startsWith("pl_") == true
+    }
+    (firstSongItem?.key as? String)
+      ?.removePrefix("pl_")
+      ?.substringBefore("_")
+      ?.toIntOrNull()
+      ?: 0
+  }
+
+  // Track whether the open/close transition has settled so newly scrolled rows in 80+ song playlists don't re-animate
+  var settledSelectionMode by remember { mutableStateOf(playlistSelectionMode) }
+  LaunchedEffect(playlistSelectionMode, effectiveReduceMotion) {
+    val totalWindowMs = if (effectiveReduceMotion) {
+      5L
+    } else if (playlistSelectionMode) {
+      (SELECT_CIRCLE_OPEN_DURATION_MS + SELECT_MAX_STAGGERED_VISIBLE_ROWS * SELECT_OPEN_STAGGER_DELAY_MS).toLong()
+    } else {
+      (SELECT_CIRCLE_CLOSE_DURATION_MS + SELECT_MAX_STAGGERED_VISIBLE_ROWS * SELECT_CLOSE_STAGGER_DELAY_MS).toLong()
+    }
+    delay(totalWindowMs)
+    settledSelectionMode = playlistSelectionMode
+  }
 
   LazyColumn(
+    state = lazyListState,
     modifier = Modifier.fillMaxSize(),
     verticalArrangement = Arrangement.spacedBy(16.dp),
     contentPadding = PaddingValues(bottom = listBottomPadding)
@@ -1113,6 +1272,12 @@ private fun YoutubeLinkGlassPane(
         }
       }
     } else if (youtubePlaylist != null) {
+      val effectiveSelectedIds = if (playlistSelectionMode) {
+        selectedPlaylistTrackIds
+      } else {
+        displayedSelectedTrackIds
+      }
+
       item {
         YoutubePlaylistResultCard(
           playlist = youtubePlaylist,
@@ -1121,7 +1286,7 @@ private fun YoutubeLinkGlassPane(
           songDownloadProgress = songDownloadProgress,
           downloadedSongIds = downloadedSongIds,
           selectionMode = playlistSelectionMode,
-          selectedCount = selectedPlaylistTrackIds.size,
+          selectedCount = effectiveSelectedIds.size,
           hasQueueItems = hasQueueItems,
           onPlayAll = { onPlayPlaylist(false) },
           onShuffle = { onPlayPlaylist(true) },
@@ -1150,181 +1315,44 @@ private fun YoutubeLinkGlassPane(
       }
 
       item {
-        Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
-          Row(
-            modifier = Modifier
-              .fillMaxWidth()
-              .padding(horizontal = 4.dp, vertical = 2.dp),
-            horizontalArrangement = Arrangement.spacedBy(8.dp),
-            verticalAlignment = Alignment.CenterVertically
-          ) {
-            Text(
-              text = stringResource(id = R.string.playlist_songs_header, youtubePlaylist.tracks.size),
-              style = MaterialTheme.typography.labelLarge.copy(fontWeight = FontWeight.Bold),
-              color = AurixTealAccent,
-              modifier = Modifier.weight(1f)
-            )
-            Surface(
-              onClick = onTogglePlaylistSelectionMode,
-              shape = CircleShape,
-              color = if (playlistSelectionMode) Color(0xFF2F8BFF).copy(alpha = 0.22f)
-              else if (darkTheme) Color.White.copy(alpha = 0.08f) else Color.White.copy(alpha = 0.78f),
-              border = BorderStroke(
-                1.dp,
-                if (playlistSelectionMode) Color(0xFF2F8BFF).copy(alpha = 0.55f)
-                else if (darkTheme) Color.White.copy(alpha = 0.16f) else Color.White
-              ),
-              modifier = Modifier
-                .minimumInteractiveComponentSize()
-                .testTag("playlist_select_toggle_button")
-            ) {
-              Row(
-                modifier = Modifier.padding(horizontal = 12.dp, vertical = 6.dp),
-                verticalAlignment = Alignment.CenterVertically,
-                horizontalArrangement = Arrangement.spacedBy(5.dp)
-              ) {
-                Icon(
-                  imageVector = Icons.Rounded.Checklist,
-                  contentDescription = null,
-                  tint = if (playlistSelectionMode) Color(0xFF2F8BFF) else MaterialTheme.colorScheme.onSurfaceVariant,
-                  modifier = Modifier.size(15.dp)
-                )
-                Text(
-                  text = stringResource(
-                    id = if (playlistSelectionMode) R.string.playlist_done_selecting else R.string.playlist_select_songs
-                  ),
-                  style = MaterialTheme.typography.labelSmall.copy(fontWeight = FontWeight.Bold),
-                  color = if (playlistSelectionMode) Color(0xFF2F8BFF) else MaterialTheme.colorScheme.onSurfaceVariant
-                )
-              }
-            }
-            Surface(
-              onClick = onClearYoutubeResult,
-              shape = CircleShape,
-              color = if (darkTheme) Color.White.copy(alpha = 0.08f) else Color.White.copy(alpha = 0.78f),
-              border = BorderStroke(
-                1.dp,
-                if (darkTheme) Color.White.copy(alpha = 0.16f) else Color.White
-              ),
-              modifier = Modifier
-                .minimumInteractiveComponentSize()
-                .testTag("playlist_clear_button")
-            ) {
-              Text(
-                text = stringResource(id = R.string.search_quick_clear),
-                style = MaterialTheme.typography.labelSmall.copy(fontWeight = FontWeight.SemiBold),
-                color = MaterialTheme.colorScheme.onSurfaceVariant,
-                modifier = Modifier.padding(horizontal = 12.dp, vertical = 6.dp)
-              )
-            }
-          }
-
-          AnimatedVisibility(
-            visible = playlistSelectionMode,
-            enter = if (reducedMotion) fadeIn(snap()) else fadeIn(tween(180)) + expandVertically(),
-            exit = if (reducedMotion) fadeOut(snap()) else fadeOut(tween(140)) + shrinkVertically()
-          ) {
-            Row(
-              modifier = Modifier
-                .fillMaxWidth()
-                .clip(RoundedCornerShape(18.dp))
-                .background(
-                  if (darkTheme) Color(0xFF1A233E).copy(alpha = 0.80f)
-                  else Color.White.copy(alpha = 0.85f)
-                )
-                .border(1.dp, Color(0xFF2F8BFF).copy(alpha = 0.30f), RoundedCornerShape(18.dp))
-                .padding(horizontal = 12.dp, vertical = 8.dp),
-              verticalAlignment = Alignment.CenterVertically,
-              horizontalArrangement = Arrangement.spacedBy(8.dp)
-            ) {
-              Text(
-                text = stringResource(id = R.string.playlist_selected_count, selectedPlaylistTrackIds.size),
-                style = MaterialTheme.typography.labelMedium.copy(fontWeight = FontWeight.Bold),
-                color = MaterialTheme.colorScheme.onSurface,
-                modifier = Modifier.weight(1f)
-              )
-              Surface(
-                onClick = onSelectAllPlaylistTracks,
-                shape = CircleShape,
-                color = Color(0xFF2F8BFF).copy(alpha = 0.16f),
-                border = BorderStroke(1.dp, Color(0xFF2F8BFF).copy(alpha = 0.40f)),
-                modifier = Modifier
-                  .minimumInteractiveComponentSize()
-                  .testTag("playlist_select_all_button")
-              ) {
-                Text(
-                  text = stringResource(id = R.string.playlist_select_all),
-                  style = MaterialTheme.typography.labelSmall.copy(fontWeight = FontWeight.Bold),
-                  color = Color(0xFF2F8BFF),
-                  modifier = Modifier.padding(horizontal = 11.dp, vertical = 6.dp)
-                )
-              }
-              Surface(
-                onClick = onClearPlaylistTrackSelection,
-                shape = CircleShape,
-                color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.08f),
-                modifier = Modifier
-                  .minimumInteractiveComponentSize()
-                  .testTag("playlist_clear_selection_button")
-              ) {
-                Text(
-                  text = stringResource(id = R.string.playlist_clear_selection),
-                  style = MaterialTheme.typography.labelSmall.copy(fontWeight = FontWeight.SemiBold),
-                  color = MaterialTheme.colorScheme.onSurfaceVariant,
-                  modifier = Modifier.padding(horizontal = 11.dp, vertical = 6.dp)
-                )
-              }
-            }
-          }
-        }
+        PlaylistSelectionHeaderAndBar(
+          totalTrackCount = youtubePlaylist.tracks.size,
+          playlistSelectionMode = playlistSelectionMode,
+          selectedCount = effectiveSelectedIds.size,
+          darkTheme = darkTheme,
+          effectiveReduceMotion = effectiveReduceMotion,
+          onTogglePlaylistSelectionMode = onTogglePlaylistSelectionMode,
+          onClearYoutubeResult = onClearYoutubeResult,
+          onSelectAllPlaylistTracks = onSelectAllPlaylistTracks,
+          onClearPlaylistTrackSelection = onClearPlaylistTrackSelection
+        )
       }
 
       itemsIndexed(youtubePlaylist.tracks, key = { index, song -> "pl_${index}_${song.id}" }) { index, song ->
-        val isChecked = song.id in selectedPlaylistTrackIds
-        Row(
-          modifier = Modifier.fillMaxWidth(),
-          verticalAlignment = Alignment.CenterVertically,
-          horizontalArrangement = Arrangement.spacedBy(8.dp)
-        ) {
-          if (playlistSelectionMode) {
-            IconButton(
-              onClick = { onTogglePlaylistTrackSelection(song.id) },
-              modifier = Modifier
-                .minimumInteractiveComponentSize()
-                .testTag("playlist_track_checkbox_${song.id}")
-            ) {
-              Icon(
-                imageVector = if (isChecked) Icons.Rounded.CheckCircle else Icons.Rounded.RadioButtonUnchecked,
-                contentDescription = song.title,
-                tint = if (isChecked) Color(0xFF2F8BFF) else MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.72f),
-                modifier = Modifier.size(24.dp)
-              )
-            }
-          }
-          SongDownloadRow(
-            song = song,
-            index = index + 1,
-            isPlaying = isPlaying,
-            isCurrent = currentSong?.id == song.id,
-            isResolving = resolvingSongId == song.id,
-            reducedMotion = reducedMotion,
-            darkTheme = darkTheme,
-            hasLyrics = song.id in verifiedLyricsIds,
-            downloadProgress = songDownloadProgress[song.id],
-            isDownloaded = song.id in downloadedSongIds,
-            onCheckLyrics = onCheckLyrics,
-            onSongClick = {
-              if (playlistSelectionMode) {
-                onTogglePlaylistTrackSelection(song.id)
-              } else {
-                onSongClick(song, youtubePlaylist.tracks)
-              }
-            },
-            onFavoriteClick = { onFavoriteClick(song) },
-            onDownloadClick = { onTrackDownloadClick(song) },
-            modifier = Modifier.weight(1f)
-          )
-        }
+        val isChecked = song.id in effectiveSelectedIds
+        PlaylistSelectableSongRow(
+          song = song,
+          index = index,
+          totalTrackCount = youtubePlaylist.tracks.size,
+          firstVisibleIndex = firstVisiblePlaylistSongIndex,
+          playlistSelectionMode = playlistSelectionMode,
+          settledSelectionMode = settledSelectionMode,
+          isChecked = isChecked,
+          isPlaying = isPlaying,
+          isCurrent = currentSong?.id == song.id,
+          isResolving = resolvingSongId == song.id,
+          reducedMotion = reducedMotion,
+          effectiveReduceMotion = effectiveReduceMotion,
+          darkTheme = darkTheme,
+          hasLyrics = song.id in verifiedLyricsIds,
+          downloadProgress = songDownloadProgress[song.id],
+          isDownloaded = song.id in downloadedSongIds,
+          onCheckLyrics = onCheckLyrics,
+          onToggleTrackSelection = { onTogglePlaylistTrackSelection(song.id) },
+          onPlaySong = { onSongClick(song, youtubePlaylist.tracks) },
+          onFavoriteClick = { onFavoriteClick(song) },
+          onDownloadClick = { onTrackDownloadClick(song) }
+        )
       }
     } else if (youtubeAnalysis != null) {
       item {
@@ -1406,6 +1434,638 @@ private fun YoutubeLinkGlassPane(
             }
           }
         }
+      }
+    }
+  }
+}
+
+@Composable
+private fun PlaylistSelectionHeaderAndBar(
+  totalTrackCount: Int,
+  playlistSelectionMode: Boolean,
+  selectedCount: Int,
+  darkTheme: Boolean,
+  effectiveReduceMotion: Boolean,
+  onTogglePlaylistSelectionMode: () -> Unit,
+  onClearYoutubeResult: () -> Unit,
+  onSelectAllPlaylistTracks: () -> Unit,
+  onClearPlaylistTrackSelection: () -> Unit
+) {
+  val btnDuration = if (effectiveReduceMotion) 1 else SELECT_BUTTON_TRANSITION_DURATION_MS
+
+  val toggleContainerColor by animateColorAsState(
+    targetValue = if (playlistSelectionMode) {
+      SelectButtonLightBlue.copy(alpha = 0.22f)
+    } else if (darkTheme) {
+      Color.White.copy(alpha = 0.08f)
+    } else {
+      Color.White.copy(alpha = 0.78f)
+    },
+    animationSpec = tween(durationMillis = btnDuration, easing = SelectEaseOut),
+    label = "select_btn_bg"
+  )
+  val toggleBorderColor by animateColorAsState(
+    targetValue = if (playlistSelectionMode) {
+      SelectButtonLightBlue.copy(alpha = 0.55f)
+    } else if (darkTheme) {
+      Color.White.copy(alpha = 0.16f)
+    } else {
+      Color.White
+    },
+    animationSpec = tween(durationMillis = btnDuration, easing = SelectEaseOut),
+    label = "select_btn_border"
+  )
+  val toggleContentColor by animateColorAsState(
+    targetValue = if (playlistSelectionMode) {
+      SelectButtonLightBlue
+    } else {
+      MaterialTheme.colorScheme.onSurfaceVariant
+    },
+    animationSpec = tween(durationMillis = btnDuration, easing = SelectEaseOut),
+    label = "select_btn_content"
+  )
+
+  // 1. "0 selected" bar open (420ms ease-out 0.22, 1, 0.36, 1) & close (380ms reverse)
+  val barProgress = remember { Animatable(if (playlistSelectionMode) 1f else 0f) }
+  LaunchedEffect(playlistSelectionMode, effectiveReduceMotion) {
+    if (effectiveReduceMotion) {
+      barProgress.animateTo(
+        targetValue = if (playlistSelectionMode) 1f else 0f,
+        animationSpec = tween(durationMillis = 1)
+      )
+    } else if (playlistSelectionMode) {
+      barProgress.animateTo(
+        targetValue = 1f,
+        animationSpec = tween(
+          durationMillis = SELECT_BAR_OPEN_DURATION_MS,
+          easing = SelectEaseOut
+        )
+      )
+    } else {
+      barProgress.animateTo(
+        targetValue = 0f,
+        animationSpec = tween(
+          durationMillis = SELECT_BAR_CLOSE_DURATION_MS,
+          easing = SelectEaseOut
+        )
+      )
+    }
+  }
+
+  // "N selected" counter bump (scale 1 -> 1.25 -> 1, 260ms) every time the number changes
+  val counterScale = remember { Animatable(1f) }
+  var lastSelectedCount by remember { mutableIntStateOf(selectedCount) }
+  LaunchedEffect(selectedCount, effectiveReduceMotion) {
+    if (selectedCount != lastSelectedCount) {
+      lastSelectedCount = selectedCount
+      if (effectiveReduceMotion) {
+        counterScale.snapTo(1f)
+      } else {
+        val upMs = (SELECT_COUNTER_BUMP_DURATION_MS * 0.38f).roundToInt().coerceAtLeast(1)
+        val downMs = (SELECT_COUNTER_BUMP_DURATION_MS - upMs).coerceAtLeast(1)
+        counterScale.animateTo(
+          targetValue = SELECT_COUNTER_BUMP_PEAK_SCALE,
+          animationSpec = tween(durationMillis = upMs, easing = SelectEaseOut)
+        )
+        counterScale.animateTo(
+          targetValue = 1f,
+          animationSpec = tween(durationMillis = downMs, easing = SelectEaseOut)
+        )
+      }
+    }
+  }
+
+  Column(modifier = Modifier.fillMaxWidth()) {
+    Row(
+      modifier = Modifier
+        .fillMaxWidth()
+        .padding(horizontal = 4.dp, vertical = 2.dp),
+      horizontalArrangement = Arrangement.spacedBy(8.dp),
+      verticalAlignment = Alignment.CenterVertically
+    ) {
+      Text(
+        text = stringResource(id = R.string.playlist_songs_header, totalTrackCount),
+        style = MaterialTheme.typography.labelLarge.copy(fontWeight = FontWeight.Bold),
+        color = AurixTealAccent,
+        modifier = Modifier.weight(1f)
+      )
+
+      // 5. "Select" / "Done" button: label slides up & fades out/in, button turns light blue (300ms)
+      Surface(
+        onClick = onTogglePlaylistSelectionMode,
+        shape = CircleShape,
+        color = toggleContainerColor,
+        border = BorderStroke(1.dp, toggleBorderColor),
+        modifier = Modifier
+          .minimumInteractiveComponentSize()
+          .testTag("playlist_select_toggle_button")
+      ) {
+        Row(
+          modifier = Modifier.padding(horizontal = 12.dp, vertical = 6.dp),
+          verticalAlignment = Alignment.CenterVertically,
+          horizontalArrangement = Arrangement.spacedBy(5.dp)
+        ) {
+          Icon(
+            imageVector = Icons.Rounded.Checklist,
+            contentDescription = null,
+            tint = toggleContentColor,
+            modifier = Modifier.size(15.dp)
+          )
+          AnimatedContent(
+            targetState = playlistSelectionMode,
+            transitionSpec = {
+              if (effectiveReduceMotion) {
+                fadeIn(tween(1)) togetherWith fadeOut(tween(1))
+              } else if (targetState) {
+                // OPEN: "Select" slides up & fades out; "Done" slides up from below & fades in (300ms)
+                (slideInVertically(
+                  animationSpec = tween(btnDuration, easing = SelectEaseOut),
+                  initialOffsetY = { fullHeight -> fullHeight }
+                ) + fadeIn(
+                  animationSpec = tween(btnDuration, easing = SelectEaseOut)
+                )) togetherWith (slideOutVertically(
+                  animationSpec = tween(btnDuration, easing = SelectEaseOut),
+                  targetOffsetY = { fullHeight -> -fullHeight }
+                ) + fadeOut(
+                  animationSpec = tween(btnDuration, easing = SelectEaseOut)
+                )) using SizeTransform(clip = false)
+              } else {
+                // CLOSE: Play in reverse ("Done" slides down & fades out; "Select" slides down & fades in)
+                (slideInVertically(
+                  animationSpec = tween(btnDuration, easing = SelectEaseOut),
+                  initialOffsetY = { fullHeight -> -fullHeight }
+                ) + fadeIn(
+                  animationSpec = tween(btnDuration, easing = SelectEaseOut)
+                )) togetherWith (slideOutVertically(
+                  animationSpec = tween(btnDuration, easing = SelectEaseOut),
+                  targetOffsetY = { fullHeight -> fullHeight }
+                ) + fadeOut(
+                  animationSpec = tween(btnDuration, easing = SelectEaseOut)
+                )) using SizeTransform(clip = false)
+              }
+            },
+            label = "select_done_label_slide"
+          ) { isSelectMode ->
+            Text(
+              text = stringResource(
+                id = if (isSelectMode) R.string.playlist_done_selecting else R.string.playlist_select_songs
+              ),
+              style = MaterialTheme.typography.labelSmall.copy(fontWeight = FontWeight.Bold),
+              color = toggleContentColor
+            )
+          }
+        }
+      }
+
+      Surface(
+        onClick = onClearYoutubeResult,
+        shape = CircleShape,
+        color = if (darkTheme) Color.White.copy(alpha = 0.08f) else Color.White.copy(alpha = 0.78f),
+        border = BorderStroke(
+          1.dp,
+          if (darkTheme) Color.White.copy(alpha = 0.16f) else Color.White
+        ),
+        modifier = Modifier
+          .minimumInteractiveComponentSize()
+          .testTag("playlist_clear_button")
+      ) {
+        Text(
+          text = stringResource(id = R.string.search_quick_clear),
+          style = MaterialTheme.typography.labelSmall.copy(fontWeight = FontWeight.SemiBold),
+          color = MaterialTheme.colorScheme.onSurfaceVariant,
+          modifier = Modifier.padding(horizontal = 12.dp, vertical = 6.dp)
+        )
+      }
+    }
+
+    // 1. "0 selected" bar: height expands smoothly from 0 (no jump), slides from -14dp, fades in, scales 0.97 -> 1
+    if (playlistSelectionMode || barProgress.value > 0.001f) {
+      Box(
+        modifier = Modifier
+          .fillMaxWidth()
+          .layout { measurable, constraints ->
+            val placeable = measurable.measure(constraints)
+            val p = barProgress.value.coerceIn(0f, 1f)
+            val currentHeight = (placeable.height * p).roundToInt()
+            layout(placeable.width, currentHeight) {
+              placeable.placeRelative(0, 0)
+            }
+          }
+          .graphicsLayer {
+            val p = barProgress.value.coerceIn(0f, 1f)
+            alpha = p
+            translationY = (1f - p) * SELECT_BAR_SLIDE_OFFSET_Y.toPx()
+            val s = SELECT_BAR_INITIAL_SCALE + (1f - SELECT_BAR_INITIAL_SCALE) * p
+            scaleX = s
+            scaleY = s
+          }
+      ) {
+        Row(
+          modifier = Modifier
+            .padding(top = 8.dp)
+            .fillMaxWidth()
+            .clip(RoundedCornerShape(18.dp))
+            .background(
+              if (darkTheme) Color(0xFF1A233E).copy(alpha = 0.80f)
+              else Color.White.copy(alpha = 0.85f)
+            )
+            .border(1.dp, SelectButtonLightBlue.copy(alpha = 0.30f), RoundedCornerShape(18.dp))
+            .padding(horizontal = 12.dp, vertical = 8.dp),
+          verticalAlignment = Alignment.CenterVertically,
+          horizontalArrangement = Arrangement.spacedBy(8.dp)
+        ) {
+          Box(
+            modifier = Modifier.weight(1f),
+            contentAlignment = Alignment.CenterStart
+          ) {
+            Text(
+              text = stringResource(id = R.string.playlist_selected_count, selectedCount),
+              style = MaterialTheme.typography.labelMedium.copy(fontWeight = FontWeight.Bold),
+              color = MaterialTheme.colorScheme.onSurface,
+              modifier = Modifier.graphicsLayer {
+                scaleX = counterScale.value
+                scaleY = counterScale.value
+                transformOrigin = TransformOrigin(0.15f, 0.5f)
+              }
+            )
+          }
+          Surface(
+            onClick = onSelectAllPlaylistTracks,
+            shape = CircleShape,
+            color = SelectButtonLightBlue.copy(alpha = 0.16f),
+            border = BorderStroke(1.dp, SelectButtonLightBlue.copy(alpha = 0.40f)),
+            modifier = Modifier
+              .minimumInteractiveComponentSize()
+              .testTag("playlist_select_all_button")
+          ) {
+            Text(
+              text = stringResource(id = R.string.playlist_select_all),
+              style = MaterialTheme.typography.labelSmall.copy(fontWeight = FontWeight.Bold),
+              color = SelectButtonLightBlue,
+              modifier = Modifier.padding(horizontal = 11.dp, vertical = 6.dp)
+            )
+          }
+          Surface(
+            onClick = onClearPlaylistTrackSelection,
+            shape = CircleShape,
+            color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.08f),
+            modifier = Modifier
+              .minimumInteractiveComponentSize()
+              .testTag("playlist_clear_selection_button")
+          ) {
+            Text(
+              text = stringResource(id = R.string.playlist_clear_selection),
+              style = MaterialTheme.typography.labelSmall.copy(fontWeight = FontWeight.SemiBold),
+              color = MaterialTheme.colorScheme.onSurfaceVariant,
+              modifier = Modifier.padding(horizontal = 11.dp, vertical = 6.dp)
+            )
+          }
+        }
+      }
+    }
+  }
+}
+
+@Composable
+private fun PlaylistSelectableSongRow(
+  song: Song,
+  index: Int,
+  totalTrackCount: Int,
+  firstVisibleIndex: Int,
+  playlistSelectionMode: Boolean,
+  settledSelectionMode: Boolean,
+  isChecked: Boolean,
+  isPlaying: Boolean,
+  isCurrent: Boolean,
+  isResolving: Boolean,
+  reducedMotion: Boolean,
+  effectiveReduceMotion: Boolean,
+  darkTheme: Boolean,
+  hasLyrics: Boolean,
+  downloadProgress: Float?,
+  isDownloaded: Boolean,
+  onCheckLyrics: (Song) -> Unit,
+  onToggleTrackSelection: () -> Unit,
+  onPlaySong: () -> Unit,
+  onFavoriteClick: () -> Unit,
+  onDownloadClick: () -> Unit
+) {
+  // If this row enters composition while scrolling after the transition has already settled, start directly at target
+  val initialTarget = if (settledSelectionMode == playlistSelectionMode) {
+    if (playlistSelectionMode) 1f else 0f
+  } else {
+    if (playlistSelectionMode) 0f else 1f
+  }
+
+  val circleProgress = remember { Animatable(initialTarget) }
+  val cardShiftProgress = remember { Animatable(initialTarget) }
+
+  LaunchedEffect(playlistSelectionMode, effectiveReduceMotion) {
+    val target = if (playlistSelectionMode) 1f else 0f
+    if (abs(circleProgress.value - target) < 0.001f && abs(cardShiftProgress.value - target) < 0.001f) {
+      circleProgress.snapTo(target)
+      cardShiftProgress.snapTo(target)
+      return@LaunchedEffect
+    }
+
+    val relativeIndex = index - firstVisibleIndex
+    val isFirstEightVisible = relativeIndex in 0 until SELECT_MAX_STAGGERED_VISIBLE_ROWS
+
+    val staggerDelayMs = if (effectiveReduceMotion || !isFirstEightVisible) {
+      0L
+    } else if (playlistSelectionMode) {
+      // 4. OPEN: delay 35ms per row for first 8 visible rows; rows below 0ms
+      (relativeIndex * SELECT_OPEN_STAGGER_DELAY_MS).toLong()
+    } else {
+      // CLOSE: reverse order, 20ms per row for first 8 visible rows; rows below 0ms
+      val visibleWindow = minOf(
+        SELECT_MAX_STAGGERED_VISIBLE_ROWS,
+        (totalTrackCount - firstVisibleIndex).coerceAtLeast(1)
+      )
+      val reverseIdx = (visibleWindow - 1 - relativeIndex).coerceAtLeast(0)
+      (reverseIdx * SELECT_CLOSE_STAGGER_DELAY_MS).toLong()
+    }
+
+    if (staggerDelayMs > 0L) {
+      delay(staggerDelayMs)
+    }
+
+    if (effectiveReduceMotion) {
+      launch { circleProgress.animateTo(target, tween(1)) }
+      launch { cardShiftProgress.animateTo(target, tween(1)) }
+    } else if (playlistSelectionMode) {
+      // 2. Circle slides in from -26px, scales 0.3 -> 1, rotates -120° -> 0°, fades in (600ms, spring overshoot 0.34, 1.3, 0.64, 1)
+      launch {
+        circleProgress.animateTo(
+          targetValue = 1f,
+          animationSpec = tween(
+            durationMillis = SELECT_CIRCLE_OPEN_DURATION_MS,
+            easing = SelectCircleOvershootEasing
+          )
+        )
+      }
+      // 3. Card glides right by 46px (600ms, ease-out 0.22, 1, 0.36, 1)
+      launch {
+        cardShiftProgress.animateTo(
+          targetValue = 1f,
+          animationSpec = tween(
+            durationMillis = SELECT_CARD_OPEN_DURATION_MS,
+            easing = SelectEaseOut
+          )
+        )
+      }
+    } else {
+      // CLOSE: circles roll out & cards glide back left in reverse
+      launch {
+        circleProgress.animateTo(
+          targetValue = 0f,
+          animationSpec = tween(
+            durationMillis = SELECT_CIRCLE_CLOSE_DURATION_MS,
+            easing = SelectEaseOut
+          )
+        )
+      }
+      launch {
+        cardShiftProgress.animateTo(
+          targetValue = 0f,
+          animationSpec = tween(
+            durationMillis = SELECT_CARD_CLOSE_DURATION_MS,
+            easing = SelectEaseOut
+          )
+        )
+      }
+    }
+  }
+
+  // Smooth 2.5px (#43C7F4) accent outline fade on the card when selected
+  val outlineAlpha by animateFloatAsState(
+    targetValue = if (isChecked) 1f else 0f,
+    animationSpec = tween(
+      durationMillis = if (effectiveReduceMotion) 1 else SELECT_CARD_OUTLINE_FADE_DURATION_MS,
+      easing = SelectEaseOut
+    ),
+    label = "selected_card_outline_alpha"
+  )
+
+  Box(
+    modifier = Modifier.fillMaxWidth(),
+    contentAlignment = Alignment.CenterStart
+  ) {
+    if (playlistSelectionMode || circleProgress.value > 0.001f) {
+      PlaylistAnimatedSelectionCircle(
+        songTitle = song.title,
+        songId = song.id,
+        isChecked = isChecked,
+        enterProgress = circleProgress.value,
+        effectiveReduceMotion = effectiveReduceMotion,
+        onClick = onToggleTrackSelection
+      )
+    }
+
+    SongDownloadRow(
+      song = song,
+      index = index + 1,
+      isPlaying = isPlaying,
+      isCurrent = isCurrent,
+      isResolving = isResolving,
+      reducedMotion = reducedMotion,
+      darkTheme = darkTheme,
+      hasLyrics = hasLyrics,
+      downloadProgress = downloadProgress,
+      isDownloaded = isDownloaded,
+      onCheckLyrics = onCheckLyrics,
+      onSongClick = {
+        if (playlistSelectionMode) {
+          onToggleTrackSelection()
+        } else {
+          onPlaySong()
+        }
+      },
+      onFavoriteClick = onFavoriteClick,
+      onDownloadClick = onDownloadClick,
+      modifier = Modifier
+        // Single layout property for the card shift (46dp right glide, no full-list relayout)
+        .layout { measurable, constraints ->
+          val shiftPx = (cardShiftProgress.value.coerceAtLeast(0f) * SELECT_CARD_SHIFT_X.toPx()).roundToInt()
+          val cardWidth = (constraints.maxWidth - shiftPx).coerceAtLeast(0)
+          val placeable = measurable.measure(
+            constraints.copy(minWidth = cardWidth, maxWidth = cardWidth)
+          )
+          layout(constraints.maxWidth, placeable.height) {
+            placeable.placeRelative(shiftPx, 0)
+          }
+        }
+        // 2.5px (#43C7F4) accent outline that fades in smoothly when checked
+        .drawWithContent {
+          drawContent()
+          val visibleAlpha = (outlineAlpha * cardShiftProgress.value.coerceIn(0f, 1f)).coerceIn(0f, 1f)
+          if (visibleAlpha > 0.005f) {
+            val strokePx = SELECT_CARD_OUTLINE_WIDTH.toPx()
+            val halfStroke = strokePx / 2f
+            val cornerPx = 34.dp.toPx().coerceAtMost(minOf(size.width, size.height) / 2f)
+            drawRoundRect(
+              color = SelectCheckAccentColor.copy(alpha = visibleAlpha),
+              topLeft = Offset(halfStroke, halfStroke),
+              size = Size(
+                (size.width - strokePx).coerceAtLeast(0f),
+                (size.height - strokePx).coerceAtLeast(0f)
+              ),
+              cornerRadius = CornerRadius(cornerPx, cornerPx),
+              style = Stroke(width = strokePx)
+            )
+          }
+        }
+    )
+  }
+}
+
+@Composable
+private fun PlaylistAnimatedSelectionCircle(
+  songTitle: String,
+  songId: String,
+  isChecked: Boolean,
+  enterProgress: Float,
+  effectiveReduceMotion: Boolean,
+  onClick: () -> Unit
+) {
+  // Pop scale (1 -> 1.28 -> 1, 300ms, spring) when checked
+  val popScale = remember { Animatable(1f) }
+  var prevChecked by remember { mutableStateOf(isChecked) }
+  LaunchedEffect(isChecked, effectiveReduceMotion) {
+    if (isChecked && !prevChecked) {
+      prevChecked = true
+      if (effectiveReduceMotion) {
+        popScale.snapTo(1f)
+      } else {
+        val upMs = (SELECT_CHECK_POP_DURATION_MS * 0.34f).roundToInt().coerceAtLeast(1)
+        popScale.animateTo(
+          targetValue = SELECT_CHECK_POP_PEAK_SCALE,
+          animationSpec = tween(durationMillis = upMs, easing = SelectEaseOut)
+        )
+        popScale.animateTo(
+          targetValue = 1f,
+          animationSpec = spring(
+            dampingRatio = SELECT_CHECK_POP_SPRING_DAMPING,
+            stiffness = SELECT_CHECK_POP_SPRING_STIFFNESS
+          )
+        )
+      }
+    } else if (!isChecked && prevChecked) {
+      prevChecked = false
+      popScale.animateTo(
+        targetValue = 1f,
+        animationSpec = tween(durationMillis = if (effectiveReduceMotion) 1 else 140)
+      )
+    }
+  }
+
+  // Circle fill (#43C7F4) progress
+  val fillProgress by animateFloatAsState(
+    targetValue = if (isChecked) 1f else 0f,
+    animationSpec = tween(
+      durationMillis = if (effectiveReduceMotion) 1 else 180,
+      easing = SelectEaseOut
+    ),
+    label = "select_circle_fill"
+  )
+
+  // White checkmark stroke draw animation (250ms)
+  val checkStrokeProgress by animateFloatAsState(
+    targetValue = if (isChecked) 1f else 0f,
+    animationSpec = tween(
+      durationMillis = if (effectiveReduceMotion) 1 else SELECT_CHECK_STROKE_DURATION_MS,
+      easing = SelectEaseOut
+    ),
+    label = "select_checkmark_stroke"
+  )
+
+  val unselectedRingColor = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.72f)
+
+  IconButton(
+    onClick = onClick,
+    modifier = Modifier
+      .width(SELECT_CARD_SHIFT_X)
+      .minimumInteractiveComponentSize()
+      .graphicsLayer {
+        val p = enterProgress
+        alpha = p.coerceIn(0f, 1f)
+        translationX = (1f - p) * SELECT_CIRCLE_SLIDE_OFFSET_X.toPx()
+        val baseScale = (SELECT_CIRCLE_INITIAL_SCALE + (1f - SELECT_CIRCLE_INITIAL_SCALE) * p).coerceAtLeast(0.01f)
+        val combinedScale = baseScale * popScale.value
+        scaleX = combinedScale
+        scaleY = combinedScale
+        rotationZ = (1f - p) * SELECT_CIRCLE_INITIAL_ROTATION_DEG
+      }
+      .testTag("playlist_track_checkbox_$songId")
+  ) {
+    Canvas(
+      modifier = Modifier
+        .size(24.dp)
+        .semantics { contentDescription = songTitle }
+    ) {
+      val cx = size.width / 2f
+      val cy = size.height / 2f
+      val radius = (minOf(size.width, size.height) / 2f) - 1.2.dp.toPx()
+      val ringStrokePx = 1.9.dp.toPx()
+
+      // Unselected outer ring
+      if (fillProgress < 0.99f) {
+        drawCircle(
+          color = unselectedRingColor.copy(alpha = unselectedRingColor.alpha * (1f - fillProgress * 0.5f)),
+          radius = radius,
+          center = Offset(cx, cy),
+          style = Stroke(width = ringStrokePx)
+        )
+      }
+
+      // Filled accent circle (#43C7F4)
+      if (fillProgress > 0.005f) {
+        drawCircle(
+          color = SelectCheckAccentColor.copy(alpha = fillProgress.coerceIn(0f, 1f)),
+          radius = (radius + ringStrokePx * 0.35f) * (0.65f + 0.35f * fillProgress),
+          center = Offset(cx, cy)
+        )
+      }
+
+      // Progressive white checkmark stroke draw (250ms)
+      val p = checkStrokeProgress.coerceIn(0f, 1f)
+      if (p > 0.01f) {
+        val startPt = Offset(cx - radius * 0.44f, cy + radius * 0.02f)
+        val midPt = Offset(cx - radius * 0.10f, cy + radius * 0.36f)
+        val endPt = Offset(cx + radius * 0.46f, cy - radius * 0.28f)
+
+        val seg1Len = hypot((midPt.x - startPt.x).toDouble(), (midPt.y - startPt.y).toDouble()).toFloat()
+        val seg2Len = hypot((endPt.x - midPt.x).toDouble(), (endPt.y - midPt.y).toDouble()).toFloat()
+        val totalLen = (seg1Len + seg2Len).coerceAtLeast(1f)
+        val split = seg1Len / totalLen
+
+        val checkPath = Path().apply {
+          moveTo(startPt.x, startPt.y)
+          if (p <= split) {
+            val t1 = (p / split).coerceIn(0f, 1f)
+            lineTo(
+              startPt.x + (midPt.x - startPt.x) * t1,
+              startPt.y + (midPt.y - startPt.y) * t1
+            )
+          } else {
+            lineTo(midPt.x, midPt.y)
+            val t2 = ((p - split) / (1f - split)).coerceIn(0f, 1f)
+            lineTo(
+              midPt.x + (endPt.x - midPt.x) * t2,
+              midPt.y + (endPt.y - midPt.y) * t2
+            )
+          }
+        }
+
+        drawPath(
+          path = checkPath,
+          color = Color.White,
+          style = Stroke(
+            width = 2.25.dp.toPx(),
+            cap = StrokeCap.Round,
+            join = StrokeJoin.Round
+          )
+        )
       }
     }
   }

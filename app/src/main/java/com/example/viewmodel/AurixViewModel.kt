@@ -1955,15 +1955,26 @@ class AurixViewModel(application: Application) : AndroidViewModel(application) {
 
   private fun playlistBatchId(playlistId: String): String = "playlist_$playlistId"
 
+  private var closeSelectionClearJob: Job? = null
+
   fun togglePlaylistSelectionMode() {
     val next = !_playlistSelectionMode.value
+    closeSelectionClearJob?.cancel()
     _playlistSelectionMode.value = next
-    if (!next) {
+    if (next) {
       _selectedPlaylistTrackIds.value = emptySet()
+    } else {
+      closeSelectionClearJob = viewModelScope.launch {
+        delay(com.example.ui.screens.SELECT_CLOSE_CLEAR_DELAY_MS)
+        if (!_playlistSelectionMode.value) {
+          _selectedPlaylistTrackIds.value = emptySet()
+        }
+      }
     }
   }
 
   fun togglePlaylistTrackSelection(trackId: String) {
+    closeSelectionClearJob?.cancel()
     if (!_playlistSelectionMode.value) {
       _playlistSelectionMode.value = true
     }
@@ -1975,11 +1986,13 @@ class AurixViewModel(application: Application) : AndroidViewModel(application) {
   fun selectAllPlaylistTracks() {
     val tracks = youtubePlaylist.value?.tracks.orEmpty()
     if (tracks.isEmpty()) return
+    closeSelectionClearJob?.cancel()
     _playlistSelectionMode.value = true
     _selectedPlaylistTrackIds.value = tracks.map { it.id }.toSet()
   }
 
   fun clearPlaylistTrackSelection() {
+    closeSelectionClearJob?.cancel()
     _selectedPlaylistTrackIds.value = emptySet()
   }
 

@@ -2023,7 +2023,7 @@ fun OrbiMascotPreviewScreen(
             color = MaterialTheme.colorScheme.onBackground
           )
           Text(
-            text = "1.9.4 • Canvas + Animatable • 60fps",
+            text = "1.9.5 • Canvas + Animatable • 60fps",
             style = MaterialTheme.typography.labelSmall,
             color = accentColor
           )
@@ -2340,15 +2340,15 @@ fun OrbiMascotPreviewScreen(
               )
               OrbiScenarioCard(
                 state = OrbiState.UpdateAvailable,
-                title = "Update 1.9.4 Available",
-                subtitle = "Mini Orbi loading row, 5 custom launcher icons, and compact 60fps sketch skeleton shimmer.",
+                title = "Update 1.9.5 Available",
+                subtitle = "Smooth Playlist Select mode animations, mini Orbi loading row, and 5 custom launcher icons.",
                 runner = OrbiRunner.SyncDown,
                 badgeText = "UPDATE AVAILABLE",
                 reducedMotion = reducedMotion
               )
               OrbiScenarioCard(
                 state = OrbiState.UpdateDownloading,
-                title = "Downloading AURIX 1.9.4",
+                title = "Downloading AURIX 1.9.5",
                 subtitle = "Fetching signed APK package in the background...",
                 runner = OrbiRunner.SyncDown,
                 badgeText = "DOWNLOADING",
@@ -2366,7 +2366,7 @@ fun OrbiMascotPreviewScreen(
               OrbiScenarioCard(
                 state = OrbiState.UpdateSuccess,
                 title = "You're Up to Date!",
-                subtitle = "AURIX 1.9.4 installed cleanly. Orbi is hopping happy!",
+                subtitle = "AURIX 1.9.5 installed cleanly. Orbi is hopping happy!",
                 runner = OrbiRunner.None,
                 badgeText = "UPDATE SUCCESS",
                 reducedMotion = reducedMotion
