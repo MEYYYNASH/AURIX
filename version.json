@@ -3,13 +3,13 @@
   "versionCode": 10950,
   "releaseDate": "2026-11-23",
   "apkUrl": "https://github.com/MEYYYNASH/AURIX/releases/download/v1.9.5/AURIX-v1.9.5.apk",
-  "sha256": "",
+  "sha256": "918ec6bd80437ec05adc9f216a84e1ac4328cceed3c3f78707cbee747db83a4c",
   "mandatory": false,
   "notes": [
-    "Smooth Playlist Select Mode Open/Close & Tap Motion (v1.9.5): Added 420ms ease-out selection bar expansion, 600ms spring-overshoot selection circle roll-in (-120° to 0°), 46dp card glide with 35ms/20ms visible-row stagger, 300ms Select/Done button slide, #43C7F4 spring pop + 250ms white checkmark stroke draw, 2.5dp accent card outline, and 380ms delayed close clear",
+    "Smooth Playlist Select Mode Open/Close & Tap Motion (v1.9.5): Added 420ms ease-out selection bar expansion, 600ms spring-overshoot selection circle roll-in (-120\u00b0 to 0\u00b0), 46dp card glide with 35ms/20ms visible-row stagger, 300ms Select/Done button slide, #43C7F4 spring pop + 250ms white checkmark stroke draw, 2.5dp accent card outline, and 380ms delayed close clear",
     "Mini Inline Orbi Loading & Compact Sketch Skeletons: Scaled StatusRow / OrbiStatusRow down to a sleek 34dp mini planet with a glowing orbiting bead, 15sp bold shimmer text, 3dp bouncing dots, and compact 46dp frameless sketch track skeletons",
     "App Icon Picker & 5 Orbi Launcher Icons: Switch between Classic, Midnight, Ember, AMOLED, and Pearl Orbi adaptive launcher icons in Settings > Appearance > App icon with Android 13+ monochrome themed icon layers, 512x512 Play Store PNG exports, confirmation bottom sheet, and Happy Orbi celebration",
-    "Orbi Mascot Animation System: Added OrbiView(state, size, runner) with white-lavender planet, -12° blinking/glancing eyes, -16° cyan-to-violet ring, glossy orbiting mini icons (Search, Music, Refresh, SyncUp, SyncDown), and interactive Orbi Animation Lab in Settings"
+    "Orbi Mascot Animation System: Added OrbiView(state, size, runner) with white-lavender planet, -12\u00b0 blinking/glancing eyes, -16\u00b0 cyan-to-violet ring, glossy orbiting mini icons (Search, Music, Refresh, SyncUp, SyncDown), and interactive Orbi Animation Lab in Settings"
   ],
   "releasePageUrl": "https://github.com/MEYYYNASH/AURIX/releases/tag/v1.9.5"
 }
