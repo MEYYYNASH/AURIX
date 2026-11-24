@@ -138,57 +138,95 @@ fun WidgetCustomizerScreen(
 
   BackHandler(onBack = handleBackAttempt)
 
-  // Zero-permission Android Photo Picker launchers (Play Policy compliant)
-  val framePhotoPicker = rememberLauncherForActivityResult(
-    contract = ActivityResultContracts.PickVisualMedia()
-  ) { uri ->
-    if (uri == null) return@rememberLauncherForActivityResult
-    scope.launch {
-      when (val res = WidgetPhotoStorage.importFramePhoto(context, uri)) {
-        is PhotoOperationResult.Success -> {
-          photoErrorMsg = null
-          hasDiskPhotoChanges = true
-          draft = draft.copy(
-            frameSource = WidgetPhotoSource.CUSTOM,
-            photoRevision = System.currentTimeMillis()
-          )
-          Toast.makeText(context, context.getString(R.string.wc_photo_saved_toast), Toast.LENGTH_SHORT).show()
-        }
-        is PhotoOperationResult.Error -> {
-          photoErrorMsg = if (res.isOutOfMemory) {
-            context.getString(R.string.wc_photo_error_oom)
-          } else {
-            context.getString(R.string.wc_photo_error_generic)
+  val handlePickedFrameUri: (android.net.Uri?) -> Unit = { uri ->
+    if (uri != null) {
+      scope.launch {
+        when (val res = WidgetPhotoStorage.importFramePhoto(context, uri)) {
+          is PhotoOperationResult.Success -> {
+            photoErrorMsg = null
+            hasDiskPhotoChanges = true
+            draft = draft.copy(
+              frameSource = WidgetPhotoSource.CUSTOM,
+              photoRevision = System.currentTimeMillis()
+            )
+            Toast.makeText(context, context.getString(R.string.wc_photo_saved_toast), Toast.LENGTH_SHORT).show()
+          }
+          is PhotoOperationResult.Error -> {
+            photoErrorMsg = if (res.isOutOfMemory) {
+              context.getString(R.string.wc_photo_error_oom)
+            } else {
+              context.getString(R.string.wc_photo_error_generic)
+            }
           }
         }
       }
     }
   }
 
-  val bgPhotoPicker = rememberLauncherForActivityResult(
-    contract = ActivityResultContracts.PickVisualMedia()
-  ) { uri ->
-    if (uri == null) return@rememberLauncherForActivityResult
-    scope.launch {
-      when (val res = WidgetPhotoStorage.importBackgroundPhoto(context, uri)) {
-        is PhotoOperationResult.Success -> {
-          photoErrorMsg = null
-          hasDiskPhotoChanges = true
-          draft = draft.copy(
-            samePhoto = false,
-            bgSource = WidgetPhotoSource.CUSTOM,
-            photoRevision = System.currentTimeMillis()
-          )
-          Toast.makeText(context, context.getString(R.string.wc_photo_saved_toast), Toast.LENGTH_SHORT).show()
-        }
-        is PhotoOperationResult.Error -> {
-          photoErrorMsg = if (res.isOutOfMemory) {
-            context.getString(R.string.wc_photo_error_oom)
-          } else {
-            context.getString(R.string.wc_photo_error_generic)
+  val handlePickedBgUri: (android.net.Uri?) -> Unit = { uri ->
+    if (uri != null) {
+      scope.launch {
+        when (val res = WidgetPhotoStorage.importBackgroundPhoto(context, uri)) {
+          is PhotoOperationResult.Success -> {
+            photoErrorMsg = null
+            hasDiskPhotoChanges = true
+            draft = draft.copy(
+              samePhoto = false,
+              bgSource = WidgetPhotoSource.CUSTOM,
+              photoRevision = System.currentTimeMillis()
+            )
+            Toast.makeText(context, context.getString(R.string.wc_photo_saved_toast), Toast.LENGTH_SHORT).show()
+          }
+          is PhotoOperationResult.Error -> {
+            photoErrorMsg = if (res.isOutOfMemory) {
+              context.getString(R.string.wc_photo_error_oom)
+            } else {
+              context.getString(R.string.wc_photo_error_generic)
+            }
           }
         }
       }
+    }
+  }
+
+  // Zero-permission Android Photo Picker launchers with automatic GetContent("image/*") fallback
+  val framePhotoPicker = rememberLauncherForActivityResult(
+    contract = ActivityResultContracts.PickVisualMedia(),
+    onResult = handlePickedFrameUri
+  )
+  val framePhotoFallbackPicker = rememberLauncherForActivityResult(
+    contract = ActivityResultContracts.GetContent(),
+    onResult = handlePickedFrameUri
+  )
+
+  val bgPhotoPicker = rememberLauncherForActivityResult(
+    contract = ActivityResultContracts.PickVisualMedia(),
+    onResult = handlePickedBgUri
+  )
+  val bgPhotoFallbackPicker = rememberLauncherForActivityResult(
+    contract = ActivityResultContracts.GetContent(),
+    onResult = handlePickedBgUri
+  )
+
+  val launchFramePicker: () -> Unit = {
+    val launched = runCatching {
+      framePhotoPicker.launch(PickVisualMediaRequest(ActivityResultContracts.PickVisualMedia.ImageOnly))
+      true
+    }.getOrDefault(false)
+    if (!launched) {
+      runCatching { framePhotoFallbackPicker.launch("image/*") }
+        .onFailure { photoErrorMsg = context.getString(R.string.wc_photo_error_generic) }
+    }
+  }
+
+  val launchBgPicker: () -> Unit = {
+    val launched = runCatching {
+      bgPhotoPicker.launch(PickVisualMediaRequest(ActivityResultContracts.PickVisualMedia.ImageOnly))
+      true
+    }.getOrDefault(false)
+    if (!launched) {
+      runCatching { bgPhotoFallbackPicker.launch("image/*") }
+        .onFailure { photoErrorMsg = context.getString(R.string.wc_photo_error_generic) }
     }
   }
 
@@ -404,9 +442,7 @@ fun WidgetCustomizerScreen(
                 stringResource(R.string.wc_using_custom_photo)
               },
               isAlbumArt = draft.frameSource == WidgetPhotoSource.ALBUM_ART,
-              onPickPhoto = {
-                framePhotoPicker.launch(PickVisualMediaRequest(ActivityResultContracts.PickVisualMedia.ImageOnly))
-              },
+              onPickPhoto = launchFramePicker,
               onUseAlbumArt = {
                 draft = draft.copy(
                   frameSource = WidgetPhotoSource.ALBUM_ART,
@@ -429,9 +465,7 @@ fun WidgetCustomizerScreen(
                     else -> stringResource(R.string.wc_using_frame_fallback)
                   },
                   isAlbumArt = draft.bgSource == WidgetPhotoSource.ALBUM_ART,
-                  onPickPhoto = {
-                    bgPhotoPicker.launch(PickVisualMediaRequest(ActivityResultContracts.PickVisualMedia.ImageOnly))
-                  },
+                  onPickPhoto = launchBgPicker,
                   onUseAlbumArt = {
                     draft = draft.copy(
                       bgSource = WidgetPhotoSource.ALBUM_ART,

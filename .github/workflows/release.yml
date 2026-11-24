@@ -10,9 +10,9 @@ on:
   workflow_dispatch:
     inputs:
       tag:
-        description: 'Release tag (e.g. v2.0.3)'
+        description: 'Release tag (e.g. v2.0.4)'
         required: false
-        default: 'v2.0.3'
+        default: 'v2.0.4'
 
 permissions:
   contents: write
@@ -52,13 +52,13 @@ jobs:
             RELEASE_TAG="${{ github.ref_name }}"
           else
             VERSION=$(grep -m1 'versionName' app/build.gradle.kts | sed -E 's/.*"([^"]+)".*/\1/' | tr '[:upper:]' '[:lower:]' | tr ' ' '-')
-            RELEASE_TAG="v${VERSION:-2.0.3}"
+            RELEASE_TAG="v${VERSION:-2.0.4}"
           fi
           VCODE=$(grep -m1 'versionCode' app/build.gradle.kts | sed -E 's/[^0-9]*([0-9]+).*/\1/')
           RDATE=$(grep -m1 'RELEASE_DATE' app/build.gradle.kts | sed -E 's/.*\\"([^\\"]+)\\".*/\1/')
           echo "RELEASE_TAG=${RELEASE_TAG}" >> "$GITHUB_ENV"
           echo "RELEASE_VERSION=${RELEASE_TAG#v}" >> "$GITHUB_ENV"
-          echo "RELEASE_VERSION_CODE=${VCODE:-20003}" >> "$GITHUB_ENV"
+          echo "RELEASE_VERSION_CODE=${VCODE:-20004}" >> "$GITHUB_ENV"
           echo "RELEASE_DATE=${RDATE:-$(date -u +%Y-%m-%d)}" >> "$GITHUB_ENV"
 
       - name: Ensure keystores exist
@@ -98,10 +98,10 @@ jobs:
             "sha256": os.environ["APK_SHA256"],
             "mandatory": False,
             "notes": [
-              f"Lyrics Animation Picker & 5 Transition Styles ({tag}): Added Settings > Lyrics > Lyrics animation sheet with 5 looping live-preview cards (Slide Up, Blur Fade, Karaoke Fill, Typewriter, Pop Zoom), Both/App/Widget targeting (same animation or different animations for App Lyrics vs Widget), Replay Preview button, DataStore persistence (lyrics_anim), zero-polling exact LRC timestamp widget scheduling, Share Card live animation preview, system Remove Animations support, and full EN/KM localization",
-              "Smooth Animated Lyrics Widget (v2.0.0): Added native 60fps/120fps glide-up, fade, and subtle scale entrance animations whenever each synced lyric line transitions in the AURIX Lyrics home screen widget using flicker-free partial RemoteViews updates",
-              "Sculpted Frosted-Glass Widget Redesign (v1.9.9): Redesigned both Lyrics and Music home screen widgets with true-dp 24dp clipped glass corners, smart letterbox-free album art cropping, vibrant edge-to-edge centerCrop Ambient glow, crisp 1dp specular rim, glowing active lyric accent bar, 3-bar waveform Lyrics pill + Orbi mark, and mini rounded album art footer",
-              "Home Screen Music & Lyrics Widgets + Shared Ambient Album Glow (v1.9.8): Added 4×2 Music widget and 4×2 Synced Lyrics widget powered by pre-rendered cached Ambient Album Glow synced with Settings Dim, Glass level, and Blur level plus EN/KM localization"
+              f"Widget Photo Picker, Smooth Widget Animations & Clean Lyrics UI ({tag}): Fixed Photo Picker HEIC/AVIF & single-use gallery streams, fixed Home Screen Lyrics widget line animations with Binder-safe RGB_565 & Khmer bitmaps, removed floating overlay from Lyrics screen, and cleaned up the TAP Sync button styling",
+              "Widget Customizer & Live Settings Preview (v2.0.3): Added Settings > Widgets > Customize widget with live 2:1 preview, 9 Frame styles, 5 Backgrounds, Blur & Darkness sliders, and fixed 2:1 Background Cropper",
+              "Developer Mode & Offline Custom Lyrics Editor (v2.0.2): Tap Build number 7 times in Settings > About to unlock Developer mode with Write & TAP Sync editor, .lrc/.txt import/export, and Room offline priority over LRCLIB",
+              "Lyrics Animation Picker & 5 Transition Styles (v2.0.1): Settings > Lyrics > Lyrics animation sheet with 5 looping live-preview cards and Both/App/Widget targeting"
             ],
             "releasePageUrl": f"https://github.com/{repo}/releases/tag/{tag}"
           }
@@ -127,10 +127,10 @@ jobs:
             mandatory: false
 
             What's New in AURIX ${{ env.RELEASE_TAG }}:
-            - Lyrics Animation Picker & 5 Transition Styles: Settings > Lyrics > Lyrics animation opens a bottom sheet with 5 looping live-preview cards (Slide Up, Blur Fade, Karaoke Fill, Typewriter, Pop Zoom), Both/App/Widget targeting (apply the same animation or different animations for App Lyrics vs Home Screen Widget), Replay Preview button, zero-polling exact LRC timestamp widget scheduling, Share Card live animation preview, and EN/KM localization
-            - Smooth Animated Lyrics Widget (v2.0.0): Native 60fps/120fps ViewFlipper line transitions with zero-flicker partial RemoteViews updates
-            - Sculpted Frosted-Glass Widget Redesign (v1.9.9): True-dp 24dp clipped glass corners, smart letterbox-free album art cropping, vibrant edge-to-edge Ambient glow, crisp 1dp specular rim, glowing active lyric accent bar, 3-bar waveform Lyrics badge + Orbi mark, and mini rounded album cover footer
-            - Home Screen Music & Lyrics Widgets + Shared Ambient Album Glow (v1.9.8): 4×2 Music and Synced Lyrics widgets powered by shared Settings Ambient glow and EN/KM localization
+            - Widget Photo Picker, Smooth Widget Animations & Clean Lyrics UI: Fixed Photo Picker HEIC/AVIF & single-use gallery streams, fixed Home Screen Lyrics widget line animations with Binder-safe RGB_565 & Khmer bitmaps, removed floating overlay from Lyrics screen, and cleaned up the TAP Sync button styling
+            - Widget Customizer & Live Settings Preview (v2.0.3): Settings > Widgets > Customize widget with live 2:1 preview, 9 Frame styles, 5 Backgrounds, Blur & Darkness sliders, and fixed 2:1 Background Cropper
+            - Developer Mode & Offline Custom Lyrics Editor (v2.0.2): Tap Build number 7 times in Settings > About for offline Write & TAP Sync custom lyrics
+            - Lyrics Animation Picker & 5 Transition Styles (v2.0.1): 5 looping live-preview cards (Slide Up, Blur Fade, Karaoke Fill, Typewriter, Pop Zoom) and Both/App/Widget targeting
           files: |
             app/build/outputs/apk/release/app-release.apk
             AURIX-${{ env.RELEASE_TAG }}.apk

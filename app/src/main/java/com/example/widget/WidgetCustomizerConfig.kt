@@ -56,15 +56,15 @@ enum class WidgetBgType(val id: String) {
 }
 
 enum class WidgetSizeTier(val id: String, val widthPx: Int, val heightPx: Int) {
-  SMALL("small", 420, 420),
-  WIDE("wide", 800, 400),
-  LARGE("large", 800, 620);
+  SMALL("small", 320, 320),
+  WIDE("wide", 560, 280),
+  LARGE("large", 520, 380);
 
   companion object {
     fun fromDimensionsDp(minWidthDp: Int, minHeightDp: Int): WidgetSizeTier {
       return when {
         minWidthDp in 1..205 -> SMALL
-        minHeightDp >= 180 -> LARGE
+        minHeightDp >= 220 -> LARGE
         else -> WIDE
       }
     }

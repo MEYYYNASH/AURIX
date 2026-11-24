@@ -234,20 +234,6 @@ fun LyricsView(
       }
     )
 
-    if (widgetCustomizerConfig.frameStyle != com.example.widget.WidgetFrameStyle.NONE) {
-      LyricsScreenFramedArtwork(
-        config = widgetCustomizerConfig,
-        artworkUrl = songArtworkUrl,
-        isPlaying = isPlaying,
-        reducedMotion = reducedMotion,
-        size = 54.dp,
-        modifier = Modifier
-          .align(Alignment.TopStart)
-          .padding(top = 4.dp, start = 6.dp)
-          .testTag("lyrics_screen_framed_artwork")
-      )
-    }
-
     if (lyricsResult.isCustom && developerModeEnabled) {
       Surface(
         shape = CircleShape,

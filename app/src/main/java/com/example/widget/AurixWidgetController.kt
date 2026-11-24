@@ -137,7 +137,7 @@ object AurixWidgetController {
   private const val CACHED_RAW_ART_FILE = "last_album_art_v2.png"
   private const val CACHED_GLOW_BG_FILE = "last_glow_bg_v2.png"
   private const val CACHED_ROUNDED_ART_FILE = "last_rounded_art_v2.png"
-  private const val MAX_PARTIAL_UPDATES_BEFORE_FULL_SYNC = 16
+  private const val MAX_PARTIAL_UPDATES_BEFORE_FULL_SYNC = 64
 
   @OptIn(kotlinx.coroutines.ExperimentalCoroutinesApi::class)
   private val widgetScope = CoroutineScope(SupervisorJob() + Dispatchers.IO.limitedParallelism(1))
@@ -631,8 +631,7 @@ object AurixWidgetController {
         saveSnapshot(appCtx, updated)
 
         forceArtReload = trackChanged
-        val expectedLayout = resolveLyricsWidgetLayoutRes(updated.lyricsWidgetAnimStyle, reduceMotion)
-        if (trackChanged || lyricsSourceChanged || lastFullLyricsLayoutRes != expectedLayout) {
+        if (trackChanged || lyricsSourceChanged || lastFullLyricsLayoutByWidgetId.isEmpty()) {
           shouldFullRefreshLyrics = trackChanged || lyricsSourceChanged || lineTextChanged
         } else if (lineTextChanged && updated.hasLyrics && isPlaying) {
           shouldAnimateLyricsOnly = true
@@ -1384,9 +1383,10 @@ object AurixWidgetController {
     mutedColor: Int
   ): Bitmap? {
     return runCatching {
-      val density = context.resources.displayMetrics.density.coerceAtLeast(1.5f)
-      val widthPx = (296f * density).roundToInt().coerceIn(360, 960)
-      val heightPx = (74f * density).roundToInt().coerceIn(108, 260)
+      // Keep Khmer bitmap Binder-safe (~183 KB ARGB_8888) so full & partial RemoteViews never overflow 1 MB IPC
+      val scale = context.resources.displayMetrics.density.coerceIn(1.25f, 1.55f)
+      val widthPx = (284f * scale).roundToInt().coerceIn(340, 440)
+      val heightPx = (68f * scale).roundToInt().coerceIn(88, 104)
       val bmp = Bitmap.createBitmap(widthPx, heightPx, Bitmap.Config.ARGB_8888)
       val canvas = Canvas(bmp)
 
@@ -1397,14 +1397,14 @@ object AurixWidgetController {
       val currentPaint = TextPaint(Paint.ANTI_ALIAS_FLAG).apply {
         typeface = Typeface.create(khmerTypeface, Typeface.BOLD)
         color = primaryColor
-        textSize = 16.5f * density
-        setShadowLayer(4f * density, 0f, 1.2f * density, 0x66000000)
+        textSize = 15.5f * scale
+        setShadowLayer(3.2f * scale, 0f, 1.1f * scale, 0x66000000)
       }
 
       val currentLayout = StaticLayout.Builder
         .obtain(currentLine, 0, currentLine.length, currentPaint, widthPx)
         .setAlignment(Layout.Alignment.ALIGN_NORMAL)
-        .setLineSpacing(3.5f * density, 1.26f)
+        .setLineSpacing(2.8f * scale, 1.24f)
         .setIncludePad(true)
         .setMaxLines(if (nextLine.isNotBlank()) 1 else 2)
         .setEllipsize(TextUtils.TruncateAt.END)
@@ -1413,21 +1413,21 @@ object AurixWidgetController {
       val nextPaint = TextPaint(Paint.ANTI_ALIAS_FLAG).apply {
         typeface = Typeface.create(khmerTypeface, Typeface.NORMAL)
         color = mutedColor
-        textSize = 12.8f * density
+        textSize = 12.0f * scale
       }
 
       val nextLayout = if (nextLine.isNotBlank()) {
         StaticLayout.Builder
           .obtain(nextLine, 0, nextLine.length, nextPaint, widthPx)
           .setAlignment(Layout.Alignment.ALIGN_NORMAL)
-          .setLineSpacing(3f * density, 1.24f)
+          .setLineSpacing(2.4f * scale, 1.22f)
           .setIncludePad(true)
           .setMaxLines(1)
           .setEllipsize(TextUtils.TruncateAt.END)
           .build()
       } else null
 
-      val gapPx = if (nextLayout != null) (4f * density) else 0f
+      val gapPx = if (nextLayout != null) (3.2f * scale) else 0f
       val totalTextHeight = currentLayout.height + (nextLayout?.height ?: 0) + gapPx
       val startY = ((heightPx - totalTextHeight) * 0.5f).coerceAtLeast(0f)
 
@@ -1597,8 +1597,8 @@ object AurixWidgetController {
     val cacheDir = File(context.filesDir, CACHE_DIR_NAME).apply { mkdirs() }
     val diskRoundedFile = File(cacheDir, CACHED_ROUNDED_ART_FILE)
 
-    val sizePx = 192
-    val cornerPx = 38f
+    val sizePx = 144
+    val cornerPx = 28f
     val output = Bitmap.createBitmap(sizePx, sizePx, Bitmap.Config.ARGB_8888)
     val canvas = Canvas(output)
     val paint = Paint(Paint.ANTI_ALIAS_FLAG)
@@ -1679,10 +1679,15 @@ object AurixWidgetController {
     val cacheDir = File(context.filesDir, CACHE_DIR_NAME).apply { mkdirs() }
     val diskGlowFile = File(cacheDir, CACHED_GLOW_BG_FILE)
 
-    val widthPx = 720
-    val heightPx = 420
+    val widthPx = 560
+    val heightPx = 320
     val rect = RectF(0f, 0f, widthPx.toFloat(), heightPx.toFloat())
-    val layerBmp = Bitmap.createBitmap(widthPx, heightPx, Bitmap.Config.ARGB_8888)
+    val bgConfig = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
+      Bitmap.Config.RGB_565
+    } else {
+      Bitmap.Config.ARGB_8888
+    }
+    val layerBmp = Bitmap.createBitmap(widthPx, heightPx, bgConfig)
     val layerCanvas = Canvas(layerBmp)
 
     val isLight = isLightThemeActive(context, state.themeMode) && !state.ambientGlowEnabled

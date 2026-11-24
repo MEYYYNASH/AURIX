@@ -1515,20 +1515,18 @@ private fun SyncStepContent(
     )
 
     // Large "TAP" Button to Stamp Current Time & Move to Next Line
-    Surface(
-      onClick = onTapStamp,
-      shape = RoundedCornerShape(22.dp),
-      color = Color.Transparent,
-      shadowElevation = 8.dp,
+    Box(
       modifier = Modifier
         .fillMaxWidth()
         .height(66.dp)
         .clip(RoundedCornerShape(22.dp))
         .background(EditorAccentBrush)
-        .testTag("lyrics_editor_tap_button")
+        .border(1.dp, Color.White.copy(alpha = 0.24f), RoundedCornerShape(22.dp))
+        .clickable(onClick = onTapStamp)
+        .testTag("lyrics_editor_tap_button"),
+      contentAlignment = Alignment.Center
     ) {
       Column(
-        modifier = Modifier.fillMaxSize(),
         horizontalAlignment = Alignment.CenterHorizontally,
         verticalArrangement = Arrangement.Center
       ) {
@@ -1543,7 +1541,7 @@ private fun SyncStepContent(
         Text(
           text = "${stringResource(id = R.string.lyrics_editor_tap_hint)} · ${stringResource(id = R.string.lyrics_editor_synced_count, syncedCount, rows.size)}",
           style = MaterialTheme.typography.labelSmall,
-          color = Color.White.copy(alpha = 0.88f)
+          color = Color.White.copy(alpha = 0.90f)
         )
       }
     }

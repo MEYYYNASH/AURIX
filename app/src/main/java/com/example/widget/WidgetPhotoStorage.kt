@@ -4,11 +4,13 @@ import android.content.Context
 import android.graphics.Bitmap
 import android.graphics.BitmapFactory
 import android.graphics.Canvas
+import android.graphics.ImageDecoder
 import android.graphics.Matrix
 import android.graphics.Paint
 import android.graphics.RectF
 import android.media.ExifInterface
 import android.net.Uri
+import android.os.Build
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 import java.io.File
@@ -79,8 +81,10 @@ object WidgetPhotoStorage {
     }
 
   /**
-   * Decodes a Photo Picker URI safely with inSampleSize downsampling, EXIF orientation
-   * correction, and OOM fallback retry before writing to app-private JPEG storage.
+   * Copies the picked URI ONCE into a private temp file (prevents multi-open failures on
+   * Samsung Gallery / cloud Photo Picker URIs), then decodes using ImageDecoder on API 28+
+   * (native HEIC/HEIF/AVIF/WebP/JPEG/PNG + automatic EXIF rotation + OOM-safe target sizing)
+   * with a local-file BitmapFactory + ExifInterface fallback.
    */
   private fun importUriToFile(
     context: Context,
@@ -88,80 +92,137 @@ object WidgetPhotoStorage {
     targetFile: File,
     maxDimPx: Int
   ): PhotoOperationResult {
-    var attempts = 0
-    var activeMaxDim = maxDimPx
-    while (attempts < 2) {
-      attempts++
-      try {
-        val boundsOpts = BitmapFactory.Options().apply { inJustDecodeBounds = true }
-        context.contentResolver.openInputStream(uri)?.use { stream ->
-          BitmapFactory.decodeStream(stream, null, boundsOpts)
-        } ?: return PhotoOperationResult.Error(false, "Unable to open selected photo.")
+    val stagingFile = File(context.cacheDir, "widget_pick_${System.nanoTime()}.tmp")
+    try {
+      val copied = copyUriToTempFile(context, uri, stagingFile)
+      if (!copied || !stagingFile.exists() || stagingFile.length() == 0L) {
+        return PhotoOperationResult.Error(false, "Unable to open selected photo.")
+      }
 
-        val srcW = boundsOpts.outWidth
-        val srcH = boundsOpts.outHeight
-        if (srcW <= 0 || srcH <= 0) {
-          return PhotoOperationResult.Error(false, "Selected file is not a valid image.")
-        }
+      var attempts = 0
+      var activeMaxDim = maxDimPx
+      while (attempts < 2) {
+        attempts++
+        try {
+          val decodedBmp = decodeStagingFile(stagingFile, activeMaxDim)
+            ?: return PhotoOperationResult.Error(false, "Selected file is not a supported image.")
 
-        val sampleSize = computeInSampleSize(srcW, srcH, activeMaxDim)
-        val decodeOpts = BitmapFactory.Options().apply {
-          inSampleSize = sampleSize
-          inPreferredConfig = Bitmap.Config.ARGB_8888
-        }
+          val finalBmp = scaleDownIfNeeded(decodedBmp, activeMaxDim)
+          if (finalBmp !== decodedBmp) decodedBmp.recycle()
 
-        val decoded = context.contentResolver.openInputStream(uri)?.use { stream ->
-          BitmapFactory.decodeStream(stream, null, decodeOpts)
-        } ?: return PhotoOperationResult.Error(false, "Unable to decode selected photo.")
+          val parent = targetFile.parentFile
+          if (parent != null && !parent.exists()) parent.mkdirs()
 
-        val orientationDegrees = readExifRotationDegrees(context, uri)
-        val oriented = if (orientationDegrees != 0) {
-          val matrix = Matrix().apply { postRotate(orientationDegrees.toFloat()) }
-          val rotated = Bitmap.createBitmap(decoded, 0, 0, decoded.width, decoded.height, matrix, true)
-          if (rotated !== decoded) decoded.recycle()
-          rotated
-        } else {
-          decoded
-        }
-
-        val finalBmp = scaleDownIfNeeded(oriented, activeMaxDim)
-        if (finalBmp !== oriented) oriented.recycle()
-
-        val tempFile = File(targetFile.parentFile, "${targetFile.name}.tmp")
-        FileOutputStream(tempFile).use { out ->
-          val ok = finalBmp.compress(Bitmap.CompressFormat.JPEG, JPEG_QUALITY, out)
-          out.flush()
-          if (!ok) {
-            finalBmp.recycle()
-            tempFile.delete()
-            return PhotoOperationResult.Error(false, "Could not save photo to device storage.")
+          val tempOut = File(parent ?: context.filesDir, "${targetFile.name}.tmp")
+          FileOutputStream(tempOut).use { out ->
+            val ok = finalBmp.compress(Bitmap.CompressFormat.JPEG, JPEG_QUALITY, out)
+            out.flush()
+            if (!ok) {
+              finalBmp.recycle()
+              tempOut.delete()
+              return PhotoOperationResult.Error(false, "Could not save photo to device storage.")
+            }
           }
-        }
-        finalBmp.recycle()
+          finalBmp.recycle()
 
-        if (targetFile.exists()) targetFile.delete()
-        if (!tempFile.renameTo(targetFile)) {
-          tempFile.copyTo(targetFile, overwrite = true)
-          tempFile.delete()
-        }
-        return PhotoOperationResult.Success(targetFile)
-      } catch (oom: OutOfMemoryError) {
-        System.gc()
-        activeMaxDim = (activeMaxDim / 2).coerceAtLeast(512)
-        if (attempts >= 2) {
+          if (targetFile.exists()) targetFile.delete()
+          if (!tempOut.renameTo(targetFile)) {
+            tempOut.copyTo(targetFile, overwrite = true)
+            tempOut.delete()
+          }
+          return PhotoOperationResult.Success(targetFile)
+        } catch (oom: OutOfMemoryError) {
+          System.gc()
+          activeMaxDim = (activeMaxDim / 2).coerceAtLeast(512)
+          if (attempts >= 2) {
+            return PhotoOperationResult.Error(
+              isOutOfMemory = true,
+              message = "This photo is too large for available memory. Try a smaller image."
+            )
+          }
+        } catch (t: Throwable) {
           return PhotoOperationResult.Error(
-            isOutOfMemory = true,
-            message = "This photo is too large for available memory. Try a smaller image."
+            isOutOfMemory = false,
+            message = t.message ?: "Failed to import photo."
           )
         }
-      } catch (t: Throwable) {
-        return PhotoOperationResult.Error(
-          isOutOfMemory = false,
-          message = t.message ?: "Failed to import photo."
-        )
       }
+      return PhotoOperationResult.Error(true, "Unable to process photo due to low memory.")
+    } finally {
+      runCatching { stagingFile.delete() }
     }
-    return PhotoOperationResult.Error(true, "Unable to process photo due to low memory.")
+  }
+
+  private fun copyUriToTempFile(context: Context, uri: Uri, dest: File): Boolean {
+    val resolver = context.contentResolver
+    val stream = runCatching { resolver.openInputStream(uri) }.getOrNull()
+      ?: runCatching { resolver.openAssetFileDescriptor(uri, "r")?.createInputStream() }.getOrNull()
+      ?: return false
+    return runCatching {
+      stream.use { input ->
+        FileOutputStream(dest).use { output ->
+          input.copyTo(output, bufferSize = 32 * 1024)
+          output.flush()
+        }
+      }
+      true
+    }.getOrDefault(false)
+  }
+
+  private fun decodeStagingFile(file: File, maxDimPx: Int): Bitmap? {
+    if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.P) {
+      val imageDecoderResult = runCatching {
+        val source = ImageDecoder.createSource(file)
+        ImageDecoder.decodeBitmap(source) { decoder, info, _ ->
+          decoder.allocator = ImageDecoder.ALLOCATOR_SOFTWARE
+          decoder.isMutableRequired = false
+          val srcW = info.size.width.coerceAtLeast(1)
+          val srcH = info.size.height.coerceAtLeast(1)
+          val maxSide = max(srcW, srcH)
+          if (maxSide > maxDimPx) {
+            val scale = maxDimPx.toFloat() / maxSide.toFloat()
+            val dstW = (srcW * scale).roundToInt().coerceAtLeast(1)
+            val dstH = (srcH * scale).roundToInt().coerceAtLeast(1)
+            decoder.setTargetSize(dstW, dstH)
+          }
+        }
+      }.getOrNull()
+      if (imageDecoderResult != null) return imageDecoderResult
+    }
+
+    // Fallback for API 24-27 or non-ImageDecoder formats
+    val boundsOpts = BitmapFactory.Options().apply { inJustDecodeBounds = true }
+    BitmapFactory.decodeFile(file.absolutePath, boundsOpts)
+    val srcW = boundsOpts.outWidth
+    val srcH = boundsOpts.outHeight
+    if (srcW <= 0 || srcH <= 0) return null
+
+    val decodeOpts = BitmapFactory.Options().apply {
+      inSampleSize = computeInSampleSize(srcW, srcH, maxDimPx)
+      inPreferredConfig = Bitmap.Config.ARGB_8888
+    }
+    val decoded = BitmapFactory.decodeFile(file.absolutePath, decodeOpts) ?: return null
+    val rotation = readExifRotationDegreesFromFile(file)
+    return if (rotation != 0) {
+      val matrix = Matrix().apply { postRotate(rotation.toFloat()) }
+      val rotated = Bitmap.createBitmap(decoded, 0, 0, decoded.width, decoded.height, matrix, true)
+      if (rotated !== decoded) decoded.recycle()
+      rotated
+    } else {
+      decoded
+    }
+  }
+
+  private fun readExifRotationDegreesFromFile(file: File): Int {
+    return runCatching {
+      val exif = ExifInterface(file.absolutePath)
+      when (exif.getAttributeInt(ExifInterface.TAG_ORIENTATION, ExifInterface.ORIENTATION_NORMAL)) {
+        ExifInterface.ORIENTATION_ROTATE_90 -> 90
+        ExifInterface.ORIENTATION_ROTATE_180 -> 180
+        ExifInterface.ORIENTATION_ROTATE_270 -> 270
+        else -> 0
+      }
+    }.getOrDefault(0)
   }
 
   /**

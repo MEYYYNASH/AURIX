@@ -11,10 +11,10 @@ import org.junit.Test
 class CrashFixStabilityTest {
 
   @Test
-  fun release203_metadataAndVersionCodeAreConsistent() {
-    assertEquals("2.0.3", BuildConfig.VERSION_NAME)
-    assertEquals(20003, BuildConfig.VERSION_CODE)
-    assertTrue("Release 2.0.3 versionCode must exceed 2.0.2 (20002)", BuildConfig.VERSION_CODE > 20002)
+  fun release204_metadataAndVersionCodeAreConsistent() {
+    assertEquals("2.0.4", BuildConfig.VERSION_NAME)
+    assertEquals(20004, BuildConfig.VERSION_CODE)
+    assertTrue("Release 2.0.4 versionCode must exceed 2.0.3 (20003)", BuildConfig.VERSION_CODE > 20003)
     assertEquals(420, com.example.ui.screens.SELECT_BAR_OPEN_DURATION_MS)
     assertEquals(600, com.example.ui.screens.SELECT_CIRCLE_OPEN_DURATION_MS)
     assertEquals(380L, com.example.ui.screens.SELECT_CLOSE_CLEAR_DELAY_MS)
@@ -367,19 +367,23 @@ class CrashFixStabilityTest {
     assertEquals("blur", com.example.data.PreferencesManager.WIDGET_BLUR.name)
     assertEquals("darkness", com.example.data.PreferencesManager.WIDGET_DARKNESS.name)
 
-    // Widget size tier classification (small / wide 2:1 / large)
+    // Widget size tier classification (small / wide 2:1 / large) and Binder-safe RGB_565 byte sizes (< 500 KB)
     assertEquals(
       com.example.widget.WidgetSizeTier.SMALL,
       com.example.widget.WidgetSizeTier.fromDimensionsDp(minWidthDp = 150, minHeightDp = 110)
     )
     assertEquals(
       com.example.widget.WidgetSizeTier.WIDE,
-      com.example.widget.WidgetSizeTier.fromDimensionsDp(minWidthDp = 280, minHeightDp = 110)
+      com.example.widget.WidgetSizeTier.fromDimensionsDp(minWidthDp = 280, minHeightDp = 185)
     )
     assertEquals(
       com.example.widget.WidgetSizeTier.LARGE,
       com.example.widget.WidgetSizeTier.fromDimensionsDp(minWidthDp = 300, minHeightDp = 220)
     )
+    com.example.widget.WidgetSizeTier.entries.forEach { tier ->
+      val rgb565Bytes = tier.widthPx * tier.heightPx * 2
+      assertTrue("${tier.id} RGB_565 bitmap ($rgb565Bytes B) must stay safely under 500 KB Binder budget", rgb565Bytes < 500_000)
+    }
 
     // OOM-safe downsampling calculation
     assertEquals(1, com.example.widget.WidgetPhotoStorage.computeInSampleSize(800, 600, 1024))

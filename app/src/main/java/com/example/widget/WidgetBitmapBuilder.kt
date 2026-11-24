@@ -14,6 +14,7 @@ import android.graphics.Rect
 import android.graphics.RectF
 import android.graphics.Shader
 import android.graphics.SweepGradient
+import android.os.Build
 import android.os.SystemClock
 import java.util.concurrent.ConcurrentHashMap
 import kotlin.math.PI
@@ -122,7 +123,12 @@ object WidgetBitmapBuilder {
     val startMs = SystemClock.elapsedRealtime()
     val w = sizeTier.widthPx
     val h = sizeTier.heightPx
-    val out = Bitmap.createBitmap(w, h, Bitmap.Config.ARGB_8888)
+    val bmpConfig = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
+      Bitmap.Config.RGB_565
+    } else {
+      Bitmap.Config.ARGB_8888
+    }
+    val out = Bitmap.createBitmap(w, h, bmpConfig)
     val canvas = Canvas(out)
 
     // 1. Background layer
@@ -759,12 +765,19 @@ object WidgetBitmapBuilder {
     }
     val smallW = (source.width * scale).roundToInt().coerceAtLeast(24)
     val smallH = (source.height * scale).roundToInt().coerceAtLeast(16)
-    val small = Bitmap.createScaledBitmap(source, smallW, smallH, true)
+    val rawSmall = Bitmap.createScaledBitmap(source, smallW, smallH, true)
+    val small = if (rawSmall.isMutable && rawSmall.config == Bitmap.Config.ARGB_8888) {
+      rawSmall
+    } else {
+      rawSmall.copy(Bitmap.Config.ARGB_8888, true).also {
+        if (rawSmall !== source) rawSmall.recycle()
+      }
+    }
     val radius = ((clamped / 60f) * 14f).roundToInt().coerceIn(1, 14)
     boxBlurInPlace(small, radius)
     boxBlurInPlace(small, max(1, radius / 2))
     val result = Bitmap.createScaledBitmap(small, source.width, source.height, true)
-    if (small !== result) small.recycle()
+    if (small !== result && small !== source) small.recycle()
     return result
   }
 
