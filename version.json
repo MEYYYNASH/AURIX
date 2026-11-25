@@ -2,9 +2,9 @@
   "versionName": "2.3.2",
   "versionCode": 20302,
   "releaseDate": "2026-11-25",
-  "releaseTimestampMs": 1795651200000,
+  "releaseTimestampMs": 1795650226000,
   "apkUrl": "https://github.com/MEYYYNASH/AURIX/releases/download/v2.3.2/AURIX-v2.3.2.apk",
-  "sha256": "adc3d44a18be373264ecc65c484a892b5e140e15339f74ec2eca35750b877aeb",
+  "sha256": "358f160128d304ce163ccc8f8c59a63ef02faa0df78e9556b3715ee456aa019a",
   "mandatory": false,
   "notes": [
     "Material You Dynamic Album Theme & Network Update Checker (v2.3.2): Automatically extracts primary, secondary, and tertiary color seeds from the currently playing album art via Palette API to build a live WCAG-accessible Material You theme across Light, Dark, and AMOLED modes with smooth animated transitions; added a Settings > Theme toggle with live palette swatches, plus a cache-bypassing network JSON update checker supporting granular versioning and timestamped notifications",
