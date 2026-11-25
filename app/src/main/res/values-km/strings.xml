@@ -829,4 +829,11 @@
     <string name="settings_widgets_show_lyrics">បង្ហាញទំនុកច្រៀង</string>
     <string name="settings_widgets_show_lyrics_sub">បង្ហាញទំនុកច្រៀងផ្ទាល់ពេលពង្រីកដល់ទំហំ Lyrics</string>
     <string name="settings_widgets_applied_all_toast">បានអនុវត្ត %1$s លើវិដ្ជិតទាំង ៤</string>
+
+    <!-- Material You Dynamic Color from Album Art (v2.3.2) -->
+    <string name="settings_dynamic_album_theme">ពណ៌ថាមវន្ត (Material You)</string>
+    <string name="settings_dynamic_album_theme_desc">ប្តូរពណ៌ UI របស់ AURIX ដោយស្វ័យប្រវត្តិតាមពណ៌ចម្រាញ់ពីគម្របអាល់ប៊ុមកំពុងចាក់</string>
+    <string name="settings_dynamic_album_badge_live">គម្របអាល់ប៊ុម · %1$s</string>
+    <string name="settings_dynamic_album_badge_auto">តាមគម្របអាល់ប៊ុម</string>
+    <string name="settings_dynamic_album_palette_label">ពណ៌ផ្សាយផ្ទាល់</string>
 </resources>

@@ -365,9 +365,10 @@ class UpdateManagerTest {
   }
 
   @Test
-  fun `app release metadata targets 2_3_1`() {
-    assertEquals("2.3.1", BuildConfig.VERSION_NAME)
-    assertEquals(20301, BuildConfig.VERSION_CODE)
+  fun `app release metadata targets 2_3_2`() {
+    assertEquals("2.3.2", BuildConfig.VERSION_NAME)
+    assertEquals(20302, BuildConfig.VERSION_CODE)
+    assertEquals(20302L, GitHubUpdater.deriveVersionCodeFromTag("v2.3.2"))
     assertEquals(20301L, GitHubUpdater.deriveVersionCodeFromTag("v2.3.1"))
     assertEquals(20300L, GitHubUpdater.deriveVersionCodeFromTag("v2.3.0"))
     assertEquals(20200L, GitHubUpdater.deriveVersionCodeFromTag("v2.2.0"))
@@ -428,7 +429,7 @@ class UpdateManagerTest {
   }
 
   @Test
-  fun `remote JSON server query detects 20301 same-version later timestamp and posts timestamped notification`() = runBlocking {
+  fun `remote JSON server query detects 20302 same-version later timestamp and posts timestamped notification`() = runBlocking {
     val context = ApplicationProvider.getApplicationContext<Context>()
     val shadowApp = Shadows.shadowOf(context as android.app.Application)
     shadowApp.grantPermissions(android.Manifest.permission.POST_NOTIFICATIONS)
@@ -449,14 +450,14 @@ class UpdateManagerTest {
     server.createContext("/version.json") { exchange ->
       val body = """
         {
-          "versionName": "2.3.1",
-          "versionCode": 20301,
+          "versionName": "2.3.2",
+          "versionCode": 20302,
           "releaseDate": "2026-11-26",
           "releaseTimestampMs": $newerTsMs,
-          "apkUrl": "http://127.0.0.1:$port/AURIX-v2.3.1.apk",
+          "apkUrl": "http://127.0.0.1:$port/AURIX-v2.3.2.apk",
           "sha256": "",
-          "notes": ["Timestamped 2.3.1 rebuild"],
-          "releasePageUrl": "http://127.0.0.1:$port/releases/v2.3.1"
+          "notes": ["Timestamped 2.3.2 rebuild"],
+          "releasePageUrl": "http://127.0.0.1:$port/releases/v2.3.2"
         }
       """.trimIndent().toByteArray()
       exchange.sendResponseHeaders(200, body.size.toLong())
@@ -480,7 +481,7 @@ class UpdateManagerTest {
 
       val state = manager.uiState.value
       assertEquals("Unexpected state: ${state.errorMessage}", UpdateStage.Available, state.stage)
-      assertEquals(20301L, state.latestRelease?.versionCode)
+      assertEquals(20302L, state.latestRelease?.versionCode)
       assertEquals(newerTsMs, state.latestRelease?.releaseTimestampMs)
 
       val nm = context.getSystemService(Context.NOTIFICATION_SERVICE) as android.app.NotificationManager

@@ -174,6 +174,7 @@ class AurixViewModel(application: Application) : AndroidViewModel(application) {
   // Preferences States
   val themeMode = prefsManager.themeMode.stateIn(viewModelScope, SharingStarted.Lazily, "system")
   val accentColorHex = prefsManager.accentColor.stateIn(viewModelScope, SharingStarted.Lazily, "#007AFF")
+  val dynamicAlbumTheme = prefsManager.dynamicAlbumTheme.stateIn(viewModelScope, SharingStarted.Eagerly, true)
   val language = prefsManager.language.stateIn(
     viewModelScope,
     SharingStarted.Eagerly,
@@ -5271,6 +5272,7 @@ class AurixViewModel(application: Application) : AndroidViewModel(application) {
     }
   }
   fun setAccentColor(hex: String) { safeLaunch(notifyUser = false) { prefsManager.setAccentColor(hex) } }
+  fun setDynamicAlbumTheme(enabled: Boolean) { safeLaunch(notifyUser = false) { prefsManager.setDynamicAlbumTheme(enabled) } }
   fun setLanguage(lang: String) {
     val normalized = LocaleHelper.normalizeLanguage(lang)
     runCatching { LocaleHelper.saveLanguageSync(getApplication(), normalized) }

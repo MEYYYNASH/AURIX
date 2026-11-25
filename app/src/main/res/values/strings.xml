@@ -932,4 +932,11 @@
     <string name="settings_widgets_show_lyrics">Show lyrics</string>
     <string name="settings_widgets_show_lyrics_sub">Show synced lyrics in tall Lyrics size</string>
     <string name="settings_widgets_applied_all_toast">Applied %1$s to classic widgets</string>
+
+    <!-- Material You Dynamic Color from Album Art (v2.3.2) -->
+    <string name="settings_dynamic_album_theme">Dynamic Color (Material You)</string>
+    <string name="settings_dynamic_album_theme_desc">Automatically theme the AURIX UI using colors extracted from the active album art</string>
+    <string name="settings_dynamic_album_badge_live">Album Art · %1$s</string>
+    <string name="settings_dynamic_album_badge_auto">Album Art Auto</string>
+    <string name="settings_dynamic_album_palette_label">Live palette</string>
 </resources>

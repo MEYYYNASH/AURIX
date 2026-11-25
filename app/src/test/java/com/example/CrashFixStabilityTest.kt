@@ -11,10 +11,10 @@ import org.junit.Test
 class CrashFixStabilityTest {
 
   @Test
-  fun release231_metadataAndVersionCodeAreConsistent() {
-    assertEquals("2.3.1", BuildConfig.VERSION_NAME)
-    assertEquals(20301, BuildConfig.VERSION_CODE)
-    assertTrue("Release 2.3.1 versionCode must exceed 2.3.0 (20300)", BuildConfig.VERSION_CODE > 20300)
+  fun release232_metadataAndVersionCodeAreConsistent() {
+    assertEquals("2.3.2", BuildConfig.VERSION_NAME)
+    assertEquals(20302, BuildConfig.VERSION_CODE)
+    assertTrue("Release 2.3.2 versionCode must exceed 2.3.1 (20301)", BuildConfig.VERSION_CODE > 20301)
     assertEquals(420, com.example.ui.screens.SELECT_BAR_OPEN_DURATION_MS)
     assertEquals(600, com.example.ui.screens.SELECT_CIRCLE_OPEN_DURATION_MS)
     assertEquals(380L, com.example.ui.screens.SELECT_CLOSE_CLEAR_DELAY_MS)
@@ -982,7 +982,7 @@ class CrashFixStabilityTest {
 
   @Test
   fun remoteJsonUpdateChecker_granularVersioningAndTimestamps_workEndToEnd() {
-    assertEquals(20301, BuildConfig.VERSION_CODE)
+    assertEquals(20302, BuildConfig.VERSION_CODE)
     assertEquals(20301L, com.example.data.GitHubUpdater.deriveVersionCodeFromTag("v2.3.1"))
     assertEquals(20301L, com.example.data.GitHubUpdater.deriveVersionCodeFromTag("v2.3.1+20301"))
     assertEquals(20312L, com.example.data.GitHubUpdater.deriveVersionCodeFromTag("v2.3.1.2"))
@@ -1054,5 +1054,85 @@ class CrashFixStabilityTest {
     } finally {
       server.stop(0)
     }
+  }
+
+  @Test
+  fun dynamicAlbumTheme_materialYouPaletteEngine_enforcesContrastAndModes() {
+    assertEquals("dynamic_album_theme", com.example.data.PreferencesManager.DYNAMIC_ALBUM_THEME.name)
+
+    val brightYellowPalette = com.example.ui.theme.AlbumDynamicPalette(
+      primary = androidx.compose.ui.graphics.Color(0xFFFFEE58),
+      secondary = androidx.compose.ui.graphics.Color(0xFFFFA726),
+      tertiary = androidx.compose.ui.graphics.Color(0xFF26C6DA),
+      primaryContainerSeed = androidx.compose.ui.graphics.Color(0xFFFFF59D),
+      sourceKey = "bright_cover",
+      isExtractedFromArt = true
+    )
+    val deepIndigoPalette = com.example.ui.theme.AlbumDynamicPalette(
+      primary = androidx.compose.ui.graphics.Color(0xFF1A237E),
+      secondary = androidx.compose.ui.graphics.Color(0xFF00838F),
+      tertiary = androidx.compose.ui.graphics.Color(0xFFAD1457),
+      primaryContainerSeed = androidx.compose.ui.graphics.Color(0xFF283593),
+      sourceKey = "deep_cover",
+      isExtractedFromArt = true
+    )
+
+    for (palette in listOf(brightYellowPalette, deepIndigoPalette)) {
+      val light = com.example.ui.theme.AlbumPaletteThemeEngine.buildMaterialYouColorScheme(
+        seedPalette = palette,
+        darkTheme = false,
+        amoledTheme = false
+      )
+      val dark = com.example.ui.theme.AlbumPaletteThemeEngine.buildMaterialYouColorScheme(
+        seedPalette = palette,
+        darkTheme = true,
+        amoledTheme = false
+      )
+      val amoled = com.example.ui.theme.AlbumPaletteThemeEngine.buildMaterialYouColorScheme(
+        seedPalette = palette,
+        darkTheme = true,
+        amoledTheme = true
+      )
+
+      assertEquals(androidx.compose.ui.graphics.Color.Black, amoled.background)
+      assertTrue(dark.background != androidx.compose.ui.graphics.Color.Black)
+      assertTrue(
+        "Light background luminance must stay bright",
+        com.example.ui.theme.AlbumPaletteThemeEngine.relativeLuminance(light.background) > 0.7f
+      )
+      assertTrue(
+        "Dark background luminance must stay deep",
+        com.example.ui.theme.AlbumPaletteThemeEngine.relativeLuminance(dark.background) < 0.1f
+      )
+
+      listOf(light, dark, amoled).forEach { scheme ->
+        assertTrue(
+          "onPrimary contrast >= 4.5 required",
+          com.example.ui.theme.AlbumPaletteThemeEngine.contrastRatio(scheme.onPrimary, scheme.primary) >= 4.5f
+        )
+        assertTrue(
+          "onPrimaryContainer contrast >= 4.5 required",
+          com.example.ui.theme.AlbumPaletteThemeEngine.contrastRatio(scheme.onPrimaryContainer, scheme.primaryContainer) >= 4.5f
+        )
+        assertTrue(
+          "onBackground contrast >= 4.5 required",
+          com.example.ui.theme.AlbumPaletteThemeEngine.contrastRatio(scheme.onBackground, scheme.background) >= 4.5f
+        )
+        assertTrue(
+          "onSurface contrast >= 4.5 required",
+          com.example.ui.theme.AlbumPaletteThemeEngine.contrastRatio(scheme.onSurface, scheme.surface) >= 4.5f
+        )
+      }
+    }
+
+    val javaRoot = listOf("src/main/java", "app/src/main/java")
+      .map { java.io.File(it) }
+      .first { it.isDirectory }
+    val engineSrc = java.io.File(javaRoot, "com/example/ui/theme/AlbumPaletteThemeEngine.kt").readText()
+    assertTrue(engineSrc.contains("androidx.palette.graphics.Palette"))
+    assertTrue(engineSrc.contains("Palette.from("))
+    val aurixAppSrc = java.io.File(javaRoot, "com/example/ui/screens/AurixApp.kt").readText()
+    assertTrue(aurixAppSrc.contains("rememberAlbumDynamicPalette"))
+    assertTrue(aurixAppSrc.contains("dynamicPalette = activeDynamicPalette"))
   }
 }

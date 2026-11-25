@@ -42,6 +42,7 @@ class PreferencesManager(private val context: Context) {
 
     val THEME_MODE = stringPreferencesKey("theme_mode")
     val ACCENT_COLOR = stringPreferencesKey("accent_color")
+    val DYNAMIC_ALBUM_THEME = booleanPreferencesKey("dynamic_album_theme")
     val LANGUAGE = stringPreferencesKey("language")
     val DYNAMIC_BG = booleanPreferencesKey("dynamic_bg")
     val DYNAMIC_BG_DIM = floatPreferencesKey("dynamic_bg_dim")
@@ -136,6 +137,7 @@ class PreferencesManager(private val context: Context) {
 
   val themeMode: Flow<String> = safeDataFlow.map { prefs -> prefs[THEME_MODE] ?: "system" }
   val accentColor: Flow<String> = safeDataFlow.map { prefs -> prefs[ACCENT_COLOR] ?: "#007AFF" }
+  val dynamicAlbumTheme: Flow<Boolean> = safeDataFlow.map { prefs -> prefs[DYNAMIC_ALBUM_THEME] ?: true }
   val language: Flow<String> = safeDataFlow.map { prefs -> prefs[LANGUAGE] ?: "en" }
   val dynamicBg: Flow<Boolean> = safeDataFlow.map { prefs -> prefs[DYNAMIC_BG] ?: true }
   val dynamicBgDim: Flow<Float> = safeDataFlow.map { prefs ->
@@ -246,6 +248,7 @@ class PreferencesManager(private val context: Context) {
 
   suspend fun setThemeMode(mode: String) { context.dataStore.edit { it[THEME_MODE] = mode } }
   suspend fun setAccentColor(color: String) { context.dataStore.edit { it[ACCENT_COLOR] = color } }
+  suspend fun setDynamicAlbumTheme(enabled: Boolean) { context.dataStore.edit { it[DYNAMIC_ALBUM_THEME] = enabled } }
   suspend fun setLanguage(lang: String) { context.dataStore.edit { it[LANGUAGE] = lang } }
   suspend fun setDynamicBg(enabled: Boolean) { context.dataStore.edit { it[DYNAMIC_BG] = enabled } }
   suspend fun setDynamicBgDim(value: Float) {

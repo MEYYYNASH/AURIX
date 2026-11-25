@@ -165,7 +165,10 @@ fun SettingsScreen(
   onUnlockDeveloperMode: () -> Unit = {},
   onDeveloperModeEnabledChanged: (Boolean) -> Unit = {},
   onOpenCurrentSongLyricsEditor: () -> Unit = {},
-  onDeleteCustomLyrics: (String) -> Unit = {}
+  onDeleteCustomLyrics: (String) -> Unit = {},
+  dynamicAlbumTheme: Boolean = true,
+  onDynamicAlbumThemeChanged: (Boolean) -> Unit = {},
+  albumDynamicPalette: com.example.ui.theme.AlbumDynamicPalette? = null
 ) {
   val context = LocalContext.current
   LaunchedEffect(Unit) {
@@ -344,6 +347,65 @@ fun SettingsScreen(
 
           Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
             Row(
+              modifier = Modifier
+                .fillMaxWidth()
+                .defaultMinSize(minHeight = 48.dp)
+                .clip(RoundedCornerShape(16.dp))
+                .clickable { onDynamicAlbumThemeChanged(!dynamicAlbumTheme) }
+                .padding(vertical = 4.dp),
+              verticalAlignment = Alignment.CenterVertically,
+              horizontalArrangement = Arrangement.SpaceBetween
+            ) {
+              Column(
+                modifier = Modifier
+                  .weight(1f)
+                  .padding(end = 12.dp),
+                verticalArrangement = Arrangement.spacedBy(3.dp)
+              ) {
+                Text(
+                  text = stringResource(id = R.string.settings_dynamic_album_theme),
+                  style = MaterialTheme.typography.titleMedium.copy(fontWeight = FontWeight.Bold, lineHeight = 22.sp),
+                  color = MaterialTheme.colorScheme.onSurface
+                )
+                Text(
+                  text = stringResource(id = R.string.settings_dynamic_album_theme_desc),
+                  style = MaterialTheme.typography.bodySmall.copy(lineHeight = 17.sp),
+                  color = MaterialTheme.colorScheme.onSurfaceVariant
+                )
+                if (dynamicAlbumTheme) {
+                  Row(
+                    modifier = Modifier.padding(top = 4.dp),
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.spacedBy(6.dp)
+                  ) {
+                    val primarySwatch = MaterialTheme.colorScheme.primary
+                    val secondarySwatch = MaterialTheme.colorScheme.secondary
+                    val tertiarySwatch = MaterialTheme.colorScheme.tertiary
+                    listOf(primarySwatch, secondarySwatch, tertiarySwatch).forEach { swatch ->
+                      Box(
+                        modifier = Modifier
+                          .size(14.dp)
+                          .clip(CircleShape)
+                          .background(swatch)
+                          .border(1.dp, MaterialTheme.colorScheme.onSurface.copy(alpha = 0.22f), CircleShape)
+                      )
+                    }
+                    Text(
+                      text = stringResource(id = R.string.settings_dynamic_album_palette_label),
+                      style = MaterialTheme.typography.labelSmall,
+                      color = MaterialTheme.colorScheme.primary
+                    )
+                  }
+                }
+              }
+              Switch(
+                checked = dynamicAlbumTheme,
+                onCheckedChange = onDynamicAlbumThemeChanged,
+                modifier = Modifier.testTag("dynamic_album_theme_toggle")
+              )
+            }
+
+            Row(
               modifier = Modifier.fillMaxWidth(),
               verticalAlignment = Alignment.CenterVertically,
               horizontalArrangement = Arrangement.SpaceBetween
@@ -353,6 +415,19 @@ fun SettingsScreen(
                 style = MaterialTheme.typography.titleMedium.copy(fontWeight = FontWeight.Bold, lineHeight = 24.sp),
                 color = MaterialTheme.colorScheme.onSurface
               )
+              val badgeText = if (dynamicAlbumTheme) {
+                if (albumDynamicPalette?.isExtractedFromArt == true) {
+                  stringResource(
+                    id = R.string.settings_dynamic_album_badge_live,
+                    com.example.ui.theme.AlbumPaletteThemeEngine.colorToHex(activeAccentColor)
+                  )
+                } else {
+                  stringResource(id = R.string.settings_dynamic_album_badge_auto)
+                }
+              } else {
+                "Custom · ${currentAccentHex.uppercase(Locale.US)}"
+              }
+              val badgeContentColor = if (darkTheme) lerp(activeAccentColor, Color.White, 0.25f) else activeAccentColor
               Surface(
                 shape = RoundedCornerShape(999.dp),
                 color = activeAccentColor.copy(alpha = 0.16f),
@@ -370,16 +445,16 @@ fun SettingsScreen(
                   Icon(
                     imageVector = Icons.Rounded.Palette,
                     contentDescription = null,
-                    tint = lerp(activeAccentColor, Color.White, 0.25f),
+                    tint = badgeContentColor,
                     modifier = Modifier.size(14.dp)
                   )
                   Text(
-                    text = "Custom · ${currentAccentHex.uppercase(Locale.US)}",
+                    text = badgeText,
                     style = MaterialTheme.typography.labelSmall.copy(
                       fontWeight = FontWeight.Bold,
                       fontSize = 11.sp
                     ),
-                    color = lerp(activeAccentColor, Color.White, 0.25f)
+                    color = badgeContentColor
                   )
                 }
               }
@@ -391,8 +466,10 @@ fun SettingsScreen(
               verticalAlignment = Alignment.CenterVertically
             ) {
               accents.forEach { (hex, color) ->
-                val selected = currentAccentHex.equals(hex, ignoreCase = true) ||
-                  (hex == "#007AFF" && currentAccentHex.equals("#3B77F5", ignoreCase = true))
+                val selected = !dynamicAlbumTheme && (
+                  currentAccentHex.equals(hex, ignoreCase = true) ||
+                    (hex == "#007AFF" && currentAccentHex.equals("#3B77F5", ignoreCase = true))
+                  )
                 Box(
                   modifier = Modifier
                     .size(34.dp)
@@ -403,18 +480,22 @@ fun SettingsScreen(
                     )
                     .clip(CircleShape)
                     .background(color)
-                    .clickable { onAccentChanged(hex) }
+                    .clickable {
+                      onDynamicAlbumThemeChanged(false)
+                      onAccentChanged(hex)
+                    }
                     .testTag("accent_dot_$hex")
                 )
               }
 
               // Custom color wheel / palette dot
+              val customSelected = !dynamicAlbumTheme && !isPresetAccent
               Box(
                 modifier = Modifier
                   .size(34.dp)
                   .clip(CircleShape)
                   .then(
-                    if (!isPresetAccent) {
+                    if (customSelected) {
                       Modifier.border(2.5.dp, MaterialTheme.colorScheme.onSurface, CircleShape).padding(3.dp)
                     } else {
                       Modifier.border(1.dp, Color.White.copy(alpha = 0.22f), CircleShape)
@@ -422,7 +503,7 @@ fun SettingsScreen(
                   )
                   .clip(CircleShape)
                   .background(
-                    if (!isPresetAccent) {
+                    if (customSelected) {
                       Brush.linearGradient(
                         colors = listOf(activeAccentColor, lerp(activeAccentColor, Color.White, 0.30f))
                       )
@@ -1487,6 +1568,7 @@ fun SettingsScreen(
     CustomAccentColorPickerSheet(
       currentAccentHex = currentAccentHex,
       onApplyAccent = { hex ->
+        onDynamicAlbumThemeChanged(false)
         onAccentChanged(hex)
         showCustomAccentSheet = false
       },

@@ -103,6 +103,8 @@ private fun AurixAppContent(
 
   val themeMode by viewModel.themeMode.collectAsStateWithLifecycle()
   val accentHex by viewModel.accentColorHex.collectAsStateWithLifecycle()
+  val dynamicAlbumTheme by viewModel.dynamicAlbumTheme.collectAsStateWithLifecycle()
+  val currentSongForTheme by viewModel.currentSong.collectAsStateWithLifecycle()
   val dynamicBg by viewModel.dynamicBg.collectAsStateWithLifecycle()
   val reducedMotion by viewModel.reducedMotion.collectAsStateWithLifecycle()
   val appError by viewModel.appError.collectAsStateWithLifecycle()
@@ -116,12 +118,24 @@ private fun AurixAppContent(
     else -> systemDark
   }
   val accentColor = parseHexColor(accentHex, darkTheme)
+  val albumDynamicPalette = rememberAlbumDynamicPalette(
+    song = currentSongForTheme,
+    enabled = dynamicAlbumTheme,
+    fallbackAccent = accentColor
+  )
+  val activeDynamicPalette = if (dynamicAlbumTheme && currentSongForTheme != null) albumDynamicPalette else null
 
-  AurixTheme(darkTheme = darkTheme, amoledTheme = amoledTheme, accentColor = accentColor) {
+  AurixTheme(
+    darkTheme = darkTheme,
+    amoledTheme = amoledTheme,
+    accentColor = accentColor,
+    dynamicPalette = activeDynamicPalette,
+    reducedMotion = reducedMotion
+  ) {
     Box(
       modifier = Modifier
         .fillMaxSize()
-        .background(if (darkTheme) Color(0xFF17181D) else Color(0xFFECEDF2))
+        .background(MaterialTheme.colorScheme.background)
     ) {
       if (!isAppInitialized) {
         Box(modifier = Modifier.fillMaxSize())
@@ -135,7 +149,9 @@ private fun AurixAppContent(
           dynamicBg = dynamicBg,
           reducedMotion = reducedMotion,
           darkTheme = darkTheme,
-          amoledTheme = amoledTheme
+          amoledTheme = amoledTheme,
+          dynamicAlbumTheme = dynamicAlbumTheme,
+          albumDynamicPalette = activeDynamicPalette
         )
       }
 
@@ -249,7 +265,9 @@ private fun AurixMainShell(
   dynamicBg: Boolean,
   reducedMotion: Boolean,
   darkTheme: Boolean,
-  amoledTheme: Boolean
+  amoledTheme: Boolean,
+  dynamicAlbumTheme: Boolean,
+  albumDynamicPalette: AlbumDynamicPalette?
 ) {
   var currentScreen by remember { mutableStateOf<Screen>(Screen.Home) }
   var libraryTab by remember { mutableIntStateOf(0) }
@@ -1327,7 +1345,10 @@ private fun AurixMainShell(
                   showCustomLyricsEditor = true
                 }
               },
-              onDeleteCustomLyrics = { songId -> viewModel.deleteCustomLyrics(songId) }
+              onDeleteCustomLyrics = { songId -> viewModel.deleteCustomLyrics(songId) },
+              dynamicAlbumTheme = dynamicAlbumTheme,
+              onDynamicAlbumThemeChanged = { viewModel.setDynamicAlbumTheme(it) },
+              albumDynamicPalette = albumDynamicPalette
             )
           }
         }
@@ -1335,10 +1356,10 @@ private fun AurixMainShell(
         val hideBottomDockForSheet = currentScreen is Screen.Library && isLibraryCreateAlbumOpen
 
         // Subtle atmospheric gradient scrim so scrolling list rows fade gracefully behind the floating dock
-        val targetScrimBase = when {
-          currentScreen is Screen.Album -> Color(0xFF0E1120)
-          darkTheme -> Color(0xFF0A0E1A)
-          else -> Color(0xFFEAF0FF)
+        val targetScrimBase = if (currentScreen is Screen.Album) {
+          Color(0xFF0E1120)
+        } else {
+          MaterialTheme.colorScheme.background
         }
         val dockScrimBase by animateColorAsState(
           targetValue = targetScrimBase,

@@ -85,7 +85,7 @@ fun MiniPlayer(
   val primaryTextColor = if (darkTheme) Color.White else Color(0xFF0F172A)
   val secondaryTextColor = if (darkTheme) Color(0xFFB3BFD4) else Color(0xFF52607A)
   val buttonBgColor = if (darkTheme) Color.White.copy(alpha = 0.95f) else MaterialTheme.colorScheme.primary
-  val buttonIconColor = if (darkTheme) Color(0xFF0F172A) else Color.White
+  val buttonIconColor = if (darkTheme) Color(0xFF0F172A) else MaterialTheme.colorScheme.onPrimary
 
   val totalMs = durationMs.coerceAtLeast(song.durationSeconds * 1000L).coerceAtLeast(1L)
   val progress = (currentPositionMs.toFloat() / totalMs.toFloat()).coerceIn(0f, 1f)
