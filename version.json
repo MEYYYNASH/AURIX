@@ -2,9 +2,9 @@
   "versionName": "2.3.1",
   "versionCode": 20301,
   "releaseDate": "2026-11-25",
-  "releaseTimestampMs": 1795646273000,
+  "releaseTimestampMs": 1795648551000,
   "apkUrl": "https://github.com/MEYYYNASH/AURIX/releases/download/v2.3.1/AURIX-v2.3.1.apk",
-  "sha256": "adc3d44a18be373264ecc65c484a892b5e140e15339f74ec2eca35750b877aeb",
+  "sha256": "a4c69f29e09c0a0cd855cbc5c4359af763516f6d79ea571c6515372c4d1c93e3",
   "mandatory": false,
   "notes": [
     "Vinyl Widget Style, Resizable AURIX Now Playing Widget & Refreshed Settings (v2.3.1): Added the tactile 'Vinyl' style (cream paper #EFE6D6 & spinning half-visible vinyl disc) across classic widgets, introduced the resizable 'AURIX Now Playing' widget (3 sizes x 10 WCAG 4.5:1 styles with Material You Light/Paper theming), and refreshed Settings > Widgets",
