@@ -403,6 +403,98 @@ class UpdateManagerTest {
     assertEquals(10802L, GitHubUpdater.deriveVersionCodeFromTag("v1.8.2"))
     assertEquals(10812L, GitHubUpdater.deriveVersionCodeFromTag("v1.8.1.2"))
     assertEquals(10801L, GitHubUpdater.deriveVersionCodeFromTag("v1.8.1"))
+    assertEquals(20301L, GitHubUpdater.deriveVersionCodeFromTag("v2.3.1+20301"))
+    assertEquals(20312L, GitHubUpdater.deriveVersionCodeFromTag("v2.3.1.2"))
     assertTrue(UpdateManager.CURRENT_RELEASE_NOTES.isNotEmpty())
+  }
+
+  @Test
+  fun `parseVersionJson supports ISO-8601 publishedAt and granular version fields`() {
+    val raw = """
+      {
+        "tag_name": "v2.3.1.2",
+        "publishedAt": "2026-11-25T22:15:30Z",
+        "apkUrl": "https://example.com/AURIX-v2.3.1.2.apk",
+        "notes": ["Granular hotfix release"]
+      }
+    """.trimIndent()
+
+    val parsed = UpdateManager.parseVersionJson(raw)
+    assertEquals("2.3.1.2", parsed.versionName)
+    assertEquals(20312L, parsed.versionCode)
+    assertEquals("2026-11-25", parsed.releaseDate)
+    assertTrue(parsed.releaseTimestampMs > 0L)
+    assertTrue(UpdateManager.compareVersions(20301L, parsed) is VersionComparisonOutcome.UpdateAvailable)
+  }
+
+  @Test
+  fun `remote JSON server query detects 20301 same-version later timestamp and posts timestamped notification`() = runBlocking {
+    val context = ApplicationProvider.getApplicationContext<Context>()
+    val shadowApp = Shadows.shadowOf(context as android.app.Application)
+    shadowApp.grantPermissions(android.Manifest.permission.POST_NOTIFICATIONS)
+    AppNotificationHelper.clearLastNotifiedVersionCode(context)
+
+    val cm = context.getSystemService(Context.CONNECTIVITY_SERVICE) as ConnectivityManager
+    val shadowCm = Shadows.shadowOf(cm)
+    val network = cm.activeNetwork
+    if (network != null) {
+      val caps = ShadowNetworkCapabilities.newInstance()
+      Shadows.shadowOf(caps).addCapability(NetworkCapabilities.NET_CAPABILITY_INTERNET)
+      shadowCm.setNetworkCapabilities(network, caps)
+    }
+
+    val newerTsMs = 1_795_700_000_000L
+    val server = HttpServer.create(InetSocketAddress("127.0.0.1", 0), 0)
+    val port = server.address.port
+    server.createContext("/version.json") { exchange ->
+      val body = """
+        {
+          "versionName": "2.3.1",
+          "versionCode": 20301,
+          "releaseDate": "2026-11-26",
+          "releaseTimestampMs": $newerTsMs,
+          "apkUrl": "http://127.0.0.1:$port/AURIX-v2.3.1.apk",
+          "sha256": "",
+          "notes": ["Timestamped 2.3.1 rebuild"],
+          "releasePageUrl": "http://127.0.0.1:$port/releases/v2.3.1"
+        }
+      """.trimIndent().toByteArray()
+      exchange.sendResponseHeaders(200, body.size.toLong())
+      exchange.responseBody.use { it.write(body) }
+    }
+    server.start()
+
+    val scope = CoroutineScope(SupervisorJob() + Dispatchers.Unconfined)
+    try {
+      val manager = UpdateManager(
+        context = context,
+        scope = scope,
+        versionJsonUrl = "http://127.0.0.1:$port/version.json"
+      )
+      manager.checkForUpdates(silent = false)
+      repeat(50) {
+        val st = manager.uiState.value.stage
+        if (st == UpdateStage.Available || st == UpdateStage.Error) return@repeat
+        delay(50)
+      }
+
+      val state = manager.uiState.value
+      assertEquals("Unexpected state: ${state.errorMessage}", UpdateStage.Available, state.stage)
+      assertEquals(20301L, state.latestRelease?.versionCode)
+      assertEquals(newerTsMs, state.latestRelease?.releaseTimestampMs)
+
+      val nm = context.getSystemService(Context.NOTIFICATION_SERVICE) as android.app.NotificationManager
+      val posted = Shadows.shadowOf(nm).getNotification(AppNotificationHelper.NOTIF_ID_UPDATE_AVAILABLE)
+      assertEquals(newerTsMs, posted.`when`)
+      assertEquals(newerTsMs, AppNotificationHelper.getLastNotifiedReleaseTimestampMs(context))
+      assertFalse(AppNotificationHelper.notifyUpdateAvailableIfNeeded(context, state.latestRelease!!))
+
+      val evenNewer = state.latestRelease!!.copy(releaseTimestampMs = newerTsMs + 60_000L)
+      assertTrue(AppNotificationHelper.notifyUpdateAvailableIfNeeded(context, evenNewer))
+      assertEquals(newerTsMs + 60_000L, AppNotificationHelper.getLastNotifiedReleaseTimestampMs(context))
+    } finally {
+      scope.cancel()
+      server.stop(0)
+    }
   }
 }

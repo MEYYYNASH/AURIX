@@ -17,9 +17,15 @@ on:
 permissions:
   contents: write
 
+concurrency:
+  group: aurix-release
+  cancel-in-progress: false
+
 jobs:
   build:
     runs-on: ubuntu-latest
+    permissions:
+      contents: write
 
     steps:
       - name: Checkout code
@@ -46,22 +52,43 @@ jobs:
 
       - name: Determine release tag
         run: |
-          if [ "${{ github.event_name }}" = "workflow_dispatch" ] && [ -n "${{ github.event.inputs.tag }}" ]; then
-            RELEASE_TAG="${{ github.event.inputs.tag }}"
-          elif [ "${{ github.ref_type }}" = "tag" ]; then
-            RELEASE_TAG="${{ github.ref_name }}"
-          else
-            VERSION=$(grep -m1 'versionName' app/build.gradle.kts | sed -E 's/.*"([^"]+)".*/\1/' | tr '[:upper:]' '[:lower:]' | tr ' ' '-')
-            RELEASE_TAG="v${VERSION:-2.3.1}"
-          fi
-          VCODE=$(grep -m1 'versionCode' app/build.gradle.kts | sed -E 's/[^0-9]*([0-9]+).*/\1/')
-          RDATE=$(grep -m1 'RELEASE_DATE' app/build.gradle.kts | sed -E 's/.*\\"([^\\"]+)\\".*/\1/')
-          BUILD_TS_MS=$(( $(date -u +%s) * 1000 ))
-          echo "RELEASE_TAG=${RELEASE_TAG}" >> "$GITHUB_ENV"
-          echo "RELEASE_VERSION=${RELEASE_TAG#v}" >> "$GITHUB_ENV"
-          echo "RELEASE_VERSION_CODE=${VCODE:-20301}" >> "$GITHUB_ENV"
-          echo "RELEASE_DATE=${RDATE:-$(date -u +%Y-%m-%d)}" >> "$GITHUB_ENV"
-          echo "AURIX_BUILD_TIMESTAMP_MS=${BUILD_TS_MS}" >> "$GITHUB_ENV"
+          python3 - <<'PYEOF'
+          import os, re, time
+
+          with open("app/build.gradle.kts", "r", encoding="utf-8") as f:
+            gradle_text = f.read()
+
+          ver_m = re.search(r'versionName\s*=\s*"([^"]+)"', gradle_text)
+          code_m = re.search(r'versionCode\s*=\s*(\d+)', gradle_text)
+          date_m = re.search(r'buildConfigField\(\s*"String"\s*,\s*"RELEASE_DATE"\s*,\s*"\\"([^\\"]+)\\""\s*\)', gradle_text)
+
+          version = (ver_m.group(1) if ver_m else "2.3.1").strip()
+          vcode = code_m.group(1) if code_m else "20301"
+          rdate = date_m.group(1) if date_m else time.strftime("%Y-%m-%d", time.gmtime())
+
+          event_name = os.environ.get("GITHUB_EVENT_NAME", "")
+          input_tag = os.environ.get("INPUT_TAG", "").strip()
+          ref_type = os.environ.get("GITHUB_REF_TYPE", "")
+          ref_name = os.environ.get("GITHUB_REF_NAME", "")
+
+          if event_name == "workflow_dispatch" and input_tag:
+            release_tag = input_tag
+          elif ref_type == "tag" and ref_name:
+            release_tag = ref_name
+          else:
+            slug = re.sub(r"\s+", "-", version.lower())
+            release_tag = slug if slug.startswith("v") else f"v{slug}"
+
+          build_ts_ms = int(time.time()) * 1000
+          with open(os.environ["GITHUB_ENV"], "a", encoding="utf-8") as env_f:
+            env_f.write(f"RELEASE_TAG={release_tag}\n")
+            env_f.write(f"RELEASE_VERSION={release_tag.lstrip('vV')}\n")
+            env_f.write(f"RELEASE_VERSION_CODE={vcode}\n")
+            env_f.write(f"RELEASE_DATE={rdate}\n")
+            env_f.write(f"AURIX_BUILD_TIMESTAMP_MS={build_ts_ms}\n")
+          PYEOF
+        env:
+          INPUT_TAG: ${{ github.event.inputs.tag }}
 
       - name: Ensure keystores exist
         run: |
@@ -121,31 +148,95 @@ jobs:
           name: AURIX-${{ env.RELEASE_TAG }}-apk
           path: AURIX-${{ env.RELEASE_TAG }}.apk
 
-      - name: Create GitHub Release
-        uses: softprops/action-gh-release@v2
-        with:
-          tag_name: ${{ env.RELEASE_TAG }}
-          name: AURIX ${{ env.RELEASE_TAG }}
-          fail_on_unmatched_files: true
-          body: |
-            versionCode: ${{ env.RELEASE_VERSION_CODE }}
-            mandatory: false
-
-            What's New in AURIX ${{ env.RELEASE_TAG }}:
-            - Vinyl Widget Style & Resizable AURIX Now Playing Widget: Tactile cream-paper Vinyl style with half-visible 7s-turn spinning disc, new resizable AURIX Now Playing widget (Compact 4x1, Player 4x2, Lyrics 4x2+) with 10 WCAG 4.5:1 styles & Material You Light/Paper support, and redesigned Settings > Widgets studio
-            - 5 Glass Widget Styles & Per-Widget Configurator (v2.3.0): Redesigned AURIX Music/Lyrics/Cover/Mini widgets with independent per-widget styles and instant setup/reconfigure picker
-            - Redesigned Widgets, Real Picker Previews & Standby Overhaul (v2.2.0): Redesigned AURIX Music/Lyrics/Cover/Mini widgets and Standby Split/Poster/Lyrics layouts with Mint default mood
-          files: |
-            app/build/outputs/apk/release/app-release.apk
-            AURIX-${{ env.RELEASE_TAG }}.apk
-            AURIX-${{ env.RELEASE_TAG }}.apk.sha256
-            app/build/outputs/apk/release/output-metadata.json
-            version.json
+      - name: Create or Update GitHub Release
         env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          set -euo pipefail
+
+          RELEASE_FILES=(
+            "app/build/outputs/apk/release/app-release.apk"
+            "AURIX-${RELEASE_TAG}.apk"
+            "AURIX-${RELEASE_TAG}.apk.sha256"
+            "app/build/outputs/apk/release/output-metadata.json"
+            "version.json"
+          )
+
+          for f in "${RELEASE_FILES[@]}"; do
+            if [ ! -s "$f" ]; then
+              echo "::error::Missing or empty release file: $f"
+              exit 1
+            fi
+          done
+
+          NOTES_FILE="${RUNNER_TEMP}/release_notes.md"
+          cat > "$NOTES_FILE" <<EOF
+          versionCode: ${RELEASE_VERSION_CODE}
+          releaseTimestampMs: ${AURIX_BUILD_TIMESTAMP_MS}
+          mandatory: false
+
+          What's New in AURIX ${RELEASE_TAG}:
+          - Vinyl Widget Style & Resizable AURIX Now Playing Widget: Tactile cream-paper Vinyl style with half-visible 7s-turn spinning disc, new resizable AURIX Now Playing widget (Compact 4x1, Player 4x2, Lyrics 4x2+) with 10 WCAG 4.5:1 styles & Material You Light/Paper support, and redesigned Settings > Widgets studio
+          - 5 Glass Widget Styles & Per-Widget Configurator (v2.3.0): Redesigned AURIX Music/Lyrics/Cover/Mini widgets with independent per-widget styles and instant setup/reconfigure picker
+          - Redesigned Widgets, Real Picker Previews & Standby Overhaul (v2.2.0): Redesigned AURIX Music/Lyrics/Cover/Mini widgets and Standby Split/Poster/Lyrics layouts with Mint default mood
+          EOF
+
+          upload_assets_with_retry() {
+            local attempt
+            for attempt in 1 2 3; do
+              if gh release upload "${RELEASE_TAG}" "${RELEASE_FILES[@]}" --repo "${GITHUB_REPOSITORY}" --clobber; then
+                return 0
+              fi
+              if [ "$attempt" -eq 3 ]; then
+                echo "::error::Failed to upload assets to release ${RELEASE_TAG} after 3 attempts."
+                return 1
+              fi
+              echo "::warning::Release asset upload attempt ${attempt} failed; retrying..."
+              sleep $((attempt * 3))
+            done
+          }
+
+          if gh release view "${RELEASE_TAG}" --repo "${GITHUB_REPOSITORY}" --json id,isDraft,url >/dev/null 2>&1; then
+            echo "Updating existing release ${RELEASE_TAG}..."
+            gh api --method PATCH "repos/${GITHUB_REPOSITORY}/git/refs/tags/${RELEASE_TAG}" \
+              -f "sha=${GITHUB_SHA}" -F force=true >/dev/null 2>&1 || \
+              echo "::warning::Could not move tag ${RELEASE_TAG} to ${GITHUB_SHA}; continuing with release update."
+
+            gh release edit "${RELEASE_TAG}" \
+              --repo "${GITHUB_REPOSITORY}" \
+              --draft=false \
+              --latest \
+              --title "AURIX ${RELEASE_TAG}" \
+              --notes-file "$NOTES_FILE"
+
+            upload_assets_with_retry
+          else
+            echo "Creating new release ${RELEASE_TAG}..."
+            if gh api "repos/${GITHUB_REPOSITORY}/git/refs/tags/${RELEASE_TAG}" >/dev/null 2>&1; then
+              gh api --method PATCH "repos/${GITHUB_REPOSITORY}/git/refs/tags/${RELEASE_TAG}" \
+                -f "sha=${GITHUB_SHA}" -F force=true >/dev/null 2>&1 || true
+            fi
+
+            if ! gh release create "${RELEASE_TAG}" "${RELEASE_FILES[@]}" \
+              --repo "${GITHUB_REPOSITORY}" \
+              --target "${GITHUB_SHA}" \
+              --title "AURIX ${RELEASE_TAG}" \
+              --notes-file "$NOTES_FILE" \
+              --latest; then
+              echo "::warning::Initial release creation failed; checking if ${RELEASE_TAG} exists to update in-place..."
+              gh release view "${RELEASE_TAG}" --repo "${GITHUB_REPOSITORY}" >/dev/null
+              gh release edit "${RELEASE_TAG}" \
+                --repo "${GITHUB_REPOSITORY}" \
+                --draft=false \
+                --latest \
+                --title "AURIX ${RELEASE_TAG}" \
+                --notes-file "$NOTES_FILE"
+              upload_assets_with_retry
+            fi
+          fi
 
       - name: Sync version.json to default branch
-        if: github.event_name == 'push' && github.ref_type == 'branch'
+        if: (github.event_name == 'push' || github.event_name == 'workflow_dispatch') && github.ref_type == 'branch'
         run: |
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"

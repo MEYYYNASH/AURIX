@@ -979,4 +979,80 @@ class CrashFixStabilityTest {
     assertTrue(pipelineSrc.contains("allowRgb565(false)"))
     assertTrue(pipelineSrc.contains("getDrawableForDensity"))
   }
+
+  @Test
+  fun remoteJsonUpdateChecker_granularVersioningAndTimestamps_workEndToEnd() {
+    assertEquals(20301, BuildConfig.VERSION_CODE)
+    assertEquals(20301L, com.example.data.GitHubUpdater.deriveVersionCodeFromTag("v2.3.1"))
+    assertEquals(20301L, com.example.data.GitHubUpdater.deriveVersionCodeFromTag("v2.3.1+20301"))
+    assertEquals(20312L, com.example.data.GitHubUpdater.deriveVersionCodeFromTag("v2.3.1.2"))
+    assertEquals(20302L, com.example.data.GitHubUpdater.deriveVersionCodeFromTag("v2.3.2"))
+
+    val server = com.sun.net.httpserver.HttpServer.create(java.net.InetSocketAddress("127.0.0.1", 0), 0)
+    val port = server.address.port
+    server.createContext("/version.json") { exchange ->
+      val body = """
+        {
+          "versionName": "2.3.1.2",
+          "publishedAt": "2026-11-25T22:15:30Z",
+          "apkUrl": "http://127.0.0.1:$port/AURIX-v2.3.1.2.apk",
+          "sha256": "0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef",
+          "notes": ["Granular 4-segment hotfix release"]
+        }
+      """.trimIndent().toByteArray()
+      exchange.sendResponseHeaders(200, body.size.toLong())
+      exchange.responseBody.use { it.write(body) }
+    }
+    server.start()
+    try {
+      val client = okhttp3.OkHttpClient()
+      val req = okhttp3.Request.Builder()
+        .url("http://127.0.0.1:$port/version.json")
+        .build()
+      val rawJson = client.newCall(req).execute().use { resp ->
+        assertTrue(resp.isSuccessful)
+        resp.body?.string().orEmpty()
+      }
+      val versionName = Regex(""""versionName"\s*:\s*"([^"]+)"""").find(rawJson)!!.groupValues[1]
+      val publishedAt = Regex(""""publishedAt"\s*:\s*"([^"]+)"""").find(rawJson)!!.groupValues[1]
+      val apkUrl = Regex(""""apkUrl"\s*:\s*"([^"]+)"""").find(rawJson)!!.groupValues[1]
+      val derivedCode = com.example.data.GitHubUpdater.deriveVersionCodeFromTag(versionName)
+      val parsedTs = com.example.data.GitHubUpdater.parseIsoTimestampMs(publishedAt)
+
+      assertEquals("2.3.1.2", versionName)
+      assertEquals(20312L, derivedCode)
+      assertTrue(parsedTs > 0L)
+
+      val remote = com.example.data.RemoteVersionInfo(
+        versionName = versionName,
+        versionCode = derivedCode,
+        releaseDate = publishedAt.take(10),
+        apkUrl = apkUrl,
+        sha256 = "0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef",
+        notes = listOf("Granular 4-segment hotfix release"),
+        releasePageUrl = "https://github.com/MEYYYNASH/AURIX/releases/tag/v$versionName",
+        releaseTimestampMs = parsedTs
+      )
+
+      val cmp = com.example.data.UpdateManager.compareVersions(
+        installedVersionCode = BuildConfig.VERSION_CODE.toLong(),
+        remote = remote,
+        installedBuildTimestampMs = 1_764_080_000_000L
+      )
+      assertTrue(cmp is com.example.data.VersionComparisonOutcome.UpdateAvailable)
+
+      val formattedTs = com.example.data.AppNotificationHelper.formatNotificationTimestamp(
+        releaseDate = remote.releaseDate,
+        releaseTimestampMs = remote.releaseTimestampMs
+      )
+      assertTrue(formattedTs.contains("2026"))
+      assertTrue(formattedTs.contains(":"))
+      assertEquals(
+        "Nov 25, 2026",
+        com.example.data.AppNotificationHelper.formatNotificationTimestamp("2026-11-25", 0L)
+      )
+    } finally {
+      server.stop(0)
+    }
+  }
 }

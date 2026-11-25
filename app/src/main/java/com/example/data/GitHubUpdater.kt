@@ -190,6 +190,7 @@ object GitHubUpdater {
 
   fun deriveVersionCodeFromTag(tag: String): Long {
     val parts = tag.trim().removePrefix("v").removePrefix("V")
+      .substringBefore("+")
       .substringBefore("-")
       .split(".")
       .mapNotNull { it.toLongOrNull() }
@@ -207,6 +208,31 @@ object GitHubUpdater {
   private fun parseVersionCodeFromText(text: String): Long? {
     val match = Regex("""versionCode\s*[:=]\s*(\d+)""", RegexOption.IGNORE_CASE).find(text)
     return match?.groupValues?.get(1)?.toLongOrNull()
+  }
+
+  private fun parseReleaseTimestampFromText(text: String): Long {
+    val match = Regex("""(?:releaseTimestampMs|buildTimestampMs)\s*[:=]\s*(\d+)""", RegexOption.IGNORE_CASE).find(text)
+    return match?.groupValues?.get(1)?.toLongOrNull()?.coerceAtLeast(0L) ?: 0L
+  }
+
+  fun parseIsoTimestampMs(raw: String): Long {
+    val trimmed = raw.trim()
+    if (trimmed.isBlank()) return 0L
+    val formats = listOf(
+      "yyyy-MM-dd'T'HH:mm:ss.SSSX",
+      "yyyy-MM-dd'T'HH:mm:ssX",
+      "yyyy-MM-dd'T'HH:mm:ss'Z'",
+      "yyyy-MM-dd'T'HH:mm:ss.SSS'Z'"
+    )
+    for (pattern in formats) {
+      val parsed = runCatching {
+        java.text.SimpleDateFormat(pattern, java.util.Locale.US).apply {
+          timeZone = java.util.TimeZone.getTimeZone("UTC")
+        }.parse(trimmed)?.time
+      }.getOrNull()
+      if (parsed != null && parsed > 0L) return parsed
+    }
+    return 0L
   }
 
   private fun parseMandatoryFlag(text: String): Boolean {
@@ -295,11 +321,13 @@ object GitHubUpdater {
             val tagName = json.optString("tag_name", "").trim()
             val name = json.optString("name", tagName).trim()
             val body = json.optString("body", "").trim()
-            val publishedAt = json.optString("published_at", "").take(10)
+            val publishedAtIso = json.optString("published_at", "")
+            val publishedAt = publishedAtIso.take(10)
             val assets = json.optJSONArray("assets")
 
             var apkUrl = ""
-            var metadataJsonUrl = ""
+            var versionJsonAssetUrl = ""
+            var outputMetadataUrl = ""
             if (assets != null) {
               for (i in 0 until assets.length()) {
                 val asset = assets.getJSONObject(i)
@@ -309,18 +337,19 @@ object GitHubUpdater {
                   if (apkUrl.isBlank() || assetName.contains("AURIX", ignoreCase = true)) {
                     apkUrl = downloadUrl
                   }
-                } else if (assetName.equals("output-metadata.json", ignoreCase = true) ||
-                  assetName.equals("version.json", ignoreCase = true)
-                ) {
-                  metadataJsonUrl = downloadUrl
+                } else if (assetName.equals("version.json", ignoreCase = true)) {
+                  versionJsonAssetUrl = downloadUrl
+                } else if (assetName.equals("output-metadata.json", ignoreCase = true)) {
+                  outputMetadataUrl = downloadUrl
                 }
               }
             }
+            val metadataJsonUrl = versionJsonAssetUrl.ifBlank { outputMetadataUrl }
 
             if (tagName.isNotBlank() && apkUrl.isNotBlank()) {
               var remoteCode = parseVersionCodeFromText("$name\n$body") ?: 0L
               var isMandatory = parseMandatoryFlag("$name\n$body")
-              var releaseTimestampMs = 0L
+              var releaseTimestampMs = parseReleaseTimestampFromText("$name\n$body")
 
               if (metadataJsonUrl.isNotBlank()) {
                 val meta = fetchRemoteMetadataJson(metadataJsonUrl)
@@ -329,6 +358,9 @@ object GitHubUpdater {
                   if (meta.mandatory) isMandatory = true
                   if (meta.releaseTimestampMs > 0L) releaseTimestampMs = meta.releaseTimestampMs
                 }
+              }
+              if (releaseTimestampMs <= 0L) {
+                releaseTimestampMs = parseIsoTimestampMs(publishedAtIso)
               }
               if (remoteCode <= 0L) {
                 remoteCode = deriveVersionCodeFromTag(tagName)
@@ -425,7 +457,8 @@ object GitHubUpdater {
         .build()
 
       var apkUrl = ""
-      var metaUrl = ""
+      var versionJsonAssetUrl = ""
+      var outputMetadataUrl = ""
       apiClient.newCall(assetsReq).execute().use { res ->
         val html = res.body?.string().orEmpty()
         val apkRegex = Regex("""href="(/[^"]+/releases/download/[^"]+\.apk)"""")
@@ -436,11 +469,16 @@ object GitHubUpdater {
         }
 
         val metaRegex = Regex("""href="(/[^"]+/releases/download/[^"]+(?:output-metadata|version)\.json)"""")
-        val metaMatch = metaRegex.find(html)?.groupValues?.get(1)
-        if (metaMatch != null) {
-          metaUrl = "https://github.com$metaMatch"
+        metaRegex.findAll(html).forEach { match ->
+          val relUrl = "https://github.com${match.groupValues[1]}"
+          if (relUrl.endsWith("/version.json", ignoreCase = true)) {
+            versionJsonAssetUrl = relUrl
+          } else if (outputMetadataUrl.isBlank()) {
+            outputMetadataUrl = relUrl
+          }
         }
       }
+      val metaUrl = versionJsonAssetUrl.ifBlank { outputMetadataUrl }
 
       if (apkUrl.isBlank()) {
         apkUrl = "https://github.com/$owner/$repo/releases/download/$resolvedTag/app-release.apk"
@@ -448,7 +486,7 @@ object GitHubUpdater {
 
       var remoteCode = parseVersionCodeFromText(pageHtml) ?: 0L
       var isMandatory = parseMandatoryFlag(pageHtml)
-      var releaseTimestampMs = 0L
+      var releaseTimestampMs = parseReleaseTimestampFromText(pageHtml)
       if (metaUrl.isNotBlank()) {
         val meta = fetchRemoteMetadataJson(metaUrl)
         if (meta != null) {

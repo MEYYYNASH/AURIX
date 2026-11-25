@@ -197,7 +197,12 @@ class UpdateManager(
 
     fun parseVersionJson(rawJson: String): RemoteVersionInfo {
       val obj = JSONObject(rawJson.trim())
-      val versionName = obj.optString("versionName", "")
+      val firstElement = obj.optJSONArray("elements")?.optJSONObject(0)
+      val rawVersionName = obj.optString("versionName", "")
+        .ifBlank { obj.optString("tag_name", "") }
+        .ifBlank { obj.optString("version", "") }
+        .ifBlank { firstElement?.optString("versionName", "").orEmpty() }
+      val versionName = rawVersionName
         .trim()
         .removePrefix("v")
         .removePrefix("V")
@@ -205,20 +210,35 @@ class UpdateManager(
         throw IllegalArgumentException("version.json missing versionName")
       }
       val explicitCode = obj.optLong("versionCode", 0L)
+        .takeIf { it > 0L }
+        ?: obj.optLong("buildNumber", 0L).takeIf { it > 0L }
+        ?: firstElement?.optLong("versionCode", 0L)?.takeIf { it > 0L }
+        ?: 0L
       val versionCode = if (explicitCode > 0L) {
         explicitCode
       } else {
         GitHubUpdater.deriveVersionCodeFromTag(versionName)
       }
-      val releaseDate = obj.optString("releaseDate", "").trim()
+      val releaseDate = obj.optString("releaseDate", "")
+        .ifBlank { obj.optString("publishedAt", "").take(10) }
+        .trim()
       val apkUrl = obj.optString("apkUrl", "").trim()
       val sha256 = obj.optString("sha256", "").trim().lowercase(Locale.ROOT)
       val releasePageUrl = obj.optString("releasePageUrl", DEFAULT_RELEASE_PAGE_URL)
         .trim()
         .ifBlank { DEFAULT_RELEASE_PAGE_URL }
       val isMandatory = obj.optBoolean("mandatory", false) || obj.optBoolean("critical", false)
-      val releaseTimestampMs = obj.optLong("releaseTimestampMs", obj.optLong("buildTimestampMs", 0L))
-        .coerceAtLeast(0L)
+      val numericTimestampMs = listOf("releaseTimestampMs", "buildTimestampMs", "timestampMs")
+        .firstNotNullOfOrNull { key -> obj.optLong(key, 0L).takeIf { it > 0L } }
+        ?: 0L
+      val releaseTimestampMs = if (numericTimestampMs > 0L) {
+        numericTimestampMs
+      } else {
+        listOf("releaseTimestamp", "publishedAt", "updatedAt", "createdAt")
+          .firstNotNullOfOrNull { key ->
+            GitHubUpdater.parseIsoTimestampMs(obj.optString(key, "")).takeIf { it > 0L }
+          } ?: 0L
+      }
 
       val notes = mutableListOf<String>()
       val notesArr = obj.optJSONArray("notes")
@@ -354,7 +374,8 @@ class UpdateManager(
 
     private data class AuthoritativeReleaseMetadata(
       val sha256: String?,
-      val releaseTimestampMs: Long
+      val releaseTimestampMs: Long,
+      val fullInfo: RemoteVersionInfo? = null
     )
 
     private fun fetchAuthoritativeReleaseMetadata(apkUrl: String): AuthoritativeReleaseMetadata? {
@@ -363,6 +384,7 @@ class UpdateManager(
       runCatching {
         val req = Request.Builder()
           .url(releaseVersionJsonUrl)
+          .cacheControl(okhttp3.CacheControl.FORCE_NETWORK)
           .header("User-Agent", "AURIX-Android-Updater")
           .header("Cache-Control", "no-cache")
           .build()
@@ -375,7 +397,8 @@ class UpdateManager(
               val validSha = candidate.takeIf { SHA256_HEX_REGEX.matches(it) }
               return AuthoritativeReleaseMetadata(
                 sha256 = validSha,
-                releaseTimestampMs = parsed.releaseTimestampMs
+                releaseTimestampMs = parsed.releaseTimestampMs,
+                fullInfo = parsed
               )
             }
           }
@@ -386,6 +409,7 @@ class UpdateManager(
         val shaUrl = "${apkUrl.trim()}.sha256"
         val req = Request.Builder()
           .url(shaUrl)
+          .cacheControl(okhttp3.CacheControl.FORCE_NETWORK)
           .header("User-Agent", "AURIX-Android-Updater")
           .header("Cache-Control", "no-cache")
           .build()
@@ -417,9 +441,25 @@ class UpdateManager(
       repo: String,
       versionJsonUrl: String = VERSION_JSON_URL
     ): Result<RemoteVersionInfo> = withContext(Dispatchers.IO) {
+      val cleanOwner = owner.trim().ifBlank { "MEYYYNASH" }
+      val cleanRepo = repo.trim().ifBlank { "AURIX" }
+      val isDefaultManifest = versionJsonUrl == VERSION_JSON_URL
+      val baseUrl = if (isDefaultManifest) {
+        "https://raw.githubusercontent.com/$cleanOwner/$cleanRepo/main/version.json"
+      } else {
+        versionJsonUrl
+      }
+      val requestUrl = if (baseUrl.startsWith("https://raw.githubusercontent.com/", ignoreCase = true)) {
+        val separator = if ('?' in baseUrl) "&" else "?"
+        "${baseUrl}${separator}_cb=${System.currentTimeMillis() / 15_000L}"
+      } else {
+        baseUrl
+      }
+
       try {
         val req = Request.Builder()
-          .url(versionJsonUrl)
+          .url(requestUrl)
+          .cacheControl(okhttp3.CacheControl.FORCE_NETWORK)
           .header("User-Agent", "AURIX-Android-Updater")
           .header("Cache-Control", "no-cache")
           .build()
@@ -429,17 +469,29 @@ class UpdateManager(
             val body = response.body?.string().orEmpty()
             if (body.isNotBlank()) {
               val parsed = parseVersionJson(body)
-              val resolved = if (versionJsonUrl == VERSION_JSON_URL) {
+              val resolved = if (isDefaultManifest) {
                 val releaseMeta = fetchAuthoritativeReleaseMetadata(parsed.apkUrl)
+                val fullRelease = releaseMeta?.fullInfo
                 if (releaseMeta != null) {
-                  val mergedSha = releaseMeta.sha256?.takeIf {
-                    !it.equals(parsed.sha256, ignoreCase = true)
-                  } ?: parsed.sha256
-                  val mergedTs = maxOf(parsed.releaseTimestampMs, releaseMeta.releaseTimestampMs)
-                  if (mergedSha != parsed.sha256 || mergedTs != parsed.releaseTimestampMs) {
-                    parsed.copy(sha256 = mergedSha, releaseTimestampMs = mergedTs)
+                  val base = if (
+                    fullRelease != null && (
+                      fullRelease.versionCode > parsed.versionCode ||
+                        (fullRelease.versionCode == parsed.versionCode &&
+                          fullRelease.releaseTimestampMs >= parsed.releaseTimestampMs)
+                      )
+                  ) {
+                    fullRelease
                   } else {
                     parsed
+                  }
+                  val mergedSha = releaseMeta.sha256?.takeIf {
+                    !it.equals(base.sha256, ignoreCase = true)
+                  } ?: base.sha256
+                  val mergedTs = maxOf(parsed.releaseTimestampMs, releaseMeta.releaseTimestampMs)
+                  if (mergedSha != base.sha256 || mergedTs != base.releaseTimestampMs) {
+                    base.copy(sha256 = mergedSha, releaseTimestampMs = mergedTs)
+                  } else {
+                    base
                   }
                 } else {
                   parsed
@@ -450,8 +502,8 @@ class UpdateManager(
               return@withContext Result.success(resolved)
             }
           }
-          if (response.code == 404) {
-            return@withContext fallbackToGitHubReleasesDirect(context, owner, repo)
+          if (response.code == 404 || response.code == 429 || response.code in 500..599) {
+            return@withContext fallbackToGitHubReleasesDirect(context, cleanOwner, cleanRepo)
           }
           Result.failure(IOException("Update server returned HTTP ${response.code}"))
         }
@@ -459,7 +511,7 @@ class UpdateManager(
         if (e is UnknownHostException || e is SocketTimeoutException || e is ConnectException || e is SSLHandshakeException) {
           Result.failure(e)
         } else {
-          fallbackToGitHubReleasesDirect(context, owner, repo)
+          fallbackToGitHubReleasesDirect(context, cleanOwner, cleanRepo)
         }
       }
     }
@@ -479,23 +531,34 @@ class UpdateManager(
     }
 
     private fun GitHubRelease.toRemoteVersionInfoDirect(owner: String, repo: String): RemoteVersionInfo {
+      val assetMeta = fetchAuthoritativeReleaseMetadata(apkUrl)
+      val assetInfo = assetMeta?.fullInfo
       val parsedNotes = body.lines()
         .map { it.trim().removePrefix("- ").removePrefix("* ").removePrefix("• ").trim() }
         .filter {
           it.isNotBlank() &&
             !it.startsWith("versionCode:", ignoreCase = true) &&
+            !it.startsWith("releaseTimestampMs:", ignoreCase = true) &&
+            !it.startsWith("buildTimestampMs:", ignoreCase = true) &&
             !it.startsWith("mandatory:", ignoreCase = true)
         }
+      val resolvedCode = maxOf(
+        if (versionCode > 0L) versionCode else GitHubUpdater.deriveVersionCodeFromTag(tagName),
+        assetInfo?.versionCode ?: 0L
+      )
+      val resolvedTimestampMs = maxOf(releaseTimestampMs, assetMeta?.releaseTimestampMs ?: 0L)
       return RemoteVersionInfo(
-        versionName = tagName.removePrefix("v").removePrefix("V"),
-        versionCode = if (versionCode > 0L) versionCode else GitHubUpdater.deriveVersionCodeFromTag(tagName),
-        releaseDate = releaseDate.ifBlank { APP_RELEASE_DATE },
+        versionName = assetInfo?.versionName?.takeIf { it.isNotBlank() }
+          ?: tagName.removePrefix("v").removePrefix("V"),
+        versionCode = resolvedCode,
+        releaseDate = assetInfo?.releaseDate?.ifBlank { releaseDate }?.ifBlank { APP_RELEASE_DATE }
+          ?: releaseDate.ifBlank { APP_RELEASE_DATE },
         apkUrl = apkUrl,
-        sha256 = "",
-        notes = parsedNotes,
+        sha256 = assetMeta?.sha256.orEmpty(),
+        notes = assetInfo?.notes?.takeIf { it.isNotEmpty() } ?: parsedNotes,
         releasePageUrl = "https://github.com/$owner/$repo/releases/tag/$tagName",
-        isMandatory = isMandatory,
-        releaseTimestampMs = releaseTimestampMs
+        isMandatory = isMandatory || (assetInfo?.isMandatory == true),
+        releaseTimestampMs = resolvedTimestampMs
       )
     }
   }

@@ -128,6 +128,22 @@ object AppNotificationHelper {
     )
   }
 
+  fun formatNotificationTimestamp(releaseDate: String, releaseTimestampMs: Long): String {
+    if (releaseTimestampMs > 0L) {
+      return runCatching {
+        java.text.SimpleDateFormat("MMM d, yyyy · HH:mm", java.util.Locale.US)
+          .format(java.util.Date(releaseTimestampMs))
+      }.getOrDefault(releaseDate.trim())
+    }
+    val trimmed = releaseDate.trim()
+    if (trimmed.isBlank()) return ""
+    return runCatching {
+      val parsed = java.text.SimpleDateFormat("yyyy-MM-dd", java.util.Locale.US)
+        .parse(trimmed) ?: return@runCatching trimmed
+      java.text.SimpleDateFormat("MMM d, yyyy", java.util.Locale.US).format(parsed)
+    }.getOrDefault(trimmed)
+  }
+
   fun notifyUpdateAvailableIfNeeded(
     context: Context,
     release: RemoteVersionInfo,
@@ -143,13 +159,22 @@ object AppNotificationHelper {
     ensureChannels(context)
     if (!canPostNotifications(context)) return false
 
+    val timestampLabel = formatNotificationTimestamp(release.releaseDate, release.releaseTimestampMs)
     val title = context.getString(R.string.notif_update_available_title, release.tagName)
     val summaryLine = release.notes.firstOrNull()?.takeIf { it.isNotBlank() }
       ?: context.getString(R.string.notif_update_available_body)
-    val expandedNotes = if (release.notes.isNotEmpty()) {
-      release.notes.take(4).joinToString("\n") { "• $it" }
-    } else {
-      summaryLine
+    val expandedNotes = buildString {
+      if (timestampLabel.isNotBlank()) {
+        append(timestampLabel)
+        append(" · code ")
+        append(release.versionCode)
+        append('\n')
+      }
+      if (release.notes.isNotEmpty()) {
+        append(release.notes.take(4).joinToString("\n") { "• $it" })
+      } else {
+        append(summaryLine)
+      }
     }
 
     val openIntent = mainActivityPendingIntent(
@@ -165,7 +190,7 @@ object AppNotificationHelper {
       updateAction = ACTION_DOWNLOAD_UPDATE
     )
 
-    val notification = NotificationCompat.Builder(context, CHANNEL_UPDATE_RELEASES)
+    val builder = NotificationCompat.Builder(context, CHANNEL_UPDATE_RELEASES)
       .setSmallIcon(R.drawable.ic_stat_aurix)
       .setContentTitle(title)
       .setContentText(summaryLine)
@@ -175,7 +200,13 @@ object AppNotificationHelper {
       .setAutoCancel(true)
       .setOnlyAlertOnce(!force)
       .setPriority(NotificationCompat.PRIORITY_DEFAULT)
-      .build()
+    if (timestampLabel.isNotBlank()) {
+      builder.setSubText(timestampLabel)
+    }
+    if (release.releaseTimestampMs > 0L) {
+      builder.setWhen(release.releaseTimestampMs).setShowWhen(true)
+    }
+    val notification = builder.build()
 
     return runCatching {
       NotificationManagerCompat.from(context).notify(NOTIF_ID_UPDATE_AVAILABLE, notification)
@@ -195,14 +226,21 @@ object AppNotificationHelper {
       updateAction = ACTION_INSTALL_UPDATE
     )
 
-    val notification = NotificationCompat.Builder(context, CHANNEL_UPDATE_RELEASES)
+    val timestampLabel = formatNotificationTimestamp(release.releaseDate, release.releaseTimestampMs)
+    val builder = NotificationCompat.Builder(context, CHANNEL_UPDATE_RELEASES)
       .setSmallIcon(R.drawable.ic_stat_aurix)
       .setContentTitle(context.getString(R.string.notif_update_ready_title, release.tagName))
       .setContentText(context.getString(R.string.notif_update_ready_body))
       .setContentIntent(installIntent)
       .setAutoCancel(true)
       .setPriority(NotificationCompat.PRIORITY_DEFAULT)
-      .build()
+    if (timestampLabel.isNotBlank()) {
+      builder.setSubText(timestampLabel)
+    }
+    if (release.releaseTimestampMs > 0L) {
+      builder.setWhen(release.releaseTimestampMs).setShowWhen(true)
+    }
+    val notification = builder.build()
 
     runCatching {
       NotificationManagerCompat.from(context).notify(NOTIF_ID_UPDATE_STATUS, notification)
