@@ -20,6 +20,8 @@ android {
     versionCode = 20301
     versionName = "2.3.1"
     buildConfigField("String", "RELEASE_DATE", "\"2026-11-25\"")
+    val buildTimestampMs = System.getenv("AURIX_BUILD_TIMESTAMP_MS")?.toLongOrNull() ?: 0L
+    buildConfigField("long", "BUILD_TIMESTAMP_MS", "${buildTimestampMs}L")
 
     testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
   }

@@ -815,4 +815,113 @@ class CrashFixStabilityTest {
       assertTrue("Latin 'a' missing in $name", awtFont.canDisplay('a'))
     }
   }
+
+  @Test
+  fun sameVersionTimestampUpdateEvaluation_andWidgetCornerResources_areValid() {
+    val installedT1 = com.example.data.InstalledAppInfo(
+      packageName = "com.aurix.music",
+      versionName = "2.3.1",
+      versionCode = 20301L,
+      signingSha256Set = emptySet(),
+      buildTimestampMs = 1_764_080_000_000L
+    )
+    val baseRemote = com.example.data.RemoteVersionInfo(
+      versionName = "2.3.1",
+      versionCode = 20301L,
+      releaseDate = "2026-11-25",
+      apkUrl = "https://example.com/AURIX-v2.3.1.apk",
+      sha256 = "",
+      notes = emptyList(),
+      releasePageUrl = "https://example.com/releases/v2.3.1",
+      releaseTimestampMs = 1_764_080_000_000L
+    )
+
+    // 1. Same version + same timestamp -> UpToDate
+    assertTrue(
+      com.example.data.UpdateManager.compareVersions(
+        installedT1.versionCode,
+        baseRemote,
+        installedT1.buildTimestampMs
+      ) is com.example.data.VersionComparisonOutcome.UpToDate
+    )
+    org.junit.Assert.assertFalse(
+      com.example.data.UpdateManager.isReleaseNewerThanInstalled(installedT1, baseRemote)
+    )
+
+    // 2. Same version + older timestamp -> UpToDate (never downgrade/reinstall)
+    val olderSameVersion = baseRemote.copy(releaseTimestampMs = installedT1.buildTimestampMs - 60_000L)
+    assertTrue(
+      com.example.data.UpdateManager.compareVersions(
+        installedT1.versionCode,
+        olderSameVersion,
+        installedT1.buildTimestampMs
+      ) is com.example.data.VersionComparisonOutcome.UpToDate
+    )
+    org.junit.Assert.assertFalse(
+      com.example.data.UpdateManager.isReleaseNewerThanInstalled(installedT1, olderSameVersion)
+    )
+
+    // 3. Same version + missing (0L) timestamp -> UpToDate
+    val missingTsSameVersion = baseRemote.copy(releaseTimestampMs = 0L)
+    org.junit.Assert.assertFalse(
+      com.example.data.UpdateManager.isReleaseNewerThanInstalled(installedT1, missingTsSameVersion)
+    )
+
+    // 4. Same version + newer timestamp -> UpdateAvailable
+    val newerSameVersion = baseRemote.copy(releaseTimestampMs = installedT1.buildTimestampMs + 3_600_000L)
+    assertTrue(
+      com.example.data.UpdateManager.compareVersions(
+        installedT1.versionCode,
+        newerSameVersion,
+        installedT1.buildTimestampMs
+      ) is com.example.data.VersionComparisonOutcome.UpdateAvailable
+    )
+    assertTrue(
+      com.example.data.UpdateManager.isReleaseNewerThanInstalled(installedT1, newerSameVersion)
+    )
+    assertTrue(
+      com.example.data.GitHubUpdater.evaluateUpdate(
+        installedT1,
+        com.example.data.GitHubRelease(
+          tagName = "v2.3.1",
+          name = "AURIX v2.3.1",
+          body = "",
+          apkUrl = "https://example.com/AURIX-v2.3.1.apk",
+          versionCode = 20301L,
+          releaseTimestampMs = installedT1.buildTimestampMs + 3_600_000L
+        )
+      ) is com.example.data.UpdateCheckStatus.UpdateAvailable
+    )
+
+    // 5. Legacy build (buildTimestampMs = 0L) on same version -> updates to timestamped release
+    val legacyInstalled = installedT1.copy(buildTimestampMs = 0L)
+    assertTrue(
+      com.example.data.UpdateManager.isReleaseNewerThanInstalled(legacyInstalled, baseRemote)
+    )
+
+    // 6. Lower versionCode even with newer timestamp -> NewerInstalled / DowngradeBlocked
+    val lowerCodeNewerTs = newerSameVersion.copy(versionName = "2.3.0", versionCode = 20300L)
+    assertTrue(
+      com.example.data.UpdateManager.compareVersions(
+        installedT1.versionCode,
+        lowerCodeNewerTs,
+        installedT1.buildTimestampMs
+      ) is com.example.data.VersionComparisonOutcome.NewerInstalled
+    )
+    org.junit.Assert.assertFalse(
+      com.example.data.UpdateManager.isReleaseNewerThanInstalled(installedT1, lowerCodeNewerTs)
+    )
+
+    // 7. Verify widget border drawables exist and widget_shadow_soft is transparent (no corner wedges)
+    val resDirCandidates = listOf(java.io.File("src/main/res/drawable"), java.io.File("app/src/main/res/drawable"))
+    val drawableDir = resDirCandidates.firstOrNull { it.isDirectory }
+      ?: throw AssertionError("Could not locate res/drawable")
+    assertTrue(java.io.File(drawableDir, "widget_border_28dp.xml").isFile)
+    assertTrue(java.io.File(drawableDir, "widget_border_22dp.xml").isFile)
+    assertTrue(java.io.File(drawableDir, "widget_border_28dp_paper_ring.xml").isFile)
+    val shadowXml = java.io.File(drawableDir, "widget_shadow_soft.xml").readText()
+    assertTrue(shadowXml.contains("#00000000"))
+    val clip28Xml = java.io.File(drawableDir, "widget_clip_28dp.xml").readText()
+    assertTrue(clip28Xml.contains("#01000000"))
+  }
 }

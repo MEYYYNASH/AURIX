@@ -44,8 +44,8 @@ object NowPlayingWidgetRenderer {
   }
 
   /**
-   * Renders the style-specific card background bitmap with pre-computed rounded clipping
-   * so RemoteViews stays well under Binder limits and zero per-frame allocations occur.
+   * Renders the style-specific card background bitmap full-bleed (hardware clipping and crisp 1dp
+   * vector borders are applied by the RemoteViews container so corners never bleed or blur).
    */
   fun getOrRenderCardBackground(
     context: Context,
@@ -56,35 +56,24 @@ object NowPlayingWidgetRenderer {
     tokens: NowPlayingWidgetThemeTokens,
     coverKey: String
   ): Bitmap {
-    val w = 380
+    val w = 460
     val h = when (size) {
-      NowPlayingWidgetSize.COMPACT -> 84
-      NowPlayingWidgetSize.PLAYER -> 176
-      NowPlayingWidgetSize.LYRICS -> 252
+      NowPlayingWidgetSize.COMPACT -> 102
+      NowPlayingWidgetSize.PLAYER -> 214
+      NowPlayingWidgetSize.LYRICS -> 304
     }
-    val key = "${style.id}|${size.id}|$coverKey|${tokens.cardBg}|${tokens.accent}|${rawArt != null}"
+    val key = "v2|${style.id}|${size.id}|$coverKey|${tokens.cardBg}|${tokens.accent}|${rawArt != null}"
     cardBgCache.get(key)?.let { return it }
 
     if (style == NowPlayingWidgetStyle.VINYL) {
-      val cornerPx = 56f
-      val vinylPaper = VinylWidgetRenderer.getOrRenderVinylPaperBackground(w, h, cornerPx)
+      val vinylPaper = VinylWidgetRenderer.getOrRenderVinylPaperBackground(w, h, 0f)
       cardBgCache.put(key, vinylPaper)
       return vinylPaper
     }
 
-    val bmp = Bitmap.createBitmap(w, h, Bitmap.Config.ARGB_8888)
+    val bmp = Bitmap.createBitmap(w, h, Bitmap.Config.RGB_565)
     val canvas = Canvas(bmp)
-    val corner = when (style) {
-      NowPlayingWidgetStyle.PIXEL -> 14f
-      NowPlayingWidgetStyle.PAPER -> 36f
-      NowPlayingWidgetStyle.FLOAT -> 52f
-      else -> 56f
-    }
     val rect = RectF(0f, 0f, w.toFloat(), h.toFloat())
-    val clipPaint = Paint(Paint.ANTI_ALIAS_FLAG)
-    canvas.drawRoundRect(rect, corner, corner, clipPaint)
-    clipPaint.xfermode = PorterDuffXfermode(PorterDuff.Mode.SRC_IN)
-    val layer = canvas.saveLayer(rect, clipPaint)
 
     when (style) {
       NowPlayingWidgetStyle.AURA -> {
@@ -209,20 +198,13 @@ object NowPlayingWidgetRenderer {
         var gx = 0f
         while (gx < w) {
           canvas.drawLine(gx, 0f, gx, h.toFloat(), gridPaint)
-          gx += 16f
+          gx += 20f
         }
         var gy = 0f
         while (gy < h) {
           canvas.drawLine(0f, gy, w.toFloat(), gy, gridPaint)
-          gy += 16f
+          gy += 20f
         }
-        // Retro pixel stepped double border
-        val outerBorder = Paint().apply {
-          setStyle(Paint.Style.STROKE)
-          strokeWidth = 3f
-          color = tokens.border
-        }
-        canvas.drawRoundRect(RectF(2f, 2f, w - 2f, h - 2f), corner - 2f, corner - 2f, outerBorder)
       }
 
       NowPlayingWidgetStyle.PAPER -> {
@@ -241,9 +223,9 @@ object NowPlayingWidgetRenderer {
         canvas.drawRect(rect, editorialGlow)
         val rulePaint = Paint().apply {
           color = 0x12000000
-          strokeWidth = 1f
+          strokeWidth = 1.5f
         }
-        canvas.drawLine(24f, 18f, w - 24f, 18f, rulePaint)
+        canvas.drawLine(28f, 22f, w - 28f, 22f, rulePaint)
       }
 
       NowPlayingWidgetStyle.FLOAT -> {
@@ -269,21 +251,6 @@ object NowPlayingWidgetRenderer {
       }
     }
 
-    if (style != NowPlayingWidgetStyle.PIXEL) {
-      val borderPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
-        setStyle(Paint.Style.STROKE)
-        strokeWidth = 2f
-        color = tokens.border
-      }
-      canvas.drawRoundRect(
-        RectF(1f, 1f, w - 1f, h - 1f),
-        max(2f, corner - 1f),
-        max(2f, corner - 1f),
-        borderPaint
-      )
-    }
-
-    canvas.restoreToCount(layer)
     cardBgCache.put(key, bmp)
     return bmp
   }
@@ -411,8 +378,9 @@ object NowPlayingWidgetRenderer {
       val clean = text.trim()
       if (clean.isEmpty()) return null
       val isRtl = context.resources.configuration.layoutDirection == View.LAYOUT_DIRECTION_RTL
-      val scale = context.resources.displayMetrics.density.coerceIn(1.35f, 1.60f)
-      val widthPx = (widthDp * scale).roundToInt().coerceIn(140, 660)
+      val maxScale = if (isLyricLine) 2.15f else 2.40f
+      val scale = context.resources.displayMetrics.density.coerceIn(1.85f, maxScale)
+      val widthPx = (widthDp * scale).roundToInt().coerceIn(160, 920)
 
       val baseTypeface = when (style) {
         NowPlayingWidgetStyle.PIXEL -> Typeface.create(Typeface.MONOSPACE, if (isBold) Typeface.BOLD else Typeface.NORMAL)
@@ -452,8 +420,7 @@ object NowPlayingWidgetRenderer {
         else -> Layout.Alignment.ALIGN_NORMAL
       }
 
-      // >= 1.4x line height spacing on lyrics for high readability across Khmer & Latin glyphs
-      val lineMult = if (isLyricLine) 1.42f else 1.10f
+      val lineMult = if (isLyricLine) 1.24f else 1.10f
       val layout = StaticLayout.Builder
         .obtain(styledText, 0, styledText.length, paint, widthPx)
         .setAlignment(align)
@@ -463,8 +430,8 @@ object NowPlayingWidgetRenderer {
         .setEllipsize(TextUtils.TruncateAt.END)
         .build()
 
-      val padY = (2f * scale).roundToInt()
-      val heightPx = (layout.height + padY * 2).coerceIn(18, 220)
+      val padY = (1.5f * scale).roundToInt()
+      val heightPx = (layout.height + padY * 2).coerceIn(22, 300)
       val bmp = Bitmap.createBitmap(widthPx, heightPx, Bitmap.Config.ARGB_8888)
       val canvas = Canvas(bmp)
       canvas.save()

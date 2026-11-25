@@ -40,6 +40,7 @@ object AppNotificationHelper {
 
   private const val PREFS_NAME = "aurix_update_notif_prefs"
   private const val KEY_LAST_NOTIFIED_VERSION_CODE = "last_notified_version_code"
+  private const val KEY_LAST_NOTIFIED_RELEASE_TIMESTAMP_MS = "last_notified_release_timestamp_ms"
 
   fun ensureChannels(context: Context) {
     if (Build.VERSION.SDK_INT < Build.VERSION_CODES.O) return
@@ -83,14 +84,25 @@ object AppNotificationHelper {
     return prefs.getLong(KEY_LAST_NOTIFIED_VERSION_CODE, 0L)
   }
 
-  fun setLastNotifiedVersionCode(context: Context, versionCode: Long) {
+  fun getLastNotifiedReleaseTimestampMs(context: Context): Long {
     val prefs = context.applicationContext.getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)
-    prefs.edit().putLong(KEY_LAST_NOTIFIED_VERSION_CODE, versionCode).apply()
+    return prefs.getLong(KEY_LAST_NOTIFIED_RELEASE_TIMESTAMP_MS, 0L)
+  }
+
+  fun setLastNotifiedVersionCode(context: Context, versionCode: Long, releaseTimestampMs: Long = 0L) {
+    val prefs = context.applicationContext.getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)
+    prefs.edit()
+      .putLong(KEY_LAST_NOTIFIED_VERSION_CODE, versionCode)
+      .putLong(KEY_LAST_NOTIFIED_RELEASE_TIMESTAMP_MS, releaseTimestampMs)
+      .apply()
   }
 
   fun clearLastNotifiedVersionCode(context: Context) {
     val prefs = context.applicationContext.getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)
-    prefs.edit().remove(KEY_LAST_NOTIFIED_VERSION_CODE).apply()
+    prefs.edit()
+      .remove(KEY_LAST_NOTIFIED_VERSION_CODE)
+      .remove(KEY_LAST_NOTIFIED_RELEASE_TIMESTAMP_MS)
+      .apply()
   }
 
   private fun mainActivityPendingIntent(
@@ -121,7 +133,11 @@ object AppNotificationHelper {
     release: RemoteVersionInfo,
     force: Boolean = false
   ): Boolean {
-    if (!force && release.versionCode <= getLastNotifiedVersionCode(context)) {
+    val lastCode = getLastNotifiedVersionCode(context)
+    val lastTs = getLastNotifiedReleaseTimestampMs(context)
+    if (!force && (release.versionCode < lastCode ||
+        (release.versionCode == lastCode && release.releaseTimestampMs <= lastTs))
+    ) {
       return false
     }
     ensureChannels(context)
@@ -163,7 +179,7 @@ object AppNotificationHelper {
 
     return runCatching {
       NotificationManagerCompat.from(context).notify(NOTIF_ID_UPDATE_AVAILABLE, notification)
-      setLastNotifiedVersionCode(context, release.versionCode)
+      setLastNotifiedVersionCode(context, release.versionCode, release.releaseTimestampMs)
       true
     }.getOrDefault(false)
   }

@@ -57,11 +57,11 @@ object WidgetGlassRenderer {
     val base = rawArt ?: createFallbackGradientArtwork(context)
     val luminance = computeAverageLuminance(base)
 
-    // Layer 1: pre-blurred (~26px radius on compact bitmap, saturation +50%, 1.2x overscan scale)
+    // Layer 1: pre-blurred ambient cover (RGB_565 keeps Binder overhead compact)
     val blurred26 = createBlurredLayer(
       source = base,
-      targetWidth = 176,
-      targetHeight = 104,
+      targetWidth = 200,
+      targetHeight = 118,
       saturation = 1.50f,
       blurRadius = 26,
       overscanScale = 1.20f
@@ -69,8 +69,8 @@ object WidgetGlassRenderer {
     // Strong blur for Smoked Neon & Poster Glass floating panel
     val blurredStrong = createBlurredLayer(
       source = base,
-      targetWidth = 176,
-      targetHeight = 104,
+      targetWidth = 200,
+      targetHeight = 118,
       saturation = 1.55f,
       blurRadius = 32,
       overscanScale = 1.24f
@@ -78,8 +78,8 @@ object WidgetGlassRenderer {
     // Light Frost: strong saturation (+70%) + blur
     val blurredLightFrost = createBlurredLayer(
       source = base,
-      targetWidth = 176,
-      targetHeight = 104,
+      targetWidth = 200,
+      targetHeight = 118,
       saturation = 1.72f,
       blurRadius = 28,
       overscanScale = 1.20f
@@ -255,7 +255,8 @@ object WidgetGlassRenderer {
     canvas.drawBitmap(source, srcRect, dstRect, paint)
 
     boxBlurInPlace(small, blurRadius.coerceIn(4, 34), passes = 3)
-    return Bitmap.createScaledBitmap(small, targetWidth, targetHeight, true)
+    val scaled = Bitmap.createScaledBitmap(small, targetWidth, targetHeight, true)
+    return scaled.copy(Bitmap.Config.RGB_565, false)
   }
 
   /**
@@ -402,8 +403,8 @@ object WidgetGlassRenderer {
   fun renderLeftEdgeFadeCoverBitmap(
     context: Context,
     rawArt: Bitmap?,
-    widthPx: Int = 160,
-    heightPx: Int = 220,
+    widthPx: Int = 240,
+    heightPx: Int = 330,
     isRtl: Boolean = false
   ): Bitmap {
     val src = rawArt ?: createFallbackGradientArtwork(context)
@@ -463,11 +464,11 @@ object WidgetGlassRenderer {
   fun renderPosterCoverWithBottomGradient(
     context: Context,
     rawArt: Bitmap?,
-    widthPx: Int = 340,
-    heightPx: Int = 180
+    widthPx: Int = 540,
+    heightPx: Int = 285
   ): Bitmap {
     val src = rawArt ?: createFallbackGradientArtwork(context)
-    val out = Bitmap.createBitmap(widthPx, heightPx, Bitmap.Config.ARGB_8888)
+    val out = Bitmap.createBitmap(widthPx, heightPx, Bitmap.Config.RGB_565)
     val canvas = Canvas(out)
 
     val srcRatio = src.width.toFloat() / src.height.toFloat()
@@ -571,14 +572,14 @@ object WidgetGlassRenderer {
   fun renderSegmentedProgressBitmap(
     progressFraction: Float,
     segments: Int = 22,
-    widthPx: Int = 340,
-    heightPx: Int = 14,
+    widthPx: Int = 560,
+    heightPx: Int = 22,
     isRtl: Boolean = false
   ): Bitmap {
     val bmp = Bitmap.createBitmap(widthPx, heightPx, Bitmap.Config.ARGB_8888)
     val canvas = Canvas(bmp)
-    val gap = 4.5f
-    val pillW = ((widthPx - gap * (segments - 1)) / segments).coerceAtLeast(4f)
+    val gap = 7.0f
+    val pillW = ((widthPx - gap * (segments - 1)) / segments).coerceAtLeast(6f)
     val filledCount = (progressFraction.coerceIn(0f, 1f) * segments).roundToInt().coerceIn(0, segments)
     val radius = heightPx * 0.5f
 
@@ -612,8 +613,8 @@ object WidgetGlassRenderer {
   fun renderWaveformProgressBitmap(
     progressFraction: Float,
     bars: Int = 20,
-    widthPx: Int = 280,
-    heightPx: Int = 30,
+    widthPx: Int = 480,
+    heightPx: Int = 48,
     accentColor: Int = 0xFF3B46E0.toInt(),
     unplayedColor: Int = 0x3814172A,
     isRtl: Boolean = false
@@ -624,8 +625,8 @@ object WidgetGlassRenderer {
       0.42f, 0.72f, 0.55f, 0.94f, 0.68f, 0.45f, 0.85f, 1.0f, 0.62f, 0.48f,
       0.88f, 0.74f, 0.50f, 0.92f, 0.66f, 0.40f, 0.78f, 0.58f, 0.84f, 0.46f
     )
-    val gap = 4.5f
-    val barW = ((widthPx - gap * (bars - 1)) / bars).coerceAtLeast(3.5f)
+    val gap = 7.0f
+    val barW = ((widthPx - gap * (bars - 1)) / bars).coerceAtLeast(5f)
     val playedCount = (progressFraction.coerceIn(0f, 1f) * bars).roundToInt().coerceIn(0, bars)
     val playedPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply { color = accentColor }
     val unplayedPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply { color = unplayedColor }
@@ -633,7 +634,7 @@ object WidgetGlassRenderer {
     for (i in 0 until bars) {
       val logicalIdx = if (isRtl) (bars - 1 - i) else i
       val normH = pattern[logicalIdx % pattern.size]
-      val barH = (heightPx * normH).coerceAtLeast(6f)
+      val barH = (heightPx * normH).coerceAtLeast(10f)
       val top = (heightPx - barH) * 0.5f
       val left = i * (barW + gap)
       val rect = RectF(left, top, left + barW, top + barH)
@@ -650,8 +651,8 @@ object WidgetGlassRenderer {
     color: Int,
     isPlaying: Boolean,
     phase: Int,
-    widthPx: Int = if (barCount <= 3) 42 else 78,
-    heightPx: Int = if (barCount <= 3) 28 else 54
+    widthPx: Int = if (barCount <= 3) 64 else 112,
+    heightPx: Int = if (barCount <= 3) 42 else 78
   ): Bitmap {
     val bmp = Bitmap.createBitmap(widthPx, heightPx, Bitmap.Config.ARGB_8888)
     val canvas = Canvas(bmp)
@@ -670,11 +671,11 @@ object WidgetGlassRenderer {
         else -> if (barCount <= 3) floatArrayOf(0.78f, 0.46f, 0.92f) else floatArrayOf(0.72f, 0.48f, 0.86f, 0.58f)
       }
     }
-    val gap = if (barCount <= 3) 5f else 8f
-    val barW = ((widthPx - 8f - gap * (barCount - 1)) / barCount).coerceAtLeast(4f)
-    val startX = 4f
-    val bottomY = heightPx - 3f
-    val maxBarH = heightPx - 6f
+    val gap = if (barCount <= 3) 7.5f else 11f
+    val barW = ((widthPx - 12f - gap * (barCount - 1)) / barCount).coerceAtLeast(6f)
+    val startX = 6f
+    val bottomY = heightPx - 4f
+    val maxBarH = heightPx - 8f
     for (i in 0 until barCount) {
       val left = startX + i * (barW + gap)
       val barH = (maxBarH * heights[i % heights.size]).coerceAtLeast(barW)
@@ -711,8 +712,8 @@ object WidgetGlassRenderer {
       val cfg = context.resources.configuration
       val isRtl = cfg.layoutDirection == View.LAYOUT_DIRECTION_RTL
       val fontScale = cfg.fontScale.coerceIn(0.85f, 1.32f)
-      val scale = context.resources.displayMetrics.density.coerceIn(1.30f, 1.58f)
-      val widthPx = (widthDp * scale).roundToInt().coerceIn(120, 680)
+      val scale = context.resources.displayMetrics.density.coerceIn(1.85f, 2.35f)
+      val widthPx = (widthDp * scale).roundToInt().coerceIn(140, 860)
 
       val styledText = com.example.ui.theme.KhmerTypography.buildStyledSpannable(
         context = context,
@@ -752,7 +753,7 @@ object WidgetGlassRenderer {
         .build()
 
       val padY = (1.5f * scale).roundToInt()
-      val heightPx = (layout.height + padY * 2).coerceIn(18, 160)
+      val heightPx = (layout.height + padY * 2).coerceIn(20, 220)
       val bmp = Bitmap.createBitmap(widthPx, heightPx, Bitmap.Config.ARGB_8888)
       val canvas = Canvas(bmp)
       canvas.save()

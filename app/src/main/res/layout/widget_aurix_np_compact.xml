@@ -3,9 +3,7 @@
     android:id="@+id/widget_np_outer_shadow"
     android:layout_width="match_parent"
     android:layout_height="match_parent"
-    android:background="@drawable/widget_shadow_soft"
-    android:layoutDirection="locale"
-    android:paddingBottom="3dp">
+    android:layoutDirection="locale">
 
     <FrameLayout
         android:id="@+id/widget_np_root"
@@ -187,5 +185,13 @@
                     android:src="@drawable/ic_widget_next" />
             </FrameLayout>
         </LinearLayout>
+
+        <ImageView
+            android:id="@+id/widget_np_border"
+            android:layout_width="match_parent"
+            android:layout_height="match_parent"
+            android:contentDescription="@null"
+            android:scaleType="fitXY"
+            android:src="@drawable/widget_border_28dp" />
     </FrameLayout>
 </FrameLayout>

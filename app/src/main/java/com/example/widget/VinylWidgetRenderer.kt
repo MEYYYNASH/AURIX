@@ -126,30 +126,24 @@ object VinylWidgetRenderer {
   }
 
   /**
-   * Renders the cream paper card surface (#EFE6D6):
+   * Renders the cream paper card surface (#EFE6D6) full-bleed (hardware clipping and crisp 1dp
+   * inner ring are applied by the RemoteViews container so corners stay razor sharp):
    * - Top-right soft white highlight
    * - Horizontal paper fibers: 1px lines every 3px at rgba(120,90,50,.035)
-   * - 1px inner ring rgba(42,33,24,.08)
    */
   fun getOrRenderVinylPaperBackground(
     widthPx: Int,
     heightPx: Int,
-    cornerRadiusPx: Float = 56f
+    cornerRadiusPx: Float = 0f
   ): Bitmap {
-    val w = widthPx.coerceIn(120, 960)
-    val h = heightPx.coerceIn(64, 640)
-    val key = "paper|$w|$h|${cornerRadiusPx.roundToInt()}"
+    val w = widthPx.coerceIn(120, 1200)
+    val h = heightPx.coerceIn(64, 800)
+    val key = "paper_v2|$w|$h|${cornerRadiusPx.roundToInt()}"
     paperBgCache.get(key)?.let { return it }
 
-    val bmp = Bitmap.createBitmap(w, h, Bitmap.Config.ARGB_8888)
+    val bmp = Bitmap.createBitmap(w, h, Bitmap.Config.RGB_565)
     val canvas = Canvas(bmp)
     val rect = RectF(0f, 0f, w.toFloat(), h.toFloat())
-
-    val clipPaint = Paint(Paint.ANTI_ALIAS_FLAG)
-    canvas.drawRoundRect(rect, cornerRadiusPx, cornerRadiusPx, clipPaint)
-    clipPaint.xfermode = PorterDuffXfermode(PorterDuff.Mode.SRC_IN)
-
-    val layer = canvas.saveLayer(rect, clipPaint)
     canvas.drawColor(PAPER_COLOR)
 
     // Soft white highlight from top-right corner
@@ -177,20 +171,6 @@ object VinylWidgetRenderer {
       y += 3f
     }
 
-    // 1px inner ring rgba(42,33,24,.08)
-    val ringPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
-      style = Paint.Style.STROKE
-      strokeWidth = 1.5f
-      color = INNER_RING_COLOR
-    }
-    canvas.drawRoundRect(
-      RectF(1f, 1f, w - 1f, h - 1f),
-      max(2f, cornerRadiusPx - 1f),
-      max(2f, cornerRadiusPx - 1f),
-      ringPaint
-    )
-
-    canvas.restoreToCount(layer)
     paperBgCache.put(key, bmp)
     return bmp
   }
@@ -205,7 +185,7 @@ object VinylWidgetRenderer {
     rotationDegrees: Float,
     cropHalfOnLeft: Boolean = true
   ): Bitmap {
-    val d = diameterPx.coerceIn(72, 420)
+    val d = diameterPx.coerceIn(72, 560)
     val quantizedAngle = ((rotationDegrees % 360f) + 360f) % 360f
     val bucketAngle = (quantizedAngle / 2f).roundToInt() * 2
     val cacheKey = "disc|$d|${palette.coverBase}|${palette.coverLight}|$bucketAngle|$cropHalfOnLeft"
@@ -246,17 +226,19 @@ object VinylWidgetRenderer {
     }
     canvas.drawCircle(cx, cy, vinylRadius, baseDiscPaint)
 
-    // Grooves: repeating concentric rings, #141414 for 2px then #262626 for 2px
+    // Grooves: repeating concentric rings scaled cleanly with diameter
     val labelRadius = vinylRadius * 0.30f
+    val grooveStroke = max(2f, d * 0.007f)
+    val grooveStep = max(4f, d * 0.015f)
     val groovePaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
       style = Paint.Style.STROKE
-      strokeWidth = 2f
+      strokeWidth = grooveStroke
       color = GROOVE_LIGHT
     }
-    var grooveR = labelRadius + 4f
-    while (grooveR < vinylRadius - 3f) {
+    var grooveR = labelRadius + grooveStep
+    while (grooveR < vinylRadius - grooveStep) {
       canvas.drawCircle(cx, cy, grooveR, groovePaint)
-      grooveR += 4f
+      grooveR += grooveStep
     }
 
     // Conic light sheen: two soft white bands (~17% and ~13% opacity), rotating with the disc
@@ -326,13 +308,14 @@ object VinylWidgetRenderer {
     }
     canvas.drawCircle(cx, cy, vinylRadius, staticHighlightPaint)
 
-    // Static layer 2: 2px #0B0B0B outer rim
+    // Static layer 2: crisp dark outer rim
+    val rimWidth = max(2.5f, d * 0.01f)
     val rimPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
       style = Paint.Style.STROKE
-      strokeWidth = 2.5f
+      strokeWidth = rimWidth
       color = RIM_COLOR
     }
-    canvas.drawCircle(cx, cy, vinylRadius - 1.25f, rimPaint)
+    canvas.drawCircle(cx, cy, vinylRadius - rimWidth * 0.5f, rimPaint)
 
     discCache.put(cacheKey, bmp)
     return bmp

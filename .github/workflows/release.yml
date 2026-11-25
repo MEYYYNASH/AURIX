@@ -56,10 +56,12 @@ jobs:
           fi
           VCODE=$(grep -m1 'versionCode' app/build.gradle.kts | sed -E 's/[^0-9]*([0-9]+).*/\1/')
           RDATE=$(grep -m1 'RELEASE_DATE' app/build.gradle.kts | sed -E 's/.*\\"([^\\"]+)\\".*/\1/')
+          BUILD_TS_MS=$(( $(date -u +%s) * 1000 ))
           echo "RELEASE_TAG=${RELEASE_TAG}" >> "$GITHUB_ENV"
           echo "RELEASE_VERSION=${RELEASE_TAG#v}" >> "$GITHUB_ENV"
           echo "RELEASE_VERSION_CODE=${VCODE:-20301}" >> "$GITHUB_ENV"
           echo "RELEASE_DATE=${RDATE:-$(date -u +%Y-%m-%d)}" >> "$GITHUB_ENV"
+          echo "AURIX_BUILD_TIMESTAMP_MS=${BUILD_TS_MS}" >> "$GITHUB_ENV"
 
       - name: Ensure keystores exist
         run: |
@@ -95,6 +97,7 @@ jobs:
             "versionName": os.environ["RELEASE_VERSION"],
             "versionCode": int(os.environ["RELEASE_VERSION_CODE"]),
             "releaseDate": os.environ["RELEASE_DATE"],
+            "releaseTimestampMs": int(os.environ.get("AURIX_BUILD_TIMESTAMP_MS", "0") or 0),
             "apkUrl": f"https://github.com/{repo}/releases/download/{tag}/AURIX-{tag}.apk",
             "sha256": os.environ["APK_SHA256"],
             "mandatory": False,

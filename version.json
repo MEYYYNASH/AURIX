@@ -2,6 +2,7 @@
   "versionName": "2.3.1",
   "versionCode": 20301,
   "releaseDate": "2026-11-25",
+  "releaseTimestampMs": 0,
   "apkUrl": "https://github.com/MEYYYNASH/AURIX/releases/download/v2.3.1/AURIX-v2.3.1.apk",
   "sha256": "caad803178799a5bc32175fdb37b9370fdb418b9b09e56bee285390423dc09b5",
   "mandatory": false,

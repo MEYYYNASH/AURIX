@@ -31,7 +31,7 @@ class UpdateCheckWorker(
       )
 
       outcome.onSuccess { remote ->
-        if (UpdateManager.compareVersions(installed.versionCode, remote) is VersionComparisonOutcome.UpdateAvailable) {
+        if (UpdateManager.compareVersions(installed.versionCode, remote, installed.buildTimestampMs) is VersionComparisonOutcome.UpdateAvailable) {
           AppNotificationHelper.notifyUpdateAvailableIfNeeded(applicationContext, remote, force = false)
         }
       }

@@ -1765,6 +1765,12 @@ object AurixWidgetController {
       else -> R.drawable.widget_clip_28dp
     }
     views.setInt(R.id.widget_np_root, "setBackgroundResource", rootClipRes)
+    views.setImageViewResource(
+      R.id.widget_np_border,
+      if (style == NowPlayingWidgetStyle.PIXEL) R.drawable.widget_border_22dp else R.drawable.widget_border_28dp
+    )
+    views.setInt(R.id.widget_np_border, "setColorFilter", (tokens.border or 0xFF000000.toInt()))
+    views.setInt(R.id.widget_np_border, "setImageAlpha", Color.alpha(tokens.border))
 
     val openScreen = if (size == NowPlayingWidgetSize.LYRICS) {
       AppNotificationHelper.SCREEN_NOW_PLAYING_LYRICS
@@ -1816,9 +1822,9 @@ object AurixWidgetController {
       (state.positionMs.toFloat() / state.durationMs.toFloat()).coerceIn(0f, 1f)
     } else 0f
     val artPx = when (size) {
-      NowPlayingWidgetSize.COMPACT -> 120
-      NowPlayingWidgetSize.PLAYER -> 176
-      NowPlayingWidgetSize.LYRICS -> 120
+      NowPlayingWidgetSize.COMPACT -> 168
+      NowPlayingWidgetSize.PLAYER -> 224
+      NowPlayingWidgetSize.LYRICS -> 168
     }
     views.setImageViewBitmap(
       R.id.widget_np_art,
@@ -1899,8 +1905,8 @@ object AurixWidgetController {
 
     if (size != NowPlayingWidgetSize.COMPACT) {
       val progressBmp = renderNowPlayingProgressBitmap(
-        widthPx = 320,
-        heightPx = 10,
+        widthPx = 560,
+        heightPx = 16,
         progressFraction = progressFraction,
         trackColor = tokens.progressTrack,
         fillColor = tokens.progressFill,
@@ -2105,7 +2111,7 @@ object AurixWidgetController {
     if (glassStyle == WidgetGlassStyle.VINYL) {
       views.setImageViewBitmap(
         R.id.widget_music_bg_glow,
-        VinylWidgetRenderer.getOrRenderVinylPaperBackground(widthPx = 380, heightPx = 176, cornerRadiusPx = 56f)
+        VinylWidgetRenderer.getOrRenderVinylPaperBackground(widthPx = 460, heightPx = 214, cornerRadiusPx = 0f)
       )
     } else if (glassStyle != WidgetGlassStyle.POSTER_GLASS) {
       val bgLayer = when (glassStyle) {
@@ -2157,13 +2163,13 @@ object AurixWidgetController {
       if (glassStyle == WidgetGlassStyle.POSTER_GLASS) {
         views.setImageViewBitmap(
           R.id.widget_music_album_art,
-          WidgetGlassRenderer.renderPosterCoverWithBottomGradient(context, rawArt, widthPx = 360, heightPx = 190)
+          WidgetGlassRenderer.renderPosterCoverWithBottomGradient(context, rawArt, widthPx = 540, heightPx = 285)
         )
       } else if (glassStyle == WidgetGlassStyle.VINYL) {
         views.setImageViewBitmap(
           R.id.widget_music_album_art,
           VinylWidgetRenderer.renderVinylDiscBitmap(
-            diameterPx = 280,
+            diameterPx = 360,
             palette = vinylPalette ?: VinylWidgetRenderer.PRESET_BLUE,
             rotationDegrees = 0f,
             cropHalfOnLeft = true
@@ -2208,7 +2214,7 @@ object AurixWidgetController {
       WidgetGlassStyle.FROST_PILL -> WidgetGlassRenderer.renderRoundedCoverBitmap(
         context = context,
         rawArt = rawArt,
-        sizePx = 192,
+        sizePx = 240,
         cornerRadiusFraction = 20f / 66f,
         warmRim = false
       )
@@ -2217,33 +2223,33 @@ object AurixWidgetController {
         WidgetGlassRenderer.renderOrbDiscBitmap(
           context = context,
           rawArt = rawArt,
-          sizePx = 220,
+          sizePx = 260,
           rotationDegrees = angle
         )
       }
       WidgetGlassStyle.SMOKED_NEON -> WidgetGlassRenderer.renderTiltedArtBitmap(
         context = context,
         rawArt = rawArt,
-        artSizePx = 156,
+        artSizePx = 200,
         tiltDegrees = 6f
       )
       WidgetGlassStyle.LIGHT_FROST -> WidgetGlassRenderer.renderLeftEdgeFadeCoverBitmap(
         context = context,
         rawArt = rawArt,
-        widthPx = 160,
-        heightPx = 220,
+        widthPx = 240,
+        heightPx = 330,
         isRtl = isRtl
       )
       WidgetGlassStyle.POSTER_GLASS -> WidgetGlassRenderer.renderPosterCoverWithBottomGradient(
         context = context,
         rawArt = rawArt,
-        widthPx = 360,
-        heightPx = 190
+        widthPx = 540,
+        heightPx = 285
       )
       WidgetGlassStyle.VINYL -> {
         val angle = VinylWidgetRenderer.computeVinylAngleDegrees(state.positionMs, state.isPlaying, reduceMotion)
         VinylWidgetRenderer.renderVinylDiscBitmap(
-          diameterPx = 280,
+          diameterPx = 360,
           palette = vinylPalette ?: VinylWidgetRenderer.PRESET_BLUE,
           rotationDegrees = angle,
           cropHalfOnLeft = true
@@ -2260,8 +2266,8 @@ object AurixWidgetController {
         R.id.widget_music_poster_panel_bg,
         WidgetGlassRenderer.renderPosterFloatingGlassPanelBitmap(
           blurredStrong = coverSet.blurredStrong,
-          widthPx = 340,
-          heightPx = 96,
+          widthPx = 460,
+          heightPx = 132,
           luminance = coverSet.luminance
         )
       )
@@ -2455,7 +2461,7 @@ object AurixWidgetController {
     WidgetGlassStyle.SMOKED_NEON -> R.drawable.widget_edge_neon_26dp
     WidgetGlassStyle.LIGHT_FROST -> R.drawable.widget_edge_light_32dp
     WidgetGlassStyle.POSTER_GLASS -> R.drawable.widget_edge_poster_34dp
-    WidgetGlassStyle.VINYL -> R.drawable.widget_clip_28dp_paper
+    WidgetGlassStyle.VINYL -> R.drawable.widget_border_28dp_paper_ring
   }
 
   private fun buildCoverWidgetRemoteViews(
@@ -2523,16 +2529,16 @@ object AurixWidgetController {
 
     val reduceMotion = isReducedMotionActive(context, state.reducedMotion)
     val coverBmp = when (glassStyle) {
-      WidgetGlassStyle.POSTER_GLASS -> WidgetGlassRenderer.renderPosterCoverWithBottomGradient(context, rawArt, widthPx = 260, heightPx = 260)
+      WidgetGlassStyle.POSTER_GLASS -> WidgetGlassRenderer.renderPosterCoverWithBottomGradient(context, rawArt, widthPx = 360, heightPx = 360)
       WidgetGlassStyle.VINYL -> {
-        val paper = VinylWidgetRenderer.getOrRenderVinylPaperBackground(widthPx = 260, heightPx = 260, cornerRadiusPx = 56f)
+        val paper = VinylWidgetRenderer.getOrRenderVinylPaperBackground(widthPx = 360, heightPx = 360, cornerRadiusPx = 0f)
         val palette = VinylWidgetRenderer.extractCoverPalette(rawArt, "${state.songId}|${state.title}")
         val angle = VinylWidgetRenderer.computeVinylAngleDegrees(state.positionMs, state.isPlaying, reduceMotion)
-        val disc = VinylWidgetRenderer.renderVinylDiscBitmap(diameterPx = 212, palette = palette, rotationDegrees = angle, cropHalfOnLeft = false)
-        val combined = Bitmap.createBitmap(260, 260, Bitmap.Config.ARGB_8888)
+        val disc = VinylWidgetRenderer.renderVinylDiscBitmap(diameterPx = 296, palette = palette, rotationDegrees = angle, cropHalfOnLeft = false)
+        val combined = Bitmap.createBitmap(360, 360, Bitmap.Config.ARGB_8888)
         val canvas = Canvas(combined)
         canvas.drawBitmap(paper, 0f, 0f, null)
-        canvas.drawBitmap(disc, 24f, 24f, Paint(Paint.ANTI_ALIAS_FLAG or Paint.FILTER_BITMAP_FLAG))
+        canvas.drawBitmap(disc, 32f, 32f, Paint(Paint.ANTI_ALIAS_FLAG or Paint.FILTER_BITMAP_FLAG))
         combined
       }
       else -> rawArt ?: getOrRenderRoundedAlbumArt(context, null)
@@ -2603,14 +2609,14 @@ object AurixWidgetController {
     if (isVinyl) {
       views.setImageViewBitmap(
         R.id.widget_mini_bg_glow,
-        VinylWidgetRenderer.getOrRenderVinylPaperBackground(widthPx = 260, heightPx = 260, cornerRadiusPx = 56f)
+        VinylWidgetRenderer.getOrRenderVinylPaperBackground(widthPx = 360, heightPx = 360, cornerRadiusPx = 0f)
       )
       views.setViewVisibility(R.id.widget_mini_bg_tint, View.GONE)
       views.setViewVisibility(R.id.widget_mini_poster_panel_bg, View.GONE)
     } else if (isPoster) {
       views.setImageViewBitmap(
         R.id.widget_mini_bg_glow,
-        WidgetGlassRenderer.renderPosterCoverWithBottomGradient(context, rawArt, widthPx = 240, heightPx = 240)
+        WidgetGlassRenderer.renderPosterCoverWithBottomGradient(context, rawArt, widthPx = 360, heightPx = 360)
       )
       views.setViewVisibility(R.id.widget_mini_bg_tint, View.GONE)
       views.setViewVisibility(R.id.widget_mini_poster_panel_bg, View.VISIBLE)
@@ -2618,8 +2624,8 @@ object AurixWidgetController {
         R.id.widget_mini_poster_panel_bg,
         WidgetGlassRenderer.renderPosterFloatingGlassPanelBitmap(
           blurredStrong = coverSet.blurredStrong,
-          widthPx = 220,
-          heightPx = 88,
+          widthPx = 320,
+          heightPx = 128,
           luminance = coverSet.luminance
         )
       )
@@ -2812,12 +2818,12 @@ object AurixWidgetController {
     if (glassStyle == WidgetGlassStyle.VINYL) {
       views.setImageViewBitmap(
         R.id.widget_lyrics_bg_glow,
-        VinylWidgetRenderer.getOrRenderVinylPaperBackground(widthPx = 380, heightPx = 148, cornerRadiusPx = 56f)
+        VinylWidgetRenderer.getOrRenderVinylPaperBackground(widthPx = 460, heightPx = 180, cornerRadiusPx = 0f)
       )
     } else if (glassStyle == WidgetGlassStyle.POSTER_GLASS) {
       views.setImageViewBitmap(
         R.id.widget_lyrics_bg_glow,
-        WidgetGlassRenderer.renderPosterCoverWithBottomGradient(context, rawArt, widthPx = 360, heightPx = 190)
+        WidgetGlassRenderer.renderPosterCoverWithBottomGradient(context, rawArt, widthPx = 540, heightPx = 285)
       )
     } else {
       val bgLayer = when (glassStyle) {
@@ -2845,7 +2851,7 @@ object AurixWidgetController {
         views.setImageViewBitmap(
           R.id.widget_lyrics_header_art,
           VinylWidgetRenderer.renderVinylDiscBitmap(
-            diameterPx = 208,
+            diameterPx = 248,
             palette = vinylPalette ?: VinylWidgetRenderer.PRESET_BLUE,
             rotationDegrees = 0f,
             cropHalfOnLeft = true
@@ -2901,7 +2907,7 @@ object AurixWidgetController {
         WidgetGlassStyle.FROST_PILL -> WidgetGlassRenderer.renderRoundedCoverBitmap(
           context = context,
           rawArt = rawArt,
-          sizePx = 220,
+          sizePx = 240,
           cornerRadiusFraction = 28f / 104f,
           warmRim = true
         )
@@ -2910,27 +2916,27 @@ object AurixWidgetController {
           WidgetGlassRenderer.renderOrbDiscBitmap(
             context = context,
             rawArt = rawArt,
-            sizePx = 140,
+            sizePx = 200,
             rotationDegrees = angle
           )
         }
         WidgetGlassStyle.SMOKED_NEON -> WidgetGlassRenderer.renderTiltedArtBitmap(
           context = context,
           rawArt = rawArt,
-          artSizePx = 120,
+          artSizePx = 172,
           tiltDegrees = 6f
         )
         WidgetGlassStyle.LIGHT_FROST -> WidgetGlassRenderer.renderLeftEdgeFadeCoverBitmap(
           context = context,
           rawArt = rawArt,
-          widthPx = 160,
-          heightPx = 220,
+          widthPx = 240,
+          heightPx = 330,
           isRtl = isRtl
         )
         WidgetGlassStyle.VINYL -> {
           val angle = VinylWidgetRenderer.computeVinylAngleDegrees(state.positionMs, state.isPlaying, reduceMotion)
           VinylWidgetRenderer.renderVinylDiscBitmap(
-            diameterPx = 208,
+            diameterPx = 248,
             palette = vinylPalette ?: VinylWidgetRenderer.PRESET_BLUE,
             rotationDegrees = angle,
             cropHalfOnLeft = true
@@ -2946,8 +2952,8 @@ object AurixWidgetController {
         R.id.widget_lyrics_poster_panel_bg,
         WidgetGlassRenderer.renderPosterFloatingGlassPanelBitmap(
           blurredStrong = coverSet.blurredStrong,
-          widthPx = 340,
-          heightPx = 104,
+          widthPx = 460,
+          heightPx = 140,
           luminance = coverSet.luminance
         )
       )
@@ -3256,8 +3262,8 @@ object AurixWidgetController {
     return runCatching {
       val trimmed = currentLine.trim().ifBlank { "♪" }
       val isRtl = context.resources.configuration.layoutDirection == View.LAYOUT_DIRECTION_RTL
-      val scale = context.resources.displayMetrics.density.coerceIn(1.35f, 1.60f)
-      val widthPx = (widthDp * scale).roundToInt().coerceIn(200, 640)
+      val scale = context.resources.displayMetrics.density.coerceIn(1.85f, 2.15f)
+      val widthPx = (widthDp * scale).roundToInt().coerceIn(220, 820)
       val styledText = com.example.ui.theme.KhmerTypography.buildStyledSpannable(
         context = context,
         text = trimmed,
@@ -3284,14 +3290,14 @@ object AurixWidgetController {
       val layout = StaticLayout.Builder
         .obtain(styledText, 0, styledText.length, paint, widthPx)
         .setAlignment(align)
-        .setLineSpacing(2.0f * scale, 1.12f)
+        .setLineSpacing(2.5f * scale, 1.18f)
         .setIncludePad(true)
         .setMaxLines(2)
         .setEllipsize(TextUtils.TruncateAt.END)
         .build()
 
       val padY = (2f * scale).roundToInt()
-      val heightPx = (layout.height + padY * 2).coerceIn(22, 132)
+      val heightPx = (layout.height + padY * 2).coerceIn(24, 190)
       val bmp = Bitmap.createBitmap(widthPx, heightPx, Bitmap.Config.ARGB_8888)
       val canvas = Canvas(bmp)
       canvas.save()
@@ -3315,8 +3321,8 @@ object AurixWidgetController {
       val trimmed = nextLine.trim()
       if (trimmed.isEmpty()) return null
       val isRtl = context.resources.configuration.layoutDirection == View.LAYOUT_DIRECTION_RTL
-      val scale = context.resources.displayMetrics.density.coerceIn(1.35f, 1.60f)
-      val widthPx = (widthDp * scale).roundToInt().coerceIn(200, 640)
+      val scale = context.resources.displayMetrics.density.coerceIn(1.85f, 2.15f)
+      val widthPx = (widthDp * scale).roundToInt().coerceIn(220, 820)
       val styledText = com.example.ui.theme.KhmerTypography.buildStyledSpannable(
         context = context,
         text = trimmed,
@@ -3347,7 +3353,7 @@ object AurixWidgetController {
         .build()
 
       val padY = (1.5f * scale).roundToInt()
-      val heightPx = (layout.height + padY * 2).coerceIn(18, 60)
+      val heightPx = (layout.height + padY * 2).coerceIn(20, 84)
       val bmp = Bitmap.createBitmap(widthPx, heightPx, Bitmap.Config.ARGB_8888)
       val canvas = Canvas(bmp)
       canvas.save()
@@ -3383,8 +3389,8 @@ object AurixWidgetController {
       val cleanArtist = artistText.trim()
       val fullText = if (cleanArtist.isNotEmpty()) "$cleanTitle · $cleanArtist" else cleanTitle
 
-      val scale = context.resources.displayMetrics.density.coerceIn(1.35f, 1.60f)
-      val maxWidthPx = (widthDp * scale).roundToInt().coerceIn(160, 660)
+      val scale = context.resources.displayMetrics.density.coerceIn(1.85f, 2.35f)
+      val maxWidthPx = (widthDp * scale).roundToInt().coerceIn(180, 920)
 
       val styledSpan = SpannableString(
         com.example.ui.theme.KhmerTypography.buildStyledSpannable(
@@ -3440,7 +3446,7 @@ object AurixWidgetController {
         .build()
 
       val padY = (1.5f * scale).roundToInt()
-      val heightPx = (layout.height + padY * 2).coerceIn(20, 110)
+      val heightPx = (layout.height + padY * 2).coerceIn(22, 160)
       val bmp = Bitmap.createBitmap(measuredPx, heightPx, Bitmap.Config.ARGB_8888)
       val canvas = Canvas(bmp)
       canvas.save()
@@ -3468,8 +3474,8 @@ object AurixWidgetController {
     return runCatching {
       val trimmed = text.trim()
       if (trimmed.isEmpty()) return null
-      val scale = context.resources.displayMetrics.density.coerceIn(1.35f, 1.60f)
-      val maxWidthPx = (widthDp * scale).roundToInt().coerceIn(80, 480)
+      val scale = context.resources.displayMetrics.density.coerceIn(1.85f, 2.35f)
+      val maxWidthPx = (widthDp * scale).roundToInt().coerceIn(100, 720)
       val styled = com.example.ui.theme.KhmerTypography.buildStyledSpannable(
         context = context,
         text = trimmed,
@@ -3501,7 +3507,7 @@ object AurixWidgetController {
         .build()
 
       val padY = (1f * scale).roundToInt()
-      val heightPx = (layout.height + padY * 2).coerceIn(16, 64)
+      val heightPx = (layout.height + padY * 2).coerceIn(18, 96)
       val bmp = Bitmap.createBitmap(measuredPx, heightPx, Bitmap.Config.ARGB_8888)
       val canvas = Canvas(bmp)
       canvas.save()
@@ -3554,7 +3560,7 @@ object AurixWidgetController {
         val req = ImageRequest.Builder(context)
           .data(state.artworkUrl)
           .allowHardware(false)
-          .size(360)
+          .size(512)
           .build()
         val res = context.imageLoader.execute(req)
         val rawBmp = (res as? SuccessResult)?.drawable?.toBitmap(config = Bitmap.Config.ARGB_8888)
@@ -3652,8 +3658,8 @@ object AurixWidgetController {
     val cropY = top + (trimmedH - side) / 2
 
     val cropped = Bitmap.createBitmap(source, cropX, cropY, side, side)
-    return if (side > 300) {
-      Bitmap.createScaledBitmap(cropped, 300, 300, true)
+    return if (side > 480) {
+      Bitmap.createScaledBitmap(cropped, 480, 480, true)
     } else {
       cropped
     }
@@ -3666,7 +3672,7 @@ object AurixWidgetController {
     val cacheDir = File(context.filesDir, CACHE_DIR_NAME).apply { mkdirs() }
     val diskRoundedFile = File(cacheDir, CACHED_ROUNDED_ART_FILE)
 
-    val sizePx = 180
+    val sizePx = 256
     val cornerPx = sizePx * 0.24f
     val output = Bitmap.createBitmap(sizePx, sizePx, Bitmap.Config.ARGB_8888)
     val canvas = Canvas(output)
@@ -3694,7 +3700,7 @@ object AurixWidgetController {
       runCatching {
         val orbiDrawable = ResourcesCompat.getDrawable(context.resources, R.drawable.ic_widget_orbi, null)
         if (orbiDrawable != null) {
-          val pad = 48
+          val pad = 64
           orbiDrawable.setBounds(pad, pad, sizePx - pad, sizePx - pad)
           orbiDrawable.draw(canvas)
         }

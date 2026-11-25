@@ -1790,7 +1790,7 @@ private fun AurixMainShell(
       // Optional Mandatory Critical Update Dialog
       val mandatoryRelease = updateUiState.latestRelease?.takeIf {
         it.isMandatory &&
-          it.versionCode > updateUiState.installed.versionCode &&
+          com.example.data.UpdateManager.isReleaseNewerThanInstalled(updateUiState.installed, it) &&
           updateUiState.stage != UpdateStage.Idle &&
           updateUiState.stage != UpdateStage.Done
       }

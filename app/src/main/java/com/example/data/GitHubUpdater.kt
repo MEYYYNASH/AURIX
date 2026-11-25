@@ -31,7 +31,8 @@ data class InstalledAppInfo(
   val packageName: String,
   val versionName: String,
   val versionCode: Long,
-  val signingSha256Set: Set<String>
+  val signingSha256Set: Set<String>,
+  val buildTimestampMs: Long = 0L
 )
 
 data class GitHubRelease(
@@ -41,7 +42,8 @@ data class GitHubRelease(
   val apkUrl: String,
   val releaseDate: String = "",
   val versionCode: Long = 0L,
-  val isMandatory: Boolean = false
+  val isMandatory: Boolean = false,
+  val releaseTimestampMs: Long = 0L
 )
 
 sealed class UpdateCheckStatus {
@@ -118,14 +120,16 @@ object GitHubUpdater {
         packageName = pkgName,
         versionName = vName,
         versionCode = vCode,
-        signingSha256Set = certs
+        signingSha256Set = certs,
+        buildTimestampMs = BuildConfig.BUILD_TIMESTAMP_MS
       )
     } catch (_: Exception) {
       InstalledAppInfo(
         packageName = pkgName,
         versionName = BuildConfig.VERSION_NAME,
         versionCode = BuildConfig.VERSION_CODE.toLong(),
-        signingSha256Set = emptySet()
+        signingSha256Set = emptySet(),
+        buildTimestampMs = BuildConfig.BUILD_TIMESTAMP_MS
       )
     }
   }
@@ -210,12 +214,28 @@ object GitHubUpdater {
       .containsMatchIn(text)
   }
 
+  fun isSameVersionLaterTimestamp(
+    installedBuildTimestampMs: Long,
+    installedVersionCode: Long,
+    remoteVersionCode: Long,
+    remoteReleaseTimestampMs: Long
+  ): Boolean {
+    return remoteVersionCode == installedVersionCode &&
+      remoteReleaseTimestampMs > 0L &&
+      remoteReleaseTimestampMs > installedBuildTimestampMs
+  }
+
   fun evaluateUpdate(installed: InstalledAppInfo, release: GitHubRelease): UpdateCheckStatus {
     val remoteCode = if (release.versionCode > 0L) release.versionCode else deriveVersionCodeFromTag(release.tagName)
     val resolvedRelease = release.copy(versionCode = remoteCode)
 
     return when {
-      remoteCode > installed.versionCode -> UpdateCheckStatus.UpdateAvailable(
+      remoteCode > installed.versionCode || isSameVersionLaterTimestamp(
+        installedBuildTimestampMs = installed.buildTimestampMs,
+        installedVersionCode = installed.versionCode,
+        remoteVersionCode = remoteCode,
+        remoteReleaseTimestampMs = resolvedRelease.releaseTimestampMs
+      ) -> UpdateCheckStatus.UpdateAvailable(
         installed = installed,
         release = resolvedRelease,
         isMandatory = resolvedRelease.isMandatory
@@ -251,7 +271,7 @@ object GitHubUpdater {
 
   suspend fun checkForUpdates(context: Context, owner: String, repo: String): UpdateCheckStatus = withContext(Dispatchers.IO) {
     val installed = getInstalledAppInfo(context)
-    cleanupObsoleteApks(context, installed.versionCode)
+    cleanupObsoleteApks(context, installed.versionCode, keepSameVersionCode = false)
 
     val cleanOwner = owner.trim()
     val cleanRepo = repo.trim()
@@ -300,12 +320,14 @@ object GitHubUpdater {
             if (tagName.isNotBlank() && apkUrl.isNotBlank()) {
               var remoteCode = parseVersionCodeFromText("$name\n$body") ?: 0L
               var isMandatory = parseMandatoryFlag("$name\n$body")
+              var releaseTimestampMs = 0L
 
               if (metadataJsonUrl.isNotBlank()) {
                 val meta = fetchRemoteMetadataJson(metadataJsonUrl)
                 if (meta != null) {
-                  if (meta.first > 0L) remoteCode = meta.first
-                  if (meta.second) isMandatory = true
+                  if (meta.versionCode > 0L) remoteCode = meta.versionCode
+                  if (meta.mandatory) isMandatory = true
+                  if (meta.releaseTimestampMs > 0L) releaseTimestampMs = meta.releaseTimestampMs
                 }
               }
               if (remoteCode <= 0L) {
@@ -319,7 +341,8 @@ object GitHubUpdater {
                 apkUrl = apkUrl,
                 releaseDate = publishedAt,
                 versionCode = remoteCode,
-                isMandatory = isMandatory
+                isMandatory = isMandatory,
+                releaseTimestampMs = releaseTimestampMs
               )
               return@withContext evaluateUpdate(installed, release)
             }
@@ -340,7 +363,13 @@ object GitHubUpdater {
     return@withContext checkViaWebFallback(installed, cleanOwner, cleanRepo)
   }
 
-  private fun fetchRemoteMetadataJson(url: String): Pair<Long, Boolean>? {
+  private data class RemoteMetadataJson(
+    val versionCode: Long,
+    val mandatory: Boolean,
+    val releaseTimestampMs: Long
+  )
+
+  private fun fetchRemoteMetadataJson(url: String): RemoteMetadataJson? {
     return try {
       val req = Request.Builder().url(url).header("User-Agent", "AURIX-Android-Updater").build()
       apiClient.newCall(req).execute().use { res ->
@@ -356,7 +385,12 @@ object GitHubUpdater {
           }
         }
         val mandatory = obj.optBoolean("mandatory", false) || obj.optBoolean("critical", false)
-        code to mandatory
+        val releaseTimestampMs = obj.optLong("releaseTimestampMs", obj.optLong("buildTimestampMs", 0L)).coerceAtLeast(0L)
+        RemoteMetadataJson(
+          versionCode = code,
+          mandatory = mandatory,
+          releaseTimestampMs = releaseTimestampMs
+        )
       }
     } catch (_: Exception) {
       null
@@ -414,11 +448,13 @@ object GitHubUpdater {
 
       var remoteCode = parseVersionCodeFromText(pageHtml) ?: 0L
       var isMandatory = parseMandatoryFlag(pageHtml)
+      var releaseTimestampMs = 0L
       if (metaUrl.isNotBlank()) {
         val meta = fetchRemoteMetadataJson(metaUrl)
         if (meta != null) {
-          if (meta.first > 0L) remoteCode = meta.first
-          if (meta.second) isMandatory = true
+          if (meta.versionCode > 0L) remoteCode = meta.versionCode
+          if (meta.mandatory) isMandatory = true
+          if (meta.releaseTimestampMs > 0L) releaseTimestampMs = meta.releaseTimestampMs
         }
       }
       if (remoteCode <= 0L) {
@@ -432,7 +468,8 @@ object GitHubUpdater {
         apkUrl = apkUrl,
         releaseDate = "",
         versionCode = remoteCode,
-        isMandatory = isMandatory
+        isMandatory = isMandatory,
+        releaseTimestampMs = releaseTimestampMs
       )
       evaluateUpdate(installed, release)
     } catch (e: Exception) {
@@ -456,13 +493,22 @@ object GitHubUpdater {
     return File(dir, "aurix_update.apk")
   }
 
-  fun cleanupObsoleteApks(context: Context, installedVersionCode: Long) {
+  fun cleanupObsoleteApks(
+    context: Context,
+    installedVersionCode: Long,
+    keepSameVersionCode: Boolean = false
+  ) {
     try {
       val file = getUpdateApkFile(context)
       if (!file.exists()) return
       val archive = getArchiveInfoWithSignatures(context.packageManager, file.absolutePath)
       val apkCode = if (archive != null) PackageInfoCompat.getLongVersionCode(archive) else 0L
-      if (archive == null || archive.packageName != context.packageName || apkCode <= installedVersionCode) {
+      val obsoleteVersion = if (keepSameVersionCode) {
+        apkCode < installedVersionCode
+      } else {
+        apkCode <= installedVersionCode
+      }
+      if (archive == null || archive.packageName != context.packageName || obsoleteVersion) {
         file.delete()
       }
     } catch (_: Exception) {
@@ -470,7 +516,11 @@ object GitHubUpdater {
     }
   }
 
-  fun validateApkArchive(context: Context, file: File): ApkValidationResult {
+  fun validateApkArchive(
+    context: Context,
+    file: File,
+    allowSameVersionCode: Boolean = false
+  ): ApkValidationResult {
     if (!file.exists() || file.length() < 100_000L) {
       return ApkValidationResult.Invalid("APK file is missing or incomplete.")
     }
@@ -489,7 +539,7 @@ object GitHubUpdater {
     val apkVersionCode = PackageInfoCompat.getLongVersionCode(archiveInfo)
     val apkVersionName = archiveInfo.versionName ?: "unknown"
 
-    if (apkVersionCode == installed.versionCode) {
+    if (apkVersionCode == installed.versionCode && !allowSameVersionCode) {
       return ApkValidationResult.Invalid("You are already using the latest version. Reinstall blocked.")
     }
     if (apkVersionCode < installed.versionCode) {
@@ -512,9 +562,12 @@ object GitHubUpdater {
     return ApkValidationResult.Valid(versionCode = apkVersionCode, versionName = apkVersionName)
   }
 
-  fun hasValidatedNewerApk(context: Context): ApkDownloadState.ValidatedReady? {
+  fun hasValidatedNewerApk(
+    context: Context,
+    allowSameVersionCode: Boolean = false
+  ): ApkDownloadState.ValidatedReady? {
     val file = getUpdateApkFile(context)
-    return when (val check = validateApkArchive(context, file)) {
+    return when (val check = validateApkArchive(context, file, allowSameVersionCode = allowSameVersionCode)) {
       is ApkValidationResult.Valid -> ApkDownloadState.ValidatedReady(
         filePath = file.absolutePath,
         tagName = "v${check.versionName}",
@@ -531,7 +584,13 @@ object GitHubUpdater {
   ): ApkDownloadState = withContext(Dispatchers.IO) {
     val installed = getInstalledAppInfo(context)
     val remoteCode = if (release.versionCode > 0L) release.versionCode else deriveVersionCodeFromTag(release.tagName)
-    if (remoteCode == installed.versionCode) {
+    val allowSameVersion = isSameVersionLaterTimestamp(
+      installedBuildTimestampMs = installed.buildTimestampMs,
+      installedVersionCode = installed.versionCode,
+      remoteVersionCode = remoteCode,
+      remoteReleaseTimestampMs = release.releaseTimestampMs
+    )
+    if (remoteCode == installed.versionCode && !allowSameVersion) {
       val err = ApkDownloadState.Error("You are already using the latest version.")
       onProgress(err)
       return@withContext err
@@ -620,7 +679,7 @@ object GitHubUpdater {
           partFile.delete()
         }
 
-        when (val validation = validateApkArchive(context, finalFile)) {
+        when (val validation = validateApkArchive(context, finalFile, allowSameVersionCode = allowSameVersion)) {
           is ApkValidationResult.Valid -> {
             val done = ApkDownloadState.ValidatedReady(
               filePath = finalFile.absolutePath,
@@ -647,9 +706,9 @@ object GitHubUpdater {
     }
   }
 
-  fun installDownloadedApk(context: Context): InstallResult {
+  fun installDownloadedApk(context: Context, allowSameVersionCode: Boolean = false): InstallResult {
     val file = getUpdateApkFile(context)
-    when (val validation = validateApkArchive(context, file)) {
+    when (val validation = validateApkArchive(context, file, allowSameVersionCode = allowSameVersionCode)) {
       is ApkValidationResult.Invalid -> {
         if (file.exists()) file.delete()
         return InstallResult(launched = false, message = validation.reason)

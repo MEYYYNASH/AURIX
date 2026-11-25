@@ -146,7 +146,12 @@ private fun parseReleaseNotes(
   }
 }
 
-private fun formatReleaseSheetDate(rawDate: String): String {
+private fun formatReleaseSheetDate(rawDate: String, timestampMs: Long = 0L): String {
+  if (timestampMs > 0L) {
+    return runCatching {
+      SimpleDateFormat("MMM d, yyyy · HH:mm", Locale.US).format(java.util.Date(timestampMs))
+    }.getOrDefault(rawDate.trim())
+  }
   val trimmed = rawDate.trim()
   if (trimmed.isBlank()) return trimmed
   return runCatching {
@@ -178,7 +183,10 @@ fun ReleaseNotesBottomSheet(
   val versionLabel = "v$versionNameClean"
   val versionCode = latestRelease?.versionCode ?: installedVersionCode
   val rawReleaseDate = latestRelease?.releaseDate?.ifBlank { APP_RELEASE_DATE } ?: APP_RELEASE_DATE
-  val formattedDate = remember(rawReleaseDate) { formatReleaseSheetDate(rawReleaseDate) }
+  val releaseTimestampMs = latestRelease?.releaseTimestampMs ?: 0L
+  val formattedDate = remember(rawReleaseDate, releaseTimestampMs) {
+    formatReleaseSheetDate(rawReleaseDate, releaseTimestampMs)
+  }
   val notesList = latestRelease?.notes?.takeIf { it.isNotEmpty() } ?: UpdateManager.CURRENT_RELEASE_NOTES
   val parsedNotes = remember(notesList, sheetViolet, sheetLightViolet) {
     parseReleaseNotes(notesList, sheetViolet, sheetLightViolet)

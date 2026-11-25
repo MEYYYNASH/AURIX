@@ -1446,7 +1446,7 @@ fun SettingsScreen(
 
   if (showReleaseNotesSheet) {
     val canDownloadUpdate = updateUiState.latestRelease != null &&
-      updateUiState.latestRelease.versionCode > updateUiState.installed.versionCode &&
+      UpdateManager.isReleaseNewerThanInstalled(updateUiState.installed, updateUiState.latestRelease) &&
       updateUiState.stage != UpdateStage.Downloading &&
       updateUiState.stage != UpdateStage.Done
     ReleaseNotesBottomSheet(
@@ -1683,8 +1683,10 @@ fun AppUpdateReleaseCard(
   )
   val rawReleaseDate = updateUiState.latestRelease?.releaseDate?.ifBlank { updateUiState.installedReleaseDate }
     ?: updateUiState.installedReleaseDate
-  val formattedReleaseDate = remember(rawReleaseDate) {
-    formatUpdateReleaseDate(rawReleaseDate)
+  val displayTimestampMs = updateUiState.latestRelease?.releaseTimestampMs?.takeIf { it > 0L }
+    ?: updateUiState.installed.buildTimestampMs
+  val formattedReleaseDate = remember(rawReleaseDate, displayTimestampMs) {
+    formatUpdateReleaseDate(rawReleaseDate, displayTimestampMs)
   }
   val stageStatusColor = when (updateUiState.stage) {
     UpdateStage.Error -> Color(0xFFFB7185)
@@ -2364,7 +2366,12 @@ fun AppUpdateReleaseCard(
   }
 }
 
-private fun formatUpdateReleaseDate(rawDate: String): String {
+private fun formatUpdateReleaseDate(rawDate: String, timestampMs: Long = 0L): String {
+  if (timestampMs > 0L) {
+    return runCatching {
+      SimpleDateFormat("MMM d, yyyy · HH:mm", Locale.US).format(java.util.Date(timestampMs))
+    }.getOrDefault(rawDate.trim())
+  }
   val trimmed = rawDate.trim()
   if (trimmed.isBlank()) return trimmed
   return runCatching {

@@ -69,7 +69,8 @@ data class RemoteVersionInfo(
   val sha256: String,
   val notes: List<String>,
   val releasePageUrl: String,
-  val isMandatory: Boolean = false
+  val isMandatory: Boolean = false,
+  val releaseTimestampMs: Long = 0L
 ) {
   val tagName: String
     get() = if (versionName.startsWith("v", ignoreCase = true)) versionName else "v$versionName"
@@ -216,6 +217,8 @@ class UpdateManager(
         .trim()
         .ifBlank { DEFAULT_RELEASE_PAGE_URL }
       val isMandatory = obj.optBoolean("mandatory", false) || obj.optBoolean("critical", false)
+      val releaseTimestampMs = obj.optLong("releaseTimestampMs", obj.optLong("buildTimestampMs", 0L))
+        .coerceAtLeast(0L)
 
       val notes = mutableListOf<String>()
       val notesArr = obj.optJSONArray("notes")
@@ -242,16 +245,34 @@ class UpdateManager(
         sha256 = sha256,
         notes = notes,
         releasePageUrl = releasePageUrl,
-        isMandatory = isMandatory
+        isMandatory = isMandatory,
+        releaseTimestampMs = releaseTimestampMs
       )
+    }
+
+    fun isReleaseNewerThanInstalled(
+      installed: InstalledAppInfo,
+      remote: RemoteVersionInfo
+    ): Boolean {
+      return compareVersions(
+        installedVersionCode = installed.versionCode,
+        remote = remote,
+        installedBuildTimestampMs = installed.buildTimestampMs
+      ) is VersionComparisonOutcome.UpdateAvailable
     }
 
     fun compareVersions(
       installedVersionCode: Long,
-      remote: RemoteVersionInfo
+      remote: RemoteVersionInfo,
+      installedBuildTimestampMs: Long = 0L
     ): VersionComparisonOutcome {
       return when {
-        remote.versionCode > installedVersionCode -> VersionComparisonOutcome.UpdateAvailable(remote)
+        remote.versionCode > installedVersionCode || GitHubUpdater.isSameVersionLaterTimestamp(
+          installedBuildTimestampMs = installedBuildTimestampMs,
+          installedVersionCode = installedVersionCode,
+          remoteVersionCode = remote.versionCode,
+          remoteReleaseTimestampMs = remote.releaseTimestampMs
+        ) -> VersionComparisonOutcome.UpdateAvailable(remote)
         remote.versionCode == installedVersionCode -> VersionComparisonOutcome.UpToDate(remote)
         else -> VersionComparisonOutcome.NewerInstalled(remote)
       }
@@ -331,7 +352,12 @@ class UpdateManager(
       return "https://github.com/$owner/$repo/releases/download/$tag/version.json"
     }
 
-    private fun fetchAuthoritativeReleaseSha256(apkUrl: String): String? {
+    private data class AuthoritativeReleaseMetadata(
+      val sha256: String?,
+      val releaseTimestampMs: Long
+    )
+
+    private fun fetchAuthoritativeReleaseMetadata(apkUrl: String): AuthoritativeReleaseMetadata? {
       val releaseVersionJsonUrl = deriveReleaseAssetVersionJsonUrl(apkUrl) ?: return null
       // 1. Prefer version.json attached directly to this GitHub Release tag
       runCatching {
@@ -344,8 +370,13 @@ class UpdateManager(
           if (resp.isSuccessful) {
             val body = resp.body?.string().orEmpty()
             if (body.isNotBlank()) {
-              val candidate = parseVersionJson(body).sha256.trim().lowercase(Locale.ROOT)
-              if (SHA256_HEX_REGEX.matches(candidate)) return candidate
+              val parsed = parseVersionJson(body)
+              val candidate = parsed.sha256.trim().lowercase(Locale.ROOT)
+              val validSha = candidate.takeIf { SHA256_HEX_REGEX.matches(it) }
+              return AuthoritativeReleaseMetadata(
+                sha256 = validSha,
+                releaseTimestampMs = parsed.releaseTimestampMs
+              )
             }
           }
         }
@@ -366,11 +397,17 @@ class UpdateManager(
               .firstOrNull()
               ?.lowercase(Locale.ROOT)
               .orEmpty()
-            if (SHA256_HEX_REGEX.matches(token)) return token
+            if (SHA256_HEX_REGEX.matches(token)) {
+              return AuthoritativeReleaseMetadata(sha256 = token, releaseTimestampMs = 0L)
+            }
           }
         }
       }
       return null
+    }
+
+    private fun fetchAuthoritativeReleaseSha256(apkUrl: String): String? {
+      return fetchAuthoritativeReleaseMetadata(apkUrl)?.sha256
     }
 
     suspend fun fetchLatestReleaseDirect(
@@ -393,9 +430,17 @@ class UpdateManager(
             if (body.isNotBlank()) {
               val parsed = parseVersionJson(body)
               val resolved = if (versionJsonUrl == VERSION_JSON_URL) {
-                val releaseSha = fetchAuthoritativeReleaseSha256(parsed.apkUrl)
-                if (releaseSha != null && !releaseSha.equals(parsed.sha256, ignoreCase = true)) {
-                  parsed.copy(sha256 = releaseSha)
+                val releaseMeta = fetchAuthoritativeReleaseMetadata(parsed.apkUrl)
+                if (releaseMeta != null) {
+                  val mergedSha = releaseMeta.sha256?.takeIf {
+                    !it.equals(parsed.sha256, ignoreCase = true)
+                  } ?: parsed.sha256
+                  val mergedTs = maxOf(parsed.releaseTimestampMs, releaseMeta.releaseTimestampMs)
+                  if (mergedSha != parsed.sha256 || mergedTs != parsed.releaseTimestampMs) {
+                    parsed.copy(sha256 = mergedSha, releaseTimestampMs = mergedTs)
+                  } else {
+                    parsed
+                  }
                 } else {
                   parsed
                 }
@@ -449,7 +494,8 @@ class UpdateManager(
         sha256 = "",
         notes = parsedNotes,
         releasePageUrl = "https://github.com/$owner/$repo/releases/tag/$tagName",
-        isMandatory = isMandatory
+        isMandatory = isMandatory,
+        releaseTimestampMs = releaseTimestampMs
       )
     }
   }
@@ -509,6 +555,7 @@ class UpdateManager(
         put("versionName", release.versionName)
         put("versionCode", release.versionCode)
         put("releaseDate", release.releaseDate)
+        put("releaseTimestampMs", release.releaseTimestampMs)
         put("apkUrl", release.apkUrl)
         put("sha256", release.sha256)
         put("releasePageUrl", release.releasePageUrl)
@@ -555,13 +602,27 @@ class UpdateManager(
 
   private fun restoreInterruptedOrValidatedState() {
     val installed = GitHubUpdater.getInstalledAppInfo(context)
-    GitHubUpdater.cleanupObsoleteApks(context, installed.versionCode)
-
-    val validated = GitHubUpdater.hasValidatedNewerApk(context)
     val persisted = loadDownloadMeta()
+    val persistedIsNewerSameVersion = persisted != null &&
+      GitHubUpdater.isSameVersionLaterTimestamp(
+        installedBuildTimestampMs = installed.buildTimestampMs,
+        installedVersionCode = installed.versionCode,
+        remoteVersionCode = persisted.release.versionCode,
+        remoteReleaseTimestampMs = persisted.release.releaseTimestampMs
+      )
+    GitHubUpdater.cleanupObsoleteApks(
+      context,
+      installed.versionCode,
+      keepSameVersionCode = persistedIsNewerSameVersion
+    )
+
+    val validated = GitHubUpdater.hasValidatedNewerApk(
+      context,
+      allowSameVersionCode = persistedIsNewerSameVersion
+    )
     val partFile = getPartApkFile()
 
-    if (persisted != null && persisted.release.versionCode <= installed.versionCode) {
+    if (persisted != null && !isReleaseNewerThanInstalled(installed, persisted.release)) {
       clearPartialFiles(keepFinalApk = false)
     } else if (validated != null && (persisted == null || validated.apkVersionCode >= persisted.release.versionCode)) {
       val release = persisted?.release ?: RemoteVersionInfo(
@@ -678,26 +739,37 @@ class UpdateManager(
       }
 
       outcome.onSuccess { remote ->
-        when (val cmp = compareVersions(installed.versionCode, remote)) {
+        when (val cmp = compareVersions(installed.versionCode, remote, installed.buildTimestampMs)) {
           is VersionComparisonOutcome.UpdateAvailable -> {
             val partFile = getPartApkFile()
             val meta = loadDownloadMeta()
             val hasResumablePart = meta != null &&
               meta.release.versionCode == remote.versionCode &&
+              meta.release.releaseTimestampMs == remote.releaseTimestampMs &&
               meta.release.apkUrl == remote.apkUrl &&
               (meta.release.sha256.isBlank() || remote.sha256.isBlank() ||
                 meta.release.sha256.equals(remote.sha256, ignoreCase = true)) &&
               partFile.exists() &&
               partFile.length() > 0L
 
-            val validated = GitHubUpdater.hasValidatedNewerApk(context)
+            val allowSameValidated = GitHubUpdater.isSameVersionLaterTimestamp(
+              installedBuildTimestampMs = installed.buildTimestampMs,
+              installedVersionCode = installed.versionCode,
+              remoteVersionCode = remote.versionCode,
+              remoteReleaseTimestampMs = remote.releaseTimestampMs
+            )
+            val validated = GitHubUpdater.hasValidatedNewerApk(
+              context,
+              allowSameVersionCode = allowSameValidated
+            )
             val isSameValidated = validated != null &&
               validated.apkVersionCode == remote.versionCode &&
+              (meta == null || meta.release.releaseTimestampMs == remote.releaseTimestampMs) &&
               (remote.sha256.isBlank() || runCatching {
                 computeSha256Hex(File(validated.filePath)).equals(remote.sha256, ignoreCase = true)
               }.getOrDefault(false))
 
-            if (!hasResumablePart && meta != null && meta.release.versionCode != remote.versionCode) {
+            if (!hasResumablePart && meta != null && (meta.release.versionCode != remote.versionCode || meta.release.releaseTimestampMs != remote.releaseTimestampMs)) {
               clearPartialFiles(keepFinalApk = false)
             }
 
@@ -822,7 +894,7 @@ class UpdateManager(
       return
     }
 
-    if (release.versionCode <= state.installed.versionCode) {
+    if (!isReleaseNewerThanInstalled(state.installed, release)) {
       _uiState.update {
         it.copy(
           stage = UpdateStage.UpToDate,
@@ -886,6 +958,7 @@ class UpdateManager(
     val existingMeta = loadDownloadMeta()
     val canAppend = existingMeta != null &&
       existingMeta.release.versionCode == release.versionCode &&
+      existingMeta.release.releaseTimestampMs == release.releaseTimestampMs &&
       existingMeta.release.apkUrl == release.apkUrl &&
       (existingMeta.release.sha256.isBlank() || release.sha256.isBlank() ||
         existingMeta.release.sha256.equals(release.sha256, ignoreCase = true)) &&
@@ -1048,7 +1121,7 @@ class UpdateManager(
         clearPartialFiles(keepFinalApk = false)
         _uiState.update {
           it.copy(
-            stage = if (it.latestRelease != null && it.latestRelease.versionCode > it.installed.versionCode) {
+            stage = if (it.latestRelease != null && isReleaseNewerThanInstalled(it.installed, it.latestRelease)) {
               UpdateStage.Available
             } else {
               UpdateStage.Idle
@@ -1137,7 +1210,14 @@ class UpdateManager(
             }
           }
         }
-        when (val archiveCheck = GitHubUpdater.validateApkArchive(context, finalFile)) {
+        val installedSnapshot = _uiState.value.installed
+        val allowSameVersion = GitHubUpdater.isSameVersionLaterTimestamp(
+          installedBuildTimestampMs = installedSnapshot.buildTimestampMs,
+          installedVersionCode = installedSnapshot.versionCode,
+          remoteVersionCode = release.versionCode,
+          remoteReleaseTimestampMs = release.releaseTimestampMs
+        )
+        when (val archiveCheck = GitHubUpdater.validateApkArchive(context, finalFile, allowSameVersionCode = allowSameVersion)) {
           is ApkValidationResult.Invalid -> {
             clearPartialFiles(keepFinalApk = false)
             archiveCheck.reason
@@ -1168,7 +1248,7 @@ class UpdateManager(
         return
       }
 
-      getMetaFile().takeIf { it.exists() }?.delete()
+      saveDownloadMeta(release, finalFile.length(), finalFile.length())
       _uiState.update {
         it.copy(
           stage = UpdateStage.Available,
@@ -1247,7 +1327,7 @@ class UpdateManager(
     clearPartialFiles(keepFinalApk = false)
     _uiState.update { current ->
       val readyRelease = current.latestRelease?.takeIf {
-        it.versionCode > current.installed.versionCode
+        isReleaseNewerThanInstalled(current.installed, it)
       }
       current.copy(
         stage = if (readyRelease != null) UpdateStage.Available else UpdateStage.Idle,
@@ -1279,14 +1359,23 @@ class UpdateManager(
     when {
       state.lastFailedOperation == FailedOperation.Check -> checkForUpdates()
       state.lastFailedOperation == FailedOperation.Install && state.isValidatedReady -> launchSystemInstaller()
-      state.latestRelease != null && state.latestRelease.versionCode > state.installed.versionCode -> startOrResumeDownload()
+      state.latestRelease != null && isReleaseNewerThanInstalled(state.installed, state.latestRelease) -> startOrResumeDownload()
       else -> checkForUpdates()
     }
   }
 
   fun launchSystemInstaller() {
     val file = getFinalApkFile()
-    when (val archiveCheck = GitHubUpdater.validateApkArchive(context, file)) {
+    val currentState = _uiState.value
+    val allowSameVersion = currentState.latestRelease?.let {
+      GitHubUpdater.isSameVersionLaterTimestamp(
+        installedBuildTimestampMs = currentState.installed.buildTimestampMs,
+        installedVersionCode = currentState.installed.versionCode,
+        remoteVersionCode = it.versionCode,
+        remoteReleaseTimestampMs = it.releaseTimestampMs
+      )
+    } == true
+    when (val archiveCheck = GitHubUpdater.validateApkArchive(context, file, allowSameVersionCode = allowSameVersion)) {
       is ApkValidationResult.Invalid -> {
         clearPartialFiles(keepFinalApk = false)
         _uiState.update {
