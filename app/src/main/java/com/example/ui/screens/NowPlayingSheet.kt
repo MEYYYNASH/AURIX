@@ -164,7 +164,7 @@ fun NowPlayingSheet(
   var showEqualizer by remember { mutableStateOf(false) }
   var showQueue by remember { mutableStateOf(false) }
   var showSleepSpeed by remember { mutableStateOf(false) }
-  var showControlsExtras by rememberSaveable { mutableStateOf(true) }
+  var showControlsExtras by rememberSaveable { mutableStateOf(false) }
   var dynamicControlsBlur by rememberSaveable { mutableStateOf(true) }
 
   val (c1, c2) = rememberArtworkColors(song.artworkUrl, song.title)
@@ -328,37 +328,11 @@ fun NowPlayingSheet(
           }
         }
 
-        Row(
-          verticalAlignment = Alignment.CenterVertically,
-          horizontalArrangement = Arrangement.spacedBy(2.dp)
+        IconButton(
+          onClick = { showDetails = true },
+          modifier = Modifier.minimumInteractiveComponentSize().testTag("np_details_button")
         ) {
-          OrbiMiniMoodBadge(
-            mood = orbiMood,
-            theme = orbiTheme,
-            isPlaying = isPlaying,
-            reducedMotion = reducedMotion,
-            beatEnergy = orbiBeatEnergy,
-            showLabel = false,
-            onClick = onOpenOrbiCompanion,
-            modifier = Modifier.testTag("np_orbi_mini_badge")
-          )
-          IconButton(
-            onClick = onOpenStandby,
-            modifier = Modifier.minimumInteractiveComponentSize().testTag("np_standby_button")
-          ) {
-            Icon(
-              imageVector = Icons.Rounded.Schedule,
-              contentDescription = stringResource(id = R.string.standby_open_cd),
-              tint = Color.White.copy(alpha = 0.88f),
-              modifier = Modifier.size(22.dp)
-            )
-          }
-          IconButton(
-            onClick = { showDetails = true },
-            modifier = Modifier.minimumInteractiveComponentSize().testTag("np_details_button")
-          ) {
-            Icon(Icons.Rounded.MoreVert, contentDescription = stringResource(id = R.string.np_details_cd), tint = Color.White)
-          }
+          Icon(Icons.Rounded.MoreVert, contentDescription = stringResource(id = R.string.np_details_cd), tint = Color.White)
         }
       }
 
@@ -985,6 +959,10 @@ fun NowPlayingSheet(
         onAddToAlbum = onAddToAlbum?.let { cb -> { cb(song) } },
         onPlayNext = onPlayNextSong?.let { cb -> { cb(song) } },
         onAddToQueue = onAddToQueueSong?.let { cb -> { cb(song) } },
+        onOpenStandby = onOpenStandby,
+        onOpenOrbiCompanion = onOpenOrbiCompanion,
+        onEditLyrics = if (developerModeEnabled) onOpenLyricsEditor else null,
+        isCustomLyrics = lyricsResult?.isCustom == true && developerModeEnabled,
         onDelete = onDeleteSong
       )
     }

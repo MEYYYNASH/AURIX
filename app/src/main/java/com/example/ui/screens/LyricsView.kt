@@ -234,90 +234,34 @@ fun LyricsView(
       }
     )
 
-    if (lyricsResult.isCustom && developerModeEnabled) {
+    if (onShareLyrics != null) {
       Surface(
+        onClick = onShareLyrics,
         shape = CircleShape,
-        color = Color(0xFF43C7F4).copy(alpha = 0.20f),
-        border = androidx.compose.foundation.BorderStroke(1.dp, Color(0xFF43C7F4).copy(alpha = 0.55f)),
-        modifier = Modifier
-          .align(Alignment.TopEnd)
-          .padding(top = 4.dp, end = 6.dp)
-          .testTag("lyrics_custom_source_badge")
-      ) {
-        Text(
-          text = stringResource(id = R.string.dev_mode_custom_badge),
-          style = MaterialTheme.typography.labelSmall.copy(fontWeight = FontWeight.Bold),
-          color = Color(0xFF43C7F4),
-          modifier = Modifier.padding(horizontal = 10.dp, vertical = 4.dp)
-        )
-      }
-    }
-
-    if (onShareLyrics != null || (developerModeEnabled && onOpenLyricsEditor != null)) {
-      Row(
+        color = Color.White.copy(alpha = 0.14f),
+        border = androidx.compose.foundation.BorderStroke(1.dp, Color.White.copy(alpha = 0.26f)),
         modifier = Modifier
           .align(Alignment.BottomEnd)
-          .padding(end = 6.dp, bottom = 8.dp),
-        horizontalArrangement = Arrangement.spacedBy(8.dp),
-        verticalAlignment = Alignment.CenterVertically
+          .padding(end = 6.dp, bottom = 8.dp)
+          .minimumInteractiveComponentSize()
+          .testTag("lyrics_share_button")
       ) {
-        if (developerModeEnabled && onOpenLyricsEditor != null) {
-          Surface(
-            onClick = onOpenLyricsEditor,
-            shape = CircleShape,
-            color = Color(0xFF43C7F4).copy(alpha = 0.22f),
-            border = androidx.compose.foundation.BorderStroke(1.dp, Color(0xFF43C7F4).copy(alpha = 0.55f)),
-            modifier = Modifier
-              .minimumInteractiveComponentSize()
-              .testTag("lyrics_edit_custom_button")
-          ) {
-            Row(
-              modifier = Modifier.padding(horizontal = 14.dp, vertical = 9.dp),
-              verticalAlignment = Alignment.CenterVertically,
-              horizontalArrangement = Arrangement.spacedBy(6.dp)
-            ) {
-              Icon(
-                imageVector = Icons.Rounded.Edit,
-                contentDescription = stringResource(id = R.string.lyrics_edit_button),
-                tint = Color.White,
-                modifier = Modifier.size(16.dp)
-              )
-              Text(
-                text = stringResource(id = R.string.lyrics_edit_button),
-                style = MaterialTheme.typography.labelMedium.copy(fontWeight = FontWeight.Bold),
-                color = Color.White
-              )
-            }
-          }
-        }
-        if (onShareLyrics != null) {
-          Surface(
-            onClick = onShareLyrics,
-            shape = CircleShape,
-            color = Color.White.copy(alpha = 0.14f),
-            border = androidx.compose.foundation.BorderStroke(1.dp, Color.White.copy(alpha = 0.26f)),
-            modifier = Modifier
-              .minimumInteractiveComponentSize()
-              .testTag("lyrics_share_button")
-          ) {
-            Row(
-              modifier = Modifier.padding(horizontal = 14.dp, vertical = 9.dp),
-              verticalAlignment = Alignment.CenterVertically,
-              horizontalArrangement = Arrangement.spacedBy(6.dp)
-            ) {
-              Icon(
-                imageVector = Icons.Rounded.Share,
-                contentDescription = "Share lyrics",
-                tint = Color.White,
-                modifier = Modifier.size(17.dp)
-              )
-              Text(
-                text = "Share",
-                style = MaterialTheme.typography.labelMedium.copy(fontWeight = FontWeight.Bold),
-                color = Color.White
-              )
-            }
-          }
+        Row(
+          modifier = Modifier.padding(horizontal = 14.dp, vertical = 9.dp),
+          verticalAlignment = Alignment.CenterVertically,
+          horizontalArrangement = Arrangement.spacedBy(6.dp)
+        ) {
+          Icon(
+            imageVector = Icons.Rounded.Share,
+            contentDescription = "Share lyrics",
+            tint = Color.White,
+            modifier = Modifier.size(17.dp)
+          )
+          Text(
+            text = "Share",
+            style = MaterialTheme.typography.labelMedium.copy(fontWeight = FontWeight.Bold),
+            color = Color.White
+          )
         }
       }
     }

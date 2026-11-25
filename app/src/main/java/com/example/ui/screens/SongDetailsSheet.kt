@@ -16,12 +16,15 @@ import androidx.compose.material.icons.automirrored.rounded.PlaylistPlay
 import androidx.compose.material.icons.rounded.Block
 import androidx.compose.material.icons.rounded.Close
 import androidx.compose.material.icons.rounded.DeleteOutline
+import androidx.compose.material.icons.rounded.Edit
 import androidx.compose.material.icons.rounded.Favorite
 import androidx.compose.material.icons.rounded.FavoriteBorder
 import androidx.compose.material.icons.rounded.LibraryAdd
 import androidx.compose.material.icons.rounded.PlayArrow
+import androidx.compose.material.icons.rounded.Schedule
 import androidx.compose.material.icons.rounded.Share
 import androidx.compose.material.icons.rounded.VisibilityOff
+import androidx.compose.material.icons.rounded.WorkspacePremium
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
@@ -64,6 +67,10 @@ fun SongDetailsSheet(
   onAddToAlbum: (() -> Unit)? = null,
   onPlayNext: (() -> Unit)? = null,
   onAddToQueue: (() -> Unit)? = null,
+  onOpenStandby: (() -> Unit)? = null,
+  onOpenOrbiCompanion: (() -> Unit)? = null,
+  onEditLyrics: (() -> Unit)? = null,
+  isCustomLyrics: Boolean = false,
   onDelete: (() -> Unit)? = null
 ) {
   val enrichedSong = remember(song) { TrackMetadataClassifier.enrich(song) }
@@ -187,6 +194,26 @@ fun SongDetailsSheet(
                 reducedMotion = reducedMotion,
                 modifier = Modifier.padding(start = 8.dp)
               )
+              if (isCustomLyrics) {
+                Surface(
+                  shape = CircleShape,
+                  color = Color(0xFF43C7F4).copy(alpha = 0.18f),
+                  border = BorderStroke(1.dp, Color(0xFF43C7F4).copy(alpha = 0.45f)),
+                  modifier = Modifier
+                    .padding(start = 6.dp)
+                    .testTag("details_custom_lyrics_badge")
+                ) {
+                  Text(
+                    text = stringResource(id = R.string.dev_mode_custom_badge),
+                    style = MaterialTheme.typography.labelSmall.copy(
+                      fontSize = 10.sp,
+                      fontWeight = FontWeight.Bold
+                    ),
+                    color = Color(0xFF43C7F4),
+                    modifier = Modifier.padding(horizontal = 8.dp, vertical = 2.dp)
+                  )
+                }
+              }
             }
             Spacer(modifier = Modifier.height(3.dp))
             Text(
@@ -284,6 +311,48 @@ fun SongDetailsSheet(
                 onClick = {
                   onDismiss()
                   onAddToAlbum()
+                }
+              )
+            )
+          }
+          if (onOpenStandby != null) {
+            add(
+              SheetActionSpec(
+                icon = Icons.Rounded.Schedule,
+                label = stringResource(id = R.string.standby_title),
+                active = false,
+                testTag = "details_standby_button",
+                onClick = {
+                  onDismiss()
+                  onOpenStandby()
+                }
+              )
+            )
+          }
+          if (onOpenOrbiCompanion != null) {
+            add(
+              SheetActionSpec(
+                icon = Icons.Rounded.WorkspacePremium,
+                label = stringResource(id = R.string.orbi_companion_title),
+                active = false,
+                testTag = "details_orbi_companion_button",
+                onClick = {
+                  onDismiss()
+                  onOpenOrbiCompanion()
+                }
+              )
+            )
+          }
+          if (onEditLyrics != null) {
+            add(
+              SheetActionSpec(
+                icon = Icons.Rounded.Edit,
+                label = stringResource(id = R.string.lyrics_edit_button),
+                active = isCustomLyrics,
+                testTag = "details_edit_lyrics_button",
+                onClick = {
+                  onDismiss()
+                  onEditLyrics()
                 }
               )
             )

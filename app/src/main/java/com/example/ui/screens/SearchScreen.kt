@@ -362,7 +362,7 @@ fun SearchScreen(
     artworkUrl = currentSong?.artworkUrl.orEmpty(),
     fallbackTitle = currentSong?.title.orEmpty()
   )
-  var showQuickTags by rememberSaveable { mutableStateOf(true) }
+  var showQuickTags by rememberSaveable { mutableStateOf(false) }
   var showResultsPanel by rememberSaveable { mutableStateOf(true) }
   var dynamicBlurGlass by rememberSaveable { mutableStateOf(true) }
 
@@ -998,7 +998,7 @@ private fun YoutubeLinkGlassPane(
   val inputBg = if (darkTheme) Color.White.copy(alpha = 0.08f) else Color.White.copy(alpha = 0.85f)
   val inputBorder = if (darkTheme) Color.White.copy(alpha = 0.22f) else Color.White
   val pasteBg = if (darkTheme) Color.White.copy(alpha = 0.10f) else Color.White.copy(alpha = 0.85f)
-  var showYoutubeGuide by rememberSaveable { mutableStateOf(true) }
+  var showYoutubeGuide by rememberSaveable { mutableStateOf(false) }
   val effectiveReduceMotion = rememberSelectEffectiveReduceMotion(reducedMotion)
   val lazyListState = rememberLazyListState()
 
