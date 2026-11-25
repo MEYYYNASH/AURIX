@@ -439,10 +439,12 @@ internal fun EditAlbumCoverSheetContent(
                 )
               }
             } else {
+              val photoPreviewReq = com.example.ui.image.rememberCrispArtworkRequest(model = selectedPhotoUri)
               AsyncImage(
-                model = selectedPhotoUri,
+                model = photoPreviewReq,
                 contentDescription = albumInfo.title,
                 contentScale = ContentScale.Crop,
+                filterQuality = com.example.ui.image.AurixImagePipeline.ARTWORK_FILTER_QUALITY,
                 modifier = Modifier
                   .fillMaxSize()
                   .pointerInput(selectedPhotoUri, photoZoom) {
@@ -677,10 +679,12 @@ internal fun EditAlbumCoverSheetContent(
                   modifier = Modifier.size(24.dp)
                 )
               } else {
+                val mixSlotReq = com.example.ui.image.rememberCrispArtworkRequest(model = imageUri)
                 AsyncImage(
-                  model = imageUri,
+                  model = mixSlotReq,
                   contentDescription = null,
                   contentScale = ContentScale.Crop,
+                  filterQuality = com.example.ui.image.AurixImagePipeline.ARTWORK_FILTER_QUALITY,
                   modifier = Modifier.fillMaxSize()
                 )
                 Box(
@@ -827,10 +831,12 @@ internal fun EditAlbumCoverSheetContent(
                     }
                     .testTag("edit_cover_mix_track_candidate_$idx")
                 ) {
+                  val candidateReq = com.example.ui.image.rememberCrispArtworkRequest(model = candidateUri)
                   AsyncImage(
-                    model = candidateUri,
+                    model = candidateReq,
                     contentDescription = null,
                     contentScale = ContentScale.Crop,
+                    filterQuality = com.example.ui.image.AurixImagePipeline.ARTWORK_FILTER_QUALITY,
                     modifier = Modifier.fillMaxSize()
                   )
                 }
@@ -1228,10 +1234,12 @@ private fun MixSlotImage(source: String, modifier: Modifier) {
       )
     }
   } else {
+    val mixGridReq = com.example.ui.image.rememberCrispArtworkRequest(model = source)
     AsyncImage(
-      model = source,
+      model = mixGridReq,
       contentDescription = null,
       contentScale = ContentScale.Crop,
+      filterQuality = com.example.ui.image.AurixImagePipeline.ARTWORK_FILTER_QUALITY,
       modifier = modifier
     )
   }
@@ -1329,10 +1337,12 @@ private fun StudioCoverPreview(
       .background(Brush.linearGradient(listOf(startColor, midColor, endColor)))
   ) {
     if (!backdropSource.isNullOrBlank() && backdropSource != APP_ICON_ARTWORK) {
+      val studioBackdropReq = com.example.ui.image.rememberCrispArtworkRequest(model = backdropSource)
       AsyncImage(
-        model = backdropSource,
+        model = studioBackdropReq,
         contentDescription = null,
         contentScale = ContentScale.Crop,
+        filterQuality = com.example.ui.image.AurixImagePipeline.ARTWORK_FILTER_QUALITY,
         modifier = Modifier
           .fillMaxSize()
           .blur((blurAmount * 18f).dp)

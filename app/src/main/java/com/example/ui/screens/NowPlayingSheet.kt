@@ -221,10 +221,12 @@ fun NowPlayingSheet(
       Box(modifier = Modifier.fillMaxSize().alpha(bgAlpha)) {
         val bgModel = resolveArtworkModel(song.artworkUrl, song.source)
         if (bgModel != null) {
+          val npBgReq = com.example.ui.image.rememberCrispArtworkRequest(model = bgModel)
           AsyncImage(
-            model = bgModel,
+            model = npBgReq,
             contentDescription = null,
             contentScale = ContentScale.Crop,
+            filterQuality = com.example.ui.image.AurixImagePipeline.ARTWORK_FILTER_QUALITY,
             modifier = Modifier
               .fillMaxSize()
               .offset(x = activeBgShiftX.dp)

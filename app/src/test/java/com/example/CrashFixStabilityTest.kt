@@ -924,4 +924,59 @@ class CrashFixStabilityTest {
     val clip28Xml = java.io.File(drawableDir, "widget_clip_28dp.xml").readText()
     assertTrue(clip28Xml.contains("#01000000"))
   }
+
+  @Test
+  fun imagePipeline_highDensityFlagsAndNoDownsampling_areEnforced() {
+    assertEquals(android.util.DisplayMetrics.DENSITY_XXXHIGH, com.example.ui.image.AurixImagePipeline.MINIMUM_HIGH_DENSITY_DPI)
+    assertEquals(androidx.compose.ui.graphics.FilterQuality.High, com.example.ui.image.AurixImagePipeline.ARTWORK_FILTER_QUALITY)
+    assertEquals(4096, com.example.ui.image.AurixImagePipeline.MAX_SAFE_TEXTURE_DIMENSION_PX)
+
+    // Verify AudioMetadataReader & SongDownloader no longer cap artwork via 1024px inSampleSize downsampling,
+    // and SongArtwork / ShareLyricsSheet / WidgetPreviewComponents / AurixWidgetController no longer downsample
+    val sourceRoots = listOf(java.io.File("src/main/java"), java.io.File("app/src/main/java"))
+    val javaRoot = sourceRoots.firstOrNull { it.isDirectory }
+      ?: throw AssertionError("Could not locate src/main/java")
+
+    val songComponentsSrc = java.io.File(javaRoot, "com/example/ui/screens/SongComponents.kt").readText()
+    org.junit.Assert.assertFalse(
+      "SongArtwork must not downsample to 240px",
+      songComponentsSrc.contains(".size(240)")
+    )
+    assertTrue(songComponentsSrc.contains("rememberCrispArtworkRequest"))
+    assertTrue(songComponentsSrc.contains("ARTWORK_FILTER_QUALITY"))
+
+    val shareLyricsSrc = java.io.File(javaRoot, "com/example/ui/screens/ShareLyricsSheet.kt").readText()
+    org.junit.Assert.assertFalse(
+      "ShareLyricsSheet must not downsample artwork to 640px",
+      shareLyricsSrc.contains(".size(640)")
+    )
+    assertTrue(shareLyricsSrc.contains("buildCrispArtworkRequest"))
+
+    val previewComponentsSrc = java.io.File(javaRoot, "com/example/ui/screens/WidgetPreviewComponents.kt").readText()
+    org.junit.Assert.assertFalse(
+      "WidgetPreviewComponents must not downsample artwork to 480px",
+      previewComponentsSrc.contains(".size(480)")
+    )
+    assertTrue(previewComponentsSrc.contains("buildCrispArtworkRequest"))
+
+    val audioMetadataSrc = java.io.File(javaRoot, "com/example/data/AudioMetadataReader.kt").readText()
+    assertTrue(audioMetadataSrc.contains("decodeHighDensityArtworkBytes"))
+
+    val songDownloaderSrc = java.io.File(javaRoot, "com/example/data/SongDownloader.kt").readText()
+    assertTrue(songDownloaderSrc.contains("decodeHighDensityArtworkBytes"))
+
+    val appSrc = java.io.File(javaRoot, "com/example/AurixApplication.kt").readText()
+    assertTrue(appSrc.contains("ImageLoaderFactory"))
+    assertTrue(appSrc.contains("AurixImagePipeline.createImageLoader"))
+
+    val pipelineSrc = java.io.File(javaRoot, "com/example/ui/image/AurixImagePipeline.kt").readText()
+    assertTrue(pipelineSrc.contains("inScaled = false"))
+    assertTrue(pipelineSrc.contains("inSampleSize = 1"))
+    assertTrue(pipelineSrc.contains("inDensity = targetDpi"))
+    assertTrue(pipelineSrc.contains("inTargetDensity = targetDpi"))
+    assertTrue(pipelineSrc.contains("CoilSize.ORIGINAL"))
+    assertTrue(pipelineSrc.contains("Precision.EXACT"))
+    assertTrue(pipelineSrc.contains("allowRgb565(false)"))
+    assertTrue(pipelineSrc.contains("getDrawableForDensity"))
+  }
 }

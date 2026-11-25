@@ -557,6 +557,7 @@ private fun AlbumBanner(
               bitmap = visual.blurredBitmap,
               contentDescription = null,
               contentScale = ContentScale.Crop,
+              filterQuality = com.example.ui.image.AurixImagePipeline.ARTWORK_FILTER_QUALITY,
               modifier = Modifier
                 .fillMaxSize()
                 .then(
@@ -565,10 +566,12 @@ private fun AlbumBanner(
             )
           }
           key.isNotBlank() && key != APP_ICON_ARTWORK -> {
+            val bannerArtReq = com.example.ui.image.rememberCrispArtworkRequest(model = key)
             AsyncImage(
-              model = key,
+              model = bannerArtReq,
               contentDescription = null,
               contentScale = ContentScale.Crop,
+              filterQuality = com.example.ui.image.AurixImagePipeline.ARTWORK_FILTER_QUALITY,
               modifier = Modifier
                 .fillMaxSize()
                 .then(
@@ -687,10 +690,12 @@ fun AlbumHeader(
               )
             }
             activeCover.isNotBlank() && !imageFailed -> {
+              val headerArtReq = com.example.ui.image.rememberCrispArtworkRequest(model = activeCover)
               AsyncImage(
-                model = activeCover,
+                model = headerArtReq,
                 contentDescription = albumTitle,
                 contentScale = ContentScale.Crop,
+                filterQuality = com.example.ui.image.AurixImagePipeline.ARTWORK_FILTER_QUALITY,
                 onError = { imageFailed = true },
                 modifier = Modifier.fillMaxSize()
               )

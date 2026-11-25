@@ -25,6 +25,7 @@ import androidx.compose.ui.graphics.ImageBitmap
 import androidx.compose.ui.graphics.asImageBitmap
 import com.example.R
 import com.example.model.APP_ICON_ARTWORK
+import com.example.ui.image.AurixImagePipeline
 import coil.imageLoader
 import coil.request.ImageRequest
 import coil.request.SuccessResult
@@ -90,7 +91,12 @@ object AlbumBannerCache {
     cache.get(artworkUrl)?.let { return it }
 
     val created = withContext(Dispatchers.IO) {
-      val sourceBitmap = AlbumCoverStorage.loadBitmapForUi(context, artworkUrl, targetSize = 180)
+      val sourceBitmap = AlbumCoverStorage.loadBitmapForUi(
+        context = context,
+        artworkSource = artworkUrl,
+        targetSize = 180,
+        disableDownsampling = false
+      )
         ?: return@withContext null
       withContext(Dispatchers.Default) {
         val dominant = extractBannerDominantColor(sourceBitmap)
@@ -884,12 +890,16 @@ object AlbumCoverStorage {
   suspend fun loadBitmapForUi(
     context: Context,
     artworkSource: String,
-    targetSize: Int = 512
+    targetSize: Int = 512,
+    disableDownsampling: Boolean = true
   ): Bitmap? = withContext(Dispatchers.IO) {
     if (artworkSource.isBlank()) return@withContext null
     if (artworkSource == APP_ICON_ARTWORK) {
-      val drawable = ContextCompat.getDrawable(context, R.drawable.ic_launcher_foreground)
-      return@withContext drawable?.toBitmap(targetSize, targetSize, Bitmap.Config.ARGB_8888)
+      val drawable = AurixImagePipeline.decodeHighDensityResourceDrawable(context, R.drawable.ic_launcher_foreground)
+        ?: ContextCompat.getDrawable(context, R.drawable.ic_launcher_foreground)
+      return@withContext drawable?.toBitmap(targetSize, targetSize, Bitmap.Config.ARGB_8888)?.let {
+        AurixImagePipeline.applyHighDensityMetadata(it, context)
+      }
     }
 
     val uri = Uri.parse(artworkSource)
@@ -903,23 +913,45 @@ object AlbumCoverStorage {
       }.getOrNull()
 
       if (rawBytes != null && rawBytes.isNotEmpty()) {
-        val decoded = decodeSampledBitmapWithExif(rawBytes, targetSize)
+        val decoded = decodeSampledBitmapWithExif(
+          context = context,
+          bytes = rawBytes,
+          maxDimTarget = targetSize,
+          disableDownsampling = disableDownsampling
+        )
         if (decoded != null) return@withContext decoded
       }
     }
 
     runCatching {
-      val request = ImageRequest.Builder(context)
-        .data(artworkSource)
-        .allowHardware(false)
-        .size(targetSize)
-        .build()
+      val request = if (disableDownsampling) {
+        AurixImagePipeline.buildCrispArtworkRequest(
+          context = context,
+          model = artworkSource,
+          allowHardware = false
+        )
+      } else {
+        ImageRequest.Builder(context)
+          .data(artworkSource)
+          .allowHardware(false)
+          .allowRgb565(false)
+          .bitmapConfig(Bitmap.Config.ARGB_8888)
+          .size(targetSize)
+          .build()
+      }
       val result = context.imageLoader.execute(request)
-      (result as? SuccessResult)?.drawable?.toBitmap()?.copy(Bitmap.Config.ARGB_8888, false)
+      (result as? SuccessResult)?.drawable?.toBitmap()?.copy(Bitmap.Config.ARGB_8888, false)?.let {
+        AurixImagePipeline.applyHighDensityMetadata(it, context)
+      }
     }.getOrNull()
   }
 
-  private fun decodeSampledBitmapWithExif(bytes: ByteArray, maxDimTarget: Int): Bitmap? {
+  private fun decodeSampledBitmapWithExif(
+    context: Context,
+    bytes: ByteArray,
+    maxDimTarget: Int,
+    disableDownsampling: Boolean = true
+  ): Bitmap? {
     val orientation = runCatching {
       ByteArrayInputStream(bytes).use { stream ->
         ExifInterface(stream).getAttributeInt(
@@ -929,18 +961,27 @@ object AlbumCoverStorage {
       }
     }.getOrDefault(ExifInterface.ORIENTATION_NORMAL)
 
-    val bounds = BitmapFactory.Options().apply { inJustDecodeBounds = true }
-    BitmapFactory.decodeByteArray(bytes, 0, bytes.size, bounds)
-    val maxDim = max(bounds.outWidth, bounds.outHeight)
-    var sampleSize = 1
-    while (maxDim / sampleSize > maxDimTarget * 2) {
-      sampleSize *= 2
+    val bitmap = if (disableDownsampling) {
+      AurixImagePipeline.decodeHighDensityArtworkBytes(
+        context = context,
+        bytes = bytes,
+        guardGpuTextureLimit = true
+      ) ?: return null
+    } else {
+      val bounds = BitmapFactory.Options().apply { inJustDecodeBounds = true }
+      BitmapFactory.decodeByteArray(bytes, 0, bytes.size, bounds)
+      val maxDim = max(bounds.outWidth, bounds.outHeight)
+      var sampleSize = 1
+      while (maxDim / sampleSize > maxDimTarget * 2) {
+        sampleSize *= 2
+      }
+      val opts = AurixImagePipeline.createHighDensityBitmapOptions(context).apply {
+        inSampleSize = sampleSize
+      }
+      BitmapFactory.decodeByteArray(bytes, 0, bytes.size, opts)
+        ?.let { AurixImagePipeline.applyHighDensityMetadata(it, context) }
+        ?: return null
     }
-    val opts = BitmapFactory.Options().apply {
-      inSampleSize = sampleSize
-      inPreferredConfig = Bitmap.Config.ARGB_8888
-    }
-    val bitmap = BitmapFactory.decodeByteArray(bytes, 0, bytes.size, opts) ?: return null
     val degrees = when (orientation) {
       ExifInterface.ORIENTATION_ROTATE_90 -> 90f
       ExifInterface.ORIENTATION_ROTATE_180 -> 180f

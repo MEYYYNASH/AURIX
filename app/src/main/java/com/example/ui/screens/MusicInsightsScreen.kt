@@ -1366,10 +1366,12 @@ fun NewAlbumsDetailScreen(
                   contentAlignment = Alignment.Center
                 ) {
                   if (album.artworkUrl.isNotBlank()) {
+                    val insightsCoverReq = com.example.ui.image.rememberCrispArtworkRequest(model = album.artworkUrl)
                     AsyncImage(
-                      model = album.artworkUrl,
+                      model = insightsCoverReq,
                       contentDescription = album.title,
                       contentScale = ContentScale.Crop,
+                      filterQuality = com.example.ui.image.AurixImagePipeline.ARTWORK_FILTER_QUALITY,
                       modifier = Modifier.fillMaxSize()
                     )
                   } else {

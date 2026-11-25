@@ -3,6 +3,9 @@ package com.example
 import android.app.Application
 import android.content.Context
 import android.util.Log
+import coil.ImageLoader
+import coil.ImageLoaderFactory
+import com.example.ui.image.AurixImagePipeline
 import java.io.File
 import java.io.FileWriter
 import java.io.PrintWriter
@@ -11,11 +14,15 @@ import java.text.SimpleDateFormat
 import java.util.Date
 import java.util.Locale
 
-class AurixApplication : Application() {
+class AurixApplication : Application(), ImageLoaderFactory {
 
     override fun onCreate() {
         super.onCreate()
         setupGlobalCrashHandler()
+    }
+
+    override fun newImageLoader(): ImageLoader {
+        return AurixImagePipeline.createImageLoader(this)
     }
 
     private fun setupGlobalCrashHandler() {

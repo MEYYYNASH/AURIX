@@ -61,19 +61,14 @@ object SongDownloader {
       val rawBytes = context.contentResolver.openInputStream(imageUri)?.use { it.readBytes() }
         ?: return@withContext Result.failure(Exception("Unable to read selected image"))
 
-      val bounds = BitmapFactory.Options().apply { inJustDecodeBounds = true }
-      BitmapFactory.decodeByteArray(rawBytes, 0, rawBytes.size, bounds)
-      val maxDim = maxOf(bounds.outWidth, bounds.outHeight)
-      var sampleSize = 1
-      while (maxDim / sampleSize > 1024) {
-        sampleSize *= 2
-      }
-
-      val decodeOpts = BitmapFactory.Options().apply { inSampleSize = sampleSize }
-      val bitmap = BitmapFactory.decodeByteArray(rawBytes, 0, rawBytes.size, decodeOpts)
+      val bitmap = com.example.ui.image.AurixImagePipeline.decodeHighDensityArtworkBytes(
+        context = context,
+        bytes = rawBytes,
+        guardGpuTextureLimit = true
+      )
       if (bitmap != null) {
         FileOutputStream(outFile).use { fos ->
-          bitmap.compress(Bitmap.CompressFormat.JPEG, 92, fos)
+          bitmap.compress(Bitmap.CompressFormat.JPEG, 96, fos)
           fos.flush()
         }
         bitmap.recycle()

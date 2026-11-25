@@ -198,13 +198,15 @@ fun ShareLyricsSheet(
         null
       } else {
         try {
-          val request = ImageRequest.Builder(context)
-            .data(song.artworkUrl)
-            .allowHardware(false)
-            .size(640)
-            .build()
+          val request = com.example.ui.image.AurixImagePipeline.buildCrispArtworkRequest(
+            context = context,
+            model = song.artworkUrl,
+            allowHardware = false
+          )
           val result = context.imageLoader.execute(request)
-          (result as? SuccessResult)?.drawable?.toBitmap()
+          (result as? SuccessResult)?.drawable?.toBitmap()?.let {
+            com.example.ui.image.AurixImagePipeline.applyHighDensityMetadata(it, context)
+          }
         } catch (_: Exception) {
           null
         }

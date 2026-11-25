@@ -197,17 +197,23 @@ object WidgetPhotoStorage {
     val srcH = boundsOpts.outHeight
     if (srcW <= 0 || srcH <= 0) return null
 
+    val targetDpi = com.example.ui.image.AurixImagePipeline.MINIMUM_HIGH_DENSITY_DPI
     val decodeOpts = BitmapFactory.Options().apply {
+      inScaled = false
       inSampleSize = computeInSampleSize(srcW, srcH, maxDimPx)
       inPreferredConfig = Bitmap.Config.ARGB_8888
+      inDensity = targetDpi
+      inTargetDensity = targetDpi
     }
-    val decoded = BitmapFactory.decodeFile(file.absolutePath, decodeOpts) ?: return null
+    val decoded = BitmapFactory.decodeFile(file.absolutePath, decodeOpts)?.also {
+      it.density = targetDpi
+    } ?: return null
     val rotation = readExifRotationDegreesFromFile(file)
     return if (rotation != 0) {
       val matrix = Matrix().apply { postRotate(rotation.toFloat()) }
       val rotated = Bitmap.createBitmap(decoded, 0, 0, decoded.width, decoded.height, matrix, true)
       if (rotated !== decoded) decoded.recycle()
-      rotated
+      rotated.also { it.density = targetDpi }
     } else {
       decoded
     }
@@ -358,11 +364,17 @@ object WidgetPhotoStorage {
       val bounds = BitmapFactory.Options().apply { inJustDecodeBounds = true }
       BitmapFactory.decodeFile(file.absolutePath, bounds)
       if (bounds.outWidth <= 0 || bounds.outHeight <= 0) return null
+      val targetDpi = com.example.ui.image.AurixImagePipeline.MINIMUM_HIGH_DENSITY_DPI
       val opts = BitmapFactory.Options().apply {
+        inScaled = false
         inSampleSize = computeInSampleSize(bounds.outWidth, bounds.outHeight, maxDimPx)
         inPreferredConfig = Bitmap.Config.ARGB_8888
+        inDensity = targetDpi
+        inTargetDensity = targetDpi
       }
-      BitmapFactory.decodeFile(file.absolutePath, opts)
+      BitmapFactory.decodeFile(file.absolutePath, opts)?.also {
+        it.density = targetDpi
+      }
     } catch (_: OutOfMemoryError) {
       System.gc()
       runCatching {

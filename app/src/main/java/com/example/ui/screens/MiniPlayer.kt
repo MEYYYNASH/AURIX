@@ -220,10 +220,12 @@ fun MiniPlayer(
       // Dynamic blurred album artwork + track-hue aura inside glass pill
       val miniArtModel = resolveArtworkModel(song.artworkUrl, song.source)
       if (miniArtModel != null && Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
+        val miniArtReq = com.example.ui.image.rememberCrispArtworkRequest(model = miniArtModel)
         AsyncImage(
-          model = miniArtModel,
+          model = miniArtReq,
           contentDescription = null,
           contentScale = ContentScale.Crop,
+          filterQuality = com.example.ui.image.AurixImagePipeline.ARTWORK_FILTER_QUALITY,
           modifier = Modifier
             .matchParentSize()
             .scale(1.24f)

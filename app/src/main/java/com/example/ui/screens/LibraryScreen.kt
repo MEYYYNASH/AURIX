@@ -1839,10 +1839,12 @@ private fun LibraryAlbumGridCard(
           )
         }
         !coverUrl.isNullOrBlank() -> {
+          val libCoverReq = com.example.ui.image.rememberCrispArtworkRequest(model = coverUrl)
           AsyncImage(
-            model = coverUrl,
+            model = libCoverReq,
             contentDescription = album.title,
             contentScale = ContentScale.Crop,
+            filterQuality = com.example.ui.image.AurixImagePipeline.ARTWORK_FILTER_QUALITY,
             modifier = Modifier.fillMaxSize()
           )
         }

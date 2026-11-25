@@ -1403,10 +1403,12 @@ private fun AlbumMiniThumb(
         )
       }
       !coverUrl.isNullOrBlank() -> {
+        val pickerCoverReq = com.example.ui.image.rememberCrispArtworkRequest(model = coverUrl)
         AsyncImage(
-          model = coverUrl,
+          model = pickerCoverReq,
           contentDescription = album.title,
           contentScale = ContentScale.Crop,
+          filterQuality = com.example.ui.image.AurixImagePipeline.ARTWORK_FILTER_QUALITY,
           modifier = Modifier.fillMaxSize()
         )
       }

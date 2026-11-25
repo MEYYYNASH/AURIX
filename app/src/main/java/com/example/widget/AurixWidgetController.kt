@@ -52,6 +52,7 @@ import com.example.model.LyricLine
 import com.example.model.LyricsResult
 import com.example.model.Song
 import com.example.playback.PlaybackService
+import com.example.ui.image.AurixImagePipeline
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
@@ -3557,14 +3558,14 @@ object AurixWidgetController {
 
     if (state.artworkUrl.isNotBlank() && state.artworkUrl != APP_ICON_ARTWORK) {
       val fetched = runCatching {
-        val req = ImageRequest.Builder(context)
-          .data(state.artworkUrl)
-          .allowHardware(false)
-          .size(512)
-          .build()
+        val req = AurixImagePipeline.buildCrispArtworkRequest(
+          context = context,
+          model = state.artworkUrl,
+          allowHardware = false
+        )
         val res = context.imageLoader.execute(req)
         val rawBmp = (res as? SuccessResult)?.drawable?.toBitmap(config = Bitmap.Config.ARGB_8888)
-        rawBmp?.let { smartCropArtworkCore(it) }
+        rawBmp?.let { smartCropArtworkCore(AurixImagePipeline.applyHighDensityMetadata(it, context)) }
       }.getOrNull()
 
       if (fetched != null) {
@@ -3573,7 +3574,7 @@ object AurixWidgetController {
         cachedRoundedArtBitmap = null
         runCatching {
           FileOutputStream(diskArtFile).use { out ->
-            fetched.compress(Bitmap.CompressFormat.PNG, 92, out)
+            fetched.compress(Bitmap.CompressFormat.PNG, 96, out)
           }
         }
         return fetched
@@ -3581,7 +3582,13 @@ object AurixWidgetController {
     }
 
     if (diskArtFile.exists() && state.songId.isNotBlank()) {
-      val restored = runCatching { BitmapFactory.decodeFile(diskArtFile.absolutePath) }.getOrNull()
+      val restored = runCatching {
+        AurixImagePipeline.decodeHighDensityArtworkFile(
+          context = context,
+          filePath = diskArtFile.absolutePath,
+          guardGpuTextureLimit = false
+        )
+      }.getOrNull()
       if (restored != null) {
         lastLoadedArtworkKey = artKey
         cachedRawArtworkBitmap = restored

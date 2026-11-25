@@ -995,14 +995,19 @@ private fun PreviewArtworkSlot(
           bitmap = rawArtwork.asImageBitmap(),
           contentDescription = null,
           contentScale = ContentScale.Crop,
+          filterQuality = com.example.ui.image.AurixImagePipeline.ARTWORK_FILTER_QUALITY,
           modifier = Modifier.fillMaxSize()
         )
-        artworkUrl.isNotBlank() -> AsyncImage(
-          model = artworkUrl,
-          contentDescription = null,
-          contentScale = ContentScale.Crop,
-          modifier = Modifier.fillMaxSize()
-        )
+        artworkUrl.isNotBlank() -> {
+          val previewArtReq = com.example.ui.image.rememberCrispArtworkRequest(model = artworkUrl)
+          AsyncImage(
+            model = previewArtReq,
+            contentDescription = null,
+            contentScale = ContentScale.Crop,
+            filterQuality = com.example.ui.image.AurixImagePipeline.ARTWORK_FILTER_QUALITY,
+            modifier = Modifier.fillMaxSize()
+          )
+        }
         else -> Icon(
           imageVector = Icons.Rounded.MusicNote,
           contentDescription = null,

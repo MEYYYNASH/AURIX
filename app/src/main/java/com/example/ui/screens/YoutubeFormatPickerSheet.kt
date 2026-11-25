@@ -130,10 +130,12 @@ fun YoutubeFormatPickerSheet(
         )
     ) {
       if (song.artworkUrl.isNotBlank()) {
+        val formatBgReq = com.example.ui.image.rememberCrispArtworkRequest(model = song.artworkUrl)
         AsyncImage(
-          model = song.artworkUrl,
+          model = formatBgReq,
           contentDescription = null,
           contentScale = ContentScale.Crop,
+          filterQuality = com.example.ui.image.AurixImagePipeline.ARTWORK_FILTER_QUALITY,
           modifier = Modifier
             .matchParentSize()
             .alpha(if (darkTheme) 0.16f else 0.10f)

@@ -173,7 +173,8 @@ fun WidgetCropDialog(
               drawImage(
                 image = imageBitmap,
                 dstOffset = IntOffset(left.roundToInt(), top.roundToInt()),
-                dstSize = IntSize(drawW.roundToInt().coerceAtLeast(1), drawH.roundToInt().coerceAtLeast(1))
+                dstSize = IntSize(drawW.roundToInt().coerceAtLeast(1), drawH.roundToInt().coerceAtLeast(1)),
+                filterQuality = com.example.ui.image.AurixImagePipeline.ARTWORK_FILTER_QUALITY
               )
 
               // Rule-of-thirds guides

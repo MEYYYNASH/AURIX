@@ -229,10 +229,12 @@ fun NavigationPreviewBottomSheet(
           when (backdropMode) {
             NavPreviewBackdrop.ART -> {
               if (currentSong?.artworkUrl?.isNotBlank() == true) {
+                val navPreviewReq = com.example.ui.image.rememberCrispArtworkRequest(model = currentSong.artworkUrl)
                 AsyncImage(
-                  model = currentSong.artworkUrl,
+                  model = navPreviewReq,
                   contentDescription = null,
                   contentScale = ContentScale.Crop,
+                  filterQuality = com.example.ui.image.AurixImagePipeline.ARTWORK_FILTER_QUALITY,
                   modifier = Modifier
                     .matchParentSize()
                     .then(if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) Modifier.blur(32.dp) else Modifier)

@@ -225,10 +225,12 @@ fun ArtistMixCard(
           contentAlignment = Alignment.Center
         ) {
           if (mix.artworkUrl.isNotBlank() && mix.artworkUrl != APP_ICON_ARTWORK) {
+            val mixArtistReq = com.example.ui.image.rememberCrispArtworkRequest(model = mix.artworkUrl)
             AsyncImage(
-              model = mix.artworkUrl,
+              model = mixArtistReq,
               contentDescription = mix.artistName,
               contentScale = ContentScale.Crop,
+              filterQuality = com.example.ui.image.AurixImagePipeline.ARTWORK_FILTER_QUALITY,
               modifier = Modifier.fillMaxSize()
             )
           } else if (fallbackSong != null) {
@@ -361,10 +363,12 @@ fun PersonalMixCard(
       ) {
         val coverTrack = mix.tracks.firstOrNull()
         if (mix.artworkUrl.isNotBlank() && mix.artworkUrl != APP_ICON_ARTWORK) {
+          val mixCoverReq = com.example.ui.image.rememberCrispArtworkRequest(model = mix.artworkUrl)
           AsyncImage(
-            model = mix.artworkUrl,
+            model = mixCoverReq,
             contentDescription = mix.title,
             contentScale = ContentScale.Crop,
+            filterQuality = com.example.ui.image.AurixImagePipeline.ARTWORK_FILTER_QUALITY,
             modifier = Modifier.fillMaxSize()
           )
         } else if (coverTrack != null) {
@@ -521,10 +525,12 @@ fun NewForYouCard(
           .background(Brush.linearGradient(listOf(c1.copy(alpha = 0.7f), c2.copy(alpha = 0.85f))))
       ) {
         if (item.artworkUrl.isNotBlank() && item.artworkUrl != APP_ICON_ARTWORK) {
+          val newForYouReq = com.example.ui.image.rememberCrispArtworkRequest(model = item.artworkUrl)
           AsyncImage(
-            model = item.artworkUrl,
+            model = newForYouReq,
             contentDescription = item.title,
             contentScale = ContentScale.Crop,
+            filterQuality = com.example.ui.image.AurixImagePipeline.ARTWORK_FILTER_QUALITY,
             modifier = Modifier.fillMaxSize()
           )
         } else if (item.song != null) {

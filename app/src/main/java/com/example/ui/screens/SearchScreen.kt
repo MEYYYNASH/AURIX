@@ -2540,10 +2540,12 @@ private fun YoutubeAnalysisResultCard(
       .border(1.dp, Color.White.copy(alpha = if (darkTheme) 0.28f else 0.96f), cardShape)
   ) {
     if (analysis.thumbnailUrl.isNotBlank()) {
+      val bgThumbReq = com.example.ui.image.rememberCrispArtworkRequest(model = analysis.thumbnailUrl)
       AsyncImage(
-        model = analysis.thumbnailUrl,
+        model = bgThumbReq,
         contentDescription = null,
         contentScale = ContentScale.Crop,
+        filterQuality = com.example.ui.image.AurixImagePipeline.ARTWORK_FILTER_QUALITY,
         modifier = Modifier
           .matchParentSize()
           .alpha(if (darkTheme) 0.22f else 0.14f)
@@ -2572,10 +2574,12 @@ private fun YoutubeAnalysisResultCard(
             .clip(RoundedCornerShape(20.dp))
             .border(1.dp, Color.White.copy(alpha = 0.30f), RoundedCornerShape(20.dp))
         ) {
+          val thumbReq = com.example.ui.image.rememberCrispArtworkRequest(model = analysis.thumbnailUrl)
           AsyncImage(
-            model = analysis.thumbnailUrl,
+            model = thumbReq,
             contentDescription = analysis.videoTitle,
             contentScale = ContentScale.Crop,
+            filterQuality = com.example.ui.image.AurixImagePipeline.ARTWORK_FILTER_QUALITY,
             modifier = Modifier.fillMaxSize()
           )
           Surface(
@@ -2915,10 +2919,12 @@ private fun YoutubePlaylistResultCard(
       .testTag("youtube_playlist_card")
   ) {
     if (playlist.thumbnailUrl.isNotBlank()) {
+      val playlistBgReq = com.example.ui.image.rememberCrispArtworkRequest(model = playlist.thumbnailUrl)
       AsyncImage(
-        model = playlist.thumbnailUrl,
+        model = playlistBgReq,
         contentDescription = null,
         contentScale = ContentScale.Crop,
+        filterQuality = com.example.ui.image.AurixImagePipeline.ARTWORK_FILTER_QUALITY,
         modifier = Modifier
           .matchParentSize()
           .alpha(if (darkTheme) 0.22f else 0.14f)
@@ -2961,10 +2967,12 @@ private fun YoutubePlaylistResultCard(
           contentAlignment = Alignment.Center
         ) {
           if (playlist.thumbnailUrl.isNotBlank()) {
+            val playlistThumbReq = com.example.ui.image.rememberCrispArtworkRequest(model = playlist.thumbnailUrl)
             AsyncImage(
-              model = playlist.thumbnailUrl,
+              model = playlistThumbReq,
               contentDescription = playlist.title,
               contentScale = ContentScale.Crop,
+              filterQuality = com.example.ui.image.AurixImagePipeline.ARTWORK_FILTER_QUALITY,
               modifier = Modifier.fillMaxSize()
             )
           } else {

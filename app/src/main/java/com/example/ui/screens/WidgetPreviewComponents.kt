@@ -90,13 +90,15 @@ fun rememberSongAlbumArtBitmap(artworkUrl: String?): Bitmap? {
     }
     value = withContext(Dispatchers.IO) {
       runCatching {
-        val req = ImageRequest.Builder(context)
-          .data(artworkUrl)
-          .allowHardware(false)
-          .size(480)
-          .build()
+        val req = com.example.ui.image.AurixImagePipeline.buildCrispArtworkRequest(
+          context = context,
+          model = artworkUrl,
+          allowHardware = false
+        )
         val result = context.imageLoader.execute(req)
-        (result as? SuccessResult)?.drawable?.toBitmap(config = Bitmap.Config.ARGB_8888)
+        (result as? SuccessResult)?.drawable?.toBitmap(config = Bitmap.Config.ARGB_8888)?.let {
+          com.example.ui.image.AurixImagePipeline.applyHighDensityMetadata(it, context)
+        }
       }.getOrNull()
     }
   }
@@ -249,6 +251,7 @@ fun LiveWidgetPreviewCard(
           bitmap = bgBmp.asImageBitmap(),
           contentDescription = null,
           contentScale = ContentScale.Crop,
+          filterQuality = com.example.ui.image.AurixImagePipeline.ARTWORK_FILTER_QUALITY,
           modifier = Modifier.fillMaxSize()
         )
       }
@@ -344,6 +347,7 @@ fun LiveWidgetPreviewCard(
               bitmap = frameBitmap!!.asImageBitmap(),
               contentDescription = null,
               contentScale = ContentScale.Fit,
+              filterQuality = com.example.ui.image.AurixImagePipeline.ARTWORK_FILTER_QUALITY,
               modifier = Modifier.fillMaxSize()
             )
           }
@@ -468,6 +472,7 @@ fun LiveWidgetPreviewCard(
                 bitmap = albumArtBitmap.asImageBitmap(),
                 contentDescription = null,
                 contentScale = ContentScale.Crop,
+                filterQuality = com.example.ui.image.AurixImagePipeline.ARTWORK_FILTER_QUALITY,
                 modifier = Modifier
                   .size(18.dp)
                   .clip(RoundedCornerShape(5.dp))
@@ -667,6 +672,7 @@ fun LyricsScreenFramedArtwork(
       bitmap = bmp.asImageBitmap(),
       contentDescription = null,
       contentScale = ContentScale.Fit,
+      filterQuality = com.example.ui.image.AurixImagePipeline.ARTWORK_FILTER_QUALITY,
       modifier = Modifier.fillMaxSize()
     )
   }

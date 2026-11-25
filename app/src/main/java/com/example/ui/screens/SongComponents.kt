@@ -61,6 +61,8 @@ import coil.request.SuccessResult
 import com.example.R
 import com.example.model.APP_ICON_ARTWORK
 import com.example.model.Song
+import com.example.ui.image.AurixImagePipeline
+import com.example.ui.image.rememberCrispArtworkRequest
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.delay
@@ -101,11 +103,11 @@ fun rememberArtworkColors(
     }
     val sampled = withContext(Dispatchers.IO) {
       try {
-        val request = ImageRequest.Builder(context)
-          .data(model)
-          .allowHardware(false)
-          .size(64)
-          .build()
+        val request = AurixImagePipeline.buildColorSamplingRequest(
+          context = context,
+          model = model,
+          sampleSizePx = 64
+        )
         val result = context.imageLoader.execute(request)
         val drawable = (result as? SuccessResult)?.drawable ?: return@withContext null
         val rawBitmap = runCatching { drawable.toBitmap() }.getOrNull() ?: return@withContext null
@@ -277,18 +279,16 @@ fun SongArtwork(
         )
       }
       song.artworkUrl.isNotBlank() -> {
-        val imageRequest = remember(context, song.artworkUrl) {
-          ImageRequest.Builder(context)
-            .data(song.artworkUrl)
-            .size(240)
-            .crossfade(false)
-            .build()
-        }
+        val imageRequest = rememberCrispArtworkRequest(
+          model = song.artworkUrl,
+          crossfade = false
+        )
         AsyncImage(
           model = imageRequest,
           contentDescription = song.title,
           contentScale = ContentScale.Crop,
           alignment = Alignment.Center,
+          filterQuality = AurixImagePipeline.ARTWORK_FILTER_QUALITY,
           modifier = Modifier.fillMaxSize()
         )
       }
@@ -734,10 +734,12 @@ fun DynamicArtworkBackdrop(
       Box(modifier = Modifier.fillMaxSize().alpha(animatedAlpha)) {
         val bgModel = resolveArtworkModel(song.artworkUrl, song.source)
         if (bgModel != null) {
+          val bgRequest = rememberCrispArtworkRequest(model = bgModel, crossfade = false)
           AsyncImage(
-            model = bgModel,
+            model = bgRequest,
             contentDescription = null,
             contentScale = ContentScale.Crop,
+            filterQuality = AurixImagePipeline.ARTWORK_FILTER_QUALITY,
             modifier = Modifier
               .fillMaxSize()
               .offset(x = activeOffsetX.dp)
@@ -816,17 +818,18 @@ fun DynamicArtGlassBackdropLayer(
       Box(modifier = Modifier.matchParentSize().alpha(layerAlpha)) {
         val model = resolveArtworkModel(song.artworkUrl, song.source)
         if (model != null && Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
-          val blurReq = remember(context, model) {
-            ImageRequest.Builder(context)
-              .data(model)
-              .size(96)
-              .crossfade(false)
-              .build()
+          val blurReq = remember(context, model, effectiveBlurRadius) {
+            if (effectiveBlurRadius <= 2.dp) {
+              AurixImagePipeline.buildCrispArtworkRequest(context = context, model = model, crossfade = false)
+            } else {
+              AurixImagePipeline.buildColorSamplingRequest(context = context, model = model, sampleSizePx = 256)
+            }
           }
           AsyncImage(
             model = blurReq,
             contentDescription = null,
             contentScale = ContentScale.Crop,
+            filterQuality = AurixImagePipeline.ARTWORK_FILTER_QUALITY,
             modifier = Modifier
               .matchParentSize()
               .scale(1.18f)

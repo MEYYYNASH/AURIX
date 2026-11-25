@@ -22,6 +22,7 @@ import android.util.LruCache
 import android.view.View
 import androidx.core.content.res.ResourcesCompat
 import com.example.R
+import com.example.ui.image.AurixImagePipeline
 import kotlin.math.max
 import kotlin.math.min
 import kotlin.math.pow
@@ -274,7 +275,7 @@ object WidgetGlassRenderer {
     val canvas = Canvas(out)
     val rect = RectF(0f, 0f, sizePx.toFloat(), sizePx.toFloat())
     val radius = sizePx * cornerRadiusFraction.coerceIn(0.05f, 0.5f)
-    val paint = Paint(Paint.ANTI_ALIAS_FLAG)
+    val paint = AurixImagePipeline.createCrispBitmapPaint()
     canvas.drawRoundRect(rect, radius, radius, paint)
     paint.xfermode = PorterDuffXfermode(PorterDuff.Mode.SRC_IN)
     val scaled = Bitmap.createScaledBitmap(src, sizePx, sizePx, true)
@@ -293,7 +294,7 @@ object WidgetGlassRenderer {
       (radius - inset).coerceAtLeast(2f),
       borderPaint
     )
-    return out
+    return AurixImagePipeline.applyHighDensityMetadata(out, context)
   }
 
   /**
@@ -310,7 +311,7 @@ object WidgetGlassRenderer {
     val out = Bitmap.createBitmap(sizePx, sizePx, Bitmap.Config.ARGB_8888)
     val canvas = Canvas(out)
     val half = sizePx * 0.5f
-    val discPaint = Paint(Paint.ANTI_ALIAS_FLAG)
+    val discPaint = AurixImagePipeline.createCrispBitmapPaint()
     canvas.drawCircle(half, half, half - 2f, discPaint)
     discPaint.xfermode = PorterDuffXfermode(PorterDuff.Mode.SRC_IN)
 
@@ -351,7 +352,7 @@ object WidgetGlassRenderer {
       color = 0x4DFFFFFF
     }
     canvas.drawCircle(half, half, holeRadius, holeRimPaint)
-    return out
+    return AurixImagePipeline.applyHighDensityMetadata(out, context)
   }
 
   /**

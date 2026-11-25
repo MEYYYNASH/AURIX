@@ -139,18 +139,14 @@ object AudioMetadataReader {
       val safeHash = songId.hashCode().toUInt().toString(16)
       val outFile = File(dir, "embedded_${safeHash}.jpg")
 
-      val bounds = BitmapFactory.Options().apply { inJustDecodeBounds = true }
-      BitmapFactory.decodeByteArray(bytes, 0, bytes.size, bounds)
-      val maxDim = maxOf(bounds.outWidth, bounds.outHeight)
-      var sampleSize = 1
-      while (maxDim / sampleSize > 1024) {
-        sampleSize *= 2
-      }
-      val decodeOpts = BitmapFactory.Options().apply { inSampleSize = sampleSize }
-      val decoded = BitmapFactory.decodeByteArray(bytes, 0, bytes.size, decodeOpts)
+      val decoded = com.example.ui.image.AurixImagePipeline.decodeHighDensityArtworkBytes(
+        context = context,
+        bytes = bytes,
+        guardGpuTextureLimit = true
+      )
       if (decoded != null) {
         FileOutputStream(outFile).use { fos ->
-          decoded.compress(Bitmap.CompressFormat.JPEG, 92, fos)
+          decoded.compress(Bitmap.CompressFormat.JPEG, 96, fos)
           fos.flush()
         }
         decoded.recycle()

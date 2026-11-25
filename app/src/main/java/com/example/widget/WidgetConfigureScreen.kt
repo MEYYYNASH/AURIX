@@ -1019,6 +1019,7 @@ private fun LiveMusicWidgetPreview(
               bitmap = it,
               contentDescription = null,
               contentScale = ContentScale.Crop,
+              filterQuality = com.example.ui.image.AurixImagePipeline.ARTWORK_FILTER_QUALITY,
               modifier = Modifier.fillMaxSize()
             )
           }
@@ -1111,6 +1112,7 @@ private fun LiveMusicWidgetPreview(
                 bitmap = it,
                 contentDescription = null,
                 contentScale = ContentScale.Crop,
+                filterQuality = com.example.ui.image.AurixImagePipeline.ARTWORK_FILTER_QUALITY,
                 modifier = Modifier.fillMaxSize()
               )
             }
@@ -1198,6 +1200,7 @@ private fun LiveMusicWidgetPreview(
                   Image(
                     bitmap = it,
                     contentDescription = null,
+                    filterQuality = com.example.ui.image.AurixImagePipeline.ARTWORK_FILTER_QUALITY,
                     modifier = Modifier.size(56.dp)
                   )
                 }
@@ -1207,6 +1210,7 @@ private fun LiveMusicWidgetPreview(
                   Image(
                     bitmap = it,
                     contentDescription = null,
+                    filterQuality = com.example.ui.image.AurixImagePipeline.ARTWORK_FILTER_QUALITY,
                     modifier = Modifier.size(56.dp)
                   )
                 }
@@ -1216,6 +1220,7 @@ private fun LiveMusicWidgetPreview(
                   Image(
                     bitmap = it,
                     contentDescription = null,
+                    filterQuality = com.example.ui.image.AurixImagePipeline.ARTWORK_FILTER_QUALITY,
                     modifier = Modifier.size(52.dp)
                   )
                 }
@@ -1421,6 +1426,7 @@ private fun LiveLyricsWidgetPreview(
               bitmap = it,
               contentDescription = null,
               contentScale = ContentScale.Crop,
+              filterQuality = com.example.ui.image.AurixImagePipeline.ARTWORK_FILTER_QUALITY,
               modifier = Modifier.fillMaxSize()
             )
           }
@@ -1495,6 +1501,7 @@ private fun LiveLyricsWidgetPreview(
                 bitmap = it,
                 contentDescription = null,
                 contentScale = ContentScale.Crop,
+                filterQuality = com.example.ui.image.AurixImagePipeline.ARTWORK_FILTER_QUALITY,
                 modifier = Modifier.fillMaxSize()
               )
             }
@@ -1648,7 +1655,12 @@ private fun LiveLyricsWidgetPreview(
           if (style == WidgetGlassStyle.FROST_PILL) {
             Spacer(modifier = Modifier.width(10.dp))
             bundle?.warmRoundedCover?.let {
-              Image(bitmap = it, contentDescription = null, modifier = Modifier.size(72.dp))
+              Image(
+                bitmap = it,
+                contentDescription = null,
+                filterQuality = com.example.ui.image.AurixImagePipeline.ARTWORK_FILTER_QUALITY,
+                modifier = Modifier.size(72.dp)
+              )
             }
           }
         }
@@ -1691,6 +1703,7 @@ private fun LiveCoverWidgetPreview(
               bitmap = it,
               contentDescription = null,
               contentScale = ContentScale.Crop,
+              filterQuality = com.example.ui.image.AurixImagePipeline.ARTWORK_FILTER_QUALITY,
               modifier = Modifier.fillMaxSize()
             )
           }
@@ -1700,6 +1713,7 @@ private fun LiveCoverWidgetPreview(
             Image(
               bitmap = it,
               contentDescription = null,
+              filterQuality = com.example.ui.image.AurixImagePipeline.ARTWORK_FILTER_QUALITY,
               modifier = Modifier
                 .size(94.dp)
                 .align(Alignment.Center)
@@ -1711,6 +1725,7 @@ private fun LiveCoverWidgetPreview(
             Image(
               bitmap = it,
               contentDescription = null,
+              filterQuality = com.example.ui.image.AurixImagePipeline.ARTWORK_FILTER_QUALITY,
               modifier = Modifier
                 .size(98.dp)
                 .align(Alignment.Center)
@@ -1722,6 +1737,7 @@ private fun LiveCoverWidgetPreview(
             Image(
               bitmap = it,
               contentDescription = null,
+              filterQuality = com.example.ui.image.AurixImagePipeline.ARTWORK_FILTER_QUALITY,
               modifier = Modifier
                 .size(94.dp)
                 .align(Alignment.Center)
@@ -1809,6 +1825,7 @@ private fun LiveMiniWidgetPreview(
             bitmap = it,
             contentDescription = null,
             contentScale = ContentScale.Crop,
+            filterQuality = com.example.ui.image.AurixImagePipeline.ARTWORK_FILTER_QUALITY,
             modifier = Modifier.fillMaxSize()
           )
         }

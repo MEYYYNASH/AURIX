@@ -1535,10 +1535,12 @@ private fun StandbyAlbumArtWithHalo(
       contentAlignment = Alignment.Center
     ) {
       if (artworkModel != null) {
+        val standbyArtRequest = com.example.ui.image.rememberCrispArtworkRequest(model = artworkModel)
         AsyncImage(
-          model = artworkModel,
+          model = standbyArtRequest,
           contentDescription = songTitle,
           contentScale = ContentScale.Crop,
+          filterQuality = com.example.ui.image.AurixImagePipeline.ARTWORK_FILTER_QUALITY,
           modifier = Modifier.fillMaxSize()
         )
       } else {
