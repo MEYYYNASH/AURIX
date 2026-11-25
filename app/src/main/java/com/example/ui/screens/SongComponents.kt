@@ -1114,7 +1114,7 @@ fun LibraryFramelessTrackRow(
         ),
         style = MaterialTheme.typography.bodyMedium.copy(
           fontSize = 15.sp,
-          lineHeight = 19.sp,
+          lineHeight = 23.sp,
           fontWeight = FontWeight.Bold
         ),
         maxLines = 1,
@@ -1508,7 +1508,11 @@ private fun StandaloneSongCard(
                 baseFontSize = 14.sp,
                 isBold = true
               ),
-              style = MaterialTheme.typography.bodyMedium.copy(fontWeight = FontWeight.Bold),
+              style = MaterialTheme.typography.bodyMedium.copy(
+                fontSize = 14.sp,
+                lineHeight = 22.sp,
+                fontWeight = FontWeight.Bold
+              ),
               maxLines = 1,
               overflow = TextOverflow.Ellipsis,
               color = if (isCurrent) accentColor else MaterialTheme.colorScheme.onBackground

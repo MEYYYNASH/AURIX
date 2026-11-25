@@ -1157,7 +1157,8 @@ private fun CleanSectionHeader(
           text = title,
           style = MaterialTheme.typography.titleMedium.copy(
             fontWeight = FontWeight.ExtraBold,
-            fontSize = 18.sp
+            fontSize = 18.sp,
+            lineHeight = 26.sp
           ),
           color = MaterialTheme.colorScheme.onBackground,
           maxLines = 1,

@@ -340,25 +340,59 @@ object WidgetBitmapBuilder {
 
   private fun drawDarknessOverlay(canvas: Canvas, w: Int, h: Int, darknessPercent: Int) {
     val norm = darknessPercent.coerceIn(0, 100) / 100f
-    if (norm <= 0.001f) return
-    // 100% darkness gives a deep, cinema-grade legible scrim (~74% opacity) so the
-    // blurred photo glow still breathes underneath while white lyrics stay razor-sharp.
-    val topAlpha = (norm * 155f).roundToInt().coerceIn(0, 225)
-    val midAlpha = (norm * 186f).roundToInt().coerceIn(0, 235)
-    val botAlpha = (norm * 212f).roundToInt().coerceIn(0, 245)
-    val paint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
-      shader = LinearGradient(
-        0f, 0f, 0f, h.toFloat(),
-        intArrayOf(
-          Color.argb(topAlpha, 7, 11, 20),
-          Color.argb(midAlpha, 8, 12, 22),
-          Color.argb(botAlpha, 5, 8, 16)
-        ),
-        floatArrayOf(0f, 0.5f, 1f),
+    val wf = w.toFloat()
+    val hf = h.toFloat()
+    if (norm > 0.001f) {
+      // Cinema-grade cosmic midnight indigo scrim so underlying album art/aurora breathes
+      // through vibrantly while white Khmer & Latin lyrics stay razor-sharp.
+      val topAlpha = (norm * 144f).roundToInt().coerceIn(0, 218)
+      val midAlpha = (norm * 174f).roundToInt().coerceIn(0, 228)
+      val botAlpha = (norm * 200f).roundToInt().coerceIn(0, 238)
+      val paint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
+        shader = LinearGradient(
+          0f, 0f, 0f, hf,
+          intArrayOf(
+            Color.argb(topAlpha, 8, 14, 30),
+            Color.argb(midAlpha, 10, 19, 40),
+            Color.argb(botAlpha, 5, 9, 20)
+          ),
+          floatArrayOf(0f, 0.5f, 1f),
+          Shader.TileMode.CLAMP
+        )
+      }
+      canvas.drawRect(0f, 0f, wf, hf, paint)
+    }
+
+    // Subtle atmospheric AURIX cyan/violet aurora rim glow + top-left frosted sheen
+    val cyanGlow = Paint(Paint.ANTI_ALIAS_FLAG).apply {
+      shader = RadialGradient(
+        wf * 0.14f, hf * 0.16f, wf * 0.62f,
+        intArrayOf(0x1843C7F4, Color.TRANSPARENT),
+        floatArrayOf(0f, 1f),
         Shader.TileMode.CLAMP
       )
     }
-    canvas.drawRect(0f, 0f, w.toFloat(), h.toFloat(), paint)
+    canvas.drawRect(0f, 0f, wf, hf, cyanGlow)
+
+    val violetGlow = Paint(Paint.ANTI_ALIAS_FLAG).apply {
+      shader = RadialGradient(
+        wf * 0.88f, hf * 0.86f, wf * 0.56f,
+        intArrayOf(0x167965FF, Color.TRANSPARENT),
+        floatArrayOf(0f, 1f),
+        Shader.TileMode.CLAMP
+      )
+    }
+    canvas.drawRect(0f, 0f, wf, hf, violetGlow)
+
+    val sheen = Paint(Paint.ANTI_ALIAS_FLAG).apply {
+      shader = LinearGradient(
+        0f, 0f, wf * 0.55f, hf * 0.45f,
+        intArrayOf(0x18FFFFFF, 0x05FFFFFF, Color.TRANSPARENT),
+        floatArrayOf(0f, 0.40f, 1f),
+        Shader.TileMode.CLAMP
+      )
+    }
+    canvas.drawRect(0f, 0f, wf, hf, sheen)
   }
 
   fun drawStyledFrameOnCanvas(

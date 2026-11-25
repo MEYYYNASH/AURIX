@@ -107,56 +107,54 @@ data class ScriptTextRun(
 }
 
 /**
- * Compose FontFamilies backed by local bundled .ttf files in res/font.
+ * Compose FontFamilies backed by local bundled full-Unicode .ttf files in res/font.
  */
 object AurixFontFamilies {
   val DangrekTitleFamily = FontFamily(
-    Font(R.font.dangrek, FontWeight.Normal),
-    Font(R.font.dangrek, FontWeight.Medium),
-    Font(R.font.dangrek, FontWeight.SemiBold),
-    Font(R.font.dangrek, FontWeight.Bold),
-    Font(R.font.dangrek, FontWeight.ExtraBold)
+    Font(R.font.dangrek, FontWeight.Normal)
   )
 
   val KantumruyProFamily = FontFamily(
     Font(R.font.kantumruy_pro, FontWeight.Normal),
-    Font(R.font.kantumruy_pro, FontWeight.Medium),
-    Font(R.font.kantumruy_pro, FontWeight.SemiBold),
-    Font(R.font.kantumruy_pro, FontWeight.Bold),
-    Font(R.font.kantumruy_pro, FontWeight.ExtraBold)
+    Font(R.font.kantumruy_pro_semibold, FontWeight.Medium),
+    Font(R.font.kantumruy_pro_semibold, FontWeight.SemiBold),
+    Font(R.font.kantumruy_pro_bold, FontWeight.Bold),
+    Font(R.font.kantumruy_pro_bold, FontWeight.ExtraBold)
   )
 
   val KoulenFamily = FontFamily(
-    Font(R.font.koulen, FontWeight.Normal),
-    Font(R.font.koulen, FontWeight.Medium),
-    Font(R.font.koulen, FontWeight.SemiBold),
-    Font(R.font.koulen, FontWeight.Bold),
-    Font(R.font.koulen, FontWeight.ExtraBold)
+    Font(R.font.koulen, FontWeight.Normal)
   )
 
   val NotoSansKhmerFamily = FontFamily(
     Font(R.font.noto_sans_khmer, FontWeight.Normal),
-    Font(R.font.noto_sans_khmer, FontWeight.Medium),
-    Font(R.font.noto_sans_khmer, FontWeight.SemiBold),
-    Font(R.font.noto_sans_khmer, FontWeight.Bold),
-    Font(R.font.noto_sans_khmer, FontWeight.ExtraBold)
+    Font(R.font.noto_sans_khmer_semibold, FontWeight.Medium),
+    Font(R.font.noto_sans_khmer_semibold, FontWeight.SemiBold),
+    Font(R.font.noto_sans_khmer_bold, FontWeight.Bold),
+    Font(R.font.noto_sans_khmer_bold, FontWeight.ExtraBold)
   )
 
   val OutfitLatinTitleFamily = FontFamily(
     Font(R.font.outfit, FontWeight.Normal),
-    Font(R.font.outfit, FontWeight.Medium),
-    Font(R.font.outfit, FontWeight.SemiBold),
-    Font(R.font.outfit, FontWeight.Bold),
-    Font(R.font.outfit, FontWeight.ExtraBold)
+    Font(R.font.outfit_semibold, FontWeight.Medium),
+    Font(R.font.outfit_semibold, FontWeight.SemiBold),
+    Font(R.font.outfit_bold, FontWeight.Bold),
+    Font(R.font.outfit_bold, FontWeight.ExtraBold)
   )
 
   val InterLatinLyricsFamily = FontFamily(
     Font(R.font.inter, FontWeight.Normal),
-    Font(R.font.inter, FontWeight.Medium),
-    Font(R.font.inter, FontWeight.SemiBold),
-    Font(R.font.inter, FontWeight.Bold),
-    Font(R.font.inter, FontWeight.ExtraBold)
+    Font(R.font.inter_medium, FontWeight.Medium),
+    Font(R.font.inter_medium, FontWeight.SemiBold),
+    Font(R.font.inter_bold, FontWeight.Bold),
+    Font(R.font.inter_bold, FontWeight.ExtraBold)
   )
+
+  /**
+   * Default bilingual UI FontFamily supporting both modern Khmer (Kantumruy Pro)
+   * and geometric Latin across all app screens.
+   */
+  val AurixUiFamily: FontFamily = KantumruyProFamily
 
   fun composeFamilyForLyricsFont(font: KhmerLyricsFont): FontFamily = when (font) {
     KhmerLyricsFont.KANTUMRUY_PRO -> KantumruyProFamily
@@ -171,8 +169,8 @@ object AurixFontFamilies {
  */
 object KhmerTypography {
   // Optical scale constants for Title mixed Khmer (Dangrek) + English (Outfit)
-  const val TITLE_KHMER_DANGREK_MIXED_SCALE = 1.04f
-  const val TITLE_ENGLISH_MIXED_SCALE = 0.96f
+  const val TITLE_KHMER_DANGREK_MIXED_SCALE = 1.05f
+  const val TITLE_ENGLISH_MIXED_SCALE = 0.94f
 
   private val typefaceCache = ConcurrentHashMap<Int, Typeface>()
   private val opticalRatioCache = ConcurrentHashMap<String, Pair<Float, Float>>()
@@ -186,7 +184,8 @@ object KhmerTypography {
     val code = ch.code
     return (code in 0x0041..0x005A) ||
       (code in 0x0061..0x007A) ||
-      (code in 0x00C0..0x024F)
+      (code in 0x00C0..0x024F) ||
+      ch == '·' || ch == '•' || ch == '♪' || ch == '♫' || ch == '—' || ch == '–'
   }
 
   fun containsKhmer(text: CharSequence?): Boolean {
@@ -274,13 +273,24 @@ object KhmerTypography {
     return result
   }
 
+  private fun resolveWeightedFontRes(@FontRes baseFontRes: Int, style: Int): Int {
+    val wantBold = (style and Typeface.BOLD) != 0
+    return when (baseFontRes) {
+      R.font.kantumruy_pro -> if (wantBold) R.font.kantumruy_pro_bold else R.font.kantumruy_pro
+      R.font.noto_sans_khmer -> if (wantBold) R.font.noto_sans_khmer_bold else R.font.noto_sans_khmer
+      R.font.outfit -> if (wantBold) R.font.outfit_bold else R.font.outfit
+      R.font.inter -> if (wantBold) R.font.inter_bold else R.font.inter
+      else -> baseFontRes
+    }
+  }
+
   fun loadTypeface(context: Context, @FontRes fontRes: Int, style: Int = Typeface.NORMAL): Typeface {
-    val base = typefaceCache[fontRes] ?: runCatching {
-      ResourcesCompat.getFont(context, fontRes)
+    val targetRes = resolveWeightedFontRes(fontRes, style)
+    return typefaceCache[targetRes] ?: runCatching {
+      ResourcesCompat.getFont(context, targetRes)
     }.getOrNull()?.also {
-      typefaceCache[fontRes] = it
+      typefaceCache[targetRes] = it
     } ?: Typeface.DEFAULT
-    return if (style == Typeface.NORMAL) base else Typeface.create(base, style)
   }
 
   fun loadInterTypeface(context: Context, isBold: Boolean = true): Typeface {
@@ -295,6 +305,14 @@ object KhmerTypography {
     return loadTypeface(
       context = context,
       fontRes = R.font.outfit,
+      style = if (isBold) Typeface.BOLD else Typeface.NORMAL
+    )
+  }
+
+  fun loadUiTypeface(context: Context, isBold: Boolean = true): Typeface {
+    return loadTypeface(
+      context = context,
+      fontRes = R.font.kantumruy_pro,
       style = if (isBold) Typeface.BOLD else Typeface.NORMAL
     )
   }
@@ -339,7 +357,6 @@ object KhmerTypography {
       }
       val khmerBounds = Rect()
       val latinBounds = Rect()
-      // Measure core consonant body height without tall superscripts/subscripts vs Latin cap+lowercase body
       val khmerSample = "កខគឃងចឆជឈញ"
       val latinSample = "ABCDEFGHx"
       khmerPaint.getTextBounds(khmerSample, 0, khmerSample.length, khmerBounds)
@@ -347,7 +364,6 @@ object KhmerTypography {
       val khH = khmerBounds.height().toFloat()
       val latH = latinBounds.height().toFloat()
       if (khH > 4f && latH > 4f) {
-        // Target the balanced midpoint height so both scripts meet at the exact same visual height
         val midH = (khH + latH) * 0.5f
         val khScale = (midH / khH).coerceIn(0.92f, 1.12f)
         val enScale = (midH / latH).coerceIn(0.90f, 1.08f)
@@ -363,9 +379,9 @@ object KhmerTypography {
 
   /**
    * Builds a SpannableString for Android TextView or Canvas StaticLayout:
-   * - If [isTitle] is true: uses Dangrek (R.font.dangrek) for Khmer and Outfit (R.font.outfit) for English.
+   * - If [isTitle] is true: uses Dangrek (R.font.dangrek) for Khmer and Outfit (R.font.outfit/_bold) for English.
    * - If [isTitle] is false: uses [khmerLyricsFont] (Kantumruy Pro, Koulen, or Noto Sans Khmer) for Khmer
-   *   and Inter (R.font.inter) for English.
+   *   and Inter (R.font.inter/_bold) for English.
    * - When both Khmer and English exist in [text], applies optical scaling so both scripts have equal visual size.
    */
   fun buildStyledSpannable(
@@ -410,8 +426,9 @@ object KhmerTypography {
         ScriptRunType.LATIN -> latinTf to englishScale
         ScriptRunType.NEUTRAL -> (if (hasKhmer) khmerTf else latinTf) to 1.0f
       }
+      // Never smear single-weight Khmer display fonts (Dangrek/Koulen) or true static bold fonts with fakeBold
       span.setSpan(
-        CustomTypefaceAndScaleSpan(typeface = tf, sizeMultiplier = scale, fakeBold = isBold),
+        CustomTypefaceAndScaleSpan(typeface = tf, sizeMultiplier = scale, fakeBold = false),
         run.start,
         run.end,
         Spanned.SPAN_EXCLUSIVE_EXCLUSIVE

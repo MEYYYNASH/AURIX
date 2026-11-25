@@ -11,10 +11,10 @@ import org.junit.Test
 class CrashFixStabilityTest {
 
   @Test
-  fun release214_metadataAndVersionCodeAreConsistent() {
-    assertEquals("2.1.4", BuildConfig.VERSION_NAME)
-    assertEquals(20104, BuildConfig.VERSION_CODE)
-    assertTrue("Release 2.1.4 versionCode must exceed 2.1.3 (20103)", BuildConfig.VERSION_CODE > 20103)
+  fun release215_metadataAndVersionCodeAreConsistent() {
+    assertEquals("2.1.5", BuildConfig.VERSION_NAME)
+    assertEquals(20105, BuildConfig.VERSION_CODE)
+    assertTrue("Release 2.1.5 versionCode must exceed 2.1.4 (20104)", BuildConfig.VERSION_CODE > 20104)
     assertEquals(420, com.example.ui.screens.SELECT_BAR_OPEN_DURATION_MS)
     assertEquals(600, com.example.ui.screens.SELECT_CIRCLE_OPEN_DURATION_MS)
     assertEquals(380L, com.example.ui.screens.SELECT_CLOSE_CLEAR_DELAY_MS)
@@ -555,7 +555,7 @@ class CrashFixStabilityTest {
     assertTrue("Khmer date chip should contain Khmer weekday prefix", khmerDate.contains("ថ្ងៃ"))
 
     // UpdateDownloadErrorKind & 30s cooldown on HTTP 404
-    val installed = com.example.data.InstalledAppInfo("com.aurix.music", "2.1.4", 20104L, emptySet())
+    val installed = com.example.data.InstalledAppInfo("com.aurix.music", "2.1.5", 20105L, emptySet())
     val state404 = com.example.data.UpdateUiState(
       stage = com.example.data.UpdateStage.Error,
       installed = installed,
@@ -566,6 +566,82 @@ class CrashFixStabilityTest {
     assertEquals(com.example.data.UpdateMainAction.Retry, state404.mainAction)
     assertEquals(com.example.data.UpdateDownloadErrorKind.Http404ReleaseBuilding, state404.errorKind)
     assertEquals(30, state404.retryCooldownSeconds)
-    assertEquals(20104L, com.example.data.GitHubUpdater.deriveVersionCodeFromTag("v2.1.4"))
+    assertEquals(20105L, com.example.data.GitHubUpdater.deriveVersionCodeFromTag("v2.1.5"))
+  }
+
+  @Test
+  fun bundledKhmerFontsAndWidgetLayoutWidth_areVerified() {
+    // 1. Verify UI FontFamily is KantumruyProFamily
+    assertEquals(
+      com.example.ui.theme.AurixFontFamilies.KantumruyProFamily,
+      com.example.ui.theme.AurixFontFamilies.AurixUiFamily
+    )
+
+    // 2. Verify middot / dash punctuation stay grouped with Latin run cleanly
+    assertTrue(com.example.ui.theme.KhmerTypography.isLatinChar('·'))
+    val artistSepRuns = com.example.ui.theme.KhmerTypography.segmentScriptRuns("បទចម្រៀង · Artist")
+    assertEquals(2, artistSepRuns.size)
+    assertTrue(artistSepRuns[0].isKhmer)
+    org.junit.Assert.assertFalse(artistSepRuns[1].isKhmer)
+
+    // 3. Verify widget text column widths & sizes across Small / Wide / Large and side frame toggles
+    assertEquals(152f, com.example.widget.AurixWidgetController.computeLyricsTextWidthDp(com.example.widget.WidgetSizeTier.SMALL, false), 0.01f)
+    assertEquals(274f, com.example.widget.AurixWidgetController.computeLyricsTextWidthDp(com.example.widget.WidgetSizeTier.WIDE, false), 0.01f)
+    assertEquals(178f, com.example.widget.AurixWidgetController.computeLyricsTextWidthDp(com.example.widget.WidgetSizeTier.WIDE, true), 0.01f)
+    assertEquals(294f, com.example.widget.AurixWidgetController.computeLyricsTextWidthDp(com.example.widget.WidgetSizeTier.LARGE, false), 0.01f)
+    assertEquals(192f, com.example.widget.AurixWidgetController.computeLyricsTextWidthDp(com.example.widget.WidgetSizeTier.LARGE, true), 0.01f)
+    assertEquals(284f, com.example.widget.AurixWidgetController.computeLyricsFooterWidthDp(com.example.widget.WidgetSizeTier.WIDE, true), 0.01f)
+    assertTrue(
+      com.example.widget.AurixWidgetController.computeLyricsActiveTextSizeDp(com.example.widget.WidgetSizeTier.LARGE) >
+        com.example.widget.AurixWidgetController.computeLyricsActiveTextSizeDp(com.example.widget.WidgetSizeTier.SMALL)
+    )
+    assertTrue(
+      com.example.widget.AurixWidgetController.computeLyricsNextTextSizeDp(com.example.widget.WidgetSizeTier.LARGE) >
+        com.example.widget.AurixWidgetController.computeLyricsNextTextSizeDp(com.example.widget.WidgetSizeTier.SMALL)
+    )
+
+    // 4. Verify all bundled .ttf files exist and Khmer fonts actually carry Khmer Unicode glyphs
+    val fontDirCandidates = listOf(
+      java.io.File("src/main/res/font"),
+      java.io.File("app/src/main/res/font")
+    )
+    val fontDir = fontDirCandidates.firstOrNull { it.isDirectory }
+      ?: throw AssertionError("Could not locate res/font directory from ${java.io.File(".").absolutePath}")
+
+    val khmerFontFiles = listOf(
+      "dangrek.ttf",
+      "koulen.ttf",
+      "kantumruy_pro.ttf",
+      "kantumruy_pro_semibold.ttf",
+      "kantumruy_pro_bold.ttf",
+      "noto_sans_khmer.ttf",
+      "noto_sans_khmer_semibold.ttf",
+      "noto_sans_khmer_bold.ttf"
+    )
+    val khmerProbeChars = listOf('ក', 'ខ', 'ិ', '្', 'អ')
+    for (name in khmerFontFiles) {
+      val f = java.io.File(fontDir, name)
+      assertTrue("Font file missing: $name", f.isFile && f.length() > 10_000L)
+      val awtFont = java.awt.Font.createFont(java.awt.Font.TRUETYPE_FONT, f)
+      for (ch in khmerProbeChars) {
+        assertTrue("Khmer glyph U+${Integer.toHexString(ch.code)} missing in $name", awtFont.canDisplay(ch))
+      }
+    }
+
+    val latinFontFiles = listOf(
+      "outfit.ttf",
+      "outfit_semibold.ttf",
+      "outfit_bold.ttf",
+      "inter.ttf",
+      "inter_medium.ttf",
+      "inter_bold.ttf"
+    )
+    for (name in latinFontFiles) {
+      val f = java.io.File(fontDir, name)
+      assertTrue("Font file missing: $name", f.isFile && f.length() > 10_000L)
+      val awtFont = java.awt.Font.createFont(java.awt.Font.TRUETYPE_FONT, f)
+      assertTrue("Latin 'A' missing in $name", awtFont.canDisplay('A'))
+      assertTrue("Latin 'a' missing in $name", awtFont.canDisplay('a'))
+    }
   }
 }

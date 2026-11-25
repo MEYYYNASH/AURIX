@@ -10,9 +10,9 @@ on:
   workflow_dispatch:
     inputs:
       tag:
-        description: 'Release tag (e.g. v2.1.4)'
+        description: 'Release tag (e.g. v2.1.5)'
         required: false
-        default: 'v2.1.4'
+        default: 'v2.1.5'
 
 permissions:
   contents: write
@@ -52,13 +52,13 @@ jobs:
             RELEASE_TAG="${{ github.ref_name }}"
           else
             VERSION=$(grep -m1 'versionName' app/build.gradle.kts | sed -E 's/.*"([^"]+)".*/\1/' | tr '[:upper:]' '[:lower:]' | tr ' ' '-')
-            RELEASE_TAG="v${VERSION:-2.1.4}"
+            RELEASE_TAG="v${VERSION:-2.1.5}"
           fi
           VCODE=$(grep -m1 'versionCode' app/build.gradle.kts | sed -E 's/[^0-9]*([0-9]+).*/\1/')
           RDATE=$(grep -m1 'RELEASE_DATE' app/build.gradle.kts | sed -E 's/.*\\"([^\\"]+)\\".*/\1/')
           echo "RELEASE_TAG=${RELEASE_TAG}" >> "$GITHUB_ENV"
           echo "RELEASE_VERSION=${RELEASE_TAG#v}" >> "$GITHUB_ENV"
-          echo "RELEASE_VERSION_CODE=${VCODE:-20104}" >> "$GITHUB_ENV"
+          echo "RELEASE_VERSION_CODE=${VCODE:-20105}" >> "$GITHUB_ENV"
           echo "RELEASE_DATE=${RDATE:-$(date -u +%Y-%m-%d)}" >> "$GITHUB_ENV"
 
       - name: Ensure keystores exist
@@ -98,10 +98,10 @@ jobs:
             "sha256": os.environ["APK_SHA256"],
             "mandatory": False,
             "notes": [
-              f"Widget Photo Picker, Smooth Widget Animations & Clean Lyrics UI ({tag}): Fixed Photo Picker HEIC/AVIF & single-use gallery streams, fixed Home Screen Lyrics widget line animations with Binder-safe RGB_565 & Khmer bitmaps, removed floating overlay from Lyrics screen, and cleaned up the TAP Sync button styling",
-              "Widget Customizer & Live Settings Preview (v2.0.3): Added Settings > Widgets > Customize widget with live 2:1 preview, 9 Frame styles, 5 Backgrounds, Blur & Darkness sliders, and fixed 2:1 Background Cropper",
-              "Developer Mode & Offline Custom Lyrics Editor (v2.0.2): Tap Build number 7 times in Settings > About to unlock Developer mode with Write & TAP Sync editor, .lrc/.txt import/export, and Room offline priority over LRCLIB",
-              "Lyrics Animation Picker & 5 Transition Styles (v2.0.1): Settings > Lyrics > Lyrics animation sheet with 5 looping live-preview cards and Both/App/Widget targeting"
+              f"Bundled Full-Unicode Khmer Fonts & Redesigned Glass Widgets ({tag}): Real full-Unicode Khmer & Latin .ttf fonts (Dangrek, Kantumruy Pro, Koulen, Noto Sans Khmer, Outfit, Inter) across app & widgets, fixed Khmer line-height clipping, and redesigned AURIX cosmic glass widgets",
+              "Standby Bedside & Charging Screen + Clean Bilingual Update Error Handling (v2.1.4): 10 clock styles, 5 moods with Auto cover palette lerp, 3D Gyro Parallax, Khmer chips, burn-in drift & localized EN/KM 404 Retry error handling",
+              "Khmer Lyrics Font Picker, Dangrek Titles & Restored Home Carousels (v2.1.3): Active-only lyric animation, Khmer font selector, and Dangrek titles",
+              "Widget Customizer & Live Settings Preview (v2.0.3): Added Settings > Widgets > Customize widget with live 2:1 preview"
             ],
             "releasePageUrl": f"https://github.com/{repo}/releases/tag/{tag}"
           }
@@ -127,10 +127,9 @@ jobs:
             mandatory: false
 
             What's New in AURIX ${{ env.RELEASE_TAG }}:
-            - Widget Photo Picker, Smooth Widget Animations & Clean Lyrics UI: Fixed Photo Picker HEIC/AVIF & single-use gallery streams, fixed Home Screen Lyrics widget line animations with Binder-safe RGB_565 & Khmer bitmaps, removed floating overlay from Lyrics screen, and cleaned up the TAP Sync button styling
-            - Widget Customizer & Live Settings Preview (v2.0.3): Settings > Widgets > Customize widget with live 2:1 preview, 9 Frame styles, 5 Backgrounds, Blur & Darkness sliders, and fixed 2:1 Background Cropper
-            - Developer Mode & Offline Custom Lyrics Editor (v2.0.2): Tap Build number 7 times in Settings > About for offline Write & TAP Sync custom lyrics
-            - Lyrics Animation Picker & 5 Transition Styles (v2.0.1): 5 looping live-preview cards (Slide Up, Blur Fade, Karaoke Fill, Typewriter, Pop Zoom) and Both/App/Widget targeting
+            - Bundled Full-Unicode Khmer Fonts & Redesigned Glass Widgets: Real full-Unicode Khmer & Latin .ttf fonts (Dangrek, Kantumruy Pro, Koulen, Noto Sans Khmer, Outfit, Inter) across app & widgets, fixed Khmer line-height clipping, and redesigned AURIX cosmic glass widgets
+            - Standby Bedside & Charging Screen + Clean Bilingual Update Error Handling (v2.1.4): 10 clock styles, 5 moods with Auto cover palette lerp, 3D Gyro Parallax, Khmer chips, burn-in drift & localized EN/KM 404 Retry error handling
+            - Khmer Lyrics Font Picker, Dangrek Titles & Restored Home Carousels (v2.1.3): Active-only lyric animation, Khmer font selector, and Dangrek titles
           files: |
             app/build/outputs/apk/release/app-release.apk
             AURIX-${{ env.RELEASE_TAG }}.apk

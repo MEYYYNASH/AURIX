@@ -231,8 +231,8 @@ fun LiveWidgetPreviewCard(
     modifier = widthModifier
       .aspectRatio(aspect)
       .clip(shape)
-      .border(1.dp, Color.White.copy(alpha = 0.16f), shape)
-      .background(Color(0xFF0E1624))
+      .border(1.dp, Color(0x46E2F2FF), shape)
+      .background(Color(0xFF0A1124))
   ) {
     // 1. Background layer (live animated Aurora in app preview, Canvas bitmap for others)
     if (norm.bgType == WidgetBgType.AURORA) {
@@ -254,91 +254,106 @@ fun LiveWidgetPreviewCard(
       }
     }
 
-    // 2. Foreground content matching home screen widget layout
-    Row(
+    // 2. Foreground content matching home screen widget layout (Full-width Header + Balanced Middle + Full-width Footer)
+    Column(
       modifier = Modifier
         .fillMaxSize()
         .padding(
           horizontal = if (sizeTier == WidgetSizeTier.SMALL) 12.dp else 14.dp,
           vertical = if (sizeTier == WidgetSizeTier.SMALL) 11.dp else 12.dp
         ),
-      verticalAlignment = Alignment.CenterVertically
+      verticalArrangement = Arrangement.SpaceBetween
     ) {
-      if (showSideFrame && frameBitmap != null) {
-        val frameDim = if (sizeTier == WidgetSizeTier.LARGE) 108.dp else 94.dp
-        val effectiveMotion = if (motionDisabled) WidgetFrameMotion.STILL else norm.motion
-        Box(
-          modifier = Modifier
-            .size(frameDim)
-            .graphicsLayer {
-              when (effectiveMotion) {
-                WidgetFrameMotion.STILL -> Unit
-                WidgetFrameMotion.FLOAT -> translationY = floatOffsetY
-                WidgetFrameMotion.SPIN -> rotationZ = spinAngle
-                WidgetFrameMotion.PULSE -> {
-                  scaleX = pulseScale
-                  scaleY = pulseScale
-                }
-              }
-            },
-          contentAlignment = Alignment.Center
-        ) {
-          Image(
-            bitmap = frameBitmap!!.asImageBitmap(),
-            contentDescription = null,
-            contentScale = ContentScale.Fit,
-            modifier = Modifier.fillMaxSize()
-          )
+      // Full-Width Top Header Row
+      Row(
+        modifier = Modifier.fillMaxWidth(),
+        horizontalArrangement = Arrangement.SpaceBetween,
+        verticalAlignment = Alignment.CenterVertically
+      ) {
+        if (showLyricsContent) {
+          Row(
+            modifier = Modifier
+              .clip(RoundedCornerShape(50))
+              .background(
+                Brush.horizontalGradient(
+                  listOf(Color(0x3643C7F4), Color(0x2B7965FF))
+                )
+              )
+              .border(
+                0.85.dp,
+                Brush.horizontalGradient(listOf(Color(0x887AE8FF), Color(0x557965FF))),
+                RoundedCornerShape(50)
+              )
+              .padding(horizontal = 8.dp, vertical = 3.dp),
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.spacedBy(4.dp)
+          ) {
+            Icon(
+              imageVector = Icons.Rounded.GraphicEq,
+              contentDescription = null,
+              tint = Color(0xFF5EEAD4),
+              modifier = Modifier.size(11.dp)
+            )
+            Text(
+              text = stringResource(R.string.widget_lyrics_tag),
+              color = Color(0xFFF2FCFF),
+              fontFamily = com.example.ui.theme.AurixFontFamilies.AurixUiFamily,
+              fontSize = 10.sp,
+              fontWeight = FontWeight.Bold,
+              maxLines = 1
+            )
+          }
+        } else {
+          Spacer(modifier = Modifier.width(1.dp))
         }
-        Spacer(modifier = Modifier.width(12.dp))
+
+        Image(
+          painter = androidx.compose.ui.res.painterResource(R.drawable.ic_widget_orbi),
+          contentDescription = null,
+          modifier = Modifier.size(if (sizeTier == WidgetSizeTier.SMALL) 16.dp else 18.dp)
+        )
       }
 
-      Column(
+      // Balanced Middle Row: Optional Styled Side Frame + Active & Upcoming Lyrics
+      Row(
         modifier = Modifier
           .weight(1f)
-          .fillMaxHeight(),
-        verticalArrangement = Arrangement.SpaceBetween
+          .fillMaxWidth(),
+        verticalAlignment = Alignment.CenterVertically
       ) {
-        // Top pill row
-        Row(
-          modifier = Modifier.fillMaxWidth(),
-          horizontalArrangement = Arrangement.SpaceBetween,
-          verticalAlignment = Alignment.CenterVertically
-        ) {
-          if (showLyricsContent) {
-            Row(
-              modifier = Modifier
-                .clip(RoundedCornerShape(50))
-                .background(Color.White.copy(alpha = 0.16f))
-                .border(0.75.dp, Color.White.copy(alpha = 0.25f), RoundedCornerShape(50))
-                .padding(horizontal = 8.dp, vertical = 3.dp),
-              verticalAlignment = Alignment.CenterVertically,
-              horizontalArrangement = Arrangement.spacedBy(4.dp)
-            ) {
-              Icon(
-                imageVector = Icons.Rounded.GraphicEq,
-                contentDescription = null,
-                tint = Color(0xFF43C7F4),
-                modifier = Modifier.size(11.dp)
-              )
-              Text(
-                text = stringResource(R.string.widget_lyrics_tag),
-                color = Color.White,
-                fontSize = 10.sp,
-                fontWeight = FontWeight.Bold,
-                maxLines = 1
-              )
-            }
-          } else {
-            Spacer(modifier = Modifier.width(1.dp))
+        if (showSideFrame && frameBitmap != null) {
+          val frameDim = if (sizeTier == WidgetSizeTier.LARGE) 102.dp else 86.dp
+          val effectiveMotion = if (motionDisabled) WidgetFrameMotion.STILL else norm.motion
+          Box(
+            modifier = Modifier
+              .size(frameDim)
+              .graphicsLayer {
+                when (effectiveMotion) {
+                  WidgetFrameMotion.STILL -> Unit
+                  WidgetFrameMotion.FLOAT -> translationY = floatOffsetY
+                  WidgetFrameMotion.SPIN -> rotationZ = spinAngle
+                  WidgetFrameMotion.PULSE -> {
+                    scaleX = pulseScale
+                    scaleY = pulseScale
+                  }
+                }
+              },
+            contentAlignment = Alignment.Center
+          ) {
+            Image(
+              bitmap = frameBitmap!!.asImageBitmap(),
+              contentDescription = null,
+              contentScale = ContentScale.Fit,
+              modifier = Modifier.fillMaxSize()
+            )
           }
+          Spacer(modifier = Modifier.width(12.dp))
         }
 
-        // Center lyric or title-only stage
         if (!showLyricsContent) {
-          val noLyricsTitleFontSize = if (sizeTier == WidgetSizeTier.SMALL) 14.sp else 16.sp
+          val noLyricsTitleFontSize = if (sizeTier == WidgetSizeTier.SMALL) 14.5.sp else 16.5.sp
           Column(
-            modifier = Modifier.fillMaxWidth(),
+            modifier = Modifier.weight(1f),
             verticalArrangement = Arrangement.Center
           ) {
             Text(
@@ -350,27 +365,29 @@ fun LiveWidgetPreviewCard(
               color = Color.White,
               fontSize = noLyricsTitleFontSize,
               fontWeight = FontWeight.Bold,
+              lineHeight = noLyricsTitleFontSize * 1.32f,
               maxLines = 2,
               overflow = TextOverflow.Ellipsis
             )
             Spacer(modifier = Modifier.height(3.dp))
             Text(
               text = previewArtist,
-              color = Color.White.copy(alpha = 0.72f),
-              fontSize = 12.sp,
+              color = Color(0xC2D8EEFF),
+              fontFamily = com.example.ui.theme.AurixFontFamilies.AurixUiFamily,
+              fontSize = 12.5.sp,
               maxLines = 1,
               overflow = TextOverflow.Ellipsis
             )
           }
         } else {
           val currentLyricFontSize = when (sizeTier) {
-            WidgetSizeTier.SMALL -> 13.5.sp
-            WidgetSizeTier.WIDE -> 15.5.sp
-            WidgetSizeTier.LARGE -> 17.5.sp
+            WidgetSizeTier.SMALL -> 14.5.sp
+            WidgetSizeTier.WIDE -> 16.5.sp
+            WidgetSizeTier.LARGE -> 18.5.sp
           }
-          val nextLyricFontSize = if (sizeTier == WidgetSizeTier.SMALL) 10.5.sp else 12.sp
+          val nextLyricFontSize = if (sizeTier == WidgetSizeTier.SMALL) 11.sp else 12.5.sp
           Column(
-            modifier = Modifier.fillMaxWidth(),
+            modifier = Modifier.weight(1f),
             verticalArrangement = Arrangement.Center
           ) {
             Row(
@@ -380,10 +397,12 @@ fun LiveWidgetPreviewCard(
               Box(
                 modifier = Modifier
                   .width(3.5.dp)
-                  .height(if (sizeTier == WidgetSizeTier.SMALL) 22.dp else 26.dp)
+                  .height(if (sizeTier == WidgetSizeTier.SMALL) 24.dp else 28.dp)
                   .clip(RoundedCornerShape(50))
                   .background(
-                    Brush.verticalGradient(listOf(Color(0xFF43C7F4), Color(0xFF7965FF)))
+                    Brush.verticalGradient(
+                      listOf(Color(0xFF5EEAD4), Color(0xFF43C7F4), Color(0xFF8B5CF6))
+                    )
                   )
               )
               Spacer(modifier = Modifier.width(10.dp))
@@ -398,9 +417,9 @@ fun LiveWidgetPreviewCard(
                 fontSize = currentLyricFontSize,
                 fontWeight = FontWeight.Bold,
                 lineHeight = when (sizeTier) {
-                  WidgetSizeTier.SMALL -> 19.sp
-                  WidgetSizeTier.WIDE -> 22.sp
-                  WidgetSizeTier.LARGE -> 24.sp
+                  WidgetSizeTier.SMALL -> 20.sp
+                  WidgetSizeTier.WIDE -> 23.sp
+                  WidgetSizeTier.LARGE -> 25.sp
                 },
                 maxLines = 2,
                 overflow = TextOverflow.Ellipsis,
@@ -408,7 +427,7 @@ fun LiveWidgetPreviewCard(
               )
             }
             if (displayNext.isNotBlank()) {
-              Spacer(modifier = Modifier.height(3.dp))
+              Spacer(modifier = Modifier.height(4.dp))
               Text(
                 text = com.example.ui.theme.rememberKhmerLyricsText(
                   text = displayNext,
@@ -416,8 +435,9 @@ fun LiveWidgetPreviewCard(
                   baseFontSize = nextLyricFontSize,
                   isBold = false
                 ),
-                color = Color.White.copy(alpha = 0.66f),
+                color = Color(0xBDDAE8FF),
                 fontSize = nextLyricFontSize,
+                lineHeight = nextLyricFontSize * 1.32f,
                 maxLines = 1,
                 overflow = TextOverflow.Ellipsis,
                 modifier = Modifier.padding(start = 13.5.dp)
@@ -425,23 +445,46 @@ fun LiveWidgetPreviewCard(
             }
           }
         }
+      }
 
-        // Bottom song footer (hidden when song has no lyrics since title+artist is centered)
-        if (showLyricsContent) {
+      // Full-Width Bottom Song Footer (hidden when song has no lyrics since title+artist is centered)
+      if (showLyricsContent) {
+        Row(
+          modifier = Modifier.fillMaxWidth(),
+          verticalAlignment = Alignment.CenterVertically,
+          horizontalArrangement = Arrangement.spacedBy(7.dp)
+        ) {
+          if (!showSideFrame) {
+            if (albumArtBitmap != null && !albumArtBitmap.isRecycled) {
+              Image(
+                bitmap = albumArtBitmap.asImageBitmap(),
+                contentDescription = null,
+                contentScale = ContentScale.Crop,
+                modifier = Modifier
+                  .size(18.dp)
+                  .clip(RoundedCornerShape(5.dp))
+                  .border(0.6.dp, Color(0x59E2F2FF), RoundedCornerShape(5.dp))
+              )
+            } else {
+              Image(
+                painter = androidx.compose.ui.res.painterResource(R.drawable.ic_widget_orbi),
+                contentDescription = null,
+                modifier = Modifier.size(18.dp)
+              )
+            }
+          }
           Text(
             text = com.example.ui.theme.rememberKhmerTitleText(
               text = "$previewTitle · $previewArtist",
-              baseFontSize = 11.5.sp,
+              baseFontSize = 12.sp,
               isBold = true
             ),
-            color = Color.White.copy(alpha = 0.88f),
-            fontSize = 11.5.sp,
+            color = Color(0xF5FFFFFF),
+            fontSize = 12.sp,
             fontWeight = FontWeight.Bold,
             maxLines = 1,
             overflow = TextOverflow.Ellipsis
           )
-        } else {
-          Spacer(modifier = Modifier.height(2.dp))
         }
       }
     }
@@ -458,7 +501,7 @@ private fun LiveAuroraBackgroundCanvas(
   Canvas(modifier = modifier) {
     val w = size.width
     val h = size.height
-    drawRect(Color(0xFF0A1022))
+    drawRect(Color(0xFF0A1124))
 
     val angle = phase * (2.0 * PI)
     val dx1 = (cos(angle) * w * 0.16).toFloat()
@@ -491,9 +534,9 @@ private fun LiveAuroraBackgroundCanvas(
       drawRect(
         brush = Brush.verticalGradient(
           colors = listOf(
-            Color(0xFF070B14).copy(alpha = (normDark * 0.61f).coerceIn(0f, 0.88f)),
-            Color(0xFF080C16).copy(alpha = (normDark * 0.73f).coerceIn(0f, 0.92f)),
-            Color(0xFF050810).copy(alpha = (normDark * 0.83f).coerceIn(0f, 0.96f))
+            Color(0xFF080E1E).copy(alpha = (normDark * 0.56f).coerceIn(0f, 0.85f)),
+            Color(0xFF0A1328).copy(alpha = (normDark * 0.68f).coerceIn(0f, 0.90f)),
+            Color(0xFF050914).copy(alpha = (normDark * 0.78f).coerceIn(0f, 0.93f))
           )
         )
       )

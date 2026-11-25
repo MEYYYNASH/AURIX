@@ -136,8 +136,8 @@ object AurixWidgetController {
   private const val PREFS_WIDGET_SNAPSHOT = "aurix_widget_snapshot_prefs"
   private const val CACHE_DIR_NAME = "widget_cache"
   private const val CACHED_RAW_ART_FILE = "last_album_art_v2.png"
-  private const val CACHED_GLOW_BG_FILE = "last_glow_bg_v2.png"
-  private const val CACHED_ROUNDED_ART_FILE = "last_rounded_art_v2.png"
+  private const val CACHED_GLOW_BG_FILE = "last_glow_bg_v3.png"
+  private const val CACHED_ROUNDED_ART_FILE = "last_rounded_art_v3.png"
   private const val MAX_PARTIAL_UPDATES_BEFORE_FULL_SYNC = 64
 
   @OptIn(kotlinx.coroutines.ExperimentalCoroutinesApi::class)
@@ -177,9 +177,35 @@ object AurixWidgetController {
   private var lastFullLyricsLayoutRes: Int = 0
 
   private val lastFullLyricsLayoutByWidgetId = ConcurrentHashMap<Int, Int>()
+  private val lastLyricsHasSideFrameByWidgetId = ConcurrentHashMap<Int, Boolean>()
+  private val lastLyricsSizeTierByWidgetId = ConcurrentHashMap<Int, WidgetSizeTier>()
 
   @Volatile
   private var partialUpdatesSinceFullLyrics: Int = 0
+
+  internal fun computeLyricsTextWidthDp(sizeTier: WidgetSizeTier, hasSideFrame: Boolean): Float = when (sizeTier) {
+    WidgetSizeTier.SMALL -> 152f
+    WidgetSizeTier.WIDE -> if (hasSideFrame) 178f else 274f
+    WidgetSizeTier.LARGE -> if (hasSideFrame) 192f else 294f
+  }
+
+  internal fun computeLyricsFooterWidthDp(sizeTier: WidgetSizeTier, hasSideFrame: Boolean): Float = when (sizeTier) {
+    WidgetSizeTier.SMALL -> 166f
+    WidgetSizeTier.WIDE -> if (hasSideFrame) 284f else 266f
+    WidgetSizeTier.LARGE -> if (hasSideFrame) 308f else 290f
+  }
+
+  internal fun computeLyricsActiveTextSizeDp(sizeTier: WidgetSizeTier): Float = when (sizeTier) {
+    WidgetSizeTier.SMALL -> 15.2f
+    WidgetSizeTier.WIDE -> 17.2f
+    WidgetSizeTier.LARGE -> 19.2f
+  }
+
+  internal fun computeLyricsNextTextSizeDp(sizeTier: WidgetSizeTier): Float = when (sizeTier) {
+    WidgetSizeTier.SMALL -> 11.5f
+    WidgetSizeTier.WIDE -> 12.8f
+    WidgetSizeTier.LARGE -> 14.0f
+  }
 
   fun shouldShowLikeButton(minWidthDp: Int): Boolean {
     return minWidthDp <= 0 || minWidthDp >= MIN_WIDTH_DP_FOR_LIKE
@@ -341,6 +367,9 @@ object AurixWidgetController {
       )
       runCatching { manager.updateAppWidget(widgetId, views) }
       lastFullLyricsLayoutByWidgetId[widgetId] = layoutRes
+      lastLyricsSizeTierByWidgetId[widgetId] = sizeTier
+      lastLyricsHasSideFrameByWidgetId[widgetId] =
+        customizer.frameStyle != WidgetFrameStyle.NONE && sizeTier != WidgetSizeTier.SMALL && standaloneFrameBmp != null
       lastFullLyricsLayoutRes = layoutRes
     }
     partialUpdatesSinceFullLyrics = 0
@@ -867,15 +896,23 @@ object AurixWidgetController {
         }
 
         val primaryTextColor = COLOR_TEXT_DARK
-        val mutedTextColor = 0xA6FFFFFF.toInt()
+        val mutedTextColor = 0xBDDAE8FF.toInt()
         val displayCurrentLine = state.currentLyricLine
         val displayNextLine = state.nextLyricLine
         val targetSlot = state.lyricsFlipperSlot.coerceIn(0, 1)
         val khmerFont = com.example.ui.theme.KhmerLyricsFont.fromId(state.khmerLyricsFont)
 
         for (widgetId in lyricsIds) {
+          val tier = lastLyricsSizeTierByWidgetId[widgetId] ?: resolveWidgetSizeTier(
+            runCatching { manager.getAppWidgetOptions(widgetId) }.getOrNull()
+          )
+          val hasSideFrame = lastLyricsHasSideFrameByWidgetId[widgetId] ?: false
+          val textWidthDp = computeLyricsTextWidthDp(tier, hasSideFrame)
+          val activeTextSizeDp = computeLyricsActiveTextSizeDp(tier)
+          val nextTextSizeDp = computeLyricsNextTextSizeDp(tier)
+
           val layoutRes = lastFullLyricsLayoutByWidgetId[widgetId]
-            ?: resolveLyricsWidgetLayoutRes(state.lyricsWidgetAnimStyle, reduceMotion, WidgetSizeTier.WIDE)
+            ?: resolveLyricsWidgetLayoutRes(state.lyricsWidgetAnimStyle, reduceMotion, tier)
           val partialViews = RemoteViews(appCtx.packageName, layoutRes)
           // Animate ONLY the active lyric line inside ViewFlipper
           bindLyricsFlipperSlot(
@@ -884,7 +921,9 @@ object AurixWidgetController {
             slotIndex = targetSlot,
             currentLine = displayCurrentLine,
             khmerLyricsFont = khmerFont,
-            primaryTextColor = primaryTextColor
+            primaryTextColor = primaryTextColor,
+            textWidthDp = textWidthDp,
+            activeTextSizeDp = activeTextSizeDp
           )
           // Update the upcoming lyric line OUTSIDE ViewFlipper statically (zero premature animation)
           bindStaticNextLyricLine(
@@ -892,7 +931,9 @@ object AurixWidgetController {
             views = partialViews,
             nextLine = displayNextLine,
             khmerLyricsFont = khmerFont,
-            mutedTextColor = mutedTextColor
+            mutedTextColor = mutedTextColor,
+            textWidthDp = textWidthDp,
+            nextTextSizeDp = nextTextSizeDp
           )
           partialViews.setDisplayedChild(R.id.widget_lyrics_flipper, targetSlot)
           runCatching { manager.partiallyUpdateAppWidget(widgetId, partialViews) }
@@ -986,6 +1027,9 @@ object AurixWidgetController {
         )
         runCatching { manager.updateAppWidget(widgetId, views) }
         lastFullLyricsLayoutByWidgetId[widgetId] = layoutRes
+        lastLyricsSizeTierByWidgetId[widgetId] = sizeTier
+        lastLyricsHasSideFrameByWidgetId[widgetId] =
+          customizer.frameStyle != WidgetFrameStyle.NONE && sizeTier != WidgetSizeTier.SMALL && standaloneFrameBmp != null
         lastFullLyricsLayoutRes = layoutRes
       }
       partialUpdatesSinceFullLyrics = 0
@@ -1053,6 +1097,9 @@ object AurixWidgetController {
           )
           runCatching { appWidgetManager.updateAppWidget(widgetId, views) }
           lastFullLyricsLayoutByWidgetId[widgetId] = layoutRes
+          lastLyricsSizeTierByWidgetId[widgetId] = sizeTier
+          lastLyricsHasSideFrameByWidgetId[widgetId] =
+            customizer.frameStyle != WidgetFrameStyle.NONE && sizeTier != WidgetSizeTier.SMALL && standaloneFrameBmp != null
           lastFullLyricsLayoutRes = layoutRes
         }
         partialUpdatesSinceFullLyrics = 0
@@ -1073,7 +1120,7 @@ object AurixWidgetController {
     return WidgetBitmapBuilder.buildStandaloneFrameBitmap(
       photo = frameSource,
       config = customizer,
-      sizePx = 220
+      sizePx = 200
     )
   }
 
@@ -1103,14 +1150,31 @@ object AurixWidgetController {
       openScreen = AppNotificationHelper.SCREEN_NOW_PLAYING_PLAYER
     )
 
+    val khmerFont = com.example.ui.theme.KhmerLyricsFont.fromId(state.khmerLyricsFont)
+
     if (state.songId.isBlank() || state.title.isBlank()) {
       views.setViewVisibility(R.id.widget_music_empty_container, View.VISIBLE)
       views.setViewVisibility(R.id.widget_music_content_container, View.GONE)
-      views.setTextViewText(
-        R.id.widget_music_empty_text,
-        localizedCtx.getString(R.string.widget_open_aurix)
+      val openText = localizedCtx.getString(R.string.widget_open_aurix)
+      val emptyBmp = renderStyledUiBitmap(
+        context = context,
+        text = openText,
+        textColor = primaryTextColor,
+        baseTextSizeDp = 15.5f,
+        isBold = true,
+        widthDp = 180f,
+        wrapToTextWidth = true
       )
-      views.setTextColor(R.id.widget_music_empty_text, primaryTextColor)
+      if (emptyBmp != null) {
+        views.setViewVisibility(R.id.widget_music_empty_bitmap, View.VISIBLE)
+        views.setViewVisibility(R.id.widget_music_empty_text, View.GONE)
+        views.setImageViewBitmap(R.id.widget_music_empty_bitmap, emptyBmp)
+      } else {
+        views.setViewVisibility(R.id.widget_music_empty_bitmap, View.GONE)
+        views.setViewVisibility(R.id.widget_music_empty_text, View.VISIBLE)
+        views.setTextViewText(R.id.widget_music_empty_text, openText)
+        views.setTextColor(R.id.widget_music_empty_text, primaryTextColor)
+      }
       views.setOnClickPendingIntent(R.id.widget_music_root, openPlayerPi)
       views.setOnClickPendingIntent(R.id.widget_music_empty_container, openPlayerPi)
       return views
@@ -1123,10 +1187,52 @@ object AurixWidgetController {
     views.setOnClickPendingIntent(R.id.widget_music_album_art, openPlayerPi)
     views.setOnClickPendingIntent(R.id.widget_music_meta_container, openPlayerPi)
 
-    views.setTextViewText(R.id.widget_music_title, state.title)
-    views.setTextViewText(R.id.widget_music_artist, state.artist.ifBlank { "AURIX" })
-    views.setTextColor(R.id.widget_music_title, primaryTextColor)
-    views.setTextColor(R.id.widget_music_artist, mutedTextColor)
+    val minWidthDp = options?.getInt(AppWidgetManager.OPTION_APPWIDGET_MIN_WIDTH, 280) ?: 280
+    val metaWidthDp = (minWidthDp - 115).coerceIn(130, 320).toFloat()
+    val titleWidthDp = (metaWidthDp - 24f).coerceAtLeast(106f)
+    val cleanTitle = state.title.trim()
+    val cleanArtist = state.artist.trim().ifBlank { "AURIX" }
+
+    val titleBmp = renderStyledTitleOrFooterBitmap(
+      context = context,
+      titleText = cleanTitle,
+      artistText = "",
+      khmerLyricsFont = khmerFont,
+      titleColor = primaryTextColor,
+      artistColor = mutedTextColor,
+      baseTextSizeDp = 15.5f,
+      widthDp = titleWidthDp,
+      maxLines = 1
+    )
+    if (titleBmp != null) {
+      views.setViewVisibility(R.id.widget_music_title_bitmap, View.VISIBLE)
+      views.setViewVisibility(R.id.widget_music_title, View.GONE)
+      views.setImageViewBitmap(R.id.widget_music_title_bitmap, titleBmp)
+    } else {
+      views.setViewVisibility(R.id.widget_music_title_bitmap, View.GONE)
+      views.setViewVisibility(R.id.widget_music_title, View.VISIBLE)
+      views.setTextViewText(R.id.widget_music_title, cleanTitle)
+      views.setTextColor(R.id.widget_music_title, primaryTextColor)
+    }
+
+    val artistBmp = renderStyledUiBitmap(
+      context = context,
+      text = cleanArtist,
+      textColor = mutedTextColor,
+      baseTextSizeDp = 12.5f,
+      isBold = false,
+      widthDp = metaWidthDp
+    )
+    if (artistBmp != null) {
+      views.setViewVisibility(R.id.widget_music_artist_bitmap, View.VISIBLE)
+      views.setViewVisibility(R.id.widget_music_artist, View.GONE)
+      views.setImageViewBitmap(R.id.widget_music_artist_bitmap, artistBmp)
+    } else {
+      views.setViewVisibility(R.id.widget_music_artist_bitmap, View.GONE)
+      views.setViewVisibility(R.id.widget_music_artist, View.VISIBLE)
+      views.setTextViewText(R.id.widget_music_artist, cleanArtist)
+      views.setTextColor(R.id.widget_music_artist, mutedTextColor)
+    }
 
     val progressPermille = if (state.durationMs > 0L) {
       ((state.positionMs.toDouble() / state.durationMs.toDouble()) * 1000.0)
@@ -1136,14 +1242,13 @@ object AurixWidgetController {
     views.setProgressBar(R.id.widget_music_progress, 1000, progressPermille, false)
 
     // Responsive width: Below 3 cells wide (< 180dp), hide Like
-    val minWidthDp = options?.getInt(AppWidgetManager.OPTION_APPWIDGET_MIN_WIDTH, 280) ?: 280
     val showLike = shouldShowLikeButton(minWidthDp)
     val contentWidthDp = (minWidthDp - 30).coerceIn(140, 420)
-    val totalWeight = if (showLike) 4.20f else 3.28f
+    val totalWeight = if (showLike) 4.24f else 3.32f
     val gapCount = if (showLike) 3 else 2
     val usableDp = (contentWidthDp - gapCount * 6).coerceAtLeast(120)
     val stdBtnW = ((usableDp * (1.0f / totalWeight)) * 2.5f).roundToInt().coerceIn(110, 240)
-    val playBtnW = ((usableDp * (1.28f / totalWeight)) * 2.5f).roundToInt().coerceIn(136, 300)
+    val playBtnW = ((usableDp * (1.32f / totalWeight)) * 2.5f).roundToInt().coerceIn(140, 310)
     val likeBtnW = ((usableDp * (0.92f / totalWeight)) * 2.5f).roundToInt().coerceIn(104, 220)
     val btnH = 95
 
@@ -1244,9 +1349,9 @@ object AurixWidgetController {
     val layoutRes = resolveLyricsWidgetLayoutRes(state.lyricsWidgetAnimStyle, reduceMotion, sizeTier)
     val views = RemoteViews(context.packageName, layoutRes)
     val primaryTextColor = COLOR_TEXT_DARK
-    val mutedTextColor = 0xA6FFFFFF.toInt()
-    val footerTitleColor = 0xEBFFFFFF.toInt()
-    val footerArtistColor = 0x9EFFFFFF.toInt()
+    val mutedTextColor = 0xBDDAE8FF.toInt()
+    val footerTitleColor = 0xF5FFFFFF.toInt()
+    val footerArtistColor = 0xB8CFE3FF.toInt()
     val khmerFont = com.example.ui.theme.KhmerLyricsFont.fromId(state.khmerLyricsFont)
 
     views.setImageViewBitmap(R.id.widget_lyrics_bg_glow, compositeBg)
@@ -1266,11 +1371,26 @@ object AurixWidgetController {
     if (state.songId.isBlank() || state.title.isBlank()) {
       views.setViewVisibility(R.id.widget_lyrics_empty_container, View.VISIBLE)
       views.setViewVisibility(R.id.widget_lyrics_content_container, View.GONE)
-      views.setTextViewText(
-        R.id.widget_lyrics_empty_text,
-        localizedCtx.getString(R.string.widget_open_aurix)
+      val openText = localizedCtx.getString(R.string.widget_open_aurix)
+      val emptyBmp = renderStyledUiBitmap(
+        context = context,
+        text = openText,
+        textColor = primaryTextColor,
+        baseTextSizeDp = if (sizeTier == WidgetSizeTier.SMALL) 13.0f else 15.5f,
+        isBold = true,
+        widthDp = if (sizeTier == WidgetSizeTier.SMALL) 140f else 190f,
+        wrapToTextWidth = true
       )
-      views.setTextColor(R.id.widget_lyrics_empty_text, primaryTextColor)
+      if (emptyBmp != null) {
+        views.setViewVisibility(R.id.widget_lyrics_empty_bitmap, View.VISIBLE)
+        views.setViewVisibility(R.id.widget_lyrics_empty_text, View.GONE)
+        views.setImageViewBitmap(R.id.widget_lyrics_empty_bitmap, emptyBmp)
+      } else {
+        views.setViewVisibility(R.id.widget_lyrics_empty_bitmap, View.GONE)
+        views.setViewVisibility(R.id.widget_lyrics_empty_text, View.VISIBLE)
+        views.setTextViewText(R.id.widget_lyrics_empty_text, openText)
+        views.setTextColor(R.id.widget_lyrics_empty_text, primaryTextColor)
+      }
       views.setOnClickPendingIntent(R.id.widget_lyrics_empty_container, openLyricsPi)
       return views
     }
@@ -1290,16 +1410,27 @@ object AurixWidgetController {
       views.setViewVisibility(R.id.widget_lyrics_frame_spacer, View.GONE)
     }
 
+    val textWidthDp = computeLyricsTextWidthDp(sizeTier, showSideFrameSpacer)
+    val footerWidthDp = computeLyricsFooterWidthDp(sizeTier, showSideFrameSpacer)
+    val activeTextSizeDp = computeLyricsActiveTextSizeDp(sizeTier)
+    val nextTextSizeDp = computeLyricsNextTextSizeDp(sizeTier)
+
     val hasLyrics = state.hasLyrics && state.currentLyricLine.isNotBlank()
     val cleanTitle = state.title.trim()
     val cleanArtist = state.artist.trim()
 
     if (!hasLyrics) {
-      // Songs without lyrics show title (using Dangrek for Khmer + equalized English Outfit) and artist only
-      views.setViewVisibility(R.id.widget_lyrics_tag_container, View.GONE)
+      // Keep top-right Orbi pinned in the header by hiding the tag container with INVISIBLE
+      views.setViewVisibility(R.id.widget_lyrics_tag_container, View.INVISIBLE)
       views.setViewVisibility(R.id.widget_lyrics_stage_row, View.GONE)
       views.setViewVisibility(R.id.widget_lyrics_footer_row, View.GONE)
       views.setViewVisibility(R.id.widget_lyrics_no_lyrics_container, View.VISIBLE)
+
+      val noLyricsWidthDp = when (sizeTier) {
+        WidgetSizeTier.SMALL -> 152f
+        WidgetSizeTier.WIDE -> if (showSideFrameSpacer) 186f else 284f
+        WidgetSizeTier.LARGE -> if (showSideFrameSpacer) 202f else 306f
+      }
       val titleBmp = renderStyledTitleOrFooterBitmap(
         context = context,
         titleText = cleanTitle,
@@ -1307,9 +1438,13 @@ object AurixWidgetController {
         khmerLyricsFont = khmerFont,
         titleColor = primaryTextColor,
         artistColor = mutedTextColor,
-        baseTextSizeDp = 16.5f,
-        heightDp = 30f,
-        maxLines = 1
+        baseTextSizeDp = when (sizeTier) {
+          WidgetSizeTier.SMALL -> 15.0f
+          WidgetSizeTier.WIDE -> 17.0f
+          WidgetSizeTier.LARGE -> 18.5f
+        },
+        widthDp = noLyricsWidthDp,
+        maxLines = 2
       )
       if (titleBmp != null) {
         views.setViewVisibility(R.id.widget_lyrics_no_lyrics_title_bitmap, View.VISIBLE)
@@ -1321,8 +1456,26 @@ object AurixWidgetController {
         views.setTextViewText(R.id.widget_lyrics_no_lyrics_title, cleanTitle)
         views.setTextColor(R.id.widget_lyrics_no_lyrics_title, primaryTextColor)
       }
-      views.setTextViewText(R.id.widget_lyrics_no_lyrics_artist, cleanArtist.ifBlank { "AURIX" })
-      views.setTextColor(R.id.widget_lyrics_no_lyrics_artist, mutedTextColor)
+
+      val resolvedArtist = cleanArtist.ifBlank { "AURIX" }
+      val artistBmp = renderStyledUiBitmap(
+        context = context,
+        text = resolvedArtist,
+        textColor = mutedTextColor,
+        baseTextSizeDp = if (sizeTier == WidgetSizeTier.LARGE) 14.0f else 12.5f,
+        isBold = false,
+        widthDp = noLyricsWidthDp
+      )
+      if (artistBmp != null) {
+        views.setViewVisibility(R.id.widget_lyrics_no_lyrics_artist_bitmap, View.VISIBLE)
+        views.setViewVisibility(R.id.widget_lyrics_no_lyrics_artist, View.GONE)
+        views.setImageViewBitmap(R.id.widget_lyrics_no_lyrics_artist_bitmap, artistBmp)
+      } else {
+        views.setViewVisibility(R.id.widget_lyrics_no_lyrics_artist_bitmap, View.GONE)
+        views.setViewVisibility(R.id.widget_lyrics_no_lyrics_artist, View.VISIBLE)
+        views.setTextViewText(R.id.widget_lyrics_no_lyrics_artist, resolvedArtist)
+        views.setTextColor(R.id.widget_lyrics_no_lyrics_artist, mutedTextColor)
+      }
       return views
     }
 
@@ -1333,16 +1486,34 @@ object AurixWidgetController {
     views.setViewVisibility(R.id.widget_lyrics_accent_bar, View.VISIBLE)
 
     val tagLabel = localizedCtx.getString(R.string.widget_lyrics_tag)
-    views.setTextViewText(R.id.widget_lyrics_tag_text, tagLabel)
-    views.setTextColor(R.id.widget_lyrics_tag_text, 0xF0FFFFFF.toInt())
-    val tagWidthPx = (118 + tagLabel.length * 10).coerceIn(154, 240)
+    val tagBmp = renderStyledUiBitmap(
+      context = context,
+      text = tagLabel,
+      textColor = 0xFFF2FBFF.toInt(),
+      baseTextSizeDp = if (sizeTier == WidgetSizeTier.SMALL) 9.5f else 10.5f,
+      isBold = true,
+      widthDp = 120f,
+      wrapToTextWidth = true
+    )
+    if (tagBmp != null) {
+      views.setViewVisibility(R.id.widget_lyrics_tag_bitmap, View.VISIBLE)
+      views.setViewVisibility(R.id.widget_lyrics_tag_text, View.GONE)
+      views.setImageViewBitmap(R.id.widget_lyrics_tag_bitmap, tagBmp)
+    } else {
+      views.setViewVisibility(R.id.widget_lyrics_tag_bitmap, View.GONE)
+      views.setViewVisibility(R.id.widget_lyrics_tag_text, View.VISIBLE)
+      views.setTextViewText(R.id.widget_lyrics_tag_text, tagLabel)
+      views.setTextColor(R.id.widget_lyrics_tag_text, 0xFFF2FBFF.toInt())
+    }
+    val tagWidthPx = (104 + tagLabel.length * 11).coerceIn(138, 224)
     val tagGlassBitmap = renderGlassPillBitmap(
       widthPx = tagWidthPx,
       heightPx = 56,
       cornerRadiusPx = 28f,
       glassLevel = state.glassLevel,
       isHighlighted = false,
-      isLightTheme = false
+      isLightTheme = false,
+      isTintedAccent = true
     )
     views.setImageViewBitmap(R.id.widget_lyrics_tag_bg, tagGlassBitmap)
 
@@ -1352,13 +1523,15 @@ object AurixWidgetController {
     val inactiveSlot = 1 - activeSlot
 
     // Populate the active ViewFlipper slot with ONLY the currently active lyric line
-    bindLyricsFlipperSlot(
+    val activeBmp = bindLyricsFlipperSlot(
       context = context,
       views = views,
       slotIndex = activeSlot,
       currentLine = displayCurrentLine,
       khmerLyricsFont = khmerFont,
-      primaryTextColor = primaryTextColor
+      primaryTextColor = primaryTextColor,
+      textWidthDp = textWidthDp,
+      activeTextSizeDp = activeTextSizeDp
     )
 
     // Keep the outgoing slot populated with the previous active lyric so transitions never flash blank
@@ -1369,7 +1542,10 @@ object AurixWidgetController {
       slotIndex = inactiveSlot,
       currentLine = outgoingLine,
       khmerLyricsFont = khmerFont,
-      primaryTextColor = primaryTextColor
+      primaryTextColor = primaryTextColor,
+      textWidthDp = textWidthDp,
+      activeTextSizeDp = activeTextSizeDp,
+      preRenderedBitmap = if (outgoingLine == displayCurrentLine) activeBmp else null
     )
     views.setDisplayedChild(R.id.widget_lyrics_flipper, activeSlot)
 
@@ -1379,7 +1555,9 @@ object AurixWidgetController {
       views = views,
       nextLine = displayNextLine,
       khmerLyricsFont = khmerFont,
-      mutedTextColor = mutedTextColor
+      mutedTextColor = mutedTextColor,
+      textWidthDp = textWidthDp,
+      nextTextSizeDp = nextTextSizeDp
     )
 
     // Mini rounded album art (hidden when the large styled frame is already shown beside lyrics)
@@ -1389,7 +1567,7 @@ object AurixWidgetController {
     )
     views.setImageViewBitmap(R.id.widget_lyrics_mini_art, roundedArt)
 
-    // Render footer song title (Dangrek for Khmer + equalized English Outfit) + artist
+    // Render full-width footer song title (Dangrek for Khmer + equalized English Outfit) + artist
     val footerBmp = renderStyledTitleOrFooterBitmap(
       context = context,
       titleText = cleanTitle,
@@ -1397,8 +1575,12 @@ object AurixWidgetController {
       khmerLyricsFont = khmerFont,
       titleColor = footerTitleColor,
       artistColor = footerArtistColor,
-      baseTextSizeDp = 12.2f,
-      heightDp = 20f,
+      baseTextSizeDp = when (sizeTier) {
+        WidgetSizeTier.SMALL -> 11.0f
+        WidgetSizeTier.WIDE -> 12.0f
+        WidgetSizeTier.LARGE -> 13.0f
+      },
+      widthDp = footerWidthDp,
       maxLines = 1
     )
     if (footerBmp != null) {
@@ -1429,7 +1611,7 @@ object AurixWidgetController {
   /**
    * Binds ONLY the currently active lyric line inside the ViewFlipper slot.
    * Renders via Canvas with the user's selected Khmer lyrics font (Kantumruy Pro, Koulen, or Noto Sans Khmer)
-   * and optically equalized English + Khmer glyph heights.
+   * and optically equalized English + Khmer glyph heights at exact 1:1 widget column width.
    */
   private fun bindLyricsFlipperSlot(
     context: Context,
@@ -1437,8 +1619,11 @@ object AurixWidgetController {
     slotIndex: Int,
     currentLine: String,
     khmerLyricsFont: com.example.ui.theme.KhmerLyricsFont,
-    primaryTextColor: Int
-  ) {
+    primaryTextColor: Int,
+    textWidthDp: Float = 266f,
+    activeTextSizeDp: Float = 17.2f,
+    preRenderedBitmap: Bitmap? = null
+  ): Bitmap? {
     val khmerImgId = if (slotIndex == 0) R.id.widget_lyrics_khmer_bitmap_a else R.id.widget_lyrics_khmer_bitmap_b
     val textContainerId = if (slotIndex == 0) R.id.widget_lyrics_text_container_a else R.id.widget_lyrics_text_container_b
     val currentTextId = if (slotIndex == 0) R.id.widget_lyrics_current_line_a else R.id.widget_lyrics_current_line_b
@@ -1447,23 +1632,26 @@ object AurixWidgetController {
     // Always hide legacy in-flipper next_line_a/b so upcoming lyrics never animate inside ViewFlipper
     views.setViewVisibility(nextTextId, View.GONE)
 
-    val activeBmp = renderStyledActiveLyricBitmap(
+    val activeBmp = preRenderedBitmap ?: renderStyledActiveLyricBitmap(
       context = context,
       currentLine = currentLine,
       khmerLyricsFont = khmerLyricsFont,
-      primaryColor = primaryTextColor
+      primaryColor = primaryTextColor,
+      widthDp = textWidthDp,
+      textSizeDp = activeTextSizeDp
     )
     if (activeBmp != null) {
       views.setViewVisibility(khmerImgId, View.VISIBLE)
       views.setViewVisibility(textContainerId, View.GONE)
       views.setImageViewBitmap(khmerImgId, activeBmp)
-      return
+      return activeBmp
     }
 
     views.setViewVisibility(khmerImgId, View.GONE)
     views.setViewVisibility(textContainerId, View.VISIBLE)
     views.setTextViewText(currentTextId, currentLine)
     views.setTextColor(currentTextId, primaryTextColor)
+    return null
   }
 
   /**
@@ -1475,7 +1663,9 @@ object AurixWidgetController {
     views: RemoteViews,
     nextLine: String,
     khmerLyricsFont: com.example.ui.theme.KhmerLyricsFont,
-    mutedTextColor: Int
+    mutedTextColor: Int,
+    textWidthDp: Float = 266f,
+    nextTextSizeDp: Float = 12.8f
   ) {
     val trimmed = nextLine.trim()
     if (trimmed.isEmpty()) {
@@ -1490,7 +1680,9 @@ object AurixWidgetController {
       context = context,
       nextLine = trimmed,
       khmerLyricsFont = khmerLyricsFont,
-      mutedColor = mutedTextColor
+      mutedColor = mutedTextColor,
+      widthDp = textWidthDp,
+      textSizeDp = nextTextSizeDp
     )
     if (nextBmp != null) {
       views.setViewVisibility(R.id.widget_lyrics_next_khmer_bitmap, View.VISIBLE)
@@ -1508,16 +1700,14 @@ object AurixWidgetController {
     context: Context,
     currentLine: String,
     khmerLyricsFont: com.example.ui.theme.KhmerLyricsFont,
-    primaryColor: Int
+    primaryColor: Int,
+    widthDp: Float = 266f,
+    textSizeDp: Float = 17.2f
   ): Bitmap? {
     return runCatching {
       val trimmed = currentLine.trim().ifBlank { "♪" }
-      val scale = context.resources.displayMetrics.density.coerceIn(1.25f, 1.55f)
-      val widthPx = (276f * scale).roundToInt().coerceIn(330, 430)
-      val heightPx = (44f * scale).roundToInt().coerceIn(54, 70)
-      val bmp = Bitmap.createBitmap(widthPx, heightPx, Bitmap.Config.ARGB_8888)
-      val canvas = Canvas(bmp)
-
+      val scale = context.resources.displayMetrics.density.coerceIn(1.35f, 1.60f)
+      val widthPx = (widthDp * scale).roundToInt().coerceIn(210, 500)
       val styledText = com.example.ui.theme.KhmerTypography.buildStyledSpannable(
         context = context,
         text = trimmed,
@@ -1530,22 +1720,25 @@ object AurixWidgetController {
       val paint = TextPaint(Paint.ANTI_ALIAS_FLAG).apply {
         typeface = baseTypeface
         color = primaryColor
-        textSize = 15.6f * scale
+        textSize = textSizeDp * scale
         setShadowLayer(3.0f * scale, 0f, 1.0f * scale, 0x66000000)
       }
 
       val layout = StaticLayout.Builder
         .obtain(styledText, 0, styledText.length, paint, widthPx)
         .setAlignment(Layout.Alignment.ALIGN_NORMAL)
-        .setLineSpacing(2.0f * scale, 1.15f)
+        .setLineSpacing(2.0f * scale, 1.12f)
         .setIncludePad(true)
         .setMaxLines(2)
         .setEllipsize(TextUtils.TruncateAt.END)
         .build()
 
-      val startY = ((heightPx - layout.height) * 0.5f).coerceAtLeast(0f)
+      val padY = (2f * scale).roundToInt()
+      val heightPx = (layout.height + padY * 2).coerceIn(24, 128)
+      val bmp = Bitmap.createBitmap(widthPx, heightPx, Bitmap.Config.ARGB_8888)
+      val canvas = Canvas(bmp)
       canvas.save()
-      canvas.translate(0f, startY)
+      canvas.translate(0f, padY.toFloat())
       layout.draw(canvas)
       canvas.restore()
       bmp
@@ -1556,17 +1749,15 @@ object AurixWidgetController {
     context: Context,
     nextLine: String,
     khmerLyricsFont: com.example.ui.theme.KhmerLyricsFont,
-    mutedColor: Int
+    mutedColor: Int,
+    widthDp: Float = 266f,
+    textSizeDp: Float = 12.8f
   ): Bitmap? {
     return runCatching {
       val trimmed = nextLine.trim()
       if (trimmed.isEmpty()) return null
-      val scale = context.resources.displayMetrics.density.coerceIn(1.25f, 1.55f)
-      val widthPx = (276f * scale).roundToInt().coerceIn(330, 430)
-      val heightPx = (21f * scale).roundToInt().coerceIn(26, 34)
-      val bmp = Bitmap.createBitmap(widthPx, heightPx, Bitmap.Config.ARGB_8888)
-      val canvas = Canvas(bmp)
-
+      val scale = context.resources.displayMetrics.density.coerceIn(1.35f, 1.60f)
+      val widthPx = (widthDp * scale).roundToInt().coerceIn(210, 500)
       val styledText = com.example.ui.theme.KhmerTypography.buildStyledSpannable(
         context = context,
         text = trimmed,
@@ -1579,21 +1770,24 @@ object AurixWidgetController {
       val paint = TextPaint(Paint.ANTI_ALIAS_FLAG).apply {
         typeface = baseTypeface
         color = mutedColor
-        textSize = 12.2f * scale
+        textSize = textSizeDp * scale
       }
 
       val layout = StaticLayout.Builder
         .obtain(styledText, 0, styledText.length, paint, widthPx)
         .setAlignment(Layout.Alignment.ALIGN_NORMAL)
-        .setLineSpacing(1.5f * scale, 1.12f)
+        .setLineSpacing(1.5f * scale, 1.08f)
         .setIncludePad(true)
         .setMaxLines(1)
         .setEllipsize(TextUtils.TruncateAt.END)
         .build()
 
-      val startY = ((heightPx - layout.height) * 0.5f).coerceAtLeast(0f)
+      val padY = (1.5f * scale).roundToInt()
+      val heightPx = (layout.height + padY * 2).coerceIn(20, 64)
+      val bmp = Bitmap.createBitmap(widthPx, heightPx, Bitmap.Config.ARGB_8888)
+      val canvas = Canvas(bmp)
       canvas.save()
-      canvas.translate(0f, startY)
+      canvas.translate(0f, padY.toFloat())
       layout.draw(canvas)
       canvas.restore()
       bmp
@@ -1602,7 +1796,7 @@ object AurixWidgetController {
 
   /**
    * Renders song title (using bundled Dangrek for Khmer + optically equalized Outfit for English)
-   * and optional artist suffix onto a single-line or two-line bitmap for RemoteViews.
+   * and optional artist suffix onto a crisp bitmap for RemoteViews.
    */
   private fun renderStyledTitleOrFooterBitmap(
     context: Context,
@@ -1612,8 +1806,8 @@ object AurixWidgetController {
     titleColor: Int,
     artistColor: Int,
     baseTextSizeDp: Float,
-    heightDp: Float,
-    maxLines: Int
+    widthDp: Float = 284f,
+    maxLines: Int = 1
   ): Bitmap? {
     return runCatching {
       val cleanTitle = titleText.trim()
@@ -1621,11 +1815,8 @@ object AurixWidgetController {
       val cleanArtist = artistText.trim()
       val fullText = if (cleanArtist.isNotEmpty()) "$cleanTitle · $cleanArtist" else cleanTitle
 
-      val scale = context.resources.displayMetrics.density.coerceIn(1.25f, 1.55f)
-      val widthPx = (284f * scale).roundToInt().coerceIn(340, 440)
-      val heightPx = (heightDp * scale).roundToInt().coerceIn(24, 56)
-      val bmp = Bitmap.createBitmap(widthPx, heightPx, Bitmap.Config.ARGB_8888)
-      val canvas = Canvas(bmp)
+      val scale = context.resources.displayMetrics.density.coerceIn(1.35f, 1.60f)
+      val widthPx = (widthDp * scale).roundToInt().coerceIn(180, 520)
 
       val styledSpan = SpannableString(
         com.example.ui.theme.KhmerTypography.buildStyledSpannable(
@@ -1667,9 +1858,73 @@ object AurixWidgetController {
         .setEllipsize(TextUtils.TruncateAt.END)
         .build()
 
-      val startY = ((heightPx - layout.height) * 0.5f).coerceAtLeast(0f)
+      val padY = (1.5f * scale).roundToInt()
+      val heightPx = (layout.height + padY * 2).coerceIn(20, 96)
+      val bmp = Bitmap.createBitmap(widthPx, heightPx, Bitmap.Config.ARGB_8888)
+      val canvas = Canvas(bmp)
       canvas.save()
-      canvas.translate(0f, startY)
+      canvas.translate(0f, padY.toFloat())
+      layout.draw(canvas)
+      canvas.restore()
+      bmp
+    }.getOrNull()
+  }
+
+  /**
+   * Renders AURIX UI chrome text (widget tags, artist subtitles, empty CTA) using bundled
+   * Kantumruy Pro (Khmer) + Inter (English) bitmaps so home screen widgets never fall back to
+   * system fonts.
+   */
+  private fun renderStyledUiBitmap(
+    context: Context,
+    text: String,
+    textColor: Int,
+    baseTextSizeDp: Float,
+    isBold: Boolean,
+    widthDp: Float = 220f,
+    wrapToTextWidth: Boolean = false
+  ): Bitmap? {
+    return runCatching {
+      val trimmed = text.trim()
+      if (trimmed.isEmpty()) return null
+      val scale = context.resources.displayMetrics.density.coerceIn(1.35f, 1.60f)
+      val maxWidthPx = (widthDp * scale).roundToInt().coerceIn(80, 480)
+      val styled = com.example.ui.theme.KhmerTypography.buildStyledSpannable(
+        context = context,
+        text = trimmed,
+        isTitle = false,
+        khmerLyricsFont = com.example.ui.theme.KhmerLyricsFont.KANTUMRUY_PRO,
+        isBold = isBold
+      )
+      val baseTypeface = com.example.ui.theme.KhmerTypography.loadUiTypeface(context, isBold = isBold)
+      val paint = TextPaint(Paint.ANTI_ALIAS_FLAG).apply {
+        typeface = baseTypeface
+        color = textColor
+        textSize = baseTextSizeDp * scale
+        if (isBold) {
+          setShadowLayer(1.6f * scale, 0f, 0.7f * scale, 0x44000000)
+        }
+      }
+      val measuredPx = if (wrapToTextWidth) {
+        (StaticLayout.getDesiredWidth(styled, paint).roundToInt() + (4f * scale).roundToInt())
+          .coerceIn(28, maxWidthPx)
+      } else {
+        maxWidthPx
+      }
+      val layout = StaticLayout.Builder
+        .obtain(styled, 0, styled.length, paint, measuredPx)
+        .setAlignment(Layout.Alignment.ALIGN_NORMAL)
+        .setIncludePad(true)
+        .setMaxLines(1)
+        .setEllipsize(TextUtils.TruncateAt.END)
+        .build()
+
+      val padY = (1f * scale).roundToInt()
+      val heightPx = (layout.height + padY * 2).coerceIn(16, 64)
+      val bmp = Bitmap.createBitmap(measuredPx, heightPx, Bitmap.Config.ARGB_8888)
+      val canvas = Canvas(bmp)
+      canvas.save()
+      canvas.translate(0f, padY.toFloat())
       layout.draw(canvas)
       canvas.restore()
       bmp
@@ -1869,7 +2124,7 @@ object AurixWidgetController {
     val borderPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
       style = Paint.Style.STROKE
       strokeWidth = 2.2f
-      color = 0x44FFFFFF
+      color = 0x59E2F2FF
     }
     canvas.drawRoundRect(RectF(1.1f, 1.1f, sizePx - 1.1f, sizePx - 1.1f), cornerPx, cornerPx, borderPaint)
 
@@ -1886,7 +2141,7 @@ object AurixWidgetController {
 
   /**
    * Pre-renders the seamless, full-bleed blurred & dimmed ambient album glow bitmap
-   * (or solid #151F30 background when Ambient glow is off) and caches it on disk
+   * (or clean cosmic midnight / Light / AMOLED background when Ambient glow is off) and caches it on disk
    * so the widget is never blank after a reboot.
    * Uses centerCrop in the layout with native clipToOutline(24dp) on API 31+ so corners never distort.
    */
@@ -1896,7 +2151,7 @@ object AurixWidgetController {
     rawArt: Bitmap?
   ): Bitmap {
     val renderKey = buildString {
-      append("v2|")
+      append("v3|")
       append(state.songId)
       append('|').append(state.artworkUrl)
       append('|').append(state.ambientGlowEnabled)
@@ -1927,15 +2182,15 @@ object AurixWidgetController {
     val isAmoled = state.themeMode.equals("amoled", ignoreCase = true)
 
     if (!state.ambientGlowEnabled) {
-      // Ambient glow OFF: clean solid #151F30 background (or Light/AMOLED equivalent)
+      // Ambient glow OFF: clean solid cosmic midnight background (or Light/AMOLED equivalent)
       val solidBg = when {
         isLight -> COLOR_CARD_LIGHT
         isAmoled -> COLOR_BG_AMOLED
-        else -> COLOR_CARD_DARK
+        else -> 0xFF0A1124.toInt()
       }
       layerCanvas.drawColor(solidBg)
     } else {
-      layerCanvas.drawColor(if (isAmoled) COLOR_BG_AMOLED else 0xFF0E1624.toInt())
+      layerCanvas.drawColor(if (isAmoled) COLOR_BG_AMOLED else 0xFF0A1124.toInt())
 
       if (rawArt != null) {
         val blurredArt = createBlurredGlowBitmap(rawArt, state.blurLevel, widthPx, heightPx)
@@ -1967,11 +2222,11 @@ object AurixWidgetController {
         layerCanvas.drawRect(rect, glow2)
       }
 
-      // Dim overlay (0-90%, default 40%) clamped to MIN_LEGIBLE_DIM_FLOOR so text stays razor-sharp
+      // Cosmic midnight indigo scrim clamped to MIN_LEGIBLE_DIM_FLOOR so text stays razor-sharp
       val effectiveDim = state.dimLevel.coerceIn(0f, 0.90f).coerceAtLeast(MIN_LEGIBLE_DIM_FLOOR)
-      val topDimAlpha = (effectiveDim * 195f).roundToInt().coerceIn(58, 224)
-      val midDimAlpha = ((effectiveDim + 0.06f).coerceAtMost(0.92f) * 218f).roundToInt().coerceIn(78, 232)
-      val bottomDimAlpha = ((effectiveDim + 0.16f).coerceAtMost(0.95f) * 238f).roundToInt().coerceIn(104, 242)
+      val topDimAlpha = (effectiveDim * 188f).roundToInt().coerceIn(58, 220)
+      val midDimAlpha = ((effectiveDim + 0.06f).coerceAtMost(0.92f) * 212f).roundToInt().coerceIn(78, 230)
+      val bottomDimAlpha = ((effectiveDim + 0.16f).coerceAtMost(0.95f) * 234f).roundToInt().coerceIn(104, 242)
       val dimPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
         shader = LinearGradient(
           0f,
@@ -1979,9 +2234,9 @@ object AurixWidgetController {
           0f,
           heightPx.toFloat(),
           intArrayOf(
-            Color.argb(topDimAlpha, 0x07, 0x0B, 0x13),
-            Color.argb(midDimAlpha, 0x08, 0x0C, 0x15),
-            Color.argb(bottomDimAlpha, 0x05, 0x08, 0x10)
+            Color.argb(topDimAlpha, 0x08, 0x0E, 0x1E),
+            Color.argb(midDimAlpha, 0x0A, 0x13, 0x28),
+            Color.argb(bottomDimAlpha, 0x05, 0x09, 0x14)
           ),
           floatArrayOf(0f, 0.52f, 1f),
           Shader.TileMode.CLAMP
@@ -1989,14 +2244,26 @@ object AurixWidgetController {
       }
       layerCanvas.drawRect(rect, dimPaint)
 
-      // Delicate frosted top-left glass sheen for sculpted depth
+      // Subtle cyan radial rim glow + frosted top-left glass sheen for sculpted depth
+      val auraPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
+        shader = RadialGradient(
+          widthPx * 0.18f,
+          heightPx * 0.16f,
+          widthPx * 0.74f,
+          intArrayOf(0x1843C7F4, 0x0E7965FF, Color.TRANSPARENT),
+          floatArrayOf(0f, 0.45f, 1f),
+          Shader.TileMode.CLAMP
+        )
+      }
+      layerCanvas.drawRect(rect, auraPaint)
+
       val sheenPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
         shader = LinearGradient(
           0f,
           0f,
           widthPx * 0.65f,
           heightPx * 0.55f,
-          intArrayOf(0x22FFFFFF, 0x08FFFFFF, Color.TRANSPARENT),
+          intArrayOf(0x26E2F2FF, 0x0AE2F2FF, Color.TRANSPARENT),
           floatArrayOf(0f, 0.42f, 1f),
           Shader.TileMode.CLAMP
         )
@@ -2030,7 +2297,7 @@ object AurixWidgetController {
   }
 
   /**
-   * Renders a sculpted translucent white glass pill with top specular gradient and thin crisp border
+   * Renders a sculpted translucent glass pill with top specular gradient and thin crisp border
    * for widget buttons and the "Lyrics" badge, controlled by Glass level (0-100%, default 50%).
    */
   private fun renderGlassPillBitmap(
@@ -2039,7 +2306,8 @@ object AurixWidgetController {
     cornerRadiusPx: Float,
     glassLevel: Float,
     isHighlighted: Boolean,
-    isLightTheme: Boolean
+    isLightTheme: Boolean,
+    isTintedAccent: Boolean = false
   ): Bitmap {
     val bmp = Bitmap.createBitmap(widthPx, heightPx, Bitmap.Config.ARGB_8888)
     val canvas = Canvas(bmp)
@@ -2048,8 +2316,8 @@ object AurixWidgetController {
     val radius = cornerRadiusPx.coerceAtMost(heightPx * 0.5f)
 
     // Translucent gradient fill scaled by glassLevel (0-100%)
-    val topAlpha = (18 + (clampedGlass * 66f).roundToInt()).coerceIn(14, 96)
-    val bottomAlpha = (8 + (clampedGlass * 42f).roundToInt()).coerceIn(6, 62)
+    val topAlpha = (20 + (clampedGlass * 66f).roundToInt()).coerceIn(16, 98)
+    val bottomAlpha = (10 + (clampedGlass * 42f).roundToInt()).coerceIn(8, 64)
     val fillPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
       style = Paint.Style.FILL
       shader = when {
@@ -2059,8 +2327,20 @@ object AurixWidgetController {
           widthPx.toFloat(),
           heightPx.toFloat(),
           intArrayOf(
-            Color.argb((topAlpha + 38).coerceAtMost(145), 0x43, 0xC7, 0xF4),
-            Color.argb((bottomAlpha + 30).coerceAtMost(120), 0x79, 0x65, 0xFF)
+            Color.argb((topAlpha + 52).coerceAtMost(168), 0x43, 0xC7, 0xF4),
+            Color.argb((bottomAlpha + 44).coerceAtMost(142), 0x79, 0x65, 0xFF)
+          ),
+          null,
+          Shader.TileMode.CLAMP
+        )
+        isTintedAccent -> LinearGradient(
+          0f,
+          0f,
+          widthPx.toFloat(),
+          heightPx.toFloat(),
+          intArrayOf(
+            Color.argb((topAlpha + 26).coerceAtMost(118), 0x43, 0xC7, 0xF4),
+            Color.argb((bottomAlpha + 20).coerceAtMost(88), 0x79, 0x65, 0xFF)
           ),
           null,
           Shader.TileMode.CLAMP
@@ -2083,8 +2363,8 @@ object AurixWidgetController {
           0f,
           heightPx.toFloat(),
           intArrayOf(
-            Color.argb(topAlpha, 0xFF, 0xFF, 0xFF),
-            Color.argb(bottomAlpha, 0xFF, 0xFF, 0xFF)
+            Color.argb(topAlpha, 0xE2, 0xF2, 0xFF),
+            Color.argb(bottomAlpha, 0xC8, 0xDC, 0xFF)
           ),
           null,
           Shader.TileMode.CLAMP
@@ -2094,8 +2374,8 @@ object AurixWidgetController {
     canvas.drawRoundRect(rect, radius, radius, fillPaint)
 
     // Hairline glass specular border scaled by glassLevel
-    val borderTopAlpha = (32 + (clampedGlass * 112f).roundToInt()).coerceIn(24, 165)
-    val borderBotAlpha = (12 + (clampedGlass * 54f).roundToInt()).coerceIn(10, 82)
+    val borderTopAlpha = (36 + (clampedGlass * 112f).roundToInt()).coerceIn(26, 168)
+    val borderBotAlpha = (14 + (clampedGlass * 54f).roundToInt()).coerceIn(12, 84)
     val borderPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
       style = Paint.Style.STROKE
       strokeWidth = 2f
@@ -2103,11 +2383,23 @@ object AurixWidgetController {
         isHighlighted -> LinearGradient(
           0f,
           0f,
-          0f,
+          widthPx.toFloat(),
           heightPx.toFloat(),
           intArrayOf(
-            Color.argb((borderTopAlpha + 30).coerceAtMost(210), 0x99, 0xE6, 0xFF),
-            Color.argb(borderBotAlpha, 0x79, 0x65, 0xFF)
+            Color.argb((borderTopAlpha + 42).coerceAtMost(225), 0x7A, 0xEC, 0xFF),
+            Color.argb((borderBotAlpha + 36).coerceAtMost(155), 0x9B, 0x7A, 0xFF)
+          ),
+          null,
+          Shader.TileMode.CLAMP
+        )
+        isTintedAccent -> LinearGradient(
+          0f,
+          0f,
+          widthPx.toFloat(),
+          heightPx.toFloat(),
+          intArrayOf(
+            Color.argb((borderTopAlpha + 26).coerceAtMost(195), 0x80, 0xEE, 0xFF),
+            Color.argb((borderBotAlpha + 18).coerceAtMost(120), 0x9B, 0x7A, 0xFF)
           ),
           null,
           Shader.TileMode.CLAMP
@@ -2130,8 +2422,8 @@ object AurixWidgetController {
           0f,
           heightPx.toFloat(),
           intArrayOf(
-            Color.argb(borderTopAlpha, 0xFF, 0xFF, 0xFF),
-            Color.argb(borderBotAlpha, 0xFF, 0xFF, 0xFF)
+            Color.argb(borderTopAlpha, 0xE2, 0xF2, 0xFF),
+            Color.argb(borderBotAlpha, 0xC8, 0xDC, 0xFF)
           ),
           null,
           Shader.TileMode.CLAMP
