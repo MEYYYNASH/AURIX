@@ -141,10 +141,24 @@ fun SettingsScreen(
   currentSongTitle: String? = null,
   currentSongArtist: String? = null,
   currentSongArtworkUrl: String? = null,
+  isPlaying: Boolean = false,
+  @Suppress("UNUSED_PARAMETER")
   widgetCustomizerConfig: com.example.widget.WidgetCustomizerConfig = com.example.widget.WidgetCustomizerConfig.DEFAULT,
+  @Suppress("UNUSED_PARAMETER")
   widgetStyle: com.example.widget.WidgetStyle = com.example.widget.WidgetStyle.GLASS,
+  @Suppress("UNUSED_PARAMETER")
   onSelectWidgetStyle: (com.example.widget.WidgetStyle) -> Unit = {},
+  @Suppress("UNUSED_PARAMETER")
   onOpenWidgetCustomizer: () -> Unit = {},
+  nowPlayingWidgetStyle: com.example.widget.NowPlayingWidgetStyle = com.example.widget.NowPlayingWidgetStyle.AURA,
+  widgetMatchSystemTheme: Boolean = false,
+  widgetShowLikeButton: Boolean = true,
+  widgetShowLyrics: Boolean = true,
+  onSelectNowPlayingWidgetStyle: (com.example.widget.NowPlayingWidgetStyle) -> Unit = {},
+  onWidgetMatchSystemThemeChanged: (Boolean) -> Unit = {},
+  onWidgetShowLikeButtonChanged: (Boolean) -> Unit = {},
+  onWidgetShowLyricsChanged: (Boolean) -> Unit = {},
+  onApplyGlassStyleToAll: (com.example.widget.WidgetGlassStyle) -> Unit = {},
   onOpenStandby: () -> Unit = {},
   standbyAutoLaunch: Boolean = false,
   onStandbyAutoLaunchChanged: (Boolean) -> Unit = {},
@@ -988,128 +1002,26 @@ fun SettingsScreen(
       }
     }
 
-    // Widgets Glass Card (Settings > Widgets > Customize widget with live 2:1 preview)
+    // Widgets Glass Card (6 Classic quick-apply styles + AURIX Now Playing 3x10 customizer)
     item {
-      GlassCard(darkTheme = darkTheme, cornerRadius = 24.dp, modifier = Modifier.fillMaxWidth()) {
-        Column(
-          modifier = Modifier
-            .fillMaxWidth()
-            .clickable { onOpenWidgetCustomizer() }
-            .padding(18.dp)
-            .testTag("settings_widgets_customize_row"),
-          verticalArrangement = Arrangement.spacedBy(12.dp)
-        ) {
-          Row(
-            modifier = Modifier.fillMaxWidth(),
-            horizontalArrangement = Arrangement.SpaceBetween,
-            verticalAlignment = Alignment.CenterVertically
-          ) {
-            Column(modifier = Modifier.weight(1f)) {
-              Text(
-                text = stringResource(id = R.string.settings_widgets_section_title),
-                style = MaterialTheme.typography.titleMedium.copy(fontWeight = FontWeight.Bold, lineHeight = 24.sp),
-                color = MaterialTheme.colorScheme.onSurface
-              )
-              Text(
-                text = stringResource(id = R.string.settings_widgets_customize_title),
-                style = MaterialTheme.typography.bodyLarge.copy(fontWeight = FontWeight.SemiBold, lineHeight = 22.sp),
-                color = MaterialTheme.colorScheme.primary
-              )
-              Text(
-                text = stringResource(id = R.string.settings_widgets_customize_subtitle),
-                style = MaterialTheme.typography.bodySmall.copy(lineHeight = 18.sp),
-                color = MaterialTheme.colorScheme.onSurfaceVariant
-              )
-            }
-            Spacer(modifier = Modifier.width(10.dp))
-            Box(
-              modifier = Modifier
-                .size(40.dp)
-                .clip(RoundedCornerShape(14.dp))
-                .background(
-                  Brush.linearGradient(listOf(Color(0xFF43C7F4).copy(alpha = 0.22f), Color(0xFF7965FF).copy(alpha = 0.22f)))
-                ),
-              contentAlignment = Alignment.Center
-            ) {
-              Icon(
-                imageVector = Icons.Rounded.Widgets,
-                contentDescription = null,
-                tint = Color(0xFF43C7F4),
-                modifier = Modifier.size(22.dp)
-              )
-            }
-          }
-
-          SettingsWidgetPreviewThumb(
-            config = widgetCustomizerConfig,
-            artworkUrl = currentSongArtworkUrl,
-            songTitle = currentSongTitle.orEmpty(),
-            songArtist = currentSongArtist.orEmpty(),
-            reducedMotion = reducedMotion,
-            modifier = Modifier
-              .fillMaxWidth()
-              .testTag("settings_widget_live_preview")
-          )
-
-          HorizontalDivider(color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.08f))
-
-          Column(
-            modifier = Modifier.fillMaxWidth(),
-            verticalArrangement = Arrangement.spacedBy(8.dp)
-          ) {
-            Text(
-              text = stringResource(id = R.string.settings_widget_style_title),
-              style = MaterialTheme.typography.bodyLarge.copy(fontWeight = FontWeight.SemiBold),
-              color = MaterialTheme.colorScheme.onSurface
-            )
-            Text(
-              text = stringResource(id = R.string.settings_widget_style_subtitle),
-              style = MaterialTheme.typography.bodySmall.copy(lineHeight = 18.sp),
-              color = MaterialTheme.colorScheme.onSurfaceVariant
-            )
-            Surface(
-              shape = RoundedCornerShape(999.dp),
-              color = if (darkTheme) Color(0xFF0E1320).copy(alpha = 0.72f) else Color(0xFFE1E8F6),
-              modifier = Modifier.fillMaxWidth()
-            ) {
-              Row(
-                modifier = Modifier
-                  .fillMaxWidth()
-                  .padding(4.dp),
-                horizontalArrangement = Arrangement.spacedBy(4.dp)
-              ) {
-                com.example.widget.WidgetStyle.entries.forEach { styleItem ->
-                  val selected = styleItem == widgetStyle
-                  val label = when (styleItem) {
-                    com.example.widget.WidgetStyle.GLASS -> stringResource(id = R.string.widget_style_glass)
-                    com.example.widget.WidgetStyle.COLOR -> stringResource(id = R.string.widget_style_color)
-                    com.example.widget.WidgetStyle.MONO -> stringResource(id = R.string.widget_style_mono)
-                  }
-                  Surface(
-                    onClick = { onSelectWidgetStyle(styleItem) },
-                    shape = RoundedCornerShape(999.dp),
-                    color = if (selected) MaterialTheme.colorScheme.primary else Color.Transparent,
-                    modifier = Modifier
-                      .weight(1f)
-                      .testTag("settings_widget_style_${styleItem.id}")
-                  ) {
-                    Text(
-                      text = label,
-                      style = MaterialTheme.typography.labelLarge.copy(
-                        fontWeight = if (selected) FontWeight.Bold else FontWeight.Medium
-                      ),
-                      color = if (selected) MaterialTheme.colorScheme.onPrimary else MaterialTheme.colorScheme.onSurfaceVariant,
-                      textAlign = TextAlign.Center,
-                      maxLines = 1,
-                      modifier = Modifier.padding(vertical = 10.dp, horizontal = 8.dp)
-                    )
-                  }
-                }
-              }
-            }
-          }
-        }
-      }
+      SettingsWidgetsGlassCard(
+        darkTheme = darkTheme,
+        isKhmer = currentLanguage == com.example.LocaleHelper.LANG_KM,
+        reducedMotion = reducedMotion,
+        currentSongTitle = currentSongTitle,
+        currentSongArtist = currentSongArtist,
+        currentSongArtworkUrl = currentSongArtworkUrl,
+        isPlaying = isPlaying,
+        nowPlayingWidgetStyle = nowPlayingWidgetStyle,
+        widgetMatchSystemTheme = widgetMatchSystemTheme,
+        widgetShowLikeButton = widgetShowLikeButton,
+        widgetShowLyrics = widgetShowLyrics,
+        onSelectNowPlayingWidgetStyle = onSelectNowPlayingWidgetStyle,
+        onWidgetMatchSystemThemeChanged = onWidgetMatchSystemThemeChanged,
+        onWidgetShowLikeButtonChanged = onWidgetShowLikeButtonChanged,
+        onWidgetShowLyricsChanged = onWidgetShowLyricsChanged,
+        onApplyGlassStyleToAll = onApplyGlassStyleToAll
+      )
     }
 
     // Standby Mode Glass Card (Bedside & Charging Player + Optional Auto-Open Toggle)

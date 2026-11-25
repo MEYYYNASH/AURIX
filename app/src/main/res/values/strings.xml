@@ -907,14 +907,29 @@
     <string name="widget_preview_lyric_current">Current lyric line shows here</string>
     <string name="widget_preview_lyric_next">Next line, dimmed</string>
 
-    <!-- Per-Widget Glass Style Configurator (v2.3.0) -->
+    <!-- Per-Widget Glass Style Configurator (v2.3.0 / v2.3.1) -->
     <string name="widget_cfg_title">Choose Widget Style</string>
     <string name="widget_cfg_subtitle">Applies only to this widget</string>
-    <string name="widget_cfg_preview_section">Live previews · 5 glass styles</string>
+    <string name="widget_cfg_preview_section">Live previews · 6 widget styles</string>
     <string name="widget_cfg_apply_widget">Apply to this widget</string>
     <string name="widget_cfg_apply_all">Apply to all widgets</string>
     <string name="widget_cfg_applied_toast">Style applied to this widget</string>
     <string name="widget_cfg_applied_all_toast">Applied to all AURIX widgets</string>
     <string name="widget_cfg_close_cd">Cancel widget setup</string>
     <string name="widget_cfg_style_badge">Style %1$d</string>
+
+    <!-- Resizable AURIX Now Playing Widget & Settings Widgets Section (v2.3.1) -->
+    <string name="widget_now_playing_label">AURIX Now Playing</string>
+    <string name="widget_now_playing_desc">Resizable player &amp; synced lyrics widget with 10 adaptive styles</string>
+    <string name="settings_widgets_classic_title">Classic 4 Widgets</string>
+    <string name="settings_widgets_classic_subtitle">Quick-apply to AURIX Music, Lyrics, Cover &amp; Mini</string>
+    <string name="settings_widgets_np_title">AURIX Now Playing</string>
+    <string name="settings_widgets_np_subtitle">Resizable home widget · 3 sizes &amp; 10 styles</string>
+    <string name="settings_widgets_match_system">Match system theme</string>
+    <string name="settings_widgets_match_system_sub">Use Material You colors on Light &amp; Paper styles</string>
+    <string name="settings_widgets_show_like">Show like button</string>
+    <string name="settings_widgets_show_like_sub">Display heart favorite control on Player &amp; Lyrics sizes</string>
+    <string name="settings_widgets_show_lyrics">Show lyrics</string>
+    <string name="settings_widgets_show_lyrics_sub">Show synced lyrics in tall Lyrics size</string>
+    <string name="settings_widgets_applied_all_toast">Applied %1$s to classic widgets</string>
 </resources>

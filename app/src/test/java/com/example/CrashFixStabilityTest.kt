@@ -11,10 +11,10 @@ import org.junit.Test
 class CrashFixStabilityTest {
 
   @Test
-  fun release230_metadataAndVersionCodeAreConsistent() {
-    assertEquals("2.3.0", BuildConfig.VERSION_NAME)
-    assertEquals(20300, BuildConfig.VERSION_CODE)
-    assertTrue("Release 2.3.0 versionCode must exceed 2.2.0 (20200)", BuildConfig.VERSION_CODE > 20200)
+  fun release231_metadataAndVersionCodeAreConsistent() {
+    assertEquals("2.3.1", BuildConfig.VERSION_NAME)
+    assertEquals(20301, BuildConfig.VERSION_CODE)
+    assertTrue("Release 2.3.1 versionCode must exceed 2.3.0 (20300)", BuildConfig.VERSION_CODE > 20300)
     assertEquals(420, com.example.ui.screens.SELECT_BAR_OPEN_DURATION_MS)
     assertEquals(600, com.example.ui.screens.SELECT_CIRCLE_OPEN_DURATION_MS)
     assertEquals(380L, com.example.ui.screens.SELECT_CLOSE_CLEAR_DELAY_MS)
@@ -565,7 +565,7 @@ class CrashFixStabilityTest {
     assertTrue("Khmer date chip should contain Khmer weekday prefix", khmerDate.contains("ថ្ងៃ"))
 
     // UpdateDownloadErrorKind, 30s cooldown on HTTP 404 & release-pinned checksum URL derivation
-    val installed = com.example.data.InstalledAppInfo("com.aurix.music", "2.3.0", 20300L, emptySet())
+    val installed = com.example.data.InstalledAppInfo("com.aurix.music", "2.3.1", 20301L, emptySet())
     val state404 = com.example.data.UpdateUiState(
       stage = com.example.data.UpdateStage.Error,
       installed = installed,
@@ -576,11 +576,11 @@ class CrashFixStabilityTest {
     assertEquals(com.example.data.UpdateMainAction.Retry, state404.mainAction)
     assertEquals(com.example.data.UpdateDownloadErrorKind.Http404ReleaseBuilding, state404.errorKind)
     assertEquals(30, state404.retryCooldownSeconds)
-    assertEquals(20300L, com.example.data.GitHubUpdater.deriveVersionCodeFromTag("v2.3.0"))
+    assertEquals(20301L, com.example.data.GitHubUpdater.deriveVersionCodeFromTag("v2.3.1"))
     assertEquals(
-      "https://github.com/MEYYYNASH/AURIX/releases/download/v2.3.0/version.json",
+      "https://github.com/MEYYYNASH/AURIX/releases/download/v2.3.1/version.json",
       com.example.data.UpdateManager.deriveReleaseAssetVersionJsonUrl(
-        "https://github.com/MEYYYNASH/AURIX/releases/download/v2.3.0/AURIX-v2.3.0.apk"
+        "https://github.com/MEYYYNASH/AURIX/releases/download/v2.3.1/AURIX-v2.3.1.apk"
       )
     )
     assertNull(
@@ -592,8 +592,8 @@ class CrashFixStabilityTest {
 
   @Test
   fun widgetRedesignStylesAndPreviews_areDeterministic() {
-    // Per-widget 5 glass styles & 4 widget kinds
-    assertEquals(5, com.example.widget.WidgetGlassStyle.entries.size)
+    // Per-widget 6 styles (5 Glass + Vinyl) & 4 widget kinds
+    assertEquals(6, com.example.widget.WidgetGlassStyle.entries.size)
     assertEquals(4, com.example.widget.WidgetKind.entries.size)
     assertEquals("frost_pill", com.example.widget.WidgetGlassStyle.DEFAULT_ID)
     assertEquals(com.example.widget.WidgetGlassStyle.FROST_PILL, com.example.widget.WidgetGlassStyle.fromId(null))
@@ -601,6 +601,7 @@ class CrashFixStabilityTest {
     assertEquals(com.example.widget.WidgetGlassStyle.SMOKED_NEON, com.example.widget.WidgetGlassStyle.fromId("smoked_neon"))
     assertEquals(com.example.widget.WidgetGlassStyle.LIGHT_FROST, com.example.widget.WidgetGlassStyle.fromId("light_frost"))
     assertEquals(com.example.widget.WidgetGlassStyle.POSTER_GLASS, com.example.widget.WidgetGlassStyle.fromId("poster_glass"))
+    assertEquals(com.example.widget.WidgetGlassStyle.VINYL, com.example.widget.WidgetGlassStyle.fromId("vinyl"))
     assertEquals("style_42", com.example.widget.WidgetStyleStore.styleKey(42).name)
     assertEquals("style_99", com.example.widget.WidgetStyleStore.styleKey(99).name)
 
@@ -618,7 +619,11 @@ class CrashFixStabilityTest {
         if (style == com.example.widget.WidgetGlassStyle.POSTER_GLASS) continue
         val tint = com.example.widget.WidgetGlassRenderer.computeAutoContrastTint(style, coverLum)
         val compositedBg = blendOverCover(tint, coverGray)
-        val fg = if (style == com.example.widget.WidgetGlassStyle.LIGHT_FROST) 0xFF14172A.toInt() else 0xFFFFFFFF.toInt()
+        val fg = when (style) {
+          com.example.widget.WidgetGlassStyle.LIGHT_FROST -> 0xFF14172A.toInt()
+          com.example.widget.WidgetGlassStyle.VINYL -> com.example.widget.VinylWidgetRenderer.INK_COLOR
+          else -> 0xFFFFFFFF.toInt()
+        }
         val ratio = com.example.widget.WidgetGlassRenderer.contrastRatio(fg, compositedBg)
         assertTrue(
           "Contrast ratio for ${style.id} at lum=$coverLum was $ratio (< 4.5)",
@@ -627,21 +632,23 @@ class CrashFixStabilityTest {
       }
     }
 
-    // Music widget live layout resolution across all 5 glass styles
+    // Music widget live layout resolution across all 6 styles
     assertEquals(R.layout.widget_aurix_music, com.example.widget.AurixWidgetController.resolveMusicWidgetLayoutRes(com.example.widget.WidgetGlassStyle.FROST_PILL))
     assertEquals(R.layout.widget_aurix_music_orb, com.example.widget.AurixWidgetController.resolveMusicWidgetLayoutRes(com.example.widget.WidgetGlassStyle.ORB))
     assertEquals(R.layout.widget_aurix_music_neon, com.example.widget.AurixWidgetController.resolveMusicWidgetLayoutRes(com.example.widget.WidgetGlassStyle.SMOKED_NEON))
     assertEquals(R.layout.widget_aurix_music_light, com.example.widget.AurixWidgetController.resolveMusicWidgetLayoutRes(com.example.widget.WidgetGlassStyle.LIGHT_FROST))
     assertEquals(R.layout.widget_aurix_music_poster, com.example.widget.AurixWidgetController.resolveMusicWidgetLayoutRes(com.example.widget.WidgetGlassStyle.POSTER_GLASS))
+    assertEquals(R.layout.widget_aurix_music_vinyl, com.example.widget.AurixWidgetController.resolveMusicWidgetLayoutRes(com.example.widget.WidgetGlassStyle.VINYL))
 
-    // Lyrics widget live layout resolution across all 5 glass styles
+    // Lyrics widget live layout resolution across all 6 styles
     assertEquals(R.layout.widget_aurix_lyrics, com.example.widget.AurixWidgetController.resolveLyricsWidgetLayoutRes(com.example.widget.WidgetGlassStyle.FROST_PILL, "slide_up", false))
     assertEquals(R.layout.widget_aurix_lyrics_orb, com.example.widget.AurixWidgetController.resolveLyricsWidgetLayoutRes(com.example.widget.WidgetGlassStyle.ORB, "slide_up", false))
     assertEquals(R.layout.widget_aurix_lyrics_neon, com.example.widget.AurixWidgetController.resolveLyricsWidgetLayoutRes(com.example.widget.WidgetGlassStyle.SMOKED_NEON, "slide_up", false))
     assertEquals(R.layout.widget_aurix_lyrics_light, com.example.widget.AurixWidgetController.resolveLyricsWidgetLayoutRes(com.example.widget.WidgetGlassStyle.LIGHT_FROST, "slide_up", false))
     assertEquals(R.layout.widget_aurix_lyrics_poster, com.example.widget.AurixWidgetController.resolveLyricsWidgetLayoutRes(com.example.widget.WidgetGlassStyle.POSTER_GLASS, "slide_up", false))
+    assertEquals(R.layout.widget_aurix_lyrics_vinyl, com.example.widget.AurixWidgetController.resolveLyricsWidgetLayoutRes(com.example.widget.WidgetGlassStyle.VINYL, "slide_up", false))
 
-    // All 20 static picker preview layouts (4 kinds x 5 glass styles) are distinct valid layouts
+    // All 24 static picker preview layouts (4 kinds x 6 styles) are distinct valid layouts
     val previewLayouts = mutableSetOf<Int>()
     for (kind in com.example.widget.WidgetKind.entries) {
       for (style in com.example.widget.WidgetGlassStyle.entries) {
@@ -650,7 +657,84 @@ class CrashFixStabilityTest {
         previewLayouts.add(layoutId)
       }
     }
-    assertEquals(20, previewLayouts.size)
+    assertEquals(24, previewLayouts.size)
+  }
+
+  @Test
+  fun vinylStyleAndNowPlayingWidgetTokens_meetSpecs() {
+    // 1. Vinyl 7s/turn linear rotation + pause freeze + reducedMotion freeze
+    assertEquals(0f, com.example.widget.VinylWidgetRenderer.computeVinylAngleDegrees(0L, true, false), 0.01f)
+    assertEquals(180f, com.example.widget.VinylWidgetRenderer.computeVinylAngleDegrees(3_500L, true, false), 0.01f)
+    assertEquals(0f, com.example.widget.VinylWidgetRenderer.computeVinylAngleDegrees(7_000L, true, false), 0.01f)
+    assertEquals(90f, com.example.widget.VinylWidgetRenderer.computeVinylAngleDegrees(1_750L, false, false), 0.01f)
+    assertEquals(0f, com.example.widget.VinylWidgetRenderer.computeVinylAngleDegrees(3_500L, true, true), 0.01f)
+    assertEquals("1:14", com.example.widget.VinylWidgetRenderer.formatTabularTime(74_000L))
+    assertTrue(
+      com.example.widget.WidgetGlassRenderer.contrastRatio(
+        com.example.widget.VinylWidgetRenderer.INK_COLOR,
+        com.example.widget.VinylWidgetRenderer.PAPER_COLOR
+      ) >= 4.5
+    )
+
+    // 2. Resizable AURIX Now Playing widget sizes (Compact <96dp, Player 96-164dp, Lyrics >=165dp only with showLyrics & hasLyrics)
+    assertEquals(3, com.example.widget.NowPlayingWidgetSize.entries.size)
+    assertEquals(
+      com.example.widget.NowPlayingWidgetSize.COMPACT,
+      com.example.widget.NowPlayingWidgetSize.resolveSize(320, 72, showLyrics = true, hasLyrics = true)
+    )
+    assertEquals(
+      com.example.widget.NowPlayingWidgetSize.PLAYER,
+      com.example.widget.NowPlayingWidgetSize.resolveSize(320, 140, showLyrics = true, hasLyrics = true)
+    )
+    assertEquals(
+      com.example.widget.NowPlayingWidgetSize.LYRICS,
+      com.example.widget.NowPlayingWidgetSize.resolveSize(320, 196, showLyrics = true, hasLyrics = true)
+    )
+    assertEquals(
+      com.example.widget.NowPlayingWidgetSize.PLAYER,
+      com.example.widget.NowPlayingWidgetSize.resolveSize(320, 196, showLyrics = false, hasLyrics = true)
+    )
+    assertEquals(
+      com.example.widget.NowPlayingWidgetSize.PLAYER,
+      com.example.widget.NowPlayingWidgetSize.resolveSize(320, 196, showLyrics = true, hasLyrics = false)
+    )
+
+    // 3. All 10 NowPlayingWidgetStyle tokens satisfy WCAG >= 4.5:1 & Material You applies ONLY to Light & Paper
+    assertEquals(10, com.example.widget.NowPlayingWidgetStyle.entries.size)
+    val samplePalettes = listOf(
+      com.example.widget.VinylWidgetRenderer.PRESET_BLUE,
+      com.example.widget.VinylWidgetRenderer.PRESET_WARM,
+      com.example.widget.VinylWidgetRenderer.PRESET_GREEN
+    )
+    val customDynAccent = 0xFF7C3AED.toInt()
+    val customDynLightBg = 0xFFEDE7F6.toInt()
+    for (palette in samplePalettes) {
+      for (style in com.example.widget.NowPlayingWidgetStyle.entries) {
+        val tokensDefault = com.example.widget.NowPlayingThemeResolver.resolveTokens(
+          style = style,
+          coverColors = palette,
+          matchSystemTheme = false
+        )
+        val ratioDefault = com.example.widget.WidgetGlassRenderer.contrastRatio(tokensDefault.textPrimary, tokensDefault.cardBg)
+        assertTrue("WCAG ratio < 4.5 for ${style.id} (default): $ratioDefault", ratioDefault >= 4.5)
+
+        val tokensDynamic = com.example.widget.NowPlayingThemeResolver.resolveTokens(
+          style = style,
+          coverColors = palette,
+          matchSystemTheme = true,
+          systemAccentColor = customDynAccent,
+          systemLightBg = customDynLightBg
+        )
+        val ratioDyn = com.example.widget.WidgetGlassRenderer.contrastRatio(tokensDynamic.textPrimary, tokensDynamic.cardBg)
+        assertTrue("WCAG ratio < 4.5 for ${style.id} (dynamic): $ratioDyn", ratioDyn >= 4.5)
+
+        if (style == com.example.widget.NowPlayingWidgetStyle.LIGHT || style == com.example.widget.NowPlayingWidgetStyle.PAPER) {
+          assertEquals(customDynLightBg, tokensDynamic.cardBg)
+        } else {
+          assertEquals(tokensDefault.cardBg, tokensDynamic.cardBg)
+        }
+      }
+    }
   }
 
   @Test

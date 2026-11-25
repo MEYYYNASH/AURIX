@@ -1,7 +1,7 @@
 package com.example.widget
 
 /**
- * 5 per-widget glass design styles saved independently per appWidgetId.
+ * 6 per-widget styles (5 Glass + Vinyl) saved independently per appWidgetId.
  */
 enum class WidgetGlassStyle(
   val id: String,
@@ -50,6 +50,14 @@ enum class WidgetGlassStyle(
     displayNameKm = "កញ្ចក់ផូស្ទ័រ",
     subtitleEn = "Full sharp cover & floating glass bar",
     subtitleKm = "រូបពេញច្បាស់ និងរបារកញ្ចក់អណ្តែត"
+  ),
+  VINYL(
+    id = "vinyl",
+    styleNumber = 6,
+    displayNameEn = "Vinyl",
+    displayNameKm = "វីនីល",
+    subtitleEn = "Cream paper & spinning half-vinyl disc",
+    subtitleKm = "ក្រដាសក្រែម និងឌីសវីនីលវិល"
   );
 
   fun next(): WidgetGlassStyle = entries[(ordinal + 1) % entries.size]
@@ -65,6 +73,7 @@ enum class WidgetGlassStyle(
         "smoked_neon", "mono", "style_3", "3" -> SMOKED_NEON
         "light_frost", "color", "style_4", "4" -> LIGHT_FROST
         "poster_glass", "style_5", "5" -> POSTER_GLASS
+        "vinyl", "widget_style_vinyl", "style_6", "6" -> VINYL
         else -> FROST_PILL
       }
     }

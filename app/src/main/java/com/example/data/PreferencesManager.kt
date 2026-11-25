@@ -87,6 +87,10 @@ class PreferencesManager(private val context: Context) {
     val WIDGET_DARKNESS = intPreferencesKey("darkness")
     val WIDGET_PHOTO_REV = longPreferencesKey("widget_photo_rev")
     val WIDGET_STYLE = stringPreferencesKey("widget_style")
+    val NOW_PLAYING_WIDGET_STYLE = stringPreferencesKey("now_playing_widget_style")
+    val WIDGET_MATCH_SYSTEM_THEME = booleanPreferencesKey("widget_match_system_theme")
+    val WIDGET_SHOW_LIKE_BUTTON = booleanPreferencesKey("widget_show_like_button")
+    val WIDGET_SHOW_LYRICS = booleanPreferencesKey("widget_show_lyrics")
 
     // Orbi Companion & Ambient Standby Mode keys
     val ORBI_COMPANION_THEME = stringPreferencesKey("orbi_companion_theme")
@@ -196,6 +200,18 @@ class PreferencesManager(private val context: Context) {
   }
   val widgetStyle: Flow<String> = safeDataFlow.map { prefs ->
     com.example.widget.WidgetStyle.fromId(prefs[WIDGET_STYLE]).id
+  }
+  val nowPlayingWidgetStyle: Flow<String> = safeDataFlow.map { prefs ->
+    com.example.widget.NowPlayingWidgetStyle.fromId(prefs[NOW_PLAYING_WIDGET_STYLE]).id
+  }
+  val widgetMatchSystemTheme: Flow<Boolean> = safeDataFlow.map { prefs ->
+    prefs[WIDGET_MATCH_SYSTEM_THEME] ?: false
+  }
+  val widgetShowLikeButton: Flow<Boolean> = safeDataFlow.map { prefs ->
+    prefs[WIDGET_SHOW_LIKE_BUTTON] ?: true
+  }
+  val widgetShowLyrics: Flow<Boolean> = safeDataFlow.map { prefs ->
+    prefs[WIDGET_SHOW_LYRICS] ?: true
   }
   val lyricsWidgetAnim: Flow<String> = safeDataFlow.map { prefs ->
     com.example.lyrics.LyricsAnimationStyle.fromId(prefs[LYRICS_WIDGET_ANIM] ?: prefs[LYRICS_ANIM]).id
@@ -492,6 +508,31 @@ class PreferencesManager(private val context: Context) {
     val normalized = com.example.widget.WidgetStyle.fromId(styleId).id
     context.dataStore.edit { prefs ->
       prefs[WIDGET_STYLE] = normalized
+    }
+  }
+
+  suspend fun setNowPlayingWidgetStyle(styleId: String) {
+    val normalized = com.example.widget.NowPlayingWidgetStyle.fromId(styleId).id
+    context.dataStore.edit { prefs ->
+      prefs[NOW_PLAYING_WIDGET_STYLE] = normalized
+    }
+  }
+
+  suspend fun setWidgetMatchSystemTheme(enabled: Boolean) {
+    context.dataStore.edit { prefs ->
+      prefs[WIDGET_MATCH_SYSTEM_THEME] = enabled
+    }
+  }
+
+  suspend fun setWidgetShowLikeButton(enabled: Boolean) {
+    context.dataStore.edit { prefs ->
+      prefs[WIDGET_SHOW_LIKE_BUTTON] = enabled
+    }
+  }
+
+  suspend fun setWidgetShowLyrics(enabled: Boolean) {
+    context.dataStore.edit { prefs ->
+      prefs[WIDGET_SHOW_LYRICS] = enabled
     }
   }
 }

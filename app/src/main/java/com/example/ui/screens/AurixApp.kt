@@ -356,10 +356,17 @@ private fun AurixMainShell(
   val standbyGyroEnabled by viewModel.standbyGyroEnabled.collectAsStateWithLifecycle()
   val standbyAutoLaunch by viewModel.standbyAutoLaunch.collectAsStateWithLifecycle()
   val widgetStyleId by viewModel.widgetStyle.collectAsStateWithLifecycle()
+  val nowPlayingWidgetStyleId by viewModel.nowPlayingWidgetStyle.collectAsStateWithLifecycle()
+  val widgetMatchSystemTheme by viewModel.widgetMatchSystemTheme.collectAsStateWithLifecycle()
+  val widgetShowLikeButton by viewModel.widgetShowLikeButton.collectAsStateWithLifecycle()
+  val widgetShowLyrics by viewModel.widgetShowLyrics.collectAsStateWithLifecycle()
   val activeStandbyClockStyle = remember(standbyClockStyleId) { StandbyClockStyle.fromId(standbyClockStyleId) }
   val activeStandbyMood = remember(standbyMoodId) { StandbyColorMood.fromId(standbyMoodId) }
   val activeStandbyLayout = remember(standbyLayoutId) { StandbyLayout.fromId(standbyLayoutId) }
   val activeWidgetStyle = remember(widgetStyleId) { com.example.widget.WidgetStyle.fromId(widgetStyleId) }
+  val activeNowPlayingWidgetStyle = remember(nowPlayingWidgetStyleId) {
+    com.example.widget.NowPlayingWidgetStyle.fromId(nowPlayingWidgetStyleId)
+  }
 
   // Auto-open Standby Mode when charging in landscape or propped up (optional setting, default off)
   val currentConfig = LocalConfiguration.current
@@ -1296,10 +1303,20 @@ private fun AurixMainShell(
               currentSongTitle = currentSong?.title,
               currentSongArtist = currentSong?.artist,
               currentSongArtworkUrl = currentSong?.artworkUrl,
+              isPlaying = isPlaying,
               widgetCustomizerConfig = widgetCustomizerConfig,
               widgetStyle = activeWidgetStyle,
               onSelectWidgetStyle = { viewModel.setWidgetStyle(it.id) },
               onOpenWidgetCustomizer = { showWidgetCustomizer = true },
+              nowPlayingWidgetStyle = activeNowPlayingWidgetStyle,
+              widgetMatchSystemTheme = widgetMatchSystemTheme,
+              widgetShowLikeButton = widgetShowLikeButton,
+              widgetShowLyrics = widgetShowLyrics,
+              onSelectNowPlayingWidgetStyle = { viewModel.setNowPlayingWidgetStyle(it) },
+              onWidgetMatchSystemThemeChanged = { viewModel.setWidgetMatchSystemTheme(it) },
+              onWidgetShowLikeButtonChanged = { viewModel.setWidgetShowLikeButton(it) },
+              onWidgetShowLyricsChanged = { viewModel.setWidgetShowLyrics(it) },
+              onApplyGlassStyleToAll = { viewModel.applyGlassStyleToAllWidgets(it) },
               onOpenStandby = { showAmbientStandby = true },
               standbyAutoLaunch = standbyAutoLaunch,
               onStandbyAutoLaunchChanged = { viewModel.setStandbyAutoLaunch(it) },

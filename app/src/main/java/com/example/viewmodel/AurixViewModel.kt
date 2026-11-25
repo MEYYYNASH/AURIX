@@ -267,6 +267,14 @@ class AurixViewModel(application: Application) : AndroidViewModel(application) {
     .stateIn(viewModelScope, SharingStarted.Eagerly, false)
   val widgetStyle: StateFlow<String> = prefsManager.widgetStyle
     .stateIn(viewModelScope, SharingStarted.Eagerly, com.example.widget.WidgetStyle.DEFAULT_ID)
+  val nowPlayingWidgetStyle: StateFlow<String> = prefsManager.nowPlayingWidgetStyle
+    .stateIn(viewModelScope, SharingStarted.Eagerly, com.example.widget.NowPlayingWidgetStyle.DEFAULT_ID)
+  val widgetMatchSystemTheme: StateFlow<Boolean> = prefsManager.widgetMatchSystemTheme
+    .stateIn(viewModelScope, SharingStarted.Eagerly, false)
+  val widgetShowLikeButton: StateFlow<Boolean> = prefsManager.widgetShowLikeButton
+    .stateIn(viewModelScope, SharingStarted.Eagerly, true)
+  val widgetShowLyrics: StateFlow<Boolean> = prefsManager.widgetShowLyrics
+    .stateIn(viewModelScope, SharingStarted.Eagerly, true)
   val spectrumBars: StateFlow<FloatArray> = AudioSpectrumBus.bars
 
   // Search-Only Mode & YouTube Analyze/Download States
@@ -1528,6 +1536,27 @@ class AurixViewModel(application: Application) : AndroidViewModel(application) {
         }
       }
     }
+    viewModelScope.launch {
+      combine(
+        nowPlayingWidgetStyle,
+        widgetMatchSystemTheme,
+        widgetShowLikeButton,
+        widgetShowLyrics
+      ) { npStyle, matchSys, showLike, showLyrics ->
+        QuadNowPlayingWidgetState(npStyle, matchSys, showLike, showLyrics)
+      }.collectLatest { state ->
+        runCatching {
+          AurixWidgetController.syncNowPlayingWidgetSettings(
+            context = appCtx,
+            styleId = state.styleId,
+            matchSystemTheme = state.matchSystemTheme,
+            showLikeButton = state.showLikeButton,
+            showLyrics = state.showLyrics,
+            refreshWidgetsNow = true
+          )
+        }
+      }
+    }
   }
 
   fun saveWidgetCustomizerConfig(config: com.example.widget.WidgetCustomizerConfig) {
@@ -1573,6 +1602,13 @@ class AurixViewModel(application: Application) : AndroidViewModel(application) {
     val isPlaying: Boolean,
     val lyrics: LyricsResult?,
     val lyricOffsetMs: Long
+  )
+
+  private data class QuadNowPlayingWidgetState(
+    val styleId: String,
+    val matchSystemTheme: Boolean,
+    val showLikeButton: Boolean,
+    val showLyrics: Boolean
   )
 
   private fun observeBackgroundDownloads() {
@@ -5383,6 +5419,62 @@ class AurixViewModel(application: Application) : AndroidViewModel(application) {
         context = getApplication(),
         styleId = normalized,
         refreshWidgetsNow = true
+      )
+    }
+  }
+  fun setNowPlayingWidgetStyle(style: com.example.widget.NowPlayingWidgetStyle) {
+    safeLaunch(notifyUser = false) {
+      prefsManager.setNowPlayingWidgetStyle(style.id)
+      AurixWidgetController.syncNowPlayingWidgetSettings(
+        context = getApplication(),
+        styleId = style.id,
+        refreshWidgetsNow = true
+      )
+    }
+  }
+  fun setWidgetMatchSystemTheme(enabled: Boolean) {
+    safeLaunch(notifyUser = false) {
+      prefsManager.setWidgetMatchSystemTheme(enabled)
+      AurixWidgetController.syncNowPlayingWidgetSettings(
+        context = getApplication(),
+        matchSystemTheme = enabled,
+        refreshWidgetsNow = true
+      )
+    }
+  }
+  fun setWidgetShowLikeButton(enabled: Boolean) {
+    safeLaunch(notifyUser = false) {
+      prefsManager.setWidgetShowLikeButton(enabled)
+      AurixWidgetController.syncNowPlayingWidgetSettings(
+        context = getApplication(),
+        showLikeButton = enabled,
+        refreshWidgetsNow = true
+      )
+    }
+  }
+  fun setWidgetShowLyrics(enabled: Boolean) {
+    safeLaunch(notifyUser = false) {
+      prefsManager.setWidgetShowLyrics(enabled)
+      AurixWidgetController.syncNowPlayingWidgetSettings(
+        context = getApplication(),
+        showLyrics = enabled,
+        refreshWidgetsNow = true
+      )
+    }
+  }
+  fun applyGlassStyleToAllWidgets(style: com.example.widget.WidgetGlassStyle) {
+    safeLaunch(notifyUser = false) {
+      val appCtx = getApplication<Application>()
+      com.example.widget.WidgetStyleStore.applyStyleToAllWidgets(appCtx, style)
+      AurixWidgetController.updateWidgetPickerPreviews(appCtx, style)
+      AurixWidgetController.refreshWidgetsBlocking(
+        context = appCtx,
+        refreshMusic = true,
+        refreshLyrics = true,
+        refreshCover = true,
+        refreshMini = true,
+        refreshNowPlaying = false,
+        forceArtworkReload = false
       )
     }
   }

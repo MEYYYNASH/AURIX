@@ -188,6 +188,24 @@
                 android:resource="@xml/aurix_mini_widget_info" />
         </receiver>
 
+        <!-- AURIX Now Playing Resizable Home Screen Widget (3 sizes x 10 styles) -->
+        <receiver
+            android:name=".widget.AurixNowPlayingWidgetProvider"
+            android:exported="true"
+            android:label="@string/widget_now_playing_label">
+            <intent-filter>
+                <action android:name="android.appwidget.action.APPWIDGET_UPDATE" />
+                <action android:name="com.example.aurix.widget.ACTION_PREV" />
+                <action android:name="com.example.aurix.widget.ACTION_PLAY_PAUSE" />
+                <action android:name="com.example.aurix.widget.ACTION_NEXT" />
+                <action android:name="com.example.aurix.widget.ACTION_LIKE" />
+                <action android:name="com.example.aurix.widget.ACTION_REFRESH" />
+            </intent-filter>
+            <meta-data
+                android:name="android.appwidget.provider"
+                android:resource="@xml/aurix_now_playing_widget_info" />
+        </receiver>
+
         <!-- Per-Widget Style Configurator -->
         <activity
             android:name=".widget.WidgetConfigureActivity"

@@ -203,8 +203,12 @@ class PlaybackService : MediaSessionService() {
             positionMs = pos,
             durationMs = dur,
             isPlaying = true,
-            allowMusicUpdate = AurixWidgetController.hasMusicWidgets(this@PlaybackService),
-            allowLyricsUpdate = AurixWidgetController.hasLyricsWidgets(this@PlaybackService)
+            allowMusicUpdate = AurixWidgetController.hasMusicWidgets(this@PlaybackService) ||
+              AurixWidgetController.hasCoverWidgets(this@PlaybackService) ||
+              AurixWidgetController.hasMiniWidgets(this@PlaybackService) ||
+              AurixWidgetController.hasNowPlayingWidgets(this@PlaybackService),
+            allowLyricsUpdate = AurixWidgetController.hasLyricsWidgets(this@PlaybackService) ||
+              AurixWidgetController.hasNowPlayingWidgets(this@PlaybackService)
           )
           scheduleNextLyricsWidgetTransition(player)
         }
@@ -443,27 +447,40 @@ class PlaybackService : MediaSessionService() {
     }
   }
 
+  private fun isScreenInteractive(): Boolean {
+    return runCatching {
+      (getSystemService(Context.POWER_SERVICE) as? android.os.PowerManager)?.isInteractive ?: true
+    }.getOrDefault(true)
+  }
+
   private fun updateWidgetPlayStateAndTicker(player: ExoPlayer, isPlaying: Boolean) {
     widgetTickerJob?.cancel()
     widgetTickerJob = null
     lyricsWidgetSchedulerJob?.cancel()
     lyricsWidgetSchedulerJob = null
 
+    val hasMusicOrCompanion = AurixWidgetController.hasMusicWidgets(this) ||
+      AurixWidgetController.hasCoverWidgets(this) ||
+      AurixWidgetController.hasMiniWidgets(this) ||
+      AurixWidgetController.hasNowPlayingWidgets(this)
+    val hasLyricsOrNowPlaying = AurixWidgetController.hasLyricsWidgets(this) ||
+      AurixWidgetController.hasNowPlayingWidgets(this)
+
     val snapshot = AurixWidgetController.readSnapshot(this)
     if (snapshot.songId.isNotBlank()) {
       val pos = player.currentPosition.coerceAtLeast(0L)
       val dur = player.duration.takeIf { it > 0L } ?: snapshot.durationMs
       if (isPlaying) {
-        AurixWidgetController.onPlaybackProgressTick(
-          context = this,
-          positionMs = pos,
-          durationMs = dur,
-          isPlaying = true,
-          allowMusicUpdate = AurixWidgetController.hasMusicWidgets(this) ||
-            AurixWidgetController.hasCoverWidgets(this) ||
-            AurixWidgetController.hasMiniWidgets(this),
-          allowLyricsUpdate = AurixWidgetController.hasLyricsWidgets(this)
-        )
+        if (isScreenInteractive()) {
+          AurixWidgetController.onPlaybackProgressTick(
+            context = this,
+            positionMs = pos,
+            durationMs = dur,
+            isPlaying = true,
+            allowMusicUpdate = hasMusicOrCompanion,
+            allowLyricsUpdate = hasLyricsOrNowPlaying
+          )
+        }
       } else {
         // Persist paused state and update Play/Pause icon once, then stop all widget jobs to save battery
         val prefs = applicationContext.getSharedPreferences("aurix_widget_snapshot_prefs", Context.MODE_PRIVATE)
@@ -471,34 +488,38 @@ class PlaybackService : MediaSessionService() {
           .putBoolean("is_playing", false)
           .putLong("position_ms", pos)
           .apply()
-        if (
-          AurixWidgetController.hasMusicWidgets(this) ||
-          AurixWidgetController.hasCoverWidgets(this) ||
-          AurixWidgetController.hasMiniWidgets(this)
-        ) {
+        if (hasMusicOrCompanion) {
           AurixWidgetController.refreshAllWidgetsAsync(
             context = this,
             refreshMusic = true,
-            refreshLyrics = false,
+            refreshLyrics = true,
             refreshCover = true,
-            refreshMini = true
+            refreshMini = true,
+            refreshNowPlaying = true
           )
         }
       }
     }
 
     if (isPlaying) {
-      // Music & Mini widgets tick ~1s while playing ONLY if installed
-      if (AurixWidgetController.hasMusicWidgets(this) || AurixWidgetController.hasMiniWidgets(this)) {
+      // Tick ~1s while playing ONLY if widgets are placed and screen is interactive
+      if (
+        AurixWidgetController.hasMusicWidgets(this) ||
+        AurixWidgetController.hasMiniWidgets(this) ||
+        AurixWidgetController.hasCoverWidgets(this) ||
+        AurixWidgetController.hasNowPlayingWidgets(this)
+      ) {
         widgetTickerJob = serviceScope.launch {
           while (isActive) {
             delay(1_000L)
             val active = mainPlayer ?: break
             if (!active.isPlaying) break
-            if (
-              !AurixWidgetController.hasMusicWidgets(this@PlaybackService) &&
-              !AurixWidgetController.hasMiniWidgets(this@PlaybackService)
-            ) break
+            val anyInstalled = AurixWidgetController.hasMusicWidgets(this@PlaybackService) ||
+              AurixWidgetController.hasMiniWidgets(this@PlaybackService) ||
+              AurixWidgetController.hasCoverWidgets(this@PlaybackService) ||
+              AurixWidgetController.hasNowPlayingWidgets(this@PlaybackService)
+            if (!anyInstalled) break
+            if (!isScreenInteractive()) continue
             val pos = active.currentPosition.coerceAtLeast(0L)
             val dur = active.duration.takeIf { it > 0L } ?: 0L
             AurixWidgetController.onPlaybackProgressTick(
@@ -522,13 +543,17 @@ class PlaybackService : MediaSessionService() {
     lyricsWidgetSchedulerJob?.cancel()
     lyricsWidgetSchedulerJob = null
     if (!player.isPlaying) return
-    if (!AurixWidgetController.hasLyricsWidgets(this)) return
+    val hasLyricsTargets = AurixWidgetController.hasLyricsWidgets(this) ||
+      AurixWidgetController.hasNowPlayingWidgets(this)
+    if (!hasLyricsTargets) return
 
     lyricsWidgetSchedulerJob = serviceScope.launch {
       while (isActive) {
         val active = mainPlayer ?: break
         if (!active.isPlaying) break
-        if (!AurixWidgetController.hasLyricsWidgets(this@PlaybackService)) break
+        val stillInstalled = AurixWidgetController.hasLyricsWidgets(this@PlaybackService) ||
+          AurixWidgetController.hasNowPlayingWidgets(this@PlaybackService)
+        if (!stillInstalled) break
         val pos = active.currentPosition.coerceAtLeast(0L)
         val speed = active.playbackParameters.speed.coerceIn(0.25f, 4.0f)
         val waitMs = AurixWidgetController.computeDelayUntilNextLyricLineMs(
@@ -540,6 +565,7 @@ class PlaybackService : MediaSessionService() {
 
         val current = mainPlayer ?: break
         if (!current.isPlaying) break
+        if (!isScreenInteractive()) continue
         val newPos = current.currentPosition.coerceAtLeast(0L)
         val newDur = current.duration.takeIf { it > 0L } ?: 0L
         AurixWidgetController.onPlaybackProgressTick(

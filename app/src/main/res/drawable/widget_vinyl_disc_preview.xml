@@ -1,0 +1,66 @@
+<?xml version="1.0" encoding="utf-8"?>
+<layer-list xmlns:android="http://schemas.android.com/apk/res/android">
+    <!-- Outer 2px #0B0B0B rim + groove dark base -->
+    <item>
+        <shape android:shape="oval">
+            <solid android:color="#141414" />
+            <stroke
+                android:width="2dp"
+                android:color="#0B0B0B" />
+        </shape>
+    </item>
+    <!-- Concentric groove ring 1 -->
+    <item
+        android:bottom="14dp"
+        android:left="14dp"
+        android:right="14dp"
+        android:top="14dp">
+        <shape android:shape="oval">
+            <stroke
+                android:width="2dp"
+                android:color="#262626" />
+        </shape>
+    </item>
+    <!-- Concentric groove ring 2 -->
+    <item
+        android:bottom="28dp"
+        android:left="28dp"
+        android:right="28dp"
+        android:top="28dp">
+        <shape android:shape="oval">
+            <stroke
+                android:width="2dp"
+                android:color="#262626" />
+        </shape>
+    </item>
+    <!-- Main Label (30% radius -> ~35% inset each side) -->
+    <item
+        android:bottom="54dp"
+        android:left="54dp"
+        android:right="54dp"
+        android:top="54dp">
+        <shape android:shape="oval">
+            <solid android:color="#3B6FB0" />
+        </shape>
+    </item>
+    <!-- Light cover color inner ring -->
+    <item
+        android:bottom="70dp"
+        android:left="70dp"
+        android:right="70dp"
+        android:top="70dp">
+        <shape android:shape="oval">
+            <solid android:color="#8FC5FF" />
+        </shape>
+    </item>
+    <!-- Center hole in paper color -->
+    <item
+        android:bottom="76dp"
+        android:left="76dp"
+        android:right="76dp"
+        android:top="76dp">
+        <shape android:shape="oval">
+            <solid android:color="#EFE6D6" />
+        </shape>
+    </item>
+</layer-list>

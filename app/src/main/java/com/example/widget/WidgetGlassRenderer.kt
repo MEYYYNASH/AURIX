@@ -141,6 +141,10 @@ object WidgetGlassRenderer {
         val a = (alphaFloat * 255f).roundToInt()
         argb(a, 10, 14, 24)
       }
+      WidgetGlassStyle.VINYL -> {
+        // Cream paper card (#EFE6D6) provides high contrast (> 11:1) against dark brown ink (#2A2118).
+        VinylWidgetRenderer.PAPER_COLOR
+      }
     }
   }
 

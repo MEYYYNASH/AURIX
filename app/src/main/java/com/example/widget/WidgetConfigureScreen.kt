@@ -3,8 +3,14 @@ package com.example.widget
 import android.graphics.Bitmap
 import androidx.activity.compose.BackHandler
 import androidx.compose.animation.animateColorAsState
+import androidx.compose.animation.core.LinearEasing
+import androidx.compose.animation.core.RepeatMode
+import androidx.compose.animation.core.animateFloat
+import androidx.compose.animation.core.infiniteRepeatable
+import androidx.compose.animation.core.rememberInfiniteTransition
 import androidx.compose.animation.core.tween
 import androidx.compose.foundation.BorderStroke
+import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
@@ -22,6 +28,7 @@ import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.navigationBarsPadding
+import androidx.compose.foundation.layout.offset
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.safeDrawing
 import androidx.compose.foundation.layout.size
@@ -57,10 +64,14 @@ import androidx.compose.runtime.produceState
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.draw.clipToBounds
+import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.ImageBitmap
 import androidx.compose.ui.graphics.asImageBitmap
+import androidx.compose.ui.graphics.drawscope.Stroke
+import androidx.compose.ui.graphics.drawscope.rotate
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.testTag
@@ -69,8 +80,10 @@ import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
+import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import androidx.compose.ui.zIndex
 import com.example.R
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
@@ -92,6 +105,9 @@ private data class PreviewArtBundle(
   val eq3Dark: ImageBitmap,
   val eq4White: ImageBitmap,
   val eq4Dark: ImageBitmap,
+  val eq3Ink: ImageBitmap,
+  val eq4Ink: ImageBitmap,
+  val vinylPalette: VinylCoverPalette,
   val luminance: Float
 )
 
@@ -208,6 +224,22 @@ fun WidgetConfigureScreen(
           isPlaying = true,
           phase = 2
         ).asImageBitmap(),
+        eq3Ink = WidgetGlassRenderer.renderEqualizerBitmap(
+          barCount = 3,
+          color = VinylWidgetRenderer.INK_COLOR,
+          isPlaying = true,
+          phase = 1
+        ).asImageBitmap(),
+        eq4Ink = WidgetGlassRenderer.renderEqualizerBitmap(
+          barCount = 4,
+          color = VinylWidgetRenderer.INK_COLOR,
+          isPlaying = true,
+          phase = 2
+        ).asImageBitmap(),
+        vinylPalette = VinylWidgetRenderer.extractCoverPalette(
+          rawArt = rawArtwork,
+          seedKey = "${snapshot.songId}|${snapshot.title}|${snapshot.artist}"
+        ),
         luminance = coverSet.luminance
       )
     }
@@ -414,6 +446,9 @@ fun WidgetConfigureScreen(
               currentLyric = displayCurrentLyric,
               nextLyric = displayNextLyric,
               progressFraction = progressFraction,
+              positionMs = snapshot.positionMs,
+              durationMs = snapshot.durationMs,
+              reducedMotion = snapshot.reducedMotion,
               isPlaying = isPlaying,
               isLiked = isLiked,
               onSelect = { onSelectStyle(style) }
@@ -437,6 +472,9 @@ private fun StyleOptionCard(
   currentLyric: String,
   nextLyric: String,
   progressFraction: Float,
+  positionMs: Long,
+  durationMs: Long,
+  reducedMotion: Boolean,
   isPlaying: Boolean,
   isLiked: Boolean,
   onSelect: () -> Unit
@@ -559,6 +597,9 @@ private fun StyleOptionCard(
             title = title,
             artist = artist,
             progressFraction = progressFraction,
+            positionMs = positionMs,
+            durationMs = durationMs,
+            reducedMotion = reducedMotion,
             isPlaying = isPlaying,
             isLiked = isLiked
           )
@@ -568,22 +609,154 @@ private fun StyleOptionCard(
             title = title,
             artist = artist,
             currentLyric = currentLyric,
-            nextLyric = nextLyric
+            nextLyric = nextLyric,
+            positionMs = positionMs,
+            reducedMotion = reducedMotion,
+            isPlaying = isPlaying
           )
           WidgetKind.COVER -> LiveCoverWidgetPreview(
             style = style,
             bundle = bundle,
+            positionMs = positionMs,
+            reducedMotion = reducedMotion,
             isPlaying = isPlaying
           )
           WidgetKind.MINI -> LiveMiniWidgetPreview(
             style = style,
             bundle = bundle,
             title = title,
-            artist = artist
+            artist = artist,
+            positionMs = positionMs,
+            reducedMotion = reducedMotion,
+            isPlaying = isPlaying
           )
         }
       }
     }
+  }
+}
+
+@Composable
+private fun rememberVinylSpinAngle(
+  positionMs: Long,
+  isPlaying: Boolean,
+  reducedMotion: Boolean
+): Float {
+  val baseAngle = VinylWidgetRenderer.computeVinylAngleDegrees(
+    positionMs = positionMs,
+    isPlaying = isPlaying,
+    reducedMotion = reducedMotion
+  )
+  if (!isPlaying || reducedMotion) return baseAngle
+  val infinite = rememberInfiniteTransition(label = "vinyl_spin")
+  val sweep by infinite.animateFloat(
+    initialValue = 0f,
+    targetValue = 360f,
+    animationSpec = infiniteRepeatable(
+      animation = tween(durationMillis = VinylWidgetRenderer.TURN_DURATION_MS.toInt(), easing = LinearEasing),
+      repeatMode = RepeatMode.Restart
+    ),
+    label = "vinyl_rotation_deg"
+  )
+  return (baseAngle + sweep) % 360f
+}
+
+@Composable
+private fun VinylDiscCanvas(
+  diameter: Dp,
+  palette: VinylCoverPalette,
+  rotationDegrees: Float,
+  modifier: Modifier = Modifier
+) {
+  Canvas(modifier = modifier.size(diameter)) {
+    val d = size.minDimension
+    val r = d * 0.5f
+    val center = Offset(r, r)
+
+    // Soft outer drop shadow (static)
+    drawCircle(
+      brush = Brush.radialGradient(
+        colorStops = arrayOf(
+          0.84f to Color(0x73000000),
+          0.94f to Color(0x33000000),
+          1.0f to Color.Transparent
+        ),
+        center = Offset(r, r + r * 0.03f),
+        radius = r
+      ),
+      radius = r,
+      center = Offset(r, r + r * 0.03f)
+    )
+
+    val vinylRadius = r * 0.94f
+    rotate(degrees = rotationDegrees, pivot = center) {
+      drawCircle(color = Color(0xFF141414), radius = vinylRadius, center = center)
+
+      val labelRadius = vinylRadius * 0.30f
+      val stepPx = 3.dp.toPx()
+      var grooveR = labelRadius + 3.dp.toPx()
+      while (grooveR < vinylRadius - 2.dp.toPx()) {
+        drawCircle(
+          color = Color(0xFF262626),
+          radius = grooveR,
+          center = center,
+          style = Stroke(width = 1.2.dp.toPx())
+        )
+        grooveR += stepPx
+      }
+
+      // Rotating dual-band conic light sheen (~17% and ~13% opacity)
+      drawCircle(
+        brush = Brush.sweepGradient(
+          colorStops = arrayOf(
+            0.0f to Color.Transparent,
+            0.14f to Color.White.copy(alpha = 0.17f),
+            0.30f to Color.Transparent,
+            0.50f to Color.Transparent,
+            0.65f to Color.White.copy(alpha = 0.13f),
+            0.84f to Color.Transparent
+          ),
+          center = center
+        ),
+        radius = vinylRadius,
+        center = center
+      )
+
+      // Label (30% radius): 8..30% coverBase, 4..8% coverLight, 0..4% paper hole
+      drawCircle(color = Color(palette.coverBase), radius = labelRadius, center = center)
+      drawCircle(color = Color(palette.coverLight), radius = vinylRadius * 0.08f, center = center)
+      drawCircle(color = Color(0xFFEFE6D6), radius = (vinylRadius * 0.04f).coerceAtLeast(2.5.dp.toPx()), center = center)
+
+      // Spin indicator dot on label (5% diameter = 2.5% radius) at 40% from top
+      drawCircle(
+        color = Color(0xFFEFE6D6),
+        radius = (vinylRadius * 0.05f).coerceAtLeast(2.dp.toPx()),
+        center = Offset(center.x + vinylRadius * 0.11f, center.y - vinylRadius * 0.18f)
+      )
+    }
+
+    // Non-rotating 135-deg highlight (20% to 0% by 42%)
+    drawCircle(
+      brush = Brush.linearGradient(
+        colorStops = arrayOf(
+          0.0f to Color.White.copy(alpha = 0.20f),
+          0.42f to Color.Transparent,
+          1.0f to Color.Transparent
+        ),
+        start = Offset(center.x - vinylRadius * 0.7f, center.y - vinylRadius * 0.7f),
+        end = Offset(center.x + vinylRadius * 0.7f, center.y + vinylRadius * 0.7f)
+      ),
+      radius = vinylRadius,
+      center = center
+    )
+
+    // Non-rotating 2px #0B0B0B rim
+    drawCircle(
+      color = Color(0xFF0B0B0B),
+      radius = vinylRadius - 1.dp.toPx(),
+      center = center,
+      style = Stroke(width = 1.6.dp.toPx())
+    )
   }
 }
 
@@ -596,8 +769,51 @@ private fun GlassWidgetShell(
 ) {
   val corner = when (style) {
     WidgetGlassStyle.SMOKED_NEON -> 24.dp
+    WidgetGlassStyle.VINYL -> 28.dp
     else -> 26.dp
   }
+
+  if (style == WidgetGlassStyle.VINYL) {
+    Box(
+      modifier = modifier
+        .clip(RoundedCornerShape(corner))
+        .background(Color(0xFFEFE6D6))
+        .clipToBounds()
+    ) {
+      Canvas(modifier = Modifier.matchParentSize()) {
+        drawRect(
+          brush = Brush.radialGradient(
+            colors = listOf(
+              Color.White.copy(alpha = 0.52f),
+              Color.White.copy(alpha = 0.14f),
+              Color.Transparent
+            ),
+            center = Offset(size.width * 0.92f, size.height * 0.06f),
+            radius = size.maxDimension * 0.85f
+          )
+        )
+        var y = 0f
+        val step = 3.dp.toPx().coerceAtLeast(3f)
+        while (y < size.height) {
+          drawLine(
+            color = Color(0xFF785A32).copy(alpha = 0.035f),
+            start = Offset(0f, y),
+            end = Offset(size.width, y),
+            strokeWidth = 1f
+          )
+          y += step
+        }
+      }
+      content()
+      Box(
+        modifier = Modifier
+          .matchParentSize()
+          .border(1.dp, Color(0xFF2A2118).copy(alpha = 0.08f), RoundedCornerShape(corner))
+      )
+    }
+    return
+  }
+
   val bgLayer = bundle?.let {
     when (style) {
       WidgetGlassStyle.SMOKED_NEON -> it.blurredStrong
@@ -672,13 +888,27 @@ private fun LiveMusicWidgetPreview(
   title: String,
   artist: String,
   progressFraction: Float,
+  positionMs: Long,
+  durationMs: Long,
+  reducedMotion: Boolean,
   isPlaying: Boolean,
   isLiked: Boolean
 ) {
-  val isLight = style == WidgetGlassStyle.LIGHT_FROST
-  val titleColor = if (isLight) Color(0xFF14172A) else Color.White
-  val artistColor = if (isLight) Color(0x9E14172A) else Color.White.copy(alpha = 0.70f)
-  val iconTint = if (isLight) Color(0xFF14172A) else Color.White
+  val isLight = style == WidgetGlassStyle.LIGHT_FROST || style == WidgetGlassStyle.VINYL
+  val titleColor = when (style) {
+    WidgetGlassStyle.VINYL -> Color(0xFF2A2118)
+    WidgetGlassStyle.LIGHT_FROST -> Color(0xFF14172A)
+    else -> Color.White
+  }
+  val artistColor = when (style) {
+    WidgetGlassStyle.VINYL -> Color(0xFF2A2118).copy(alpha = 0.65f)
+    WidgetGlassStyle.LIGHT_FROST -> Color(0x9E14172A)
+    else -> Color.White.copy(alpha = 0.70f)
+  }
+  val iconTint = titleColor
+  val spinAngle = if (style == WidgetGlassStyle.VINYL) {
+    rememberVinylSpinAngle(positionMs = positionMs, isPlaying = isPlaying, reducedMotion = reducedMotion)
+  } else 0f
 
   GlassWidgetShell(
     style = style,
@@ -688,6 +918,100 @@ private fun LiveMusicWidgetPreview(
       .height(142.dp)
   ) {
     when (style) {
+      WidgetGlassStyle.VINYL -> {
+        val discPalette = bundle?.vinylPalette ?: VinylWidgetRenderer.PRESET_BLUE
+        val elapsedText = VinylWidgetRenderer.formatTabularTime(if (durationMs > 0L) positionMs else 74_000L)
+        val totalText = VinylWidgetRenderer.formatTabularTime(if (durationMs > 0L) durationMs else 208_000L)
+        Box(modifier = Modifier.fillMaxSize().clipToBounds()) {
+          // Half-visible spinning vinyl disc sitting BEHIND the text on the left edge
+          VinylDiscCanvas(
+            diameter = 148.dp,
+            palette = discPalette,
+            rotationDegrees = spinAngle,
+            modifier = Modifier
+              .align(Alignment.CenterStart)
+              .offset(x = (-74).dp)
+              .zIndex(0f)
+          )
+          Column(
+            modifier = Modifier
+              .fillMaxSize()
+              .zIndex(1f)
+              .padding(start = 84.dp, end = 14.dp, top = 12.dp, bottom = 10.dp),
+            verticalArrangement = Arrangement.SpaceBetween
+          ) {
+            Column {
+              Text(
+                text = title,
+                color = titleColor,
+                fontSize = 15.5.sp,
+                fontWeight = FontWeight.Bold,
+                maxLines = 1,
+                overflow = TextOverflow.Ellipsis
+              )
+              Text(
+                text = artist,
+                color = artistColor,
+                fontSize = 12.sp,
+                maxLines = 1,
+                overflow = TextOverflow.Ellipsis
+              )
+            }
+            Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
+              Box(
+                modifier = Modifier
+                  .fillMaxWidth()
+                  .height(3.dp)
+                  .clip(CircleShape)
+                  .background(Color(0xFF2A2118).copy(alpha = 0.18f))
+              ) {
+                Box(
+                  modifier = Modifier
+                    .fillMaxHeight()
+                    .fillMaxWidth(progressFraction)
+                    .background(Color(0xFF2A2118))
+                )
+              }
+              Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.SpaceBetween
+              ) {
+                Text(elapsedText, fontSize = 10.sp, color = Color(0xFF2A2118).copy(alpha = 0.58f))
+                Text(totalText, fontSize = 10.sp, color = Color(0xFF2A2118).copy(alpha = 0.58f))
+              }
+            }
+            Row(
+              modifier = Modifier.fillMaxWidth(),
+              horizontalArrangement = Arrangement.SpaceBetween,
+              verticalAlignment = Alignment.CenterVertically
+            ) {
+              Icon(Icons.Rounded.SkipPrevious, contentDescription = null, tint = titleColor, modifier = Modifier.size(21.dp))
+              Box(
+                modifier = Modifier
+                  .size(40.dp)
+                  .clip(CircleShape)
+                  .background(Color(0xFF2A2118)),
+                contentAlignment = Alignment.Center
+              ) {
+                Icon(
+                  imageVector = if (isPlaying) Icons.Rounded.Pause else Icons.Rounded.PlayArrow,
+                  contentDescription = null,
+                  tint = Color(0xFFEFE6D6),
+                  modifier = Modifier.size(22.dp)
+                )
+              }
+              Icon(Icons.Rounded.SkipNext, contentDescription = null, tint = titleColor, modifier = Modifier.size(21.dp))
+              Icon(
+                imageVector = if (isLiked) Icons.Rounded.Favorite else Icons.Rounded.FavoriteBorder,
+                contentDescription = null,
+                tint = if (isLiked) Color(0xFFD93838) else titleColor,
+                modifier = Modifier.size(19.dp)
+              )
+            }
+          }
+        }
+      }
+
       WidgetGlassStyle.POSTER_GLASS -> {
         Box(modifier = Modifier.fillMaxSize()) {
           bundle?.posterCover?.let {
@@ -1010,16 +1334,27 @@ private fun LiveLyricsWidgetPreview(
   title: String,
   artist: String,
   currentLyric: String,
-  nextLyric: String
+  nextLyric: String,
+  positionMs: Long,
+  reducedMotion: Boolean,
+  isPlaying: Boolean
 ) {
-  val isLight = style == WidgetGlassStyle.LIGHT_FROST
-  val primaryColor = if (isLight) Color(0xFF14172A) else Color.White
+  val isLight = style == WidgetGlassStyle.LIGHT_FROST || style == WidgetGlassStyle.VINYL
+  val primaryColor = when (style) {
+    WidgetGlassStyle.VINYL -> Color(0xFF2A2118)
+    WidgetGlassStyle.LIGHT_FROST -> Color(0xFF14172A)
+    else -> Color.White
+  }
   val mutedColor = when (style) {
+    WidgetGlassStyle.VINYL -> Color(0x802A2118)
     WidgetGlassStyle.LIGHT_FROST -> Color(0x8014172A)
     WidgetGlassStyle.SMOKED_NEON -> Color(0x73FFFFFF)
     WidgetGlassStyle.POSTER_GLASS -> Color(0xB3FFFFFF)
     else -> Color(0x9EFFFFFF)
   }
+  val spinAngle = if (style == WidgetGlassStyle.VINYL) {
+    rememberVinylSpinAngle(positionMs = positionMs, isPlaying = isPlaying, reducedMotion = reducedMotion)
+  } else 0f
 
   GlassWidgetShell(
     style = style,
@@ -1029,6 +1364,56 @@ private fun LiveLyricsWidgetPreview(
       .height(142.dp)
   ) {
     when (style) {
+      WidgetGlassStyle.VINYL -> {
+        val discPalette = bundle?.vinylPalette ?: VinylWidgetRenderer.PRESET_BLUE
+        Box(modifier = Modifier.fillMaxSize().clipToBounds()) {
+          VinylDiscCanvas(
+            diameter = 116.dp,
+            palette = discPalette,
+            rotationDegrees = spinAngle,
+            modifier = Modifier
+              .align(Alignment.CenterStart)
+              .offset(x = (-58).dp)
+              .zIndex(0f)
+          )
+          Column(
+            modifier = Modifier
+              .fillMaxSize()
+              .zIndex(1f)
+              .padding(start = 68.dp, end = 14.dp, top = 12.dp, bottom = 12.dp),
+            verticalArrangement = Arrangement.SpaceBetween
+          ) {
+            Text(
+              text = "$title · $artist",
+              color = Color(0x992A2118),
+              fontSize = 12.sp,
+              fontWeight = FontWeight.SemiBold,
+              maxLines = 1,
+              overflow = TextOverflow.Ellipsis
+            )
+            Column {
+              Text(
+                text = currentLyric,
+                color = primaryColor,
+                fontSize = 18.sp,
+                fontWeight = FontWeight.Bold,
+                lineHeight = 23.sp,
+                maxLines = 2,
+                overflow = TextOverflow.Ellipsis
+              )
+              Spacer(modifier = Modifier.height(4.dp))
+              Text(
+                text = nextLyric,
+                color = mutedColor,
+                fontSize = 13.sp,
+                maxLines = 1,
+                overflow = TextOverflow.Ellipsis
+              )
+            }
+          }
+        }
+      }
+
       WidgetGlassStyle.POSTER_GLASS -> {
         Box(modifier = Modifier.fillMaxSize()) {
           bundle?.posterCover?.let {
@@ -1276,9 +1661,14 @@ private fun LiveLyricsWidgetPreview(
 private fun LiveCoverWidgetPreview(
   style: WidgetGlassStyle,
   bundle: PreviewArtBundle?,
+  positionMs: Long,
+  reducedMotion: Boolean,
   isPlaying: Boolean
 ) {
-  val isLight = style == WidgetGlassStyle.LIGHT_FROST
+  val isLight = style == WidgetGlassStyle.LIGHT_FROST || style == WidgetGlassStyle.VINYL
+  val spinAngle = if (style == WidgetGlassStyle.VINYL) {
+    rememberVinylSpinAngle(positionMs = positionMs, isPlaying = isPlaying, reducedMotion = reducedMotion)
+  } else 0f
   GlassWidgetShell(
     style = style,
     bundle = bundle,
@@ -1286,6 +1676,15 @@ private fun LiveCoverWidgetPreview(
   ) {
     Box(modifier = Modifier.fillMaxSize()) {
       when (style) {
+        WidgetGlassStyle.VINYL -> {
+          val discPalette = bundle?.vinylPalette ?: VinylWidgetRenderer.PRESET_BLUE
+          VinylDiscCanvas(
+            diameter = 102.dp,
+            palette = discPalette,
+            rotationDegrees = spinAngle,
+            modifier = Modifier.align(Alignment.Center)
+          )
+        }
         WidgetGlassStyle.POSTER_GLASS -> {
           bundle?.posterCover?.let {
             Image(
@@ -1343,6 +1742,7 @@ private fun LiveCoverWidgetPreview(
               WidgetGlassStyle.LIGHT_FROST -> Color(0xFF3B46E0)
               WidgetGlassStyle.SMOKED_NEON -> Color(0x454FC3FF)
               WidgetGlassStyle.FROST_PILL -> Color(0x66121628)
+              WidgetGlassStyle.VINYL -> Color(0xFF2A2118)
             }
           )
           .border(
@@ -1357,6 +1757,7 @@ private fun LiveCoverWidgetPreview(
           contentDescription = null,
           tint = when (style) {
             WidgetGlassStyle.ORB, WidgetGlassStyle.POSTER_GLASS -> Color(0xFF121628)
+            WidgetGlassStyle.VINYL -> Color(0xFFEFE6D6)
             else -> Color.White
           },
           modifier = Modifier.size(20.dp)
@@ -1371,12 +1772,30 @@ private fun LiveMiniWidgetPreview(
   style: WidgetGlassStyle,
   bundle: PreviewArtBundle?,
   title: String,
-  artist: String
+  artist: String,
+  positionMs: Long,
+  reducedMotion: Boolean,
+  isPlaying: Boolean
 ) {
-  val isLight = style == WidgetGlassStyle.LIGHT_FROST
-  val titleColor = if (isLight) Color(0xFF14172A) else Color.White
-  val artistColor = if (isLight) Color(0x9E14172A) else Color.White.copy(alpha = 0.72f)
-  val eqBitmap = if (isLight) bundle?.eq4Dark else bundle?.eq4White
+  val isLight = style == WidgetGlassStyle.LIGHT_FROST || style == WidgetGlassStyle.VINYL
+  val titleColor = when (style) {
+    WidgetGlassStyle.VINYL -> Color(0xFF2A2118)
+    WidgetGlassStyle.LIGHT_FROST -> Color(0xFF14172A)
+    else -> Color.White
+  }
+  val artistColor = when (style) {
+    WidgetGlassStyle.VINYL -> Color(0xA62A2118)
+    WidgetGlassStyle.LIGHT_FROST -> Color(0x9E14172A)
+    else -> Color.White.copy(alpha = 0.72f)
+  }
+  val eqBitmap = when (style) {
+    WidgetGlassStyle.VINYL -> bundle?.eq4Ink
+    WidgetGlassStyle.LIGHT_FROST -> bundle?.eq4Dark
+    else -> bundle?.eq4White
+  }
+  val spinAngle = if (style == WidgetGlassStyle.VINYL) {
+    rememberVinylSpinAngle(positionMs = positionMs, isPlaying = isPlaying, reducedMotion = reducedMotion)
+  } else 0f
 
   GlassWidgetShell(
     style = style,
@@ -1449,7 +1868,14 @@ private fun LiveMiniWidgetPreview(
               modifier = Modifier.size(width = 34.dp, height = 22.dp)
             )
           }
-          if (style == WidgetGlassStyle.ORB) {
+          if (style == WidgetGlassStyle.VINYL) {
+            val discPalette = bundle?.vinylPalette ?: VinylWidgetRenderer.PRESET_BLUE
+            VinylDiscCanvas(
+              diameter = 32.dp,
+              palette = discPalette,
+              rotationDegrees = spinAngle
+            )
+          } else if (style == WidgetGlassStyle.ORB) {
             bundle?.orbDisc?.let {
               Image(bitmap = it, contentDescription = null, modifier = Modifier.size(28.dp))
             }
