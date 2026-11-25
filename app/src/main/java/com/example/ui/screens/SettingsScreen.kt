@@ -47,6 +47,7 @@ import androidx.compose.ui.semantics.LiveRegionMode
 import androidx.compose.ui.semantics.liveRegion
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
@@ -141,6 +142,8 @@ fun SettingsScreen(
   currentSongArtist: String? = null,
   currentSongArtworkUrl: String? = null,
   widgetCustomizerConfig: com.example.widget.WidgetCustomizerConfig = com.example.widget.WidgetCustomizerConfig.DEFAULT,
+  widgetStyle: com.example.widget.WidgetStyle = com.example.widget.WidgetStyle.GLASS,
+  onSelectWidgetStyle: (com.example.widget.WidgetStyle) -> Unit = {},
   onOpenWidgetCustomizer: () -> Unit = {},
   onOpenStandby: () -> Unit = {},
   standbyAutoLaunch: Boolean = false,
@@ -1047,6 +1050,64 @@ fun SettingsScreen(
               .fillMaxWidth()
               .testTag("settings_widget_live_preview")
           )
+
+          HorizontalDivider(color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.08f))
+
+          Column(
+            modifier = Modifier.fillMaxWidth(),
+            verticalArrangement = Arrangement.spacedBy(8.dp)
+          ) {
+            Text(
+              text = stringResource(id = R.string.settings_widget_style_title),
+              style = MaterialTheme.typography.bodyLarge.copy(fontWeight = FontWeight.SemiBold),
+              color = MaterialTheme.colorScheme.onSurface
+            )
+            Text(
+              text = stringResource(id = R.string.settings_widget_style_subtitle),
+              style = MaterialTheme.typography.bodySmall.copy(lineHeight = 18.sp),
+              color = MaterialTheme.colorScheme.onSurfaceVariant
+            )
+            Surface(
+              shape = RoundedCornerShape(999.dp),
+              color = if (darkTheme) Color(0xFF0E1320).copy(alpha = 0.72f) else Color(0xFFE1E8F6),
+              modifier = Modifier.fillMaxWidth()
+            ) {
+              Row(
+                modifier = Modifier
+                  .fillMaxWidth()
+                  .padding(4.dp),
+                horizontalArrangement = Arrangement.spacedBy(4.dp)
+              ) {
+                com.example.widget.WidgetStyle.entries.forEach { styleItem ->
+                  val selected = styleItem == widgetStyle
+                  val label = when (styleItem) {
+                    com.example.widget.WidgetStyle.GLASS -> stringResource(id = R.string.widget_style_glass)
+                    com.example.widget.WidgetStyle.COLOR -> stringResource(id = R.string.widget_style_color)
+                    com.example.widget.WidgetStyle.MONO -> stringResource(id = R.string.widget_style_mono)
+                  }
+                  Surface(
+                    onClick = { onSelectWidgetStyle(styleItem) },
+                    shape = RoundedCornerShape(999.dp),
+                    color = if (selected) MaterialTheme.colorScheme.primary else Color.Transparent,
+                    modifier = Modifier
+                      .weight(1f)
+                      .testTag("settings_widget_style_${styleItem.id}")
+                  ) {
+                    Text(
+                      text = label,
+                      style = MaterialTheme.typography.labelLarge.copy(
+                        fontWeight = if (selected) FontWeight.Bold else FontWeight.Medium
+                      ),
+                      color = if (selected) MaterialTheme.colorScheme.onPrimary else MaterialTheme.colorScheme.onSurfaceVariant,
+                      textAlign = TextAlign.Center,
+                      maxLines = 1,
+                      modifier = Modifier.padding(vertical = 10.dp, horizontal = 8.dp)
+                    )
+                  }
+                }
+              }
+            }
+          }
         }
       }
     }

@@ -783,4 +783,24 @@
     <string name="update_error_generic">មិនអាចទាញយកកំណែថ្មីបានទេ សូមព្យាយាមម្តងទៀត។</string>
     <string name="update_retry_button">ព្យាយាមម្តងទៀត</string>
     <string name="update_retry_countdown">ព្យាយាមម្តងទៀត (%1$ds)</string>
+
+    <!-- Standby Layouts & Redesigned Widgets (v2.2.0) -->
+    <string name="standby_layout_cd">ប្ដូរទម្រង់ Standby</string>
+    <string name="standby_layout_split">ចែកទំព័រ</string>
+    <string name="standby_layout_poster">ផ្ទាំងគម្រប</string>
+    <string name="standby_layout_lyrics">ទំនុកច្រៀង</string>
+    <string name="settings_widget_style_title">រចនាប័ទ្មវិដ្ជិត</string>
+    <string name="settings_widget_style_subtitle">អនុវត្តភ្លាមៗលើវិដ្ជិត AURIX ទាំងអស់ និងរូបភាពមុន</string>
+    <string name="widget_style_glass">កញ្ចក់ (Glass)</string>
+    <string name="widget_style_color">ពណ៌ (Color)</string>
+    <string name="widget_style_mono">សខ្មៅ (Mono)</string>
+    <string name="widget_tap_to_play">ប៉ះដើម្បីចាក់ចម្រៀង</string>
+    <string name="widget_cover_label">AURIX Cover</string>
+    <string name="widget_cover_desc">វិដ្ជិត 2×2 បង្ហាញគម្របអាល់ប៊ុម និងប៊ូតុងចាក់/ផ្អាក</string>
+    <string name="widget_mini_label">AURIX Mini</string>
+    <string name="widget_mini_desc">វិដ្ជិត 2×2 បង្ហាញ Equalizer និងព័ត៌មានបទចម្រៀង</string>
+    <string name="widget_preview_title">Party Funk</string>
+    <string name="widget_preview_artist">Young Madz</string>
+    <string name="widget_preview_lyric_current">ទំនុកច្រៀងកំពុងចាក់បង្ហាញនៅទីនេះ</string>
+    <string name="widget_preview_lyric_next">បន្ទាត់បន្ទាប់ស្រាល</string>
 </resources>

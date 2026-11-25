@@ -258,11 +258,15 @@ class AurixViewModel(application: Application) : AndroidViewModel(application) {
   val standbyUse24h: StateFlow<Boolean> = prefsManager.standbyUse24h
     .stateIn(viewModelScope, SharingStarted.Eagerly, true)
   val standbyMood: StateFlow<String> = prefsManager.standbyMood
-    .stateIn(viewModelScope, SharingStarted.Eagerly, "auto")
+    .stateIn(viewModelScope, SharingStarted.Eagerly, com.example.ui.screens.StandbyColorMood.DEFAULT_ID)
+  val standbyLayout: StateFlow<String> = prefsManager.standbyLayout
+    .stateIn(viewModelScope, SharingStarted.Eagerly, com.example.ui.screens.StandbyLayout.DEFAULT_ID)
   val standbyGyroEnabled: StateFlow<Boolean> = prefsManager.standbyGyroEnabled
     .stateIn(viewModelScope, SharingStarted.Eagerly, true)
   val standbyAutoLaunch: StateFlow<Boolean> = prefsManager.standbyAutoLaunch
     .stateIn(viewModelScope, SharingStarted.Eagerly, false)
+  val widgetStyle: StateFlow<String> = prefsManager.widgetStyle
+    .stateIn(viewModelScope, SharingStarted.Eagerly, com.example.widget.WidgetStyle.DEFAULT_ID)
   val spectrumBars: StateFlow<FloatArray> = AudioSpectrumBus.bars
 
   // Search-Only Mode & YouTube Analyze/Download States
@@ -1508,6 +1512,17 @@ class AurixViewModel(application: Application) : AndroidViewModel(application) {
           AurixWidgetController.syncWidgetCustomizerConfig(
             context = appCtx,
             config = config,
+            refreshWidgetsNow = true
+          )
+        }
+      }
+    }
+    viewModelScope.launch {
+      widgetStyle.collectLatest { styleId ->
+        runCatching {
+          AurixWidgetController.syncWidgetStyle(
+            context = appCtx,
+            styleId = styleId,
             refreshWidgetsNow = true
           )
         }
@@ -5357,8 +5372,20 @@ class AurixViewModel(application: Application) : AndroidViewModel(application) {
   fun setStandbyClockStyle(styleId: String) { safeLaunch(notifyUser = false) { prefsManager.setStandbyClockStyle(styleId) } }
   fun setStandbyUse24h(use24h: Boolean) { safeLaunch(notifyUser = false) { prefsManager.setStandbyUse24h(use24h) } }
   fun setStandbyMood(moodId: String) { safeLaunch(notifyUser = false) { prefsManager.setStandbyMood(moodId) } }
+  fun setStandbyLayout(layoutId: String) { safeLaunch(notifyUser = false) { prefsManager.setStandbyLayout(layoutId) } }
   fun setStandbyGyroEnabled(enabled: Boolean) { safeLaunch(notifyUser = false) { prefsManager.setStandbyGyroEnabled(enabled) } }
   fun setStandbyAutoLaunch(enabled: Boolean) { safeLaunch(notifyUser = false) { prefsManager.setStandbyAutoLaunch(enabled) } }
+  fun setWidgetStyle(styleId: String) {
+    safeLaunch(notifyUser = false) {
+      val normalized = com.example.widget.WidgetStyle.fromId(styleId).id
+      prefsManager.setWidgetStyle(normalized)
+      AurixWidgetController.syncWidgetStyle(
+        context = getApplication(),
+        styleId = normalized,
+        refreshWidgetsNow = true
+      )
+    }
+  }
   fun setOnboardingCompleted(completed: Boolean) { safeLaunch(notifyUser = false) { prefsManager.setOnboardingCompleted(completed) } }
   fun setGithubOwner(owner: String) { safeLaunch(notifyUser = false) { prefsManager.setGithubOwner(owner) } }
   fun setGithubRepo(repo: String) { safeLaunch(notifyUser = false) { prefsManager.setGithubRepo(repo) } }

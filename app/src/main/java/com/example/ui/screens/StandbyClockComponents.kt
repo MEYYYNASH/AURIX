@@ -50,6 +50,7 @@ import androidx.compose.material3.rememberModalBottomSheetState
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.alpha
@@ -115,7 +116,32 @@ enum class StandbyClockStyle(
 }
 
 /**
- * 5 Standby Color Moods: Auto (live cover palette with smooth lerp) + Lo-fi, Sunset, Mint, Mono.
+ * 3 Live-Switchable Bedside Standby Layouts saved to PreferencesManager.
+ */
+enum class StandbyLayout(
+  val id: String,
+  val displayNameEn: String,
+  val displayNameKm: String
+) {
+  SPLIT("split", "Split", "ចែកទំព័រ"),
+  POSTER("poster", "Poster", "ផ្ទាំងគម្រប"),
+  LYRICS("lyrics", "Lyrics", "ទំនុកច្រៀង");
+
+  fun next(): StandbyLayout = entries[(ordinal + 1) % entries.size]
+
+  companion object {
+    const val DEFAULT_ID = "split"
+
+    fun fromId(raw: String?): StandbyLayout {
+      if (raw.isNullOrBlank()) return SPLIT
+      val cleaned = raw.trim().lowercase()
+      return entries.firstOrNull { it.id == cleaned } ?: SPLIT
+    }
+  }
+}
+
+/**
+ * 5 Standby Color Moods: Mint (default) + Lo-fi, Sunset, Mono, Auto (live cover palette with smooth 600ms lerp).
  */
 enum class StandbyColorMood(
   val id: String,
@@ -134,12 +160,12 @@ enum class StandbyColorMood(
   }
 
   companion object {
-    const val DEFAULT_ID = "auto"
+    const val DEFAULT_ID = "mint"
 
     fun fromId(raw: String?): StandbyColorMood {
-      if (raw.isNullOrBlank()) return AUTO
+      if (raw.isNullOrBlank()) return MINT
       val cleaned = raw.trim().lowercase()
-      return entries.firstOrNull { it.id == cleaned } ?: AUTO
+      return entries.firstOrNull { it.id == cleaned } ?: MINT
     }
   }
 }
@@ -150,7 +176,8 @@ data class StandbyMoodPalette(
   val blob2: Color,
   val blob3: Color,
   val blob4: Color,
-  val accent: Color
+  val accent: Color,
+  val textPrimary: Color = Color(0xFFF2F6F4)
 )
 
 /**
@@ -171,7 +198,8 @@ fun resolveStandbyMoodPalette(
       blob2 = Color(0xFF8B6CEF),
       blob3 = Color(0xFF392E5C),
       blob4 = Color(0xFFB794F4),
-      accent = Color(0xFFC4B5FD)
+      accent = Color(0xFFCFC4F2),
+      textPrimary = Color(0xFFF2F6F4)
     )
     StandbyColorMood.SUNSET -> StandbyMoodPalette(
       background = Color(0xFF12070C),
@@ -179,53 +207,82 @@ fun resolveStandbyMoodPalette(
       blob2 = Color(0xFFEC4899),
       blob3 = Color(0xFF881337),
       blob4 = Color(0xFFF59E0B),
-      accent = Color(0xFFFDBA74)
+      accent = Color(0xFFFDBA74),
+      textPrimary = Color(0xFFF2F6F4)
     )
     StandbyColorMood.MINT -> StandbyMoodPalette(
-      background = Color(0xFF05100D),
-      blob1 = Color(0xFF10B981),
-      blob2 = Color(0xFF06B6D4),
+      background = Color(0xFF06100D),
+      blob1 = Color(0xFF7EF0C5),
+      blob2 = Color(0xFF2DD4BF),
       blob3 = Color(0xFF064E3B),
-      blob4 = Color(0xFF34D399),
-      accent = Color(0xFF6EE7B7)
+      blob4 = Color(0xFF7EF0C5),
+      accent = Color(0xFF7EF0C5),
+      textPrimary = Color(0xFFF2F6F4)
     )
     StandbyColorMood.MONO -> StandbyMoodPalette(
       background = Color(0xFF08090D),
-      blob1 = Color(0xFF334155),
-      blob2 = Color(0xFF475569),
+      blob1 = Color(0xFF475569),
+      blob2 = Color(0xFF64748B),
       blob3 = Color(0xFF1E293B),
-      blob4 = Color(0xFF64748B),
-      accent = Color(0xFFCBD5E1)
+      blob4 = Color(0xFF94A3B8),
+      accent = Color(0xFFE2E8F0),
+      textPrimary = Color(0xFFF2F6F4)
     )
     StandbyColorMood.AUTO -> {
       if (!hasActiveSong) {
-        // Fallback to AURIX grey-lavender signature palette when no song is loaded
         StandbyMoodPalette(
-          background = Color(0xFF080912),
-          blob1 = Color(0xFF5B4E8C),
-          blob2 = Color(0xFF4361EE),
-          blob3 = Color(0xFF2B2D42),
-          blob4 = Color(0xFF9D8DF1),
-          accent = Color(0xFFC4B5FD)
+          background = Color(0xFF06100D),
+          blob1 = Color(0xFF7EF0C5),
+          blob2 = Color(0xFF9D8DF1),
+          blob3 = Color(0xFF142421),
+          blob4 = Color(0xFFCFC4F2),
+          accent = Color(0xFF7EF0C5),
+          textPrimary = Color(0xFFF2F6F4)
         )
       } else {
-        val bg = lerpColor(Color(0xFF06070C), coverPrimary, 0.14f)
-        val b1 = lerpColor(coverPrimary, Color(0xFF9D8DF1), 0.18f)
-        val b2 = lerpColor(coverSecondary, Color(0xFF43C7F4), 0.16f)
-        val b3 = lerpColor(coverPrimary, coverSecondary, 0.52f)
+        val bg = lerpColor(Color(0xFF06080B), coverPrimary, 0.10f)
+        val b1 = lerpColor(coverPrimary, Color(0xFF9D8DF1), 0.16f)
+        val b2 = lerpColor(coverSecondary, Color(0xFF7EF0C5), 0.16f)
+        val b3 = lerpColor(coverPrimary, coverSecondary, 0.50f)
         val b4 = lerpColor(coverSecondary, Color.White, 0.24f)
-        val acc = lerpColor(coverPrimary, Color.White, 0.34f)
+        val rawAcc = lerpColor(coverPrimary, Color.White, 0.42f)
+        val acc = ensureStandbyContrast(rawAcc, bg, minRatio = 4.5f)
         StandbyMoodPalette(
           background = bg,
           blob1 = b1,
           blob2 = b2,
           blob3 = b3,
           blob4 = b4,
-          accent = acc
+          accent = acc,
+          textPrimary = Color(0xFFF2F6F4)
         )
       }
     }
   }
+}
+
+private fun relativeLuminance(color: Color): Float {
+  fun lin(v: Float): Float =
+    if (v <= 0.03928f) v / 12.92f else Math.pow(((v + 0.055f) / 1.055f).toDouble(), 2.4).toFloat()
+  return 0.2126f * lin(color.red) + 0.7152f * lin(color.green) + 0.0722f * lin(color.blue)
+}
+
+internal fun standbyContrastRatio(foreground: Color, background: Color): Float {
+  val l1 = relativeLuminance(foreground)
+  val l2 = relativeLuminance(background)
+  val lighter = max(l1, l2)
+  val darker = min(l1, l2)
+  return (lighter + 0.05f) / (darker + 0.05f)
+}
+
+internal fun ensureStandbyContrast(candidate: Color, background: Color, minRatio: Float = 4.5f): Color {
+  var current = candidate
+  var step = 0
+  while (standbyContrastRatio(current, background) < minRatio && step < 10) {
+    current = lerpColor(current, Color(0xFFF2F6F4), 0.20f)
+    step++
+  }
+  return current
 }
 
 private fun lerpColor(start: Color, stop: Color, fraction: Float): Color {
@@ -243,21 +300,23 @@ fun rememberAnimatedStandbyPalette(
   target: StandbyMoodPalette,
   reducedMotion: Boolean
 ): StandbyMoodPalette {
-  val spec = if (reducedMotion) snap<Color>() else tween(durationMillis = 900, easing = FastOutSlowInEasing)
+  val spec = if (reducedMotion) snap<Color>() else tween(durationMillis = 600, easing = FastOutSlowInEasing)
   val bg by animateColorAsState(targetValue = target.background, animationSpec = spec, label = "sb_bg")
   val b1 by animateColorAsState(targetValue = target.blob1, animationSpec = spec, label = "sb_b1")
   val b2 by animateColorAsState(targetValue = target.blob2, animationSpec = spec, label = "sb_b2")
   val b3 by animateColorAsState(targetValue = target.blob3, animationSpec = spec, label = "sb_b3")
   val b4 by animateColorAsState(targetValue = target.blob4, animationSpec = spec, label = "sb_b4")
   val acc by animateColorAsState(targetValue = target.accent, animationSpec = spec, label = "sb_acc")
-  return remember(bg, b1, b2, b3, b4, acc) {
+  val txt by animateColorAsState(targetValue = target.textPrimary, animationSpec = spec, label = "sb_txt")
+  return remember(bg, b1, b2, b3, b4, acc, txt) {
     StandbyMoodPalette(
       background = bg,
       blob1 = b1,
       blob2 = b2,
       blob3 = b3,
       blob4 = b4,
-      accent = acc
+      accent = acc,
+      textPrimary = txt
     )
   }
 }
@@ -460,7 +519,7 @@ private val PIXEL_5X7_GLYPHS: Map<Char, IntArray> = mapOf(
 )
 
 /**
- * Full-screen canvas of 4 slowly drifting radial gradient blobs + dark radial vignette.
+ * Full-screen canvas with one soft ~17% radial glow + dark vignette for clean atmospheric contrast.
  */
 @Composable
 fun StandbyDriftingBlobsBackground(
@@ -468,17 +527,17 @@ fun StandbyDriftingBlobsBackground(
   reducedMotion: Boolean,
   modifier: Modifier = Modifier
 ) {
-  val infinite = rememberInfiniteTransition(label = "standby_blobs_drift")
+  val infinite = rememberInfiniteTransition(label = "standby_glow_drift")
   val phase by infinite.animateFloat(
     initialValue = 0f,
     targetValue = (Math.PI * 2.0).toFloat(),
     animationSpec = infiniteRepeatable(
-      animation = tween(durationMillis = 26_000, easing = LinearEasing),
+      animation = tween(durationMillis = 32_000, easing = LinearEasing),
       repeatMode = RepeatMode.Restart
     ),
-    label = "standby_blob_phase"
+    label = "standby_glow_phase"
   )
-  val t = if (reducedMotion) 0.6f else phase
+  val t = if (reducedMotion) 0.5f else phase
 
   Canvas(modifier = modifier.fillMaxSize()) {
     drawRect(color = palette.background)
@@ -487,51 +546,35 @@ fun StandbyDriftingBlobsBackground(
     val h = size.height
     val maxDim = max(w, h).coerceAtLeast(1f)
 
-    val centers = listOf(
-      Offset(
-        x = w * (0.24f + 0.14f * cos(t)),
-        y = h * (0.28f + 0.14f * sin(t * 0.8f))
-      ) to palette.blob1,
-      Offset(
-        x = w * (0.76f + 0.13f * sin(t * 0.9f + 1.2f)),
-        y = h * (0.32f + 0.15f * cos(t + 0.7f))
-      ) to palette.blob2,
-      Offset(
-        x = w * (0.34f + 0.15f * sin(t + 2.4f)),
-        y = h * (0.76f + 0.12f * cos(t * 0.7f + 1.8f))
-      ) to palette.blob3,
-      Offset(
-        x = w * (0.72f + 0.12f * cos(t + 3.8f)),
-        y = h * (0.72f + 0.14f * sin(t + 2.9f))
-      ) to palette.blob4
+    // Single soft ~17% radial ambient glow
+    val glowCenter = Offset(
+      x = w * (0.36f + 0.08f * cos(t)),
+      y = h * (0.42f + 0.08f * sin(t * 0.8f))
+    )
+    val glowRadius = maxDim * 0.66f
+    drawCircle(
+      brush = Brush.radialGradient(
+        colors = listOf(
+          palette.accent.copy(alpha = 0.17f),
+          palette.blob1.copy(alpha = 0.07f),
+          Color.Transparent
+        ),
+        center = glowCenter,
+        radius = glowRadius
+      ),
+      radius = glowRadius,
+      center = glowCenter
     )
 
-    centers.forEachIndexed { index, (center, blobColor) ->
-      val radius = maxDim * (0.44f + (index % 2) * 0.08f)
-      drawCircle(
-        brush = Brush.radialGradient(
-          colors = listOf(
-            blobColor.copy(alpha = 0.34f),
-            blobColor.copy(alpha = 0.12f),
-            Color.Transparent
-          ),
-          center = center,
-          radius = radius
-        ),
-        radius = radius,
-        center = center
-      )
-    }
-
-    // Soft dark vignette around the edges to frame the clock and keep OLED blacks deep
+    // Subtle dark vignette around edges for high text contrast & OLED depth
     val screenCenter = Offset(w * 0.5f, h * 0.5f)
-    val vignetteRadius = maxDim * 0.78f
+    val vignetteRadius = maxDim * 0.82f
     drawRect(
       brush = Brush.radialGradient(
         colors = listOf(
           Color.Transparent,
-          Color.Black.copy(alpha = 0.38f),
-          Color.Black.copy(alpha = 0.76f)
+          Color.Black.copy(alpha = 0.34f),
+          Color.Black.copy(alpha = 0.72f)
         ),
         center = screenCenter,
         radius = vignetteRadius
@@ -646,7 +689,8 @@ fun StandbyProceduralArtworkFallback(
 }
 
 /**
- * Renders the Standby Clock in any of the 10 selectable [StandbyClockStyle]s with a blinking colon every second.
+ * Renders the Standby Clock in any of the 10 selectable [StandbyClockStyle]s with a 2s soft blinking colon
+ * and tabular numerals.
  */
 @Composable
 fun StandbyClockFace(
@@ -655,15 +699,18 @@ fun StandbyClockFace(
   accent: Color,
   compact: Boolean,
   reducedMotion: Boolean,
-  modifier: Modifier = Modifier
+  modifier: Modifier = Modifier,
+  textColor: Color = Color(0xFFF2F6F4),
+  targetSizeSp: Float? = null
 ) {
   val colonAlpha by animateFloatAsState(
-    targetValue = if (timeParts.colonVisible || reducedMotion) 1f else 0.16f,
-    animationSpec = if (reducedMotion) snap() else tween(durationMillis = 220),
+    targetValue = if (timeParts.colonVisible || reducedMotion) 1f else 0.22f,
+    animationSpec = if (reducedMotion) snap() else tween(durationMillis = 360, easing = FastOutSlowInEasing),
     label = "standby_colon_blink"
   )
 
-  val baseSizeSp = if (compact) 68f else 82f
+  val baseSizeSp = targetSizeSp ?: if (compact) 68f else 82f
+  val compactCanvas = compact || (baseSizeSp <= 70f)
 
   Box(
     modifier = modifier.testTag("standby_clock_text"),
@@ -675,10 +722,10 @@ fun StandbyClockFace(
           timeParts = timeParts,
           colonAlpha = colonAlpha,
           fontFamily = StandbyClockFonts.OutfitFamily,
-          fontWeight = FontWeight.Light,
+          fontWeight = FontWeight.ExtraLight,
           fontSizeSp = baseSizeSp,
           letterSpacingSp = -2f,
-          textColor = Color.White,
+          textColor = textColor,
           accent = accent
         )
       }
@@ -691,7 +738,7 @@ fun StandbyClockFace(
           fontWeight = FontWeight.ExtraBold,
           fontSizeSp = baseSizeSp,
           letterSpacingSp = -1.5f,
-          textColor = Color.White,
+          textColor = textColor,
           accent = accent
         )
       }
@@ -704,7 +751,7 @@ fun StandbyClockFace(
           fontWeight = FontWeight.Bold,
           fontSizeSp = baseSizeSp * 0.84f,
           letterSpacingSp = 2f,
-          textColor = Color.White,
+          textColor = textColor,
           accent = accent,
           shadow = Shadow(
             color = accent,
@@ -722,15 +769,15 @@ fun StandbyClockFace(
           fontWeight = FontWeight.Bold,
           fontSizeSp = baseSizeSp * 0.96f,
           letterSpacingSp = -0.5f,
-          textColor = Color.White,
+          textColor = textColor,
           accent = accent
         )
       }
 
       StandbyClockStyle.ROUND -> {
-        val gradientBrush = remember(accent) {
+        val gradientBrush = remember(accent, textColor) {
           Brush.verticalGradient(
-            colors = listOf(Color.White, lerpColor(Color.White, accent, 0.78f), accent)
+            colors = listOf(textColor, lerpColor(textColor, accent, 0.78f), accent)
           )
         }
         StandbyStandardTextClock(
@@ -740,7 +787,7 @@ fun StandbyClockFace(
           fontWeight = FontWeight.Bold,
           fontSizeSp = baseSizeSp * 0.95f,
           letterSpacingSp = 0.5f,
-          textColor = Color.White,
+          textColor = textColor,
           accent = accent,
           brush = gradientBrush
         )
@@ -752,7 +799,8 @@ fun StandbyClockFace(
           colonAlpha = colonAlpha,
           accent = accent,
           isLedDots = false,
-          compact = compact
+          compact = compactCanvas,
+          scaleFactor = (baseSizeSp / 78f).coerceIn(0.45f, 1.35f)
         )
       }
 
@@ -762,7 +810,8 @@ fun StandbyClockFace(
           colonAlpha = colonAlpha,
           accent = accent,
           isLedDots = true,
-          compact = compact
+          compact = compactCanvas,
+          scaleFactor = (baseSizeSp / 78f).coerceIn(0.45f, 1.35f)
         )
       }
 
@@ -771,7 +820,8 @@ fun StandbyClockFace(
           timeParts = timeParts,
           colonAlpha = colonAlpha,
           accent = accent,
-          compact = compact
+          compact = compactCanvas,
+          scaleFactor = (baseSizeSp / 78f).coerceIn(0.45f, 1.25f)
         )
       }
 
@@ -780,7 +830,8 @@ fun StandbyClockFace(
           timeParts = timeParts,
           colonAlpha = colonAlpha,
           accent = accent,
-          compact = compact
+          compact = compactCanvas,
+          scaleFactor = (baseSizeSp / 78f).coerceIn(0.50f, 1.25f)
         )
       }
 
@@ -789,7 +840,8 @@ fun StandbyClockFace(
           timeParts = timeParts,
           colonAlpha = colonAlpha,
           accent = accent,
-          compact = compact
+          compact = compactCanvas,
+          scaleFactor = (baseSizeSp / 78f).coerceIn(0.45f, 1.35f)
         )
       }
     }
@@ -814,6 +866,7 @@ private fun StandbyStandardTextClock(
     fontWeight = fontWeight,
     fontSize = fontSizeSp.sp,
     letterSpacing = letterSpacingSp.sp,
+    fontFeatureSettings = "tnum",
     shadow = shadow,
     brush = brush
   )
@@ -848,7 +901,7 @@ private fun StandbyStandardTextClock(
         style = MaterialTheme.typography.labelMedium.copy(
           fontFamily = StandbyClockFonts.OutfitFamily,
           fontWeight = FontWeight.Bold,
-          fontSize = 14.sp,
+          fontSize = (fontSizeSp * 0.19f).coerceIn(10f, 16f).sp,
           letterSpacing = 1.sp
         ),
         color = accent.copy(alpha = 0.88f),
@@ -868,20 +921,21 @@ private fun StandbyPixelMatrixClock(
   colonAlpha: Float,
   accent: Color,
   isLedDots: Boolean,
-  compact: Boolean
+  compact: Boolean,
+  scaleFactor: Float = 1f
 ) {
   val chars = remember(timeParts.hours, timeParts.minutes) {
     "${timeParts.hours}:${timeParts.minutes}".toCharArray()
   }
-  val boxHeight = if (compact) 62.dp else 74.dp
-  val boxWidth = if (compact) 232.dp else 272.dp
+  val boxHeight = (if (compact) 62f else 74f).let { (it * scaleFactor).dp }
+  val boxWidth = (if (compact) 232f else 272f).let { (it * scaleFactor).dp }
 
   Row(
     verticalAlignment = Alignment.Bottom,
     horizontalArrangement = Arrangement.Center
   ) {
     Canvas(modifier = Modifier.size(width = boxWidth, height = boxHeight)) {
-      val totalCols = 5 * 4 + 3 + 4 * 1 // 4 digits (5 cols each) + 1 colon (3 cols) + 4 gaps (1 col each) = 27 units
+      val totalCols = 5 * 4 + 3 + 4 * 1
       val totalRows = 7
       val cellSize = min(size.width / totalCols, size.height / totalRows)
       val drawW = cellSize * totalCols
@@ -895,7 +949,7 @@ private fun StandbyPixelMatrixClock(
         val glyphCols = if (isColon) 3 else 5
         val rows = PIXEL_5X7_GLYPHS[ch] ?: PIXEL_5X7_GLYPHS['0']!!
         val alphaMultiplier = if (isColon) colonAlpha else 1f
-        val activeColor = if (isColon) accent else Color.White
+        val activeColor = if (isColon) accent else Color(0xFFF2F6F4)
 
         for (r in 0 until totalRows) {
           val rowMask = rows[r]
@@ -926,11 +980,9 @@ private fun StandbyPixelMatrixClock(
                 )
               }
             } else {
-              // Minecraft 5×7 square pixel blocks
               if (isLit) {
                 val blockPad = cellSize * 0.07f
                 val blockSize = cellSize - blockPad * 2f
-                // Subtle pixel drop shadow
                 drawRect(
                   color = accent.copy(alpha = 0.35f * alphaMultiplier),
                   topLeft = Offset(cellLeft + blockPad + 1.5f, cellTop + blockPad + 1.5f),
@@ -956,7 +1008,7 @@ private fun StandbyPixelMatrixClock(
         style = MaterialTheme.typography.labelMedium.copy(
           fontFamily = StandbyClockFonts.OutfitFamily,
           fontWeight = FontWeight.Bold,
-          fontSize = 13.sp
+          fontSize = (13f * scaleFactor).coerceIn(10f, 16f).sp
         ),
         color = accent.copy(alpha = 0.88f),
         modifier = Modifier.padding(bottom = 6.dp)
@@ -970,15 +1022,16 @@ private fun StandbyFlipCardsClock(
   timeParts: StandbyTimeParts,
   colonAlpha: Float,
   accent: Color,
-  compact: Boolean
+  compact: Boolean,
+  scaleFactor: Float = 1f
 ) {
-  val cardWidth = if (compact) 86.dp else 102.dp
-  val cardHeight = if (compact) 74.dp else 88.dp
-  val digitFontSize = if (compact) 46.sp else 56.sp
+  val cardWidth = ((if (compact) 86f else 102f) * scaleFactor).dp
+  val cardHeight = ((if (compact) 74f else 88f) * scaleFactor).dp
+  val digitFontSize = ((if (compact) 46f else 56f) * scaleFactor).sp
 
   Row(
     verticalAlignment = Alignment.CenterVertically,
-    horizontalArrangement = Arrangement.spacedBy(8.dp)
+    horizontalArrangement = Arrangement.spacedBy((8f * scaleFactor).dp)
   ) {
     FlipClockCardUnit(
       value = timeParts.hours,
@@ -990,18 +1043,18 @@ private fun StandbyFlipCardsClock(
 
     Column(
       modifier = Modifier.alpha(colonAlpha),
-      verticalArrangement = Arrangement.spacedBy(10.dp),
+      verticalArrangement = Arrangement.spacedBy((10f * scaleFactor).dp),
       horizontalAlignment = Alignment.CenterHorizontally
     ) {
       Box(
         modifier = Modifier
-          .size(7.dp)
+          .size((7f * scaleFactor).coerceAtLeast(4f).dp)
           .clip(CircleShape)
           .background(accent)
       )
       Box(
         modifier = Modifier
-          .size(7.dp)
+          .size((7f * scaleFactor).coerceAtLeast(4f).dp)
           .clip(CircleShape)
           .background(accent)
       )
@@ -1049,11 +1102,11 @@ private fun FlipClockCardUnit(
         fontFamily = StandbyClockFonts.OutfitFamily,
         fontWeight = FontWeight.ExtraBold,
         fontSize = fontSize,
+        fontFeatureSettings = "tnum",
         letterSpacing = (-1).sp
       ),
-      color = Color.White
+      color = Color(0xFFF2F6F4)
     )
-    // Split mechanical horizontal crease across center
     Box(
       modifier = Modifier
         .fillMaxWidth()
@@ -1081,10 +1134,11 @@ private fun StandbyStackedClock(
   timeParts: StandbyTimeParts,
   colonAlpha: Float,
   accent: Color,
-  compact: Boolean
+  compact: Boolean,
+  scaleFactor: Float = 1f
 ) {
-  val stackFontSize = if (compact) 52.sp else 64.sp
-  val lineHeight = if (compact) 48.sp else 58.sp
+  val stackFontSize = ((if (compact) 52f else 64f) * scaleFactor).sp
+  val lineHeight = ((if (compact) 48f else 58f) * scaleFactor).sp
   Column(
     horizontalAlignment = Alignment.CenterHorizontally,
     verticalArrangement = Arrangement.spacedBy(2.dp)
@@ -1096,9 +1150,10 @@ private fun StandbyStackedClock(
         fontWeight = FontWeight.ExtraBold,
         fontSize = stackFontSize,
         lineHeight = lineHeight,
+        fontFeatureSettings = "tnum",
         letterSpacing = (-2).sp
       ),
-      color = Color.White
+      color = Color(0xFFF2F6F4)
     )
     Row(
       verticalAlignment = Alignment.CenterVertically,
@@ -1106,7 +1161,7 @@ private fun StandbyStackedClock(
     ) {
       Box(
         modifier = Modifier
-          .width(26.dp)
+          .width((26f * scaleFactor).coerceAtLeast(16f).dp)
           .height(3.dp)
           .clip(CircleShape)
           .alpha(colonAlpha)
@@ -1130,6 +1185,7 @@ private fun StandbyStackedClock(
         fontWeight = FontWeight.ExtraBold,
         fontSize = stackFontSize,
         lineHeight = lineHeight,
+        fontFeatureSettings = "tnum",
         letterSpacing = (-2).sp
       ),
       color = accent
@@ -1142,7 +1198,8 @@ private fun StandbyOutlineClock(
   timeParts: StandbyTimeParts,
   colonAlpha: Float,
   accent: Color,
-  compact: Boolean
+  compact: Boolean,
+  scaleFactor: Float = 1f
 ) {
   val context = LocalContext.current
   val outfitBoldTf = remember(context) {
@@ -1150,8 +1207,8 @@ private fun StandbyOutlineClock(
       ?.let { Typeface.create(it, Typeface.BOLD) }
       ?: Typeface.DEFAULT_BOLD
   }
-  val boxHeight = if (compact) 72.dp else 86.dp
-  val boxWidth = if (compact) 236.dp else 276.dp
+  val boxHeight = ((if (compact) 72f else 86f) * scaleFactor).dp
+  val boxWidth = ((if (compact) 236f else 276f) * scaleFactor).dp
 
   Row(
     verticalAlignment = Alignment.Bottom,
@@ -1163,12 +1220,12 @@ private fun StandbyOutlineClock(
         typeface = outfitBoldTf
         textSize = textPx
         style = NativePaint.Style.STROKE
-        strokeWidth = 2.4.dp.toPx()
+        strokeWidth = (2.4f * scaleFactor).coerceAtLeast(1.4f).dp.toPx()
         strokeJoin = NativePaint.Join.ROUND
-        color = Color.White.toArgb()
+        color = Color(0xFFF2F6F4).toArgb()
       }
       val glowPaint = NativePaint(strokePaint).apply {
-        strokeWidth = 5.5.dp.toPx()
+        strokeWidth = (5.5f * scaleFactor).coerceAtLeast(3f).dp.toPx()
         color = accent.copy(alpha = 0.25f).toArgb()
       }
       val colonPaint = NativePaint(strokePaint).apply {
@@ -1203,7 +1260,7 @@ private fun StandbyOutlineClock(
         text = timeParts.amPm,
         style = MaterialTheme.typography.labelMedium.copy(
           fontWeight = FontWeight.Bold,
-          fontSize = 13.sp
+          fontSize = (13f * scaleFactor).coerceIn(10f, 16f).sp
         ),
         color = accent.copy(alpha = 0.88f),
         modifier = Modifier.padding(bottom = 10.dp)
@@ -1226,6 +1283,13 @@ fun StandbyClockStylePickerSheet(
   onDismiss: () -> Unit
 ) {
   val sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true)
+  var sheetInteractionToken by remember { androidx.compose.runtime.mutableIntStateOf(0) }
+
+  // Auto-hide clock picker sheet after 8 seconds of inactivity
+  androidx.compose.runtime.LaunchedEffect(sheetInteractionToken) {
+    kotlinx.coroutines.delay(8_000L)
+    onDismiss()
+  }
 
   ModalBottomSheet(
     onDismissRequest = onDismiss,
@@ -1296,7 +1360,10 @@ fun StandbyClockStylePickerSheet(
                 modifier = Modifier
                   .clip(CircleShape)
                   .background(if (active) accent.copy(alpha = 0.28f) else Color.Transparent)
-                  .clickable { onToggleUse24h(is24) }
+                  .clickable {
+                    sheetInteractionToken += 1
+                    onToggleUse24h(is24)
+                  }
                   .testTag(if (is24) "standby_24h_toggle" else "standby_12h_toggle")
                   .padding(horizontal = 12.dp, vertical = 6.dp),
                 contentAlignment = Alignment.Center
@@ -1339,7 +1406,10 @@ fun StandbyClockStylePickerSheet(
           val isSelected = styleItem == selectedStyle
           val cardShape = RoundedCornerShape(18.dp)
           Surface(
-            onClick = { onSelectStyle(styleItem) },
+            onClick = {
+              sheetInteractionToken += 1
+              onSelectStyle(styleItem)
+            },
             shape = cardShape,
             color = if (isSelected) accent.copy(alpha = 0.18f) else Color.White.copy(alpha = 0.06f),
             border = BorderStroke(

@@ -459,7 +459,9 @@ class PlaybackService : MediaSessionService() {
           positionMs = pos,
           durationMs = dur,
           isPlaying = true,
-          allowMusicUpdate = AurixWidgetController.hasMusicWidgets(this),
+          allowMusicUpdate = AurixWidgetController.hasMusicWidgets(this) ||
+            AurixWidgetController.hasCoverWidgets(this) ||
+            AurixWidgetController.hasMiniWidgets(this),
           allowLyricsUpdate = AurixWidgetController.hasLyricsWidgets(this)
         )
       } else {
@@ -469,21 +471,34 @@ class PlaybackService : MediaSessionService() {
           .putBoolean("is_playing", false)
           .putLong("position_ms", pos)
           .apply()
-        if (AurixWidgetController.hasMusicWidgets(this)) {
-          AurixWidgetController.refreshAllWidgetsAsync(this, refreshMusic = true, refreshLyrics = false)
+        if (
+          AurixWidgetController.hasMusicWidgets(this) ||
+          AurixWidgetController.hasCoverWidgets(this) ||
+          AurixWidgetController.hasMiniWidgets(this)
+        ) {
+          AurixWidgetController.refreshAllWidgetsAsync(
+            context = this,
+            refreshMusic = true,
+            refreshLyrics = false,
+            refreshCover = true,
+            refreshMini = true
+          )
         }
       }
     }
 
     if (isPlaying) {
-      // Music widget progress bar ticks ~1s while playing ONLY if a Music widget is installed
-      if (AurixWidgetController.hasMusicWidgets(this)) {
+      // Music & Mini widgets tick ~1s while playing ONLY if installed
+      if (AurixWidgetController.hasMusicWidgets(this) || AurixWidgetController.hasMiniWidgets(this)) {
         widgetTickerJob = serviceScope.launch {
           while (isActive) {
             delay(1_000L)
             val active = mainPlayer ?: break
             if (!active.isPlaying) break
-            if (!AurixWidgetController.hasMusicWidgets(this@PlaybackService)) break
+            if (
+              !AurixWidgetController.hasMusicWidgets(this@PlaybackService) &&
+              !AurixWidgetController.hasMiniWidgets(this@PlaybackService)
+            ) break
             val pos = active.currentPosition.coerceAtLeast(0L)
             val dur = active.duration.takeIf { it > 0L } ?: 0L
             AurixWidgetController.onPlaybackProgressTick(

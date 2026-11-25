@@ -11,10 +11,10 @@ import org.junit.Test
 class CrashFixStabilityTest {
 
   @Test
-  fun release216_metadataAndVersionCodeAreConsistent() {
-    assertEquals("2.1.6", BuildConfig.VERSION_NAME)
-    assertEquals(20106, BuildConfig.VERSION_CODE)
-    assertTrue("Release 2.1.6 versionCode must exceed 2.1.5 (20105)", BuildConfig.VERSION_CODE > 20105)
+  fun release220_metadataAndVersionCodeAreConsistent() {
+    assertEquals("2.2.0", BuildConfig.VERSION_NAME)
+    assertEquals(20200, BuildConfig.VERSION_CODE)
+    assertTrue("Release 2.2.0 versionCode must exceed 2.1.6 (20106)", BuildConfig.VERSION_CODE > 20106)
     assertEquals(420, com.example.ui.screens.SELECT_BAR_OPEN_DURATION_MS)
     assertEquals(600, com.example.ui.screens.SELECT_CIRCLE_OPEN_DURATION_MS)
     assertEquals(380L, com.example.ui.screens.SELECT_CLOSE_CLEAR_DELAY_MS)
@@ -543,6 +543,11 @@ class CrashFixStabilityTest {
       com.example.ui.screens.StandbyClockStyle.fromId("round")
     )
     assertEquals(5, com.example.ui.screens.StandbyColorMood.entries.size)
+    assertEquals("mint", com.example.ui.screens.StandbyColorMood.DEFAULT_ID)
+    assertEquals(
+      com.example.ui.screens.StandbyColorMood.MINT,
+      com.example.ui.screens.StandbyColorMood.fromId(null)
+    )
     assertEquals(
       com.example.ui.screens.StandbyColorMood.AUTO,
       com.example.ui.screens.StandbyColorMood.fromId("auto")
@@ -551,11 +556,16 @@ class CrashFixStabilityTest {
       com.example.ui.screens.StandbyColorMood.LOFI,
       com.example.ui.screens.StandbyColorMood.fromId("lofi")
     )
+    assertEquals(3, com.example.ui.screens.StandbyLayout.entries.size)
+    assertEquals(com.example.ui.screens.StandbyLayout.SPLIT, com.example.ui.screens.StandbyLayout.fromId(null))
+    assertEquals(com.example.ui.screens.StandbyLayout.POSTER, com.example.ui.screens.StandbyLayout.fromId("poster"))
+    assertEquals(com.example.ui.screens.StandbyLayout.LYRICS, com.example.ui.screens.StandbyLayout.fromId("lyrics"))
+    assertEquals("standby_layout", com.example.data.PreferencesManager.STANDBY_LAYOUT.name)
     val khmerDate = com.example.ui.screens.formatKhmerStandbyDate(1763942400000L)
     assertTrue("Khmer date chip should contain Khmer weekday prefix", khmerDate.contains("ថ្ងៃ"))
 
     // UpdateDownloadErrorKind, 30s cooldown on HTTP 404 & release-pinned checksum URL derivation
-    val installed = com.example.data.InstalledAppInfo("com.aurix.music", "2.1.6", 20106L, emptySet())
+    val installed = com.example.data.InstalledAppInfo("com.aurix.music", "2.2.0", 20200L, emptySet())
     val state404 = com.example.data.UpdateUiState(
       stage = com.example.data.UpdateStage.Error,
       installed = installed,
@@ -566,11 +576,11 @@ class CrashFixStabilityTest {
     assertEquals(com.example.data.UpdateMainAction.Retry, state404.mainAction)
     assertEquals(com.example.data.UpdateDownloadErrorKind.Http404ReleaseBuilding, state404.errorKind)
     assertEquals(30, state404.retryCooldownSeconds)
-    assertEquals(20106L, com.example.data.GitHubUpdater.deriveVersionCodeFromTag("v2.1.6"))
+    assertEquals(20200L, com.example.data.GitHubUpdater.deriveVersionCodeFromTag("v2.2.0"))
     assertEquals(
-      "https://github.com/MEYYYNASH/AURIX/releases/download/v2.1.6/version.json",
+      "https://github.com/MEYYYNASH/AURIX/releases/download/v2.2.0/version.json",
       com.example.data.UpdateManager.deriveReleaseAssetVersionJsonUrl(
-        "https://github.com/MEYYYNASH/AURIX/releases/download/v2.1.6/AURIX-v2.1.6.apk"
+        "https://github.com/MEYYYNASH/AURIX/releases/download/v2.2.0/AURIX-v2.2.0.apk"
       )
     )
     assertNull(
@@ -578,6 +588,38 @@ class CrashFixStabilityTest {
         "http://127.0.0.1:8080/aurix.apk"
       )
     )
+  }
+
+  @Test
+  fun widgetRedesignStylesAndPreviews_areDeterministic() {
+    assertEquals("widget_style", com.example.data.PreferencesManager.WIDGET_STYLE.name)
+    assertEquals(3, com.example.widget.WidgetStyle.entries.size)
+    assertEquals("glass", com.example.widget.WidgetStyle.DEFAULT_ID)
+    assertEquals(com.example.widget.WidgetStyle.GLASS, com.example.widget.WidgetStyle.fromId(null))
+    assertEquals(com.example.widget.WidgetStyle.COLOR, com.example.widget.WidgetStyle.fromId("color"))
+    assertEquals(com.example.widget.WidgetStyle.MONO, com.example.widget.WidgetStyle.fromId("mono"))
+
+    // Music widget layout resolution per style
+    assertEquals(R.layout.widget_aurix_music, com.example.widget.AurixWidgetController.resolveMusicWidgetLayoutRes(com.example.widget.WidgetStyle.GLASS))
+    assertEquals(R.layout.widget_aurix_music_color, com.example.widget.AurixWidgetController.resolveMusicWidgetLayoutRes(com.example.widget.WidgetStyle.COLOR))
+    assertEquals(R.layout.widget_aurix_music_mono, com.example.widget.AurixWidgetController.resolveMusicWidgetLayoutRes(com.example.widget.WidgetStyle.MONO))
+
+    // Static picker preview layouts across all 4 widget families and all 3 styles
+    assertEquals(R.layout.widget_preview_aurix_music_glass, com.example.widget.AurixWidgetController.resolveMusicPreviewLayoutRes(com.example.widget.WidgetStyle.GLASS))
+    assertEquals(R.layout.widget_preview_aurix_music_color, com.example.widget.AurixWidgetController.resolveMusicPreviewLayoutRes(com.example.widget.WidgetStyle.COLOR))
+    assertEquals(R.layout.widget_preview_aurix_music_mono, com.example.widget.AurixWidgetController.resolveMusicPreviewLayoutRes(com.example.widget.WidgetStyle.MONO))
+
+    assertEquals(R.layout.widget_preview_aurix_lyrics_glass, com.example.widget.AurixWidgetController.resolveLyricsPreviewLayoutRes(com.example.widget.WidgetStyle.GLASS))
+    assertEquals(R.layout.widget_preview_aurix_lyrics_color, com.example.widget.AurixWidgetController.resolveLyricsPreviewLayoutRes(com.example.widget.WidgetStyle.COLOR))
+    assertEquals(R.layout.widget_preview_aurix_lyrics_mono, com.example.widget.AurixWidgetController.resolveLyricsPreviewLayoutRes(com.example.widget.WidgetStyle.MONO))
+
+    assertEquals(R.layout.widget_preview_aurix_cover_glass, com.example.widget.AurixWidgetController.resolveCoverPreviewLayoutRes(com.example.widget.WidgetStyle.GLASS))
+    assertEquals(R.layout.widget_preview_aurix_cover_color, com.example.widget.AurixWidgetController.resolveCoverPreviewLayoutRes(com.example.widget.WidgetStyle.COLOR))
+    assertEquals(R.layout.widget_preview_aurix_cover_mono, com.example.widget.AurixWidgetController.resolveCoverPreviewLayoutRes(com.example.widget.WidgetStyle.MONO))
+
+    assertEquals(R.layout.widget_preview_aurix_mini_glass, com.example.widget.AurixWidgetController.resolveMiniPreviewLayoutRes(com.example.widget.WidgetStyle.GLASS))
+    assertEquals(R.layout.widget_preview_aurix_mini_color, com.example.widget.AurixWidgetController.resolveMiniPreviewLayoutRes(com.example.widget.WidgetStyle.COLOR))
+    assertEquals(R.layout.widget_preview_aurix_mini_mono, com.example.widget.AurixWidgetController.resolveMiniPreviewLayoutRes(com.example.widget.WidgetStyle.MONO))
   }
 
   @Test
@@ -603,8 +645,8 @@ class CrashFixStabilityTest {
     assertEquals(313.5f, com.example.widget.AurixWidgetController.computeLyricsTextWidthDp(com.example.widget.WidgetSizeTier.LARGE, false), 0.01f)
     assertEquals(197.5f, com.example.widget.AurixWidgetController.computeLyricsTextWidthDp(com.example.widget.WidgetSizeTier.LARGE, true), 0.01f)
     assertEquals(312f, com.example.widget.AurixWidgetController.computeLyricsFooterWidthDp(com.example.widget.WidgetSizeTier.WIDE, true), 0.01f)
-    assertEquals(14.5f, com.example.widget.AurixWidgetController.computeLyricsActiveTextSizeDp(com.example.widget.WidgetSizeTier.WIDE), 0.01f)
-    assertEquals(11.5f, com.example.widget.AurixWidgetController.computeLyricsNextTextSizeDp(com.example.widget.WidgetSizeTier.WIDE), 0.01f)
+    assertEquals(22.0f, com.example.widget.AurixWidgetController.computeLyricsActiveTextSizeDp(com.example.widget.WidgetSizeTier.WIDE), 0.01f)
+    assertEquals(15.0f, com.example.widget.AurixWidgetController.computeLyricsNextTextSizeDp(com.example.widget.WidgetSizeTier.WIDE), 0.01f)
     assertTrue(
       com.example.widget.AurixWidgetController.computeLyricsActiveTextSizeDp(com.example.widget.WidgetSizeTier.LARGE) >
         com.example.widget.AurixWidgetController.computeLyricsActiveTextSizeDp(com.example.widget.WidgetSizeTier.SMALL)

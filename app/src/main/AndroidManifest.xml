@@ -159,6 +159,35 @@
                 android:resource="@xml/aurix_lyrics_widget_info" />
         </receiver>
 
+        <!-- AURIX Cover Home Screen Widget (2x2) -->
+        <receiver
+            android:name=".widget.AurixCoverWidgetProvider"
+            android:exported="true"
+            android:label="@string/widget_cover_label">
+            <intent-filter>
+                <action android:name="android.appwidget.action.APPWIDGET_UPDATE" />
+                <action android:name="com.example.aurix.widget.ACTION_PLAY_PAUSE" />
+                <action android:name="com.example.aurix.widget.ACTION_REFRESH" />
+            </intent-filter>
+            <meta-data
+                android:name="android.appwidget.provider"
+                android:resource="@xml/aurix_cover_widget_info" />
+        </receiver>
+
+        <!-- AURIX Mini Home Screen Widget (2x2) -->
+        <receiver
+            android:name=".widget.AurixMiniWidgetProvider"
+            android:exported="true"
+            android:label="@string/widget_mini_label">
+            <intent-filter>
+                <action android:name="android.appwidget.action.APPWIDGET_UPDATE" />
+                <action android:name="com.example.aurix.widget.ACTION_REFRESH" />
+            </intent-filter>
+            <meta-data
+                android:name="android.appwidget.provider"
+                android:resource="@xml/aurix_mini_widget_info" />
+        </receiver>
+
         <!-- Widget Long-Press Reconfigure Trampoline -->
         <activity
             android:name=".widget.WidgetConfigureActivity"

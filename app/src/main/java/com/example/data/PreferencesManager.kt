@@ -86,6 +86,7 @@ class PreferencesManager(private val context: Context) {
     val WIDGET_BLUR = intPreferencesKey("blur")
     val WIDGET_DARKNESS = intPreferencesKey("darkness")
     val WIDGET_PHOTO_REV = longPreferencesKey("widget_photo_rev")
+    val WIDGET_STYLE = stringPreferencesKey("widget_style")
 
     // Orbi Companion & Ambient Standby Mode keys
     val ORBI_COMPANION_THEME = stringPreferencesKey("orbi_companion_theme")
@@ -93,6 +94,7 @@ class PreferencesManager(private val context: Context) {
     val STANDBY_CLOCK_STYLE = stringPreferencesKey("standby_clock_style")
     val STANDBY_USE_24H = booleanPreferencesKey("standby_use_24h")
     val STANDBY_MOOD = stringPreferencesKey("standby_mood")
+    val STANDBY_LAYOUT = stringPreferencesKey("standby_layout")
     val STANDBY_GYRO_ENABLED = booleanPreferencesKey("standby_gyro_enabled")
     val STANDBY_AUTO_LAUNCH = booleanPreferencesKey("standby_auto_launch")
     val KHMER_LYRICS_FONT = stringPreferencesKey("khmer_lyrics_font")
@@ -181,13 +183,19 @@ class PreferencesManager(private val context: Context) {
     prefs[STANDBY_USE_24H] ?: true
   }
   val standbyMood: Flow<String> = safeDataFlow.map { prefs ->
-    prefs[STANDBY_MOOD] ?: "auto"
+    prefs[STANDBY_MOOD] ?: com.example.ui.screens.StandbyColorMood.DEFAULT_ID
+  }
+  val standbyLayout: Flow<String> = safeDataFlow.map { prefs ->
+    com.example.ui.screens.StandbyLayout.fromId(prefs[STANDBY_LAYOUT]).id
   }
   val standbyGyroEnabled: Flow<Boolean> = safeDataFlow.map { prefs ->
     prefs[STANDBY_GYRO_ENABLED] ?: true
   }
   val standbyAutoLaunch: Flow<Boolean> = safeDataFlow.map { prefs ->
     prefs[STANDBY_AUTO_LAUNCH] ?: false
+  }
+  val widgetStyle: Flow<String> = safeDataFlow.map { prefs ->
+    com.example.widget.WidgetStyle.fromId(prefs[WIDGET_STYLE]).id
   }
   val lyricsWidgetAnim: Flow<String> = safeDataFlow.map { prefs ->
     com.example.lyrics.LyricsAnimationStyle.fromId(prefs[LYRICS_WIDGET_ANIM] ?: prefs[LYRICS_ANIM]).id
@@ -461,6 +469,13 @@ class PreferencesManager(private val context: Context) {
     }
   }
 
+  suspend fun setStandbyLayout(layoutId: String) {
+    val normalized = com.example.ui.screens.StandbyLayout.fromId(layoutId).id
+    context.dataStore.edit { prefs ->
+      prefs[STANDBY_LAYOUT] = normalized
+    }
+  }
+
   suspend fun setStandbyGyroEnabled(enabled: Boolean) {
     context.dataStore.edit { prefs ->
       prefs[STANDBY_GYRO_ENABLED] = enabled
@@ -470,6 +485,13 @@ class PreferencesManager(private val context: Context) {
   suspend fun setStandbyAutoLaunch(enabled: Boolean) {
     context.dataStore.edit { prefs ->
       prefs[STANDBY_AUTO_LAUNCH] = enabled
+    }
+  }
+
+  suspend fun setWidgetStyle(styleId: String) {
+    val normalized = com.example.widget.WidgetStyle.fromId(styleId).id
+    context.dataStore.edit { prefs ->
+      prefs[WIDGET_STYLE] = normalized
     }
   }
 }

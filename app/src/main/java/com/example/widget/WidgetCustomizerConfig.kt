@@ -3,6 +3,28 @@ package com.example.widget
 import android.graphics.Color
 import org.json.JSONObject
 
+enum class WidgetStyle(
+  val id: String,
+  val displayNameEn: String,
+  val displayNameKm: String
+) {
+  GLASS("glass", "Glass", "Glass"),
+  COLOR("color", "Color", "Color"),
+  MONO("mono", "Mono", "Mono");
+
+  fun next(): WidgetStyle = entries[(ordinal + 1) % entries.size]
+
+  companion object {
+    const val DEFAULT_ID = "glass"
+
+    fun fromId(raw: String?): WidgetStyle {
+      if (raw.isNullOrBlank()) return GLASS
+      val cleaned = raw.trim().lowercase()
+      return entries.firstOrNull { it.id == cleaned } ?: GLASS
+    }
+  }
+}
+
 enum class WidgetPhotoSource(val id: String) {
   ALBUM_ART("album_art"),
   CUSTOM("custom");

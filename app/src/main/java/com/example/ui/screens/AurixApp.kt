@@ -352,10 +352,14 @@ private fun AurixMainShell(
   val standbyClockStyleId by viewModel.standbyClockStyle.collectAsStateWithLifecycle()
   val standbyUse24h by viewModel.standbyUse24h.collectAsStateWithLifecycle()
   val standbyMoodId by viewModel.standbyMood.collectAsStateWithLifecycle()
+  val standbyLayoutId by viewModel.standbyLayout.collectAsStateWithLifecycle()
   val standbyGyroEnabled by viewModel.standbyGyroEnabled.collectAsStateWithLifecycle()
   val standbyAutoLaunch by viewModel.standbyAutoLaunch.collectAsStateWithLifecycle()
+  val widgetStyleId by viewModel.widgetStyle.collectAsStateWithLifecycle()
   val activeStandbyClockStyle = remember(standbyClockStyleId) { StandbyClockStyle.fromId(standbyClockStyleId) }
   val activeStandbyMood = remember(standbyMoodId) { StandbyColorMood.fromId(standbyMoodId) }
+  val activeStandbyLayout = remember(standbyLayoutId) { StandbyLayout.fromId(standbyLayoutId) }
+  val activeWidgetStyle = remember(widgetStyleId) { com.example.widget.WidgetStyle.fromId(widgetStyleId) }
 
   // Auto-open Standby Mode when charging in landscape or propped up (optional setting, default off)
   val currentConfig = LocalConfiguration.current
@@ -1293,6 +1297,8 @@ private fun AurixMainShell(
               currentSongArtist = currentSong?.artist,
               currentSongArtworkUrl = currentSong?.artworkUrl,
               widgetCustomizerConfig = widgetCustomizerConfig,
+              widgetStyle = activeWidgetStyle,
+              onSelectWidgetStyle = { viewModel.setWidgetStyle(it.id) },
               onOpenWidgetCustomizer = { showWidgetCustomizer = true },
               onOpenStandby = { showAmbientStandby = true },
               standbyAutoLaunch = standbyAutoLaunch,
@@ -1570,6 +1576,7 @@ private fun AurixMainShell(
           clockStyle = activeStandbyClockStyle,
           use24h = standbyUse24h,
           colorMood = activeStandbyMood,
+          layout = activeStandbyLayout,
           gyroEnabled = standbyGyroEnabled,
           orbiMood = effectiveOrbiMood,
           orbiTheme = activeOrbiTheme,
@@ -1577,6 +1584,7 @@ private fun AurixMainShell(
           onSelectClockStyle = { style -> viewModel.setStandbyClockStyle(style.id) },
           onToggleUse24h = { use24 -> viewModel.setStandbyUse24h(use24) },
           onSelectColorMood = { mood -> viewModel.setStandbyMood(mood.id) },
+          onSelectLayout = { newLayout -> viewModel.setStandbyLayout(newLayout.id) },
           onToggleGyroEnabled = { enabled -> viewModel.setStandbyGyroEnabled(enabled) },
           onToggleVinylStyle = { isVinyl -> viewModel.setStandbyVinylStyle(isVinyl) },
           onSeek = { targetMs -> viewModel.seekTo(targetMs) },

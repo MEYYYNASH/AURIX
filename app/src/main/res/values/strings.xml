@@ -886,4 +886,24 @@
     <string name="update_error_generic">Unable to download the update right now. Please try again.</string>
     <string name="update_retry_button">Retry</string>
     <string name="update_retry_countdown">Retry (%1$ds)</string>
+
+    <!-- Standby Layouts & Redesigned Widgets (v2.2.0) -->
+    <string name="standby_layout_cd">Switch Standby layout</string>
+    <string name="standby_layout_split">Split</string>
+    <string name="standby_layout_poster">Poster</string>
+    <string name="standby_layout_lyrics">Lyrics</string>
+    <string name="settings_widget_style_title">Widget style</string>
+    <string name="settings_widget_style_subtitle">Applied immediately to all AURIX widgets and picker previews</string>
+    <string name="widget_style_glass">Glass</string>
+    <string name="widget_style_color">Color</string>
+    <string name="widget_style_mono">Mono</string>
+    <string name="widget_tap_to_play">Tap to play music</string>
+    <string name="widget_cover_label">AURIX Cover</string>
+    <string name="widget_cover_desc">Compact 2×2 album cover with play/pause control</string>
+    <string name="widget_mini_label">AURIX Mini</string>
+    <string name="widget_mini_desc">Compact 2×2 live equalizer and current track info</string>
+    <string name="widget_preview_title">Party Funk</string>
+    <string name="widget_preview_artist">Young Madz</string>
+    <string name="widget_preview_lyric_current">Current lyric line shows here</string>
+    <string name="widget_preview_lyric_next">Next line, dimmed</string>
 </resources>

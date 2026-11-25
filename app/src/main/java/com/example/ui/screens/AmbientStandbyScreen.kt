@@ -35,7 +35,6 @@ import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.gestures.detectTapGestures
 import androidx.compose.foundation.gestures.detectVerticalDragGestures
-import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -52,14 +51,13 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.safeDrawingPadding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
-import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.rounded.AccessTime
 import androidx.compose.material.icons.rounded.BatteryChargingFull
-import androidx.compose.material.icons.rounded.BatteryStd
 import androidx.compose.material.icons.rounded.Close
+import androidx.compose.material.icons.rounded.Dashboard
 import androidx.compose.material.icons.rounded.Explore
 import androidx.compose.material.icons.rounded.Palette
 import androidx.compose.material.icons.rounded.Pause
@@ -117,17 +115,20 @@ import com.example.R
 import com.example.model.APP_ICON_ARTWORK
 import com.example.model.LyricsResult
 import com.example.model.Song
-import com.example.playback.AudioSpectrumBus
+import com.example.ui.theme.KhmerLyricsFont
+import com.example.ui.theme.rememberKhmerLyricsText
+import com.example.ui.theme.rememberKhmerTitleText
 import com.example.widget.AurixWidgetController
+import com.example.widget.SyncedLyricLineSnapshot
 import kotlinx.coroutines.delay
 import kotlin.math.abs
 import kotlin.math.cos
-import kotlin.math.max
-import kotlin.math.min
 import kotlin.math.sin
 
 private const val BURN_IN_DIM_TIMEOUT_MS = 120_000L // 2 minutes without touch
-private const val MAX_TILT_DEGREES = 14f
+private const val BURN_IN_DRIFT_CYCLE_MS = 90_000   // 90s slow orbital burn-in drift
+private const val CONTROLS_AUTO_HIDE_MS = 5_000L    // 5 seconds inactivity hide
+private const val MAX_TILT_DEGREES = 8f             // 8° max 3D gyro tilt
 const val STANDBY_PROGRESS_SEGMENTS = 17
 
 /**
@@ -135,15 +136,12 @@ const val STANDBY_PROGRESS_SEGMENTS = 17
  *
  * - Keeps screen awake (FLAG_KEEP_SCREEN_ON) and hides system bars while open.
  * - Reuses AURIX's real player state (zero demo or fake data).
- * - Landscape: Left column has Big Clock -> Khmer Date & Chips -> Album Art; Right column has Song Info.
- * - Portrait: Single centered column: Clock -> Chips -> Album Art -> Song Info.
- * - 10 Clock Styles + 12h/24h toggle + blinking colon every second.
- * - 5 Color Moods (Auto cover palette with smooth lerp, Lo-fi, Sunset, Mint, Mono) + drifting radial blobs & vignette.
- * - 3D Gyro Parallax (up to 14° album art tilt with moving glare, opposite depth shift on clock & song info,
- *   slowly recentering neutral point when propped up, pointer fallback & gentle idle sway).
- * - Burn-in protection: slow pixel drift + automatic brightness dim after 2 minutes of no touch.
- * - Top-right glass circle buttons: Mood, Clock Style, Gyro (+ Exit); optional bottom row: Previous, Play/Pause, Next.
- * - Tap screen to show/hide controls; swipe down or press Back to exit.
+ * - 3 live-switchable layouts saved to settings: Split (default), Poster, Lyrics.
+ * - 10 Clock Styles + 12h/24h toggle + 2s soft blinking colon + tabular numbers.
+ * - 5 Color Moods (Mint default, Lo-fi, Sunset, Mono, Auto cover palette lerp) + single 17% radial glow & vignette.
+ * - 3D Gyro Parallax (up to 8° album art tilt with moving glare, opposite depth shift, slow neutral recentering).
+ * - Burn-in protection: 90s pixel drift + ~40% dim after 2 minutes of inactivity.
+ * - Top-right 44dp glass circle buttons: Layout, Clock Style, Mood, Gyro, Close.
  */
 @Composable
 fun AmbientStandbyScreen(
@@ -160,14 +158,16 @@ fun AmbientStandbyScreen(
   reducedMotion: Boolean,
   clockStyle: StandbyClockStyle = StandbyClockStyle.THIN,
   use24h: Boolean = true,
-  colorMood: StandbyColorMood = StandbyColorMood.AUTO,
+  colorMood: StandbyColorMood = StandbyColorMood.MINT,
+  layout: StandbyLayout = StandbyLayout.SPLIT,
   gyroEnabled: Boolean = true,
   orbiMood: OrbiMood = OrbiMood.CLASSIC_IDLE,
   orbiTheme: OrbiCompanionTheme = OrbiCompanionTheme.CLASSIC,
-  khmerLyricsFont: com.example.ui.theme.KhmerLyricsFont = com.example.ui.theme.KhmerLyricsFont.KANTUMRUY_PRO,
+  khmerLyricsFont: KhmerLyricsFont = KhmerLyricsFont.KANTUMRUY_PRO,
   onSelectClockStyle: (StandbyClockStyle) -> Unit = {},
   onToggleUse24h: (Boolean) -> Unit = {},
   onSelectColorMood: (StandbyColorMood) -> Unit = {},
+  onSelectLayout: (StandbyLayout) -> Unit = {},
   onToggleGyroEnabled: (Boolean) -> Unit = {},
   onToggleVinylStyle: (Boolean) -> Unit = {},
   onSeek: ((Long) -> Unit)? = null,
@@ -227,7 +227,7 @@ fun AmbientStandbyScreen(
     }
   }
 
-  // Live clock tick every 500ms for crisp 1-second blinking colon and exact minute rollovers
+  // Live clock tick every 500ms for crisp blinking colon & exact minute rollovers
   var nowMillis by remember { mutableLongStateOf(System.currentTimeMillis()) }
   var lastTouchTimestampMs by remember { mutableLongStateOf(System.currentTimeMillis()) }
   LaunchedEffect(Unit) {
@@ -247,7 +247,7 @@ fun AmbientStandbyScreen(
     }
   }
 
-  // Auto-hide controls after 4.5 seconds of inactivity
+  // Auto-hide controls after 5 seconds of inactivity
   var controlsVisible by remember { mutableStateOf(true) }
   var lastInteractionToken by remember { mutableIntStateOf(0) }
   var showClockPickerSheet by remember { mutableStateOf(false) }
@@ -259,12 +259,12 @@ fun AmbientStandbyScreen(
 
   LaunchedEffect(controlsVisible, lastInteractionToken, showClockPickerSheet) {
     if (controlsVisible && !showClockPickerSheet) {
-      delay(4_500L)
+      delay(CONTROLS_AUTO_HIDE_MS)
       controlsVisible = false
     }
   }
 
-  // Burn-in protection: dim brightness after 2 minutes of no touch
+  // Burn-in protection: dim brightness to ~40% after 2 minutes of no touch
   val isBurnInDimmed = (nowMillis - lastTouchTimestampMs) >= BURN_IN_DIM_TIMEOUT_MS
   val burnInBrightnessAlpha by animateFloatAsState(
     targetValue = if (isBurnInDimmed) 0.42f else 1.0f,
@@ -272,34 +272,34 @@ fun AmbientStandbyScreen(
     label = "standby_burn_in_dim"
   )
 
-  // Burn-in protection: slow pixel drift (±5.dp over a 64-second orbital cycle)
+  // Burn-in protection: slow pixel drift over a 90s cycle
   val infiniteTransition = rememberInfiniteTransition(label = "standby_infinite")
   val driftPhase by infiniteTransition.animateFloat(
     initialValue = 0f,
     targetValue = (Math.PI * 2.0).toFloat(),
     animationSpec = infiniteRepeatable(
-      animation = tween(durationMillis = 64_000, easing = LinearEasing),
+      animation = tween(durationMillis = BURN_IN_DRIFT_CYCLE_MS, easing = LinearEasing),
       repeatMode = RepeatMode.Restart
     ),
     label = "standby_burn_in_drift"
   )
-  val driftOffsetX = if (reducedMotion) 0.dp else (sin(driftPhase) * 5f).dp
-  val driftOffsetY = if (reducedMotion) 0.dp else (cos(driftPhase * 0.75f) * 4f).dp
+  val driftOffsetX = if (reducedMotion) 0.dp else (sin(driftPhase) * 4.5f).dp
+  val driftOffsetY = if (reducedMotion) 0.dp else (cos(driftPhase * 0.75f) * 3.5f).dp
 
   // Gentle idle sway for 3D parallax when stationary
   val swayPhase by infiniteTransition.animateFloat(
     initialValue = 0f,
     targetValue = (Math.PI * 2.0).toFloat(),
     animationSpec = infiniteRepeatable(
-      animation = tween(durationMillis = 9_500, easing = LinearEasing),
+      animation = tween(durationMillis = 10_000, easing = LinearEasing),
       repeatMode = RepeatMode.Restart
     ),
     label = "standby_idle_sway"
   )
 
-  // Real Hardware Gyro / Rotation / Accelerometer Parallax with Slowly Recentering Neutral Point
-  var sensorTiltX by remember { mutableFloatStateOf(0f) } // normalized -1..1 (roll)
-  var sensorTiltY by remember { mutableFloatStateOf(0f) } // normalized -1..1 (pitch)
+  // Real Hardware Gyro / Rotation / Accelerometer Parallax with Slowly Recentering Neutral Point (8° cap)
+  var sensorTiltX by remember { mutableFloatStateOf(0f) }
+  var sensorTiltY by remember { mutableFloatStateOf(0f) }
   var pointerTiltX by remember { mutableFloatStateOf(0f) }
   var pointerTiltY by remember { mutableFloatStateOf(0f) }
 
@@ -330,16 +330,14 @@ fun AmbientStandbyScreen(
           runCatching {
             SensorManager.getRotationMatrixFromVector(rotationMatrix, event.values)
             SensorManager.getOrientation(rotationMatrix, orientationAngles)
-            // orientationAngles[1] = pitch (radians), orientationAngles[2] = roll (radians)
             val rollDeg = Math.toDegrees(orientationAngles[2].toDouble()).toFloat()
             val pitchDeg = Math.toDegrees(orientationAngles[1].toDouble()).toFloat()
             rollDeg to pitchDeg
           }.getOrDefault(0f to 0f)
         } else {
-          // Accelerometer fallback (m/s^2 -> approximate tilt degrees)
           val gx = event.values.getOrNull(0) ?: 0f
           val gy = event.values.getOrNull(1) ?: 0f
-          (-gx * 4.5f) to (gy * 4.5f)
+          (-gx * 4.0f) to (gy * 4.0f)
         }
 
         if (!initialized) {
@@ -347,7 +345,6 @@ fun AmbientStandbyScreen(
           neutralY = rawY
           initialized = true
         } else {
-          // Neutral point slowly follows the phone so it recenters when propped up
           neutralX += (rawX - neutralX) * 0.022f
           neutralY += (rawY - neutralY) * 0.022f
         }
@@ -372,8 +369,8 @@ fun AmbientStandbyScreen(
     }
   }
 
-  val idleSwayX = if (gyroEnabled && !reducedMotion) sin(swayPhase) * 0.16f else 0f
-  val idleSwayY = if (gyroEnabled && !reducedMotion) cos(swayPhase * 0.8f) * 0.14f else 0f
+  val idleSwayX = if (gyroEnabled && !reducedMotion) sin(swayPhase) * 0.14f else 0f
+  val idleSwayY = if (gyroEnabled && !reducedMotion) cos(swayPhase * 0.8f) * 0.12f else 0f
   val effectiveTiltX = if (!gyroEnabled || reducedMotion) {
     0f
   } else {
@@ -385,7 +382,6 @@ fun AmbientStandbyScreen(
     (sensorTiltY + pointerTiltY * 0.45f + idleSwayY).coerceIn(-1f, 1f)
   }
 
-  // Smoothly animated tilt values for 60fps 3D parallax
   val smoothTiltX by animateFloatAsState(
     targetValue = effectiveTiltX,
     animationSpec = if (reducedMotion) snap() else tween(140, easing = LinearEasing),
@@ -407,7 +403,7 @@ fun AmbientStandbyScreen(
     effectiveCoverUrl?.let { resolveArtworkModel(it, song?.source ?: "Local") }
   }
 
-  // Extract palette from real cover art for Auto mode and lerp smoothly when song or mood changes
+  // Extract palette from real cover art for Auto mode and lerp smoothly (~600ms) when song/mood changes
   val (coverPrimary, coverSecondary) = rememberArtworkColors(
     effectiveCoverUrl.orEmpty(),
     song?.title.orEmpty()
@@ -441,6 +437,24 @@ fun AmbientStandbyScreen(
       noLyricsLabel = ""
     )
   }
+  val previousLyricLine = remember(lyricsResult, lyricSnap.activeIndex, lyricSnap.hasLyrics) {
+    if (!lyricSnap.hasLyrics || lyricSnap.activeIndex <= 0) {
+      ""
+    } else {
+      val cleanSynced = lyricsResult?.synced?.filter { it.text.isNotBlank() }.orEmpty()
+      if (cleanSynced.isNotEmpty()) {
+        cleanSynced.getOrNull(lyricSnap.activeIndex - 1)?.text?.trim().orEmpty()
+      } else {
+        val cleanPlain = lyricsResult?.plain
+          ?.lineSequence()
+          ?.map { it.trim() }
+          ?.filter { it.isNotEmpty() }
+          ?.toList()
+          .orEmpty()
+        cleanPlain.getOrNull(lyricSnap.activeIndex - 1).orEmpty()
+      }
+    }
+  }
 
   val totalDurationMs = remember(durationMs, song?.durationSeconds, song?.fullDurationSeconds) {
     val fromPlayer = durationMs.takeIf { it > 0L }
@@ -455,10 +469,25 @@ fun AmbientStandbyScreen(
       ?: song?.source?.takeIf { it.isNotBlank() }.orEmpty()
   }
 
+  val progressFraction = if (totalDurationMs > 0L && song != null) {
+    (livePositionMs.toFloat() / totalDurationMs.toFloat()).coerceIn(0f, 1f)
+  } else {
+    0f
+  }
+
+  fun handleSeekFraction(fraction: Float) {
+    registerUserTouch()
+    if (totalDurationMs > 0L) {
+      val targetMs = (totalDurationMs * fraction).toLong().coerceIn(0L, totalDurationMs)
+      livePositionMs = targetMs
+      onSeek?.invoke(targetMs)
+    }
+  }
+
   BoxWithConstraints(
     modifier = Modifier
       .fillMaxSize()
-      .background(Color.Black)
+      .background(palette.background)
       .pointerInput(Unit) {
         detectTapGestures(
           onTap = { offset ->
@@ -491,7 +520,6 @@ fun AmbientStandbyScreen(
           onDragEnd = {
             pointerTiltX = 0f
             pointerTiltY = 0f
-            // Swipe down exits Standby Mode
             if (totalDragY > 72.dp.toPx()) {
               onClose()
             }
@@ -508,20 +536,20 @@ fun AmbientStandbyScreen(
     val containerMaxHeight = maxHeight
     val isLandscape = containerMaxWidth > containerMaxHeight
 
-    // 1. Drifting Radial Blobs + Vignette Canvas Background
+    // 1. Single soft 17% radial glow + dark vignette background
     StandbyDriftingBlobsBackground(
       palette = palette,
       reducedMotion = reducedMotion,
       modifier = Modifier.alpha(burnInBrightnessAlpha)
     )
 
-    // Opposite depth shifts for Clock (layer 1) and Song Info (layer 2)
-    val clockParallaxX = (-smoothTiltX * 13f).dp
-    val clockParallaxY = (-smoothTiltY * 13f).dp
-    val infoParallaxX = (-smoothTiltX * 7.5f).dp
-    val infoParallaxY = (-smoothTiltY * 7.5f).dp
+    // Opposite depth shifts for Clock and Song Info driven by Gyro Parallax
+    val clockParallaxX = (-smoothTiltX * 11f).dp
+    val clockParallaxY = (-smoothTiltY * 11f).dp
+    val infoParallaxX = (-smoothTiltX * 6.5f).dp
+    val infoParallaxY = (-smoothTiltY * 6.5f).dp
 
-    // 2. Main Bedside Layout with Burn-In Pixel Drift & Dimming
+    // 2. Main Bedside Layout (Split / Poster / Lyrics) with Burn-In Pixel Drift & Dimming
     Box(
       modifier = Modifier
         .fillMaxSize()
@@ -529,175 +557,609 @@ fun AmbientStandbyScreen(
         .offset(x = driftOffsetX, y = driftOffsetY)
         .alpha(burnInBrightnessAlpha)
     ) {
-      if (isLandscape) {
-        // LANDSCAPE: Left side = Big Clock -> Date & Chips -> Album Art; Right side = Song Info
-        Row(
-          modifier = Modifier
-            .fillMaxSize()
-            .padding(horizontal = 32.dp, vertical = 18.dp),
-          horizontalArrangement = Arrangement.spacedBy(32.dp),
-          verticalAlignment = Alignment.CenterVertically
-        ) {
-          Column(
-            modifier = Modifier
-              .weight(0.48f)
-              .fillMaxHeight(),
-            verticalArrangement = Arrangement.Center,
-            horizontalAlignment = Alignment.CenterHorizontally
-          ) {
-            Box(modifier = Modifier.offset(x = clockParallaxX, y = clockParallaxY)) {
-              StandbyClockFace(
-                timeParts = timeParts,
-                style = clockStyle,
-                accent = palette.accent,
-                compact = true,
-                reducedMotion = reducedMotion
-              )
-            }
-
-            Spacer(modifier = Modifier.height(10.dp))
-
-            StandbyMetadataChipsRow(
-              khmerDateText = khmerDateText,
-              colorMood = colorMood,
-              batteryPercent = batteryPercent,
-              isCharging = isCharging,
-              accent = palette.accent,
-              onCycleMood = {
-                registerUserTouch()
-                onSelectColorMood(colorMood.next())
-              }
-            )
-
-            Spacer(modifier = Modifier.height(16.dp))
-
-            val artSize = (containerMaxHeight * 0.40f).coerceIn(108.dp, 172.dp)
-            StandbyAlbumArtWithHalo(
-              artworkModel = artworkModel,
-              songTitle = song?.title,
-              palette = palette,
-              isPlaying = isPlaying,
-              reducedMotion = reducedMotion,
-              tiltX = smoothTiltX,
-              tiltY = smoothTiltY,
-              size = artSize,
-              onTogglePlayPause = {
-                registerUserTouch()
-                onPlayPause()
-              }
-            )
+      when (layout) {
+        StandbyLayout.SPLIT -> {
+          val splitClockSp = if (isLandscape) {
+            (containerMaxWidth.value * 0.108f).coerceIn(50f, 88f)
+          } else {
+            (containerMaxWidth.value * 0.195f).coerceIn(56f, 84f)
           }
+          val splitArtSize = if (isLandscape) {
+            (containerMaxWidth * 0.155f).coerceIn(88.dp, minOf(containerMaxHeight * 0.36f, 152.dp))
+          } else {
+            (containerMaxWidth * 0.38f).coerceIn(136.dp, 196.dp)
+          }
+          val splitTitleSp = (containerMaxWidth.value * (if (isLandscape) 0.032f else 0.058f)).coerceIn(20f, 30f)
 
-          Column(
-            modifier = Modifier
-              .weight(0.52f)
-              .fillMaxHeight()
-              .offset(x = infoParallaxX, y = infoParallaxY),
-            verticalArrangement = Arrangement.Center,
-            horizontalAlignment = Alignment.Start
-          ) {
-            StandbySongInfoPanel(
-              song = song,
-              albumName = resolvedAlbumName,
-              isPlaying = isPlaying,
-              livePositionMs = livePositionMs,
-              totalDurationMs = totalDurationMs,
-              lyricSnap = lyricSnap,
-              spectrumBars = spectrumBars,
-              palette = palette,
-              reducedMotion = reducedMotion,
-              centered = false,
-              khmerLyricsFont = khmerLyricsFont,
-              onSeekFraction = { fraction ->
-                registerUserTouch()
-                if (totalDurationMs > 0L) {
-                  val targetMs = (totalDurationMs * fraction).toLong().coerceIn(0L, totalDurationMs)
-                  livePositionMs = targetMs
-                  onSeek?.invoke(targetMs)
+          if (isLandscape) {
+            Row(
+              modifier = Modifier
+                .fillMaxSize()
+                .padding(horizontal = 32.dp, vertical = 20.dp),
+              horizontalArrangement = Arrangement.spacedBy(32.dp),
+              verticalAlignment = Alignment.CenterVertically
+            ) {
+              Column(
+                modifier = Modifier
+                  .weight(0.45f)
+                  .fillMaxHeight(),
+                verticalArrangement = Arrangement.Center,
+                horizontalAlignment = Alignment.CenterHorizontally
+              ) {
+                Box(modifier = Modifier.offset(x = clockParallaxX, y = clockParallaxY)) {
+                  StandbyClockFace(
+                    timeParts = timeParts,
+                    style = clockStyle,
+                    accent = palette.accent,
+                    compact = true,
+                    reducedMotion = reducedMotion,
+                    textColor = palette.textPrimary,
+                    targetSizeSp = splitClockSp
+                  )
                 }
+
+                Spacer(modifier = Modifier.height(6.dp))
+
+                StandbyMutedMetaLine(
+                  khmerDateText = khmerDateText,
+                  batteryPercent = batteryPercent,
+                  isCharging = isCharging,
+                  textColor = palette.textPrimary
+                )
+
+                Spacer(modifier = Modifier.height(14.dp))
+
+                StandbyAlbumArtWithHalo(
+                  artworkModel = artworkModel,
+                  songTitle = song?.title,
+                  palette = palette,
+                  isPlaying = isPlaying,
+                  reducedMotion = reducedMotion,
+                  tiltX = smoothTiltX,
+                  tiltY = smoothTiltY,
+                  size = splitArtSize,
+                  cornerPercent = 22,
+                  showHalo = true,
+                  onTogglePlayPause = {
+                    registerUserTouch()
+                    onPlayPause()
+                  }
+                )
               }
-            )
+
+              Column(
+                modifier = Modifier
+                  .weight(0.55f)
+                  .fillMaxHeight()
+                  .offset(x = infoParallaxX, y = infoParallaxY),
+                verticalArrangement = Arrangement.Center,
+                horizontalAlignment = Alignment.Start
+              ) {
+                StandbySplitSongInfoPanel(
+                  song = song,
+                  albumName = resolvedAlbumName,
+                  isPlaying = isPlaying,
+                  livePositionMs = livePositionMs,
+                  totalDurationMs = totalDurationMs,
+                  progressFraction = progressFraction,
+                  lyricSnap = lyricSnap,
+                  spectrumBars = spectrumBars,
+                  palette = palette,
+                  reducedMotion = reducedMotion,
+                  centered = false,
+                  titleFontSp = splitTitleSp,
+                  khmerLyricsFont = khmerLyricsFont,
+                  onSeekFraction = ::handleSeekFraction
+                )
+              }
+            }
+          } else {
+            Column(
+              modifier = Modifier
+                .fillMaxSize()
+                .padding(horizontal = 24.dp, vertical = 20.dp),
+              horizontalAlignment = Alignment.CenterHorizontally,
+              verticalArrangement = Arrangement.SpaceEvenly
+            ) {
+              Column(
+                horizontalAlignment = Alignment.CenterHorizontally,
+                verticalArrangement = Arrangement.spacedBy(6.dp),
+                modifier = Modifier.offset(x = clockParallaxX, y = clockParallaxY)
+              ) {
+                StandbyClockFace(
+                  timeParts = timeParts,
+                  style = clockStyle,
+                  accent = palette.accent,
+                  compact = false,
+                  reducedMotion = reducedMotion,
+                  textColor = palette.textPrimary,
+                  targetSizeSp = splitClockSp
+                )
+                StandbyMutedMetaLine(
+                  khmerDateText = khmerDateText,
+                  batteryPercent = batteryPercent,
+                  isCharging = isCharging,
+                  textColor = palette.textPrimary
+                )
+              }
+
+              StandbyAlbumArtWithHalo(
+                artworkModel = artworkModel,
+                songTitle = song?.title,
+                palette = palette,
+                isPlaying = isPlaying,
+                reducedMotion = reducedMotion,
+                tiltX = smoothTiltX,
+                tiltY = smoothTiltY,
+                size = splitArtSize,
+                cornerPercent = 22,
+                showHalo = true,
+                onTogglePlayPause = {
+                  registerUserTouch()
+                  onPlayPause()
+                }
+              )
+
+              Box(modifier = Modifier.offset(x = infoParallaxX, y = infoParallaxY)) {
+                StandbySplitSongInfoPanel(
+                  song = song,
+                  albumName = resolvedAlbumName,
+                  isPlaying = isPlaying,
+                  livePositionMs = livePositionMs,
+                  totalDurationMs = totalDurationMs,
+                  progressFraction = progressFraction,
+                  lyricSnap = lyricSnap,
+                  spectrumBars = spectrumBars,
+                  palette = palette,
+                  reducedMotion = reducedMotion,
+                  centered = true,
+                  titleFontSp = splitTitleSp,
+                  khmerLyricsFont = khmerLyricsFont,
+                  onSeekFraction = ::handleSeekFraction
+                )
+              }
+            }
           }
         }
-      } else {
-        // PORTRAIT: Single centered column: Clock -> Chips -> Art -> Song Info
-        Column(
-          modifier = Modifier
-            .fillMaxSize()
-            .padding(horizontal = 24.dp, vertical = 22.dp),
-          horizontalAlignment = Alignment.CenterHorizontally,
-          verticalArrangement = Arrangement.SpaceEvenly
-        ) {
-          Column(
-            horizontalAlignment = Alignment.CenterHorizontally,
-            verticalArrangement = Arrangement.spacedBy(10.dp),
-            modifier = Modifier.offset(x = clockParallaxX, y = clockParallaxY)
-          ) {
-            StandbyClockFace(
-              timeParts = timeParts,
-              style = clockStyle,
-              accent = palette.accent,
-              compact = false,
-              reducedMotion = reducedMotion
-            )
 
-            StandbyMetadataChipsRow(
-              khmerDateText = khmerDateText,
-              colorMood = colorMood,
-              batteryPercent = batteryPercent,
-              isCharging = isCharging,
-              accent = palette.accent,
-              onCycleMood = {
-                registerUserTouch()
-                onSelectColorMood(colorMood.next())
-              }
-            )
+        StandbyLayout.POSTER -> {
+          val posterClockSp = if (isLandscape) {
+            (containerMaxWidth.value * 0.082f).coerceIn(38f, 64f)
+          } else {
+            (containerMaxWidth.value * 0.145f).coerceIn(44f, 68f)
           }
+          val posterArtSize = if (isLandscape) {
+            minOf(containerMaxWidth * 0.38f, containerMaxHeight * 0.72f).coerceIn(148.dp, 290.dp)
+          } else {
+            minOf(containerMaxWidth * 0.62f, containerMaxHeight * 0.36f).coerceIn(168.dp, 268.dp)
+          }
+          val posterTitleSp = (containerMaxWidth.value * (if (isLandscape) 0.030f else 0.056f)).coerceIn(19f, 28f)
 
-          val artSize = (containerMaxWidth * 0.52f).coerceIn(156.dp, 226.dp)
-          StandbyAlbumArtWithHalo(
-            artworkModel = artworkModel,
-            songTitle = song?.title,
-            palette = palette,
-            isPlaying = isPlaying,
-            reducedMotion = reducedMotion,
-            tiltX = smoothTiltX,
-            tiltY = smoothTiltY,
-            size = artSize,
-            onTogglePlayPause = {
-              registerUserTouch()
-              onPlayPause()
+          if (isLandscape) {
+            Row(
+              modifier = Modifier
+                .fillMaxSize()
+                .padding(horizontal = 32.dp, vertical = 20.dp),
+              horizontalArrangement = Arrangement.spacedBy(32.dp),
+              verticalAlignment = Alignment.CenterVertically
+            ) {
+              Box(
+                modifier = Modifier
+                  .weight(0.46f)
+                  .fillMaxHeight(),
+                contentAlignment = Alignment.Center
+              ) {
+                StandbyAlbumArtWithHalo(
+                  artworkModel = artworkModel,
+                  songTitle = song?.title,
+                  palette = palette,
+                  isPlaying = isPlaying,
+                  reducedMotion = reducedMotion,
+                  tiltX = smoothTiltX,
+                  tiltY = smoothTiltY,
+                  size = posterArtSize,
+                  cornerPercent = 12,
+                  showHalo = true,
+                  onTogglePlayPause = {
+                    registerUserTouch()
+                    onPlayPause()
+                  }
+                )
+              }
+
+              Column(
+                modifier = Modifier
+                  .weight(0.54f)
+                  .fillMaxHeight()
+                  .offset(x = infoParallaxX, y = infoParallaxY),
+                verticalArrangement = Arrangement.Center,
+                horizontalAlignment = Alignment.Start
+              ) {
+                Box(modifier = Modifier.offset(x = clockParallaxX * 0.5f, y = clockParallaxY * 0.5f)) {
+                  StandbyClockFace(
+                    timeParts = timeParts,
+                    style = clockStyle,
+                    accent = palette.accent,
+                    compact = true,
+                    reducedMotion = reducedMotion,
+                    textColor = palette.textPrimary,
+                    targetSizeSp = posterClockSp
+                  )
+                }
+
+                Spacer(modifier = Modifier.height(6.dp))
+
+                StandbyMutedMetaLine(
+                  khmerDateText = khmerDateText,
+                  batteryPercent = batteryPercent,
+                  isCharging = isCharging,
+                  textColor = palette.textPrimary
+                )
+
+                Spacer(modifier = Modifier.height(14.dp))
+
+                StandbyTitleArtistBlock(
+                  song = song,
+                  albumName = resolvedAlbumName,
+                  palette = palette,
+                  titleFontSp = posterTitleSp,
+                  centered = false
+                )
+
+                Spacer(modifier = Modifier.height(14.dp))
+
+                StandbyThinProgressBarBlock(
+                  song = song,
+                  livePositionMs = livePositionMs,
+                  totalDurationMs = totalDurationMs,
+                  progressFraction = progressFraction,
+                  palette = palette,
+                  centered = false,
+                  onSeekFraction = ::handleSeekFraction
+                )
+
+                Spacer(modifier = Modifier.height(16.dp))
+
+                StandbyPosterTransportControls(
+                  isPlaying = isPlaying,
+                  accent = palette.accent,
+                  textColor = palette.textPrimary,
+                  onPrevious = {
+                    registerUserTouch()
+                    onPrevious()
+                  },
+                  onPlayPause = {
+                    registerUserTouch()
+                    onPlayPause()
+                  },
+                  onNext = {
+                    registerUserTouch()
+                    onNext()
+                  }
+                )
+              }
             }
-          )
+          } else {
+            Column(
+              modifier = Modifier
+                .fillMaxSize()
+                .padding(horizontal = 24.dp, vertical = 20.dp),
+              horizontalAlignment = Alignment.CenterHorizontally,
+              verticalArrangement = Arrangement.SpaceEvenly
+            ) {
+              StandbyAlbumArtWithHalo(
+                artworkModel = artworkModel,
+                songTitle = song?.title,
+                palette = palette,
+                isPlaying = isPlaying,
+                reducedMotion = reducedMotion,
+                tiltX = smoothTiltX,
+                tiltY = smoothTiltY,
+                size = posterArtSize,
+                cornerPercent = 12,
+                showHalo = true,
+                onTogglePlayPause = {
+                  registerUserTouch()
+                  onPlayPause()
+                }
+              )
 
-          Box(modifier = Modifier.offset(x = infoParallaxX, y = infoParallaxY)) {
-            StandbySongInfoPanel(
-              song = song,
-              albumName = resolvedAlbumName,
-              isPlaying = isPlaying,
-              livePositionMs = livePositionMs,
-              totalDurationMs = totalDurationMs,
-              lyricSnap = lyricSnap,
-              spectrumBars = spectrumBars,
-              palette = palette,
-              reducedMotion = reducedMotion,
-              centered = true,
-              khmerLyricsFont = khmerLyricsFont,
-              onSeekFraction = { fraction ->
-                registerUserTouch()
-                if (totalDurationMs > 0L) {
-                  val targetMs = (totalDurationMs * fraction).toLong().coerceIn(0L, totalDurationMs)
-                  livePositionMs = targetMs
-                  onSeek?.invoke(targetMs)
+              Column(
+                horizontalAlignment = Alignment.CenterHorizontally,
+                verticalArrangement = Arrangement.spacedBy(4.dp),
+                modifier = Modifier.offset(x = clockParallaxX * 0.5f, y = clockParallaxY * 0.5f)
+              ) {
+                StandbyClockFace(
+                  timeParts = timeParts,
+                  style = clockStyle,
+                  accent = palette.accent,
+                  compact = true,
+                  reducedMotion = reducedMotion,
+                  textColor = palette.textPrimary,
+                  targetSizeSp = posterClockSp
+                )
+                StandbyMutedMetaLine(
+                  khmerDateText = khmerDateText,
+                  batteryPercent = batteryPercent,
+                  isCharging = isCharging,
+                  textColor = palette.textPrimary
+                )
+              }
+
+              StandbyTitleArtistBlock(
+                song = song,
+                albumName = resolvedAlbumName,
+                palette = palette,
+                titleFontSp = posterTitleSp,
+                centered = true
+              )
+
+              StandbyThinProgressBarBlock(
+                song = song,
+                livePositionMs = livePositionMs,
+                totalDurationMs = totalDurationMs,
+                progressFraction = progressFraction,
+                palette = palette,
+                centered = true,
+                onSeekFraction = ::handleSeekFraction
+              )
+
+              StandbyPosterTransportControls(
+                isPlaying = isPlaying,
+                accent = palette.accent,
+                textColor = palette.textPrimary,
+                onPrevious = {
+                  registerUserTouch()
+                  onPrevious()
+                },
+                onPlayPause = {
+                  registerUserTouch()
+                  onPlayPause()
+                },
+                onNext = {
+                  registerUserTouch()
+                  onNext()
+                }
+              )
+            }
+          }
+        }
+
+        StandbyLayout.LYRICS -> {
+          val lyricsClockSp = if (isLandscape) {
+            (containerMaxWidth.value * 0.048f).coerceIn(24f, 40f)
+          } else {
+            (containerMaxWidth.value * 0.095f).coerceIn(28f, 44f)
+          }
+          val lyricsThumbSize = (containerMaxWidth * (if (isLandscape) 0.070f else 0.125f))
+            .coerceIn(44.dp, 62.dp)
+          val activeLyricSp = (containerMaxWidth.value * (if (isLandscape) 0.040f else 0.068f))
+            .coerceIn(22f, 34f)
+
+          Column(
+            modifier = Modifier
+              .fillMaxSize()
+              .padding(horizontal = if (isLandscape) 32.dp else 22.dp, vertical = 18.dp),
+            verticalArrangement = Arrangement.SpaceBetween
+          ) {
+            // Top row: small clock left, muted date & battery right
+            Row(
+              modifier = Modifier
+                .fillMaxWidth()
+                .padding(end = if (controlsVisible) 216.dp else 0.dp),
+              horizontalArrangement = Arrangement.SpaceBetween,
+              verticalAlignment = Alignment.CenterVertically
+            ) {
+              Box(modifier = Modifier.offset(x = clockParallaxX * 0.4f, y = clockParallaxY * 0.4f)) {
+                StandbyClockFace(
+                  timeParts = timeParts,
+                  style = clockStyle,
+                  accent = palette.accent,
+                  compact = true,
+                  reducedMotion = reducedMotion,
+                  textColor = palette.textPrimary,
+                  targetSizeSp = lyricsClockSp
+                )
+              }
+
+              if (!controlsVisible) {
+                StandbyMutedMetaLine(
+                  khmerDateText = khmerDateText,
+                  batteryPercent = batteryPercent,
+                  isCharging = isCharging,
+                  textColor = palette.textPrimary
+                )
+              }
+            }
+
+            // Center hero: prev line (dim), active line (accent, semibold, active-only cross-fade), next line (dim)
+            // Fallback when no lyrics: large centered title + artist
+            Box(
+              modifier = Modifier
+                .weight(1f)
+                .fillMaxWidth()
+                .padding(horizontal = 8.dp)
+                .offset(x = infoParallaxX, y = infoParallaxY),
+              contentAlignment = Alignment.Center
+            ) {
+              if (song != null && lyricSnap.hasLyrics && lyricSnap.currentLine.isNotBlank()) {
+                Column(
+                  modifier = Modifier.fillMaxWidth(if (isLandscape) 0.86f else 0.96f),
+                  horizontalAlignment = Alignment.CenterHorizontally,
+                  verticalArrangement = Arrangement.spacedBy(12.dp)
+                ) {
+                  if (previousLyricLine.isNotBlank()) {
+                    Text(
+                      text = rememberKhmerLyricsText(
+                        text = previousLyricLine,
+                        khmerLyricsFont = khmerLyricsFont,
+                        baseFontSize = (activeLyricSp * 0.62f).sp,
+                        isBold = false
+                      ),
+                      style = MaterialTheme.typography.bodyLarge.copy(
+                        fontWeight = FontWeight.Medium,
+                        lineHeight = (activeLyricSp * 0.86f).sp
+                      ),
+                      color = palette.textPrimary.copy(alpha = 0.30f),
+                      textAlign = TextAlign.Center,
+                      maxLines = 1,
+                      overflow = TextOverflow.Ellipsis
+                    )
+                  }
+
+                  AnimatedContent(
+                    targetState = lyricSnap.currentLine,
+                    transitionSpec = {
+                      if (reducedMotion) {
+                        fadeIn(snap()) togetherWith fadeOut(snap())
+                      } else {
+                        (slideInVertically(tween(300, easing = FastOutSlowInEasing)) { it / 4 } + fadeIn(tween(220))) togetherWith
+                          (slideOutVertically(tween(220)) { -it / 4 } + fadeOut(tween(180)))
+                      }
+                    },
+                    label = "standby_lyrics_hero_active"
+                  ) { currentLine ->
+                    Text(
+                      text = rememberKhmerLyricsText(
+                        text = currentLine,
+                        khmerLyricsFont = khmerLyricsFont,
+                        baseFontSize = activeLyricSp.sp,
+                        isBold = true
+                      ),
+                      style = MaterialTheme.typography.headlineSmall.copy(
+                        fontWeight = FontWeight.SemiBold,
+                        lineHeight = (activeLyricSp * 1.32f).sp
+                      ),
+                      color = palette.accent,
+                      textAlign = TextAlign.Center,
+                      maxLines = 2,
+                      overflow = TextOverflow.Ellipsis,
+                      modifier = Modifier.testTag("standby_lyrics_hero_line")
+                    )
+                  }
+
+                  if (lyricSnap.nextLine.isNotBlank()) {
+                    Text(
+                      text = rememberKhmerLyricsText(
+                        text = lyricSnap.nextLine,
+                        khmerLyricsFont = khmerLyricsFont,
+                        baseFontSize = (activeLyricSp * 0.64f).sp,
+                        isBold = false
+                      ),
+                      style = MaterialTheme.typography.bodyLarge.copy(
+                        fontWeight = FontWeight.Medium,
+                        lineHeight = (activeLyricSp * 0.88f).sp
+                      ),
+                      color = palette.textPrimary.copy(alpha = 0.30f),
+                      textAlign = TextAlign.Center,
+                      maxLines = 2,
+                      overflow = TextOverflow.Ellipsis
+                    )
+                  }
+                }
+              } else {
+                Column(
+                  horizontalAlignment = Alignment.CenterHorizontally,
+                  verticalArrangement = Arrangement.spacedBy(8.dp)
+                ) {
+                  StandbyTitleArtistBlock(
+                    song = song,
+                    albumName = resolvedAlbumName,
+                    palette = palette,
+                    titleFontSp = activeLyricSp.coerceIn(22f, 32f),
+                    centered = true
+                  )
                 }
               }
-            )
+            }
+
+            // Bottom bar: small 7% art (22% corners), title & artist, full-width thin progress line
+            Column(
+              modifier = Modifier.fillMaxWidth(),
+              verticalArrangement = Arrangement.spacedBy(10.dp)
+            ) {
+              Row(
+                modifier = Modifier.fillMaxWidth(),
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.spacedBy(12.dp)
+              ) {
+                StandbyAlbumArtWithHalo(
+                  artworkModel = artworkModel,
+                  songTitle = song?.title,
+                  palette = palette,
+                  isPlaying = isPlaying,
+                  reducedMotion = reducedMotion,
+                  tiltX = smoothTiltX * 0.5f,
+                  tiltY = smoothTiltY * 0.5f,
+                  size = lyricsThumbSize,
+                  cornerPercent = 22,
+                  showHalo = false,
+                  onTogglePlayPause = {
+                    registerUserTouch()
+                    onPlayPause()
+                  }
+                )
+
+                Column(
+                  modifier = Modifier.weight(1f),
+                  verticalArrangement = Arrangement.spacedBy(2.dp)
+                ) {
+                  val displayTitle = song?.title?.takeIf { it.isNotBlank() }
+                    ?: stringResource(id = R.string.standby_no_track)
+                  val displayArtist = song?.artist?.takeIf { it.isNotBlank() }
+                    ?: stringResource(id = R.string.standby_no_artist)
+                  Text(
+                    text = rememberKhmerTitleText(
+                      text = displayTitle,
+                      baseFontSize = 15.sp,
+                      isBold = true
+                    ),
+                    style = MaterialTheme.typography.titleSmall.copy(
+                      fontSize = 15.sp,
+                      fontWeight = FontWeight.SemiBold
+                    ),
+                    color = palette.textPrimary,
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis
+                  )
+                  Text(
+                    text = rememberKhmerTitleText(
+                      text = displayArtist,
+                      baseFontSize = 13.sp,
+                      isBold = false
+                    ),
+                    style = MaterialTheme.typography.bodySmall.copy(fontSize = 13.sp),
+                    color = palette.textPrimary.copy(alpha = 0.56f),
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis
+                  )
+                }
+
+                StandbyFourBarEqualizer(
+                  bars = spectrumBars,
+                  isPlaying = isPlaying && song != null,
+                  accent = palette.accent,
+                  reducedMotion = reducedMotion
+                )
+              }
+
+              StandbyThinProgressBarBlock(
+                song = song,
+                livePositionMs = livePositionMs,
+                totalDurationMs = totalDurationMs,
+                progressFraction = progressFraction,
+                palette = palette,
+                centered = false,
+                fullWidth = true,
+                onSeekFraction = ::handleSeekFraction
+              )
+            }
           }
         }
       }
     }
 
-    // 3. Top-Right Glass Circle Buttons: Mood, Clock Style, Gyro (+ Close)
+    // 3. Top-Right 44dp Round Glass Buttons: Layout, Clock Style, Mood, Gyro, Close
     AnimatedVisibility(
       visible = controlsVisible,
       enter = if (reducedMotion) fadeIn(snap()) else fadeIn(tween(220)),
@@ -708,9 +1170,47 @@ fun AmbientStandbyScreen(
         .padding(16.dp)
     ) {
       Row(
-        horizontalArrangement = Arrangement.spacedBy(10.dp),
+        horizontalArrangement = Arrangement.spacedBy(8.dp),
         verticalAlignment = Alignment.CenterVertically
       ) {
+        // Layout switcher button (Split -> Poster -> Lyrics)
+        StandbyTopGlassCircleButton(
+          onClick = {
+            registerUserTouch()
+            onSelectLayout(layout.next())
+          },
+          active = layout != StandbyLayout.SPLIT,
+          accent = palette.accent,
+          testTag = "standby_layout_button",
+          contentDescription = stringResource(id = R.string.standby_layout_cd)
+        ) {
+          Icon(
+            imageVector = Icons.Rounded.Dashboard,
+            contentDescription = null,
+            tint = if (layout != StandbyLayout.SPLIT) palette.accent else palette.textPrimary,
+            modifier = Modifier.size(19.dp)
+          )
+        }
+
+        // Clock Style picker button
+        StandbyTopGlassCircleButton(
+          onClick = {
+            registerUserTouch()
+            showClockPickerSheet = true
+          },
+          active = showClockPickerSheet,
+          accent = palette.accent,
+          testTag = "standby_clock_style_button",
+          contentDescription = stringResource(id = R.string.standby_clock_cd)
+        ) {
+          Icon(
+            imageVector = Icons.Rounded.AccessTime,
+            contentDescription = null,
+            tint = palette.textPrimary,
+            modifier = Modifier.size(19.dp)
+          )
+        }
+
         // Mood glass circle button
         StandbyTopGlassCircleButton(
           onClick = {
@@ -726,26 +1226,7 @@ fun AmbientStandbyScreen(
             imageVector = Icons.Rounded.Palette,
             contentDescription = null,
             tint = palette.accent,
-            modifier = Modifier.size(20.dp)
-          )
-        }
-
-        // Clock Style picker glass circle button
-        StandbyTopGlassCircleButton(
-          onClick = {
-            registerUserTouch()
-            showClockPickerSheet = true
-          },
-          active = showClockPickerSheet,
-          accent = palette.accent,
-          testTag = "standby_clock_style_button",
-          contentDescription = stringResource(id = R.string.standby_clock_cd)
-        ) {
-          Icon(
-            imageVector = Icons.Rounded.AccessTime,
-            contentDescription = null,
-            tint = Color.White,
-            modifier = Modifier.size(20.dp)
+            modifier = Modifier.size(19.dp)
           )
         }
 
@@ -763,12 +1244,12 @@ fun AmbientStandbyScreen(
           Icon(
             imageVector = Icons.Rounded.Explore,
             contentDescription = null,
-            tint = if (gyroEnabled) palette.accent else Color.White.copy(alpha = 0.55f),
-            modifier = Modifier.size(20.dp)
+            tint = if (gyroEnabled) palette.accent else palette.textPrimary.copy(alpha = 0.55f),
+            modifier = Modifier.size(19.dp)
           )
         }
 
-        // Exit button
+        // Close button
         StandbyTopGlassCircleButton(
           onClick = onClose,
           active = false,
@@ -779,16 +1260,16 @@ fun AmbientStandbyScreen(
           Icon(
             imageVector = Icons.Rounded.Close,
             contentDescription = null,
-            tint = Color.White,
-            modifier = Modifier.size(20.dp)
+            tint = palette.textPrimary,
+            modifier = Modifier.size(19.dp)
           )
         }
       }
     }
 
-    // 4. Optional Bottom Row: Previous, Play/Pause, Next
+    // 4. Playback Overlay Controls (Shown on tap in Split & Lyrics; Poster already shows always-visible controls)
     AnimatedVisibility(
-      visible = controlsVisible,
+      visible = controlsVisible && layout != StandbyLayout.POSTER,
       enter = if (reducedMotion) fadeIn(snap()) else fadeIn(tween(220)) + slideInVertically { it / 2 },
       exit = if (reducedMotion) fadeOut(snap()) else fadeOut(tween(300)) + slideOutVertically { it / 2 },
       modifier = Modifier
@@ -798,7 +1279,7 @@ fun AmbientStandbyScreen(
     ) {
       Surface(
         shape = CircleShape,
-        color = Color(0xCC10131E),
+        color = Color(0xCC0E1211),
         border = BorderStroke(1.dp, Color.White.copy(alpha = 0.14f))
       ) {
         Row(
@@ -818,7 +1299,7 @@ fun AmbientStandbyScreen(
             Icon(
               imageVector = Icons.Rounded.SkipPrevious,
               contentDescription = stringResource(id = R.string.widget_cd_prev),
-              tint = Color.White,
+              tint = palette.textPrimary,
               modifier = Modifier.size(26.dp)
             )
           }
@@ -838,7 +1319,7 @@ fun AmbientStandbyScreen(
             Icon(
               imageVector = if (isPlaying) Icons.Rounded.Pause else Icons.Rounded.PlayArrow,
               contentDescription = stringResource(id = R.string.widget_cd_play_pause),
-              tint = Color(0xFF090B12),
+              tint = Color(0xFF04120C),
               modifier = Modifier.size(26.dp)
             )
           }
@@ -855,7 +1336,7 @@ fun AmbientStandbyScreen(
             Icon(
               imageVector = Icons.Rounded.SkipNext,
               contentDescription = stringResource(id = R.string.widget_cd_next),
-              tint = Color.White,
+              tint = palette.textPrimary,
               modifier = Modifier.size(26.dp)
             )
           }
@@ -863,7 +1344,7 @@ fun AmbientStandbyScreen(
       }
     }
 
-    // 5. Clock Style Picker Bottom Sheet
+    // 5. Clock Style Picker Bottom Sheet (auto-hides after 8s inactivity)
     if (showClockPickerSheet) {
       StandbyClockStylePickerSheet(
         selectedStyle = clockStyle,
@@ -901,12 +1382,12 @@ private fun StandbyTopGlassCircleButton(
     color = if (active) accent.copy(alpha = 0.16f) else Color.White.copy(alpha = 0.09f),
     border = BorderStroke(
       width = 1.dp,
-      color = if (active) accent.copy(alpha = 0.48f) else Color.White.copy(alpha = 0.16f)
+      color = if (active) accent.copy(alpha = 0.44f) else Color.White.copy(alpha = 0.14f)
     ),
     modifier = Modifier
       .minimumInteractiveComponentSize()
       .size(44.dp)
-      .testTag(testTag),
+      .testTag(testTag)
   ) {
     Box(
       contentAlignment = Alignment.Center,
@@ -918,112 +1399,48 @@ private fun StandbyTopGlassCircleButton(
 }
 
 /**
- * Chips Row:
- * 1) Khmer Date (Khmer weekday and Khmer month names)
- * 2) Current Mood Name (Auto, Lo-fi, Sunset, Mint, Mono)
- * 3) Battery %
+ * Single muted metadata line showing Khmer date + battery % (no boxed chips).
  */
 @Composable
-private fun StandbyMetadataChipsRow(
+private fun StandbyMutedMetaLine(
   khmerDateText: String,
-  colorMood: StandbyColorMood,
   batteryPercent: Int,
   isCharging: Boolean,
-  accent: Color,
-  onCycleMood: () -> Unit
+  textColor: Color
 ) {
   Row(
-    modifier = Modifier.horizontalScroll(rememberScrollState()),
     verticalAlignment = Alignment.CenterVertically,
-    horizontalArrangement = Arrangement.spacedBy(8.dp)
+    horizontalArrangement = Arrangement.spacedBy(6.dp),
+    modifier = Modifier.testTag("standby_muted_meta_line")
   ) {
-    // 1. Khmer Date Chip
-    Surface(
-      shape = CircleShape,
-      color = Color.White.copy(alpha = 0.08f),
-      border = BorderStroke(1.dp, Color.White.copy(alpha = 0.14f)),
-      modifier = Modifier.testTag("standby_khmer_date_chip")
-    ) {
-      Text(
-        text = com.example.ui.theme.rememberKhmerTitleText(
-          text = khmerDateText,
-          baseFontSize = 11.5.sp,
-          isBold = false
-        ),
-        style = MaterialTheme.typography.labelSmall.copy(fontSize = 11.5.sp),
-        color = Color.White.copy(alpha = 0.88f),
-        modifier = Modifier.padding(horizontal = 11.dp, vertical = 5.dp)
+    Text(
+      text = rememberKhmerTitleText(
+        text = "$khmerDateText · $batteryPercent%",
+        baseFontSize = 12.sp,
+        isBold = false
+      ),
+      style = MaterialTheme.typography.labelMedium.copy(
+        fontSize = 12.sp,
+        fontFeatureSettings = "tnum"
+      ),
+      color = textColor.copy(alpha = 0.56f),
+      maxLines = 1,
+      overflow = TextOverflow.Ellipsis
+    )
+    if (isCharging) {
+      Icon(
+        imageVector = Icons.Rounded.BatteryChargingFull,
+        contentDescription = null,
+        tint = Color(0xFF7EF0C5).copy(alpha = 0.82f),
+        modifier = Modifier.size(13.dp)
       )
-    }
-
-    // 2. Current Mood Name Chip
-    Surface(
-      onClick = onCycleMood,
-      shape = CircleShape,
-      color = accent.copy(alpha = 0.14f),
-      border = BorderStroke(1.dp, accent.copy(alpha = 0.36f)),
-      modifier = Modifier.testTag("standby_mood_chip")
-    ) {
-      Row(
-        modifier = Modifier.padding(horizontal = 11.dp, vertical = 5.dp),
-        verticalAlignment = Alignment.CenterVertically,
-        horizontalArrangement = Arrangement.spacedBy(5.dp)
-      ) {
-        Box(
-          modifier = Modifier
-            .size(6.dp)
-            .clip(CircleShape)
-            .background(accent)
-        )
-        Text(
-          text = colorMood.displayNameEn,
-          style = MaterialTheme.typography.labelSmall.copy(
-            fontSize = 11.5.sp,
-            fontWeight = FontWeight.SemiBold
-          ),
-          color = Color.White.copy(alpha = 0.92f)
-        )
-      }
-    }
-
-    // 3. Battery % Chip
-    Surface(
-      shape = CircleShape,
-      color = Color.White.copy(alpha = 0.08f),
-      border = BorderStroke(1.dp, Color.White.copy(alpha = 0.14f)),
-      modifier = Modifier.testTag("standby_battery_chip")
-    ) {
-      Row(
-        modifier = Modifier.padding(horizontal = 10.dp, vertical = 5.dp),
-        verticalAlignment = Alignment.CenterVertically,
-        horizontalArrangement = Arrangement.spacedBy(4.dp)
-      ) {
-        Icon(
-          imageVector = if (isCharging) Icons.Rounded.BatteryChargingFull else Icons.Rounded.BatteryStd,
-          contentDescription = null,
-          tint = if (isCharging) Color(0xFF4ADE80) else accent.copy(alpha = 0.90f),
-          modifier = Modifier.size(13.dp)
-        )
-        Text(
-          text = "$batteryPercent%",
-          style = MaterialTheme.typography.labelSmall.copy(
-            fontSize = 11.5.sp,
-            fontWeight = FontWeight.SemiBold
-          ),
-          color = Color.White.copy(alpha = 0.88f)
-        )
-      }
     }
   }
 }
 
 /**
- * Album Art with:
- * - Real cover (from song metadata or custom album cover) OR procedural art fallback built from the palette.
- * - Rounded corners (9%).
- * - Blurred rotating halo behind it.
- * - 3D Gyro Parallax tilt (up to 14 degrees) with a moving specular glare.
- * - Tapping the art toggles play/pause.
+ * Album Art with rounded corners, blurred rotating halo behind it, 3D Gyro Parallax tilt (up to 8°),
+ * moving specular glare, and tap-to-toggle play/pause.
  */
 @Composable
 private fun StandbyAlbumArtWithHalo(
@@ -1035,6 +1452,8 @@ private fun StandbyAlbumArtWithHalo(
   tiltX: Float,
   tiltY: Float,
   size: Dp,
+  cornerPercent: Int = 12,
+  showHalo: Boolean = true,
   onTogglePlayPause: () -> Unit
 ) {
   val infinite = rememberInfiniteTransition(label = "standby_halo_spin")
@@ -1048,8 +1467,8 @@ private fun StandbyAlbumArtWithHalo(
     label = "standby_halo_angle"
   )
   val haloPulse by infinite.animateFloat(
-    initialValue = 0.95f,
-    targetValue = 1.07f,
+    initialValue = 0.96f,
+    targetValue = 1.05f,
     animationSpec = infiniteRepeatable(
       animation = tween(durationMillis = 3_400, easing = FastOutSlowInEasing),
       repeatMode = RepeatMode.Reverse
@@ -1057,44 +1476,45 @@ private fun StandbyAlbumArtWithHalo(
     label = "standby_halo_pulse"
   )
 
-  val cornerShape = RoundedCornerShape(percent = 9)
+  val cornerShape = RoundedCornerShape(percent = cornerPercent)
   val pitchDeg = (-tiltY * MAX_TILT_DEGREES).coerceIn(-MAX_TILT_DEGREES, MAX_TILT_DEGREES)
   val rollDeg = (tiltX * MAX_TILT_DEGREES).coerceIn(-MAX_TILT_DEGREES, MAX_TILT_DEGREES)
   val artInteraction = remember { MutableInteractionSource() }
+  val outerBoxSize = if (showHalo) size + 24.dp else size
 
   Box(
     contentAlignment = Alignment.Center,
-    modifier = Modifier.size(size + 36.dp)
+    modifier = Modifier.size(outerBoxSize)
   ) {
-    // Blurred rotating halo behind the album art
-    Canvas(
-      modifier = Modifier
-        .size(size + 28.dp)
-        .scale(if (reducedMotion || !isPlaying) 1f else haloPulse)
-        .graphicsLayer {
-          rotationZ = if (reducedMotion) 0f else haloAngle
-        }
-        .blur(22.dp)
-    ) {
-      val r = this.size.minDimension * 0.5f
-      val c = Offset(this.size.width * 0.5f, this.size.height * 0.5f)
-      drawCircle(
-        brush = Brush.sweepGradient(
-          colors = listOf(
-            palette.blob1.copy(alpha = 0.65f),
-            palette.blob2.copy(alpha = 0.58f),
-            palette.accent.copy(alpha = 0.70f),
-            palette.blob4.copy(alpha = 0.55f),
-            palette.blob1.copy(alpha = 0.65f)
+    if (showHalo) {
+      Canvas(
+        modifier = Modifier
+          .size(size + 18.dp)
+          .scale(if (reducedMotion || !isPlaying) 1f else haloPulse)
+          .graphicsLayer {
+            rotationZ = if (reducedMotion) 0f else haloAngle
+          }
+          .blur(18.dp)
+      ) {
+        val r = this.size.minDimension * 0.5f
+        val c = Offset(this.size.width * 0.5f, this.size.height * 0.5f)
+        drawCircle(
+          brush = Brush.sweepGradient(
+            colors = listOf(
+              palette.blob1.copy(alpha = 0.50f),
+              palette.blob2.copy(alpha = 0.42f),
+              palette.accent.copy(alpha = 0.56f),
+              palette.blob4.copy(alpha = 0.40f),
+              palette.blob1.copy(alpha = 0.50f)
+            ),
+            center = c
           ),
+          radius = r,
           center = c
-        ),
-        radius = r,
-        center = c
-      )
+        )
+      }
     }
 
-    // 3D tilting album art card (9% rounded corners) + moving glare
     Box(
       modifier = Modifier
         .size(size)
@@ -1105,7 +1525,7 @@ private fun StandbyAlbumArtWithHalo(
         }
         .clip(cornerShape)
         .background(palette.background)
-        .border(1.dp, Color.White.copy(alpha = 0.18f), cornerShape)
+        .border(1.dp, Color.White.copy(alpha = 0.14f), cornerShape)
         .clickable(
           interactionSource = artInteraction,
           indication = null,
@@ -1134,13 +1554,13 @@ private fun StandbyAlbumArtWithHalo(
         val glareCenterY = this.size.height * (0.35f - tiltY * 0.42f)
         val glareRadius = this.size.maxDimension * 0.75f
         val tiltMagnitude = (abs(tiltX) + abs(tiltY)).coerceIn(0f, 1.4f)
-        val glareAlpha = (0.10f + tiltMagnitude * 0.14f).coerceIn(0.08f, 0.28f)
+        val glareAlpha = (0.08f + tiltMagnitude * 0.12f).coerceIn(0.06f, 0.24f)
 
         drawCircle(
           brush = Brush.radialGradient(
             colors = listOf(
               Color.White.copy(alpha = glareAlpha),
-              Color.White.copy(alpha = glareAlpha * 0.25f),
+              Color.White.copy(alpha = glareAlpha * 0.22f),
               Color.Transparent
             ),
             center = Offset(glareCenterX, glareCenterY),
@@ -1154,27 +1574,87 @@ private fun StandbyAlbumArtWithHalo(
   }
 }
 
+@Composable
+private fun StandbyTitleArtistBlock(
+  song: Song?,
+  albumName: String,
+  palette: StandbyMoodPalette,
+  titleFontSp: Float,
+  centered: Boolean
+) {
+  val horizontalAlign = if (centered) Alignment.CenterHorizontally else Alignment.Start
+  val textAlign = if (centered) TextAlign.Center else TextAlign.Start
+
+  Column(
+    horizontalAlignment = horizontalAlign,
+    verticalArrangement = Arrangement.spacedBy(3.dp)
+  ) {
+    val displayTitle = song?.title?.takeIf { it.isNotBlank() }
+      ?: stringResource(id = R.string.standby_no_track)
+    Text(
+      text = rememberKhmerTitleText(
+        text = displayTitle,
+        baseFontSize = titleFontSp.sp,
+        isBold = true
+      ),
+      style = MaterialTheme.typography.titleLarge.copy(
+        fontSize = titleFontSp.sp,
+        fontWeight = FontWeight.SemiBold,
+        lineHeight = (titleFontSp * 1.24f).sp
+      ),
+      color = palette.textPrimary,
+      textAlign = textAlign,
+      maxLines = 2,
+      overflow = TextOverflow.Ellipsis,
+      modifier = Modifier.testTag("standby_song_title")
+    )
+
+    val artistText = song?.artist?.takeIf { it.isNotBlank() }
+      ?: stringResource(id = R.string.standby_no_artist)
+    val artistAlbumLine = if (song != null && albumName.isNotBlank() && !albumName.equals(artistText, ignoreCase = true)) {
+      "$artistText · $albumName"
+    } else {
+      artistText
+    }
+
+    Text(
+      text = rememberKhmerTitleText(
+        text = artistAlbumLine,
+        baseFontSize = 14.sp,
+        isBold = false
+      ),
+      style = MaterialTheme.typography.bodyMedium.copy(fontSize = 14.sp),
+      color = palette.textPrimary.copy(alpha = 0.56f),
+      textAlign = textAlign,
+      maxLines = 1,
+      overflow = TextOverflow.Ellipsis,
+      modifier = Modifier.testTag("standby_song_artist_album")
+    )
+  }
+}
+
 /**
- * Song Info Panel:
- * - Animated 4-bar equalizer with the label "NOW PLAYING" + AURIX mini planet emblem
- * - Real song title, artist, and album
- * - Live synced active lyric line (if available, active-only animation)
- * - Progress bar of 17 rounded segments
- * - Elapsed / Total time
+ * Song info panel for the default SPLIT layout:
+ * - Small 4-bar equalizer + "NOW PLAYING" + AURIX planet logo
+ * - Real song title (semibold) & artist (muted)
+ * - Current lyric (semibold) + next lyric line (dim 30%) with active-only transition
+ * - Thin seekable progress line + tabular elapsed/total timestamps
  */
 @Composable
-private fun StandbySongInfoPanel(
+private fun StandbySplitSongInfoPanel(
   song: Song?,
   albumName: String,
   isPlaying: Boolean,
   livePositionMs: Long,
   totalDurationMs: Long,
-  lyricSnap: com.example.widget.SyncedLyricLineSnapshot,
+  progressFraction: Float,
+  lyricSnap: SyncedLyricLineSnapshot,
   spectrumBars: FloatArray,
   palette: StandbyMoodPalette,
   reducedMotion: Boolean,
   centered: Boolean,
-  khmerLyricsFont: com.example.ui.theme.KhmerLyricsFont,
+  titleFontSp: Float,
+  khmerLyricsFont: KhmerLyricsFont,
   onSeekFraction: (Float) -> Unit
 ) {
   val horizontalAlign = if (centered) Alignment.CenterHorizontally else Alignment.Start
@@ -1185,7 +1665,6 @@ private fun StandbySongInfoPanel(
     horizontalAlignment = horizontalAlign,
     verticalArrangement = Arrangement.spacedBy(10.dp)
   ) {
-    // 1. Animated 4-bar equalizer + "NOW PLAYING" label + AURIX tilted planet emblem
     Row(
       verticalAlignment = Alignment.CenterVertically,
       horizontalArrangement = Arrangement.spacedBy(8.dp),
@@ -1203,7 +1682,7 @@ private fun StandbySongInfoPanel(
           fontFamily = StandbyClockFonts.OutfitFamily,
           fontWeight = FontWeight.ExtraBold,
           fontSize = 11.sp,
-          letterSpacing = 1.8.sp
+          letterSpacing = 1.6.sp
         ),
         color = palette.accent
       )
@@ -1213,142 +1692,253 @@ private fun StandbySongInfoPanel(
       )
     }
 
-    // 2. Real Title, Artist, and Album (zero fake/demo data)
-    Column(
-      horizontalAlignment = horizontalAlign,
-      verticalArrangement = Arrangement.spacedBy(3.dp)
-    ) {
-      val displayTitle = song?.title?.takeIf { it.isNotBlank() }
-        ?: stringResource(id = R.string.standby_no_track)
-      Text(
-        text = com.example.ui.theme.rememberKhmerTitleText(
-          text = displayTitle,
-          baseFontSize = 22.sp,
-          isBold = true
-        ),
-        style = MaterialTheme.typography.titleLarge.copy(
-          fontSize = 22.sp,
-          fontWeight = FontWeight.Bold,
-          lineHeight = 28.sp
-        ),
-        color = Color.White,
-        textAlign = textAlign,
-        maxLines = 2,
-        overflow = TextOverflow.Ellipsis,
-        modifier = Modifier.testTag("standby_song_title")
-      )
+    StandbyTitleArtistBlock(
+      song = song,
+      albumName = albumName,
+      palette = palette,
+      titleFontSp = titleFontSp,
+      centered = centered
+    )
 
-      val artistText = song?.artist?.takeIf { it.isNotBlank() }
-        ?: stringResource(id = R.string.standby_no_artist)
-      val artistAlbumLine = if (song != null && albumName.isNotBlank() && !albumName.equals(artistText, ignoreCase = true)) {
-        "$artistText · $albumName"
-      } else {
-        artistText
-      }
-
-      Text(
-        text = com.example.ui.theme.rememberKhmerTitleText(
-          text = artistAlbumLine,
-          baseFontSize = 14.sp,
-          isBold = false
-        ),
-        style = MaterialTheme.typography.bodyMedium.copy(fontSize = 14.sp),
-        color = Color.White.copy(alpha = 0.68f),
-        textAlign = textAlign,
-        maxLines = 1,
-        overflow = TextOverflow.Ellipsis,
-        modifier = Modifier.testTag("standby_song_artist_album")
-      )
-    }
-
-    // 3. Optional Active Synced Lyric Line (Active-only animation)
     if (song != null && lyricSnap.hasLyrics && lyricSnap.currentLine.isNotBlank()) {
-      AnimatedContent(
-        targetState = lyricSnap.currentLine,
-        transitionSpec = {
-          if (reducedMotion) {
-            fadeIn(snap()) togetherWith fadeOut(snap())
-          } else {
-            (slideInVertically(tween(320, easing = FastOutSlowInEasing)) { it / 3 } + fadeIn(tween(240))) togetherWith
-              (slideOutVertically(tween(240)) { -it / 3 } + fadeOut(tween(180)))
-          }
-        },
-        label = "standby_lyric_transition"
-      ) { currentLine ->
-        Text(
-          text = com.example.ui.theme.rememberKhmerLyricsText(
-            text = currentLine,
-            khmerLyricsFont = khmerLyricsFont,
-            baseFontSize = 15.sp,
-            isBold = true
-          ),
-          style = MaterialTheme.typography.bodyMedium.copy(
-            fontWeight = FontWeight.SemiBold,
-            lineHeight = 21.sp
-          ),
-          color = palette.accent.copy(alpha = 0.94f),
-          textAlign = textAlign,
-          maxLines = 2,
-          overflow = TextOverflow.Ellipsis
-        )
+      Column(
+        horizontalAlignment = horizontalAlign,
+        verticalArrangement = Arrangement.spacedBy(4.dp)
+      ) {
+        AnimatedContent(
+          targetState = lyricSnap.currentLine,
+          transitionSpec = {
+            if (reducedMotion) {
+              fadeIn(snap()) togetherWith fadeOut(snap())
+            } else {
+              (slideInVertically(tween(300, easing = FastOutSlowInEasing)) { it / 3 } + fadeIn(tween(220))) togetherWith
+                (slideOutVertically(tween(220)) { -it / 3 } + fadeOut(tween(180)))
+            }
+          },
+          label = "standby_lyric_transition"
+        ) { currentLine ->
+          Text(
+            text = rememberKhmerLyricsText(
+              text = currentLine,
+              khmerLyricsFont = khmerLyricsFont,
+              baseFontSize = 15.5.sp,
+              isBold = true
+            ),
+            style = MaterialTheme.typography.bodyMedium.copy(
+              fontWeight = FontWeight.SemiBold,
+              lineHeight = 22.sp
+            ),
+            color = palette.accent,
+            textAlign = textAlign,
+            maxLines = 2,
+            overflow = TextOverflow.Ellipsis
+          )
+        }
+
+        if (lyricSnap.nextLine.isNotBlank()) {
+          Text(
+            text = rememberKhmerLyricsText(
+              text = lyricSnap.nextLine,
+              khmerLyricsFont = khmerLyricsFont,
+              baseFontSize = 13.5.sp,
+              isBold = false
+            ),
+            style = MaterialTheme.typography.bodySmall.copy(
+              fontWeight = FontWeight.Normal,
+              lineHeight = 19.sp
+            ),
+            color = palette.textPrimary.copy(alpha = 0.30f),
+            textAlign = textAlign,
+            maxLines = 1,
+            overflow = TextOverflow.Ellipsis
+          )
+        }
       }
     }
 
     Spacer(modifier = Modifier.height(2.dp))
 
-    // 4. Progress bar of 17 rounded segments + Elapsed / Total time
-    val progressFraction = if (totalDurationMs > 0L && song != null) {
-      (livePositionMs.toFloat() / totalDurationMs.toFloat()).coerceIn(0f, 1f)
-    } else {
-      0f
-    }
+    StandbyThinProgressBarBlock(
+      song = song,
+      livePositionMs = livePositionMs,
+      totalDurationMs = totalDurationMs,
+      progressFraction = progressFraction,
+      palette = palette,
+      centered = centered,
+      onSeekFraction = onSeekFraction
+    )
+  }
+}
 
-    Column(
-      modifier = Modifier.fillMaxWidth(if (centered) 0.88f else 0.96f),
-      verticalArrangement = Arrangement.spacedBy(6.dp)
-    ) {
-      StandbySegmentedProgressBar(
-        progress = progressFraction,
-        accent = palette.accent,
-        onSelectFraction = onSeekFraction,
-        modifier = Modifier
-          .fillMaxWidth()
-          .height(14.dp)
-          .testTag("standby_17_segment_progress")
-      )
-
-      Row(
-        modifier = Modifier.fillMaxWidth(),
-        horizontalArrangement = Arrangement.SpaceBetween,
-        verticalAlignment = Alignment.CenterVertically
-      ) {
-        Text(
-          text = formatStandbyDuration(if (song != null) livePositionMs else 0L),
-          style = MaterialTheme.typography.labelSmall.copy(
-            fontFamily = StandbyClockFonts.OutfitFamily,
-            fontWeight = FontWeight.SemiBold,
-            fontSize = 11.5.sp
-          ),
-          color = Color.White.copy(alpha = 0.68f),
-          modifier = Modifier.testTag("standby_elapsed_time")
-        )
-        Text(
-          text = formatStandbyDuration(if (song != null) totalDurationMs else 0L),
-          style = MaterialTheme.typography.labelSmall.copy(
-            fontFamily = StandbyClockFonts.OutfitFamily,
-            fontWeight = FontWeight.SemiBold,
-            fontSize = 11.5.sp
-          ),
-          color = Color.White.copy(alpha = 0.52f),
-          modifier = Modifier.testTag("standby_total_time")
-        )
+@Composable
+private fun StandbyThinProgressBarBlock(
+  song: Song?,
+  livePositionMs: Long,
+  totalDurationMs: Long,
+  progressFraction: Float,
+  palette: StandbyMoodPalette,
+  centered: Boolean,
+  fullWidth: Boolean = false,
+  onSeekFraction: (Float) -> Unit
+) {
+  Column(
+    modifier = Modifier.fillMaxWidth(
+      when {
+        fullWidth -> 1.0f
+        centered -> 0.88f
+        else -> 0.96f
       }
+    ),
+    verticalArrangement = Arrangement.spacedBy(5.dp)
+  ) {
+    StandbyThinProgressLine(
+      progress = progressFraction,
+      accent = palette.accent,
+      onSelectFraction = onSeekFraction,
+      modifier = Modifier
+        .fillMaxWidth()
+        .height(14.dp)
+        .testTag("standby_progress_bar")
+    )
+
+    Row(
+      modifier = Modifier.fillMaxWidth(),
+      horizontalArrangement = Arrangement.SpaceBetween,
+      verticalAlignment = Alignment.CenterVertically
+    ) {
+      Text(
+        text = formatStandbyDuration(if (song != null) livePositionMs else 0L),
+        style = MaterialTheme.typography.labelSmall.copy(
+          fontFamily = StandbyClockFonts.OutfitFamily,
+          fontWeight = FontWeight.SemiBold,
+          fontSize = 11.5.sp,
+          fontFeatureSettings = "tnum"
+        ),
+        color = palette.textPrimary.copy(alpha = 0.56f),
+        modifier = Modifier.testTag("standby_elapsed_time")
+      )
+      Text(
+        text = formatStandbyDuration(if (song != null) totalDurationMs else 0L),
+        style = MaterialTheme.typography.labelSmall.copy(
+          fontFamily = StandbyClockFonts.OutfitFamily,
+          fontWeight = FontWeight.SemiBold,
+          fontSize = 11.5.sp,
+          fontFeatureSettings = "tnum"
+        ),
+        color = palette.textPrimary.copy(alpha = 0.30f),
+        modifier = Modifier.testTag("standby_total_time")
+      )
     }
   }
 }
 
 /**
- * Animated 4-bar equalizer synced to real AudioSpectrumBus bars.
+ * Always-visible inline transport controls used in POSTER layout.
+ */
+@Composable
+private fun StandbyPosterTransportControls(
+  isPlaying: Boolean,
+  accent: Color,
+  textColor: Color,
+  onPrevious: () -> Unit,
+  onPlayPause: () -> Unit,
+  onNext: () -> Unit
+) {
+  Row(
+    verticalAlignment = Alignment.CenterVertically,
+    horizontalArrangement = Arrangement.spacedBy(16.dp),
+    modifier = Modifier.testTag("standby_poster_controls")
+  ) {
+    IconButton(
+      onClick = onPrevious,
+      modifier = Modifier
+        .minimumInteractiveComponentSize()
+        .testTag("standby_poster_prev_button")
+    ) {
+      Icon(
+        imageVector = Icons.Rounded.SkipPrevious,
+        contentDescription = stringResource(id = R.string.widget_cd_prev),
+        tint = textColor.copy(alpha = 0.78f),
+        modifier = Modifier.size(28.dp)
+      )
+    }
+
+    IconButton(
+      onClick = onPlayPause,
+      modifier = Modifier
+        .minimumInteractiveComponentSize()
+        .size(52.dp)
+        .clip(CircleShape)
+        .background(accent)
+        .testTag("standby_poster_play_pause_button")
+    ) {
+      Icon(
+        imageVector = if (isPlaying) Icons.Rounded.Pause else Icons.Rounded.PlayArrow,
+        contentDescription = stringResource(id = R.string.widget_cd_play_pause),
+        tint = Color(0xFF04120C),
+        modifier = Modifier.size(28.dp)
+      )
+    }
+
+    IconButton(
+      onClick = onNext,
+      modifier = Modifier
+        .minimumInteractiveComponentSize()
+        .testTag("standby_poster_next_button")
+    ) {
+      Icon(
+        imageVector = Icons.Rounded.SkipNext,
+        contentDescription = stringResource(id = R.string.widget_cd_next),
+        tint = textColor.copy(alpha = 0.78f),
+        modifier = Modifier.size(28.dp)
+      )
+    }
+  }
+}
+
+/**
+ * Thin progress bar line with generous touch target for seeking.
+ */
+@Composable
+private fun StandbyThinProgressLine(
+  progress: Float,
+  accent: Color,
+  onSelectFraction: (Float) -> Unit,
+  modifier: Modifier = Modifier
+) {
+  val clamped = progress.coerceIn(0f, 1f)
+  Canvas(
+    modifier = modifier.pointerInput(Unit) {
+      detectTapGestures { offset ->
+        if (size.width > 0) {
+          onSelectFraction((offset.x / size.width.toFloat()).coerceIn(0f, 1f))
+        }
+      }
+    }
+  ) {
+    val trackHeight = 3.dp.toPx()
+    val topY = (size.height - trackHeight) * 0.5f
+    val corner = CornerRadius(trackHeight * 0.5f, trackHeight * 0.5f)
+    drawRoundRect(
+      color = Color.White.copy(alpha = 0.14f),
+      topLeft = Offset(0f, topY),
+      size = Size(size.width, trackHeight),
+      cornerRadius = corner
+    )
+    val fillWidth = (size.width * clamped).coerceAtLeast(if (clamped > 0f) trackHeight else 0f)
+    if (fillWidth > 0f) {
+      drawRoundRect(
+        color = accent,
+        topLeft = Offset(0f, topY),
+        size = Size(fillWidth, trackHeight),
+        cornerRadius = corner
+      )
+    }
+  }
+}
+
+/**
+ * Small 4-bar equalizer synced to AudioSpectrumBus (static when paused or reduced motion).
  */
 @Composable
 private fun StandbyFourBarEqualizer(
@@ -1368,21 +1958,21 @@ private fun StandbyFourBarEqualizer(
     label = "standby_4bar_phase"
   )
 
-  Canvas(modifier = Modifier.size(width = 16.dp, height = 14.dp)) {
+  Canvas(modifier = Modifier.size(width = 14.dp, height = 12.dp)) {
     val barCount = 4
-    val gap = 2.2.dp.toPx()
-    val barWidth = ((size.width - gap * (barCount - 1)) / barCount).coerceAtLeast(1.8.dp.toPx())
+    val gap = 1.8.dp.toPx()
+    val barWidth = ((size.width - gap * (barCount - 1)) / barCount).coerceAtLeast(1.6.dp.toPx())
     val hasSignal = bars.any { it > 0.04f }
+    val staticHeights = floatArrayOf(0.45f, 0.80f, 0.60f, 0.38f)
 
     for (i in 0 until barCount) {
       val sampleIdx = (i * (bars.size / barCount.coerceAtLeast(1))).coerceIn(0, (bars.size - 1).coerceAtLeast(0))
       val level = when {
-        !isPlaying -> 0.24f
-        hasSignal -> bars.getOrElse(sampleIdx) { 0.35f }.coerceIn(0.22f, 1f)
-        reducedMotion -> 0.55f
+        !isPlaying || reducedMotion -> staticHeights[i]
+        hasSignal -> bars.getOrElse(sampleIdx) { 0.35f }.coerceIn(0.24f, 1f)
         else -> (0.30f + 0.65f * abs(sin(phase + i * 1.15f))).coerceIn(0.24f, 0.98f)
       }
-      val barH = (size.height * level).coerceAtLeast(2.5.dp.toPx())
+      val barH = (size.height * level).coerceAtLeast(2.dp.toPx())
       val x = i * (barWidth + gap)
       val y = size.height - barH
       drawRoundRect(
@@ -1390,54 +1980,6 @@ private fun StandbyFourBarEqualizer(
         topLeft = Offset(x, y),
         size = Size(barWidth, barH),
         cornerRadius = CornerRadius(barWidth * 0.5f, barWidth * 0.5f)
-      )
-    }
-  }
-}
-
-/**
- * Progress bar of exactly 17 rounded segments.
- */
-@Composable
-private fun StandbySegmentedProgressBar(
-  progress: Float,
-  accent: Color,
-  onSelectFraction: (Float) -> Unit,
-  modifier: Modifier = Modifier
-) {
-  val clamped = progress.coerceIn(0f, 1f)
-  Canvas(
-    modifier = modifier.pointerInput(Unit) {
-      detectTapGestures { offset ->
-        if (size.width > 0) {
-          onSelectFraction((offset.x / size.width.toFloat()).coerceIn(0f, 1f))
-        }
-      }
-    }
-  ) {
-    val segments = STANDBY_PROGRESS_SEGMENTS
-    val gap = 3.5.dp.toPx()
-    val totalGap = gap * (segments - 1)
-    val segWidth = ((size.width - totalGap) / segments).coerceAtLeast(2.dp.toPx())
-    val segHeight = 6.dp.toPx()
-    val topY = (size.height - segHeight) * 0.5f
-    val exactActive = clamped * segments
-
-    for (i in 0 until segments) {
-      val segFill = (exactActive - i).coerceIn(0f, 1f)
-      val x = i * (segWidth + gap)
-      val color = when {
-        segFill >= 0.99f -> accent
-        segFill > 0.05f -> androidx.compose.ui.graphics.lerp(Color.White.copy(alpha = 0.16f), accent, 0.45f + segFill * 0.55f)
-        else -> Color.White.copy(alpha = 0.14f)
-      }
-      val currentH = if (segFill in 0.05f..0.99f) segHeight + 2.dp.toPx() else segHeight
-      val currentY = (size.height - currentH) * 0.5f
-      drawRoundRect(
-        color = color,
-        topLeft = Offset(x, currentY),
-        size = Size(segWidth, currentH),
-        cornerRadius = CornerRadius(currentH * 0.5f, currentH * 0.5f)
       )
     }
   }
