@@ -46,6 +46,7 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.IntOffset
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.sp
 import coil.compose.AsyncImage
 import com.example.model.Song
 import com.example.ui.theme.HeartRed
@@ -319,7 +320,11 @@ fun MiniPlayer(
               )
             }
             Text(
-              text = song.title,
+              text = com.example.ui.theme.rememberKhmerTitleText(
+                text = song.title,
+                baseFontSize = 14.sp,
+                isBold = true
+              ),
               style = MaterialTheme.typography.bodyMedium.copy(fontWeight = FontWeight.Bold),
               maxLines = 1,
               overflow = TextOverflow.Ellipsis,

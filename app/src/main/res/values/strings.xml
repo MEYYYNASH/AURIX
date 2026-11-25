@@ -858,4 +858,12 @@
     <string name="edit_cover_studio_blur_label">Blur</string>
     <string name="edit_cover_studio_title_label">Cover title</string>
     <string name="edit_cover_studio_saved">Studio cover saved</string>
+
+    <!-- Khmer Lyrics Font Picker & Dangrek Title Typography (v2.1.3) -->
+    <string name="settings_khmer_lyrics_font_title">Khmer Lyrics Font</string>
+    <string name="settings_khmer_lyrics_font_subtitle">Titles use Dangrek · Mixed English &amp; Khmer auto-matched in size</string>
+    <string name="khmer_font_kantumruy_pro">Kantumruy Pro</string>
+    <string name="khmer_font_koulen">Koulen</string>
+    <string name="khmer_font_noto_sans_khmer">Noto Sans Khmer</string>
+    <string name="khmer_title_font_dangrek_badge">Title: Dangrek</string>
 </resources>

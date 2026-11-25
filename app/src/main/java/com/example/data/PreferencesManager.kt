@@ -90,6 +90,7 @@ class PreferencesManager(private val context: Context) {
     // Orbi Companion & Ambient Standby Mode keys
     val ORBI_COMPANION_THEME = stringPreferencesKey("orbi_companion_theme")
     val STANDBY_VINYL_STYLE = booleanPreferencesKey("standby_vinyl_style")
+    val KHMER_LYRICS_FONT = stringPreferencesKey("khmer_lyrics_font")
 
     fun decodeRecentSearches(raw: String?): List<String> {
       if (raw.isNullOrBlank()) return emptyList()
@@ -170,6 +171,9 @@ class PreferencesManager(private val context: Context) {
   }
   val lyricsWidgetAnim: Flow<String> = safeDataFlow.map { prefs ->
     com.example.lyrics.LyricsAnimationStyle.fromId(prefs[LYRICS_WIDGET_ANIM] ?: prefs[LYRICS_ANIM]).id
+  }
+  val khmerLyricsFont: Flow<String> = safeDataFlow.map { prefs ->
+    com.example.ui.theme.KhmerLyricsFont.fromId(prefs[KHMER_LYRICS_FONT]).id
   }
   val developerModeUnlocked: Flow<Boolean> = safeDataFlow.map { prefs ->
     prefs[DEVELOPER_MODE_UNLOCKED] ?: false
@@ -349,6 +353,13 @@ class PreferencesManager(private val context: Context) {
         prefs[LYRICS_ANIM] = com.example.lyrics.LyricsAnimationStyle.DEFAULT_ID
       }
       prefs[LYRICS_WIDGET_ANIM] = normalized
+    }
+  }
+
+  suspend fun setKhmerLyricsFont(fontId: String) {
+    val normalized = com.example.ui.theme.KhmerLyricsFont.fromId(fontId).id
+    context.dataStore.edit { prefs ->
+      prefs[KHMER_LYRICS_FONT] = normalized
     }
   }
 

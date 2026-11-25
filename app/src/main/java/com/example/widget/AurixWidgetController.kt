@@ -94,7 +94,8 @@ data class WidgetSnapshotState(
   val prevLyricLine: String = "",
   val prevNextLyricLine: String = "",
   val reducedMotion: Boolean = false,
-  val lyricsWidgetAnimStyle: String = com.example.lyrics.LyricsAnimationStyle.DEFAULT_ID
+  val lyricsWidgetAnimStyle: String = com.example.lyrics.LyricsAnimationStyle.DEFAULT_ID,
+  val khmerLyricsFont: String = com.example.ui.theme.KhmerLyricsFont.DEFAULT_ID
 )
 
 object AurixWidgetController {
@@ -304,7 +305,7 @@ object AurixWidgetController {
         sizeTier = WidgetSizeTier.WIDE,
         albumArtBitmap = rawArt,
         songArtworkKey = songKey,
-        includeFrameInComposite = true,
+        includeFrameInComposite = false,
         auroraPhase = 0f,
         forceRebuild = true
       )
@@ -313,6 +314,7 @@ object AurixWidgetController {
 
     var totalBuildMs = 0L
     val reduceMotion = isReducedMotionActive(appCtx, snapshot.reducedMotion)
+    val standaloneFrameBmp = buildStandaloneSideFrameIfNeeded(appCtx, customizer, rawArt)
     for (widgetId in lyricsIds) {
       val options = runCatching { manager.getAppWidgetOptions(widgetId) }.getOrNull()
       val sizeTier = resolveWidgetSizeTier(options)
@@ -322,7 +324,7 @@ object AurixWidgetController {
         sizeTier = sizeTier,
         albumArtBitmap = rawArt,
         songArtworkKey = songKey,
-        includeFrameInComposite = true,
+        includeFrameInComposite = false,
         auroraPhase = 0f,
         forceRebuild = true
       )
@@ -333,6 +335,7 @@ object AurixWidgetController {
         state = snapshot,
         compositeBg = built.bitmap,
         roundedArt = roundedArt,
+        standaloneFrameBmp = standaloneFrameBmp,
         customizer = customizer,
         sizeTier = sizeTier
       )
@@ -507,6 +510,9 @@ object AurixWidgetController {
       reducedMotion = prefs.getBoolean("reduced_motion", false),
       lyricsWidgetAnimStyle = com.example.lyrics.LyricsAnimationStyle.fromId(
         prefs.getString("lyrics_widget_anim", null)
+      ).id,
+      khmerLyricsFont = com.example.ui.theme.KhmerLyricsFont.fromId(
+        prefs.getString("khmer_lyrics_font", null)
       ).id
     )
   }
@@ -540,6 +546,7 @@ object AurixWidgetController {
       .putString("prev_next_lyric_line", state.prevNextLyricLine)
       .putBoolean("reduced_motion", state.reducedMotion)
       .putString("lyrics_widget_anim", state.lyricsWidgetAnimStyle)
+      .putString("khmer_lyrics_font", state.khmerLyricsFont)
       .apply()
   }
 
@@ -766,6 +773,7 @@ object AurixWidgetController {
     language: String? = null,
     reducedMotion: Boolean? = null,
     lyricsWidgetAnimStyle: String? = null,
+    khmerLyricsFont: String? = null,
     refreshWidgetsNow: Boolean = true
   ) {
     val appCtx = context.applicationContext
@@ -791,6 +799,10 @@ object AurixWidgetController {
         com.example.lyrics.LyricsAnimationStyle.fromId(it).id
       } ?: current.lyricsWidgetAnimStyle
 
+      val resolvedKhmerFont = khmerLyricsFont?.let {
+        com.example.ui.theme.KhmerLyricsFont.fromId(it).id
+      } ?: current.khmerLyricsFont
+
       val updated = current.copy(
         ambientGlowEnabled = ambientGlowEnabled ?: current.ambientGlowEnabled,
         dimLevel = (dimLevel ?: current.dimLevel).coerceIn(0f, 0.90f),
@@ -800,6 +812,7 @@ object AurixWidgetController {
         language = nextLang,
         reducedMotion = reducedMotion ?: current.reducedMotion,
         lyricsWidgetAnimStyle = resolvedAnim,
+        khmerLyricsFont = resolvedKhmerFont,
         currentLyricLine = lyricSnap?.currentLine ?: current.currentLyricLine,
         nextLyricLine = lyricSnap?.nextLine ?: current.nextLyricLine,
         hasLyrics = lyricSnap?.hasLyrics ?: current.hasLyrics
@@ -858,20 +871,27 @@ object AurixWidgetController {
         val displayCurrentLine = state.currentLyricLine
         val displayNextLine = state.nextLyricLine
         val targetSlot = state.lyricsFlipperSlot.coerceIn(0, 1)
+        val khmerFont = com.example.ui.theme.KhmerLyricsFont.fromId(state.khmerLyricsFont)
 
         for (widgetId in lyricsIds) {
           val layoutRes = lastFullLyricsLayoutByWidgetId[widgetId]
             ?: resolveLyricsWidgetLayoutRes(state.lyricsWidgetAnimStyle, reduceMotion, WidgetSizeTier.WIDE)
           val partialViews = RemoteViews(appCtx.packageName, layoutRes)
+          // Animate ONLY the active lyric line inside ViewFlipper
           bindLyricsFlipperSlot(
             context = appCtx,
             views = partialViews,
             slotIndex = targetSlot,
             currentLine = displayCurrentLine,
+            khmerLyricsFont = khmerFont,
+            primaryTextColor = primaryTextColor
+          )
+          // Update the upcoming lyric line OUTSIDE ViewFlipper statically (zero premature animation)
+          bindStaticNextLyricLine(
+            context = appCtx,
+            views = partialViews,
             nextLine = displayNextLine,
-            hasLyrics = true,
-            language = state.language,
-            primaryTextColor = primaryTextColor,
+            khmerLyricsFont = khmerFont,
             mutedTextColor = mutedTextColor
           )
           partialViews.setDisplayedChild(R.id.widget_lyrics_flipper, targetSlot)
@@ -940,6 +960,7 @@ object AurixWidgetController {
       val customizer = readWidgetCustomizerConfig(appCtx)
       val reduceMotion = isReducedMotionActive(appCtx, snapshot.reducedMotion)
       val songKey = "${snapshot.songId}|${snapshot.artworkUrl}"
+      val standaloneFrameBmp = buildStandaloneSideFrameIfNeeded(appCtx, customizer, rawArt)
       for (widgetId in lyricsIds) {
         val options = runCatching { manager.getAppWidgetOptions(widgetId) }.getOrNull()
         val sizeTier = resolveWidgetSizeTier(options)
@@ -949,12 +970,20 @@ object AurixWidgetController {
           sizeTier = sizeTier,
           albumArtBitmap = rawArt,
           songArtworkKey = songKey,
-          includeFrameInComposite = true,
+          includeFrameInComposite = false,
           auroraPhase = 0f,
           forceRebuild = false
         ).bitmap
         val layoutRes = resolveLyricsWidgetLayoutRes(snapshot.lyricsWidgetAnimStyle, reduceMotion, sizeTier)
-        val views = buildLyricsWidgetRemoteViews(appCtx, snapshot, compositeBg, roundedArt, customizer, sizeTier)
+        val views = buildLyricsWidgetRemoteViews(
+          context = appCtx,
+          state = snapshot,
+          compositeBg = compositeBg,
+          roundedArt = roundedArt,
+          standaloneFrameBmp = standaloneFrameBmp,
+          customizer = customizer,
+          sizeTier = sizeTier
+        )
         runCatching { manager.updateAppWidget(widgetId, views) }
         lastFullLyricsLayoutByWidgetId[widgetId] = layoutRes
         lastFullLyricsLayoutRes = layoutRes
@@ -998,6 +1027,7 @@ object AurixWidgetController {
         val roundedArt = getOrRenderRoundedAlbumArt(appCtx, rawArt)
         val reduceMotion = isReducedMotionActive(appCtx, snapshot.reducedMotion)
         val songKey = "${snapshot.songId}|${snapshot.artworkUrl}"
+        val standaloneFrameBmp = buildStandaloneSideFrameIfNeeded(appCtx, customizer, rawArt)
         for (widgetId in appWidgetIds) {
           val options = runCatching { appWidgetManager.getAppWidgetOptions(widgetId) }.getOrNull()
           val sizeTier = resolveWidgetSizeTier(options)
@@ -1007,12 +1037,20 @@ object AurixWidgetController {
             sizeTier = sizeTier,
             albumArtBitmap = rawArt,
             songArtworkKey = songKey,
-            includeFrameInComposite = true,
+            includeFrameInComposite = false,
             auroraPhase = 0f,
             forceRebuild = false
           ).bitmap
           val layoutRes = resolveLyricsWidgetLayoutRes(snapshot.lyricsWidgetAnimStyle, reduceMotion, sizeTier)
-          val views = buildLyricsWidgetRemoteViews(appCtx, snapshot, compositeBg, roundedArt, customizer, sizeTier)
+          val views = buildLyricsWidgetRemoteViews(
+            context = appCtx,
+            state = snapshot,
+            compositeBg = compositeBg,
+            roundedArt = roundedArt,
+            standaloneFrameBmp = standaloneFrameBmp,
+            customizer = customizer,
+            sizeTier = sizeTier
+          )
           runCatching { appWidgetManager.updateAppWidget(widgetId, views) }
           lastFullLyricsLayoutByWidgetId[widgetId] = layoutRes
           lastFullLyricsLayoutRes = layoutRes
@@ -1023,6 +1061,20 @@ object AurixWidgetController {
         }
       }
     }
+  }
+
+  private fun buildStandaloneSideFrameIfNeeded(
+    context: Context,
+    customizer: WidgetCustomizerConfig,
+    rawArt: Bitmap?
+  ): Bitmap? {
+    if (customizer.frameStyle == WidgetFrameStyle.NONE) return null
+    val frameSource = WidgetBitmapBuilder.resolveFramePhotoBitmap(context, customizer, rawArt)
+    return WidgetBitmapBuilder.buildStandaloneFrameBitmap(
+      photo = frameSource,
+      config = customizer,
+      sizePx = 220
+    )
   }
 
   private fun buildMusicWidgetRemoteViews(
@@ -1183,6 +1235,7 @@ object AurixWidgetController {
     state: WidgetSnapshotState,
     compositeBg: Bitmap,
     roundedArt: Bitmap,
+    standaloneFrameBmp: Bitmap?,
     customizer: WidgetCustomizerConfig,
     sizeTier: WidgetSizeTier
   ): RemoteViews {
@@ -1194,6 +1247,7 @@ object AurixWidgetController {
     val mutedTextColor = 0xA6FFFFFF.toInt()
     val footerTitleColor = 0xEBFFFFFF.toInt()
     val footerArtistColor = 0x9EFFFFFF.toInt()
+    val khmerFont = com.example.ui.theme.KhmerLyricsFont.fromId(state.khmerLyricsFont)
 
     views.setImageViewBitmap(R.id.widget_lyrics_bg_glow, compositeBg)
     views.setInt(
@@ -1225,25 +1279,48 @@ object AurixWidgetController {
     views.setViewVisibility(R.id.widget_lyrics_content_container, View.VISIBLE)
     views.setOnClickPendingIntent(R.id.widget_lyrics_content_container, openLyricsPi)
 
-    // Reserve left horizontal space for the Canvas-drawn styled frame on Wide & Large widgets
-    val showSideFrameSpacer = customizer.frameStyle != WidgetFrameStyle.NONE && sizeTier != WidgetSizeTier.SMALL
-    views.setViewVisibility(
-      R.id.widget_lyrics_frame_spacer,
-      if (showSideFrameSpacer) View.VISIBLE else View.GONE
-    )
+    // Render the styled frame inside the dedicated ImageView so centerCrop on bg_glow never shifts or overlaps the accent bar
+    val showSideFrameSpacer = customizer.frameStyle != WidgetFrameStyle.NONE &&
+      sizeTier != WidgetSizeTier.SMALL &&
+      standaloneFrameBmp != null
+    if (showSideFrameSpacer && standaloneFrameBmp != null) {
+      views.setViewVisibility(R.id.widget_lyrics_frame_spacer, View.VISIBLE)
+      views.setImageViewBitmap(R.id.widget_lyrics_frame_spacer, standaloneFrameBmp)
+    } else {
+      views.setViewVisibility(R.id.widget_lyrics_frame_spacer, View.GONE)
+    }
 
     val hasLyrics = state.hasLyrics && state.currentLyricLine.isNotBlank()
     val cleanTitle = state.title.trim()
     val cleanArtist = state.artist.trim()
 
     if (!hasLyrics) {
-      // Songs without lyrics show title and artist only (clean card, no "Lyrics" tag)
+      // Songs without lyrics show title (using Dangrek for Khmer + equalized English Outfit) and artist only
       views.setViewVisibility(R.id.widget_lyrics_tag_container, View.GONE)
       views.setViewVisibility(R.id.widget_lyrics_stage_row, View.GONE)
       views.setViewVisibility(R.id.widget_lyrics_footer_row, View.GONE)
       views.setViewVisibility(R.id.widget_lyrics_no_lyrics_container, View.VISIBLE)
-      views.setTextViewText(R.id.widget_lyrics_no_lyrics_title, cleanTitle)
-      views.setTextColor(R.id.widget_lyrics_no_lyrics_title, primaryTextColor)
+      val titleBmp = renderStyledTitleOrFooterBitmap(
+        context = context,
+        titleText = cleanTitle,
+        artistText = "",
+        khmerLyricsFont = khmerFont,
+        titleColor = primaryTextColor,
+        artistColor = mutedTextColor,
+        baseTextSizeDp = 16.5f,
+        heightDp = 30f,
+        maxLines = 1
+      )
+      if (titleBmp != null) {
+        views.setViewVisibility(R.id.widget_lyrics_no_lyrics_title_bitmap, View.VISIBLE)
+        views.setViewVisibility(R.id.widget_lyrics_no_lyrics_title, View.GONE)
+        views.setImageViewBitmap(R.id.widget_lyrics_no_lyrics_title_bitmap, titleBmp)
+      } else {
+        views.setViewVisibility(R.id.widget_lyrics_no_lyrics_title_bitmap, View.GONE)
+        views.setViewVisibility(R.id.widget_lyrics_no_lyrics_title, View.VISIBLE)
+        views.setTextViewText(R.id.widget_lyrics_no_lyrics_title, cleanTitle)
+        views.setTextColor(R.id.widget_lyrics_no_lyrics_title, primaryTextColor)
+      }
       views.setTextViewText(R.id.widget_lyrics_no_lyrics_artist, cleanArtist.ifBlank { "AURIX" })
       views.setTextColor(R.id.widget_lyrics_no_lyrics_artist, mutedTextColor)
       return views
@@ -1274,34 +1351,36 @@ object AurixWidgetController {
     val activeSlot = state.lyricsFlipperSlot.coerceIn(0, 1)
     val inactiveSlot = 1 - activeSlot
 
-    // Populate the active ViewFlipper slot with the current lyric line
+    // Populate the active ViewFlipper slot with ONLY the currently active lyric line
     bindLyricsFlipperSlot(
       context = context,
       views = views,
       slotIndex = activeSlot,
       currentLine = displayCurrentLine,
-      nextLine = displayNextLine,
-      hasLyrics = true,
-      language = state.language,
-      primaryTextColor = primaryTextColor,
-      mutedTextColor = mutedTextColor
+      khmerLyricsFont = khmerFont,
+      primaryTextColor = primaryTextColor
     )
 
-    // Keep the outgoing slot populated with the previous lyric so transitions never flash blank
+    // Keep the outgoing slot populated with the previous active lyric so transitions never flash blank
     val outgoingLine = state.prevLyricLine.takeIf { it.isNotBlank() } ?: displayCurrentLine
-    val outgoingNext = if (state.prevLyricLine.isNotBlank()) state.prevNextLyricLine else displayNextLine
     bindLyricsFlipperSlot(
       context = context,
       views = views,
       slotIndex = inactiveSlot,
       currentLine = outgoingLine,
-      nextLine = outgoingNext,
-      hasLyrics = true,
-      language = state.language,
-      primaryTextColor = primaryTextColor,
-      mutedTextColor = mutedTextColor
+      khmerLyricsFont = khmerFont,
+      primaryTextColor = primaryTextColor
     )
     views.setDisplayedChild(R.id.widget_lyrics_flipper, activeSlot)
+
+    // Populate the upcoming/next lyric line OUTSIDE ViewFlipper so it never animates prematurely
+    bindStaticNextLyricLine(
+      context = context,
+      views = views,
+      nextLine = displayNextLine,
+      khmerLyricsFont = khmerFont,
+      mutedTextColor = mutedTextColor
+    )
 
     // Mini rounded album art (hidden when the large styled frame is already shown beside lyrics)
     views.setViewVisibility(
@@ -1309,135 +1388,289 @@ object AurixWidgetController {
       if (showSideFrameSpacer) View.GONE else View.VISIBLE
     )
     views.setImageViewBitmap(R.id.widget_lyrics_mini_art, roundedArt)
-    if (cleanArtist.isNotBlank()) {
-      val full = "$cleanTitle · $cleanArtist"
-      val span = SpannableString(full)
-      span.setSpan(StyleSpan(Typeface.BOLD), 0, cleanTitle.length, Spanned.SPAN_EXCLUSIVE_EXCLUSIVE)
-      span.setSpan(ForegroundColorSpan(footerTitleColor), 0, cleanTitle.length, Spanned.SPAN_EXCLUSIVE_EXCLUSIVE)
-      span.setSpan(ForegroundColorSpan(footerArtistColor), cleanTitle.length, full.length, Spanned.SPAN_EXCLUSIVE_EXCLUSIVE)
-      views.setTextViewText(R.id.widget_lyrics_song_footer, span)
+
+    // Render footer song title (Dangrek for Khmer + equalized English Outfit) + artist
+    val footerBmp = renderStyledTitleOrFooterBitmap(
+      context = context,
+      titleText = cleanTitle,
+      artistText = cleanArtist,
+      khmerLyricsFont = khmerFont,
+      titleColor = footerTitleColor,
+      artistColor = footerArtistColor,
+      baseTextSizeDp = 12.2f,
+      heightDp = 20f,
+      maxLines = 1
+    )
+    if (footerBmp != null) {
+      views.setViewVisibility(R.id.widget_lyrics_footer_bitmap, View.VISIBLE)
+      views.setViewVisibility(R.id.widget_lyrics_song_footer, View.GONE)
+      views.setImageViewBitmap(R.id.widget_lyrics_footer_bitmap, footerBmp)
     } else {
-      val span = SpannableString(cleanTitle)
-      span.setSpan(StyleSpan(Typeface.BOLD), 0, cleanTitle.length, Spanned.SPAN_EXCLUSIVE_EXCLUSIVE)
-      span.setSpan(ForegroundColorSpan(footerTitleColor), 0, cleanTitle.length, Spanned.SPAN_EXCLUSIVE_EXCLUSIVE)
-      views.setTextViewText(R.id.widget_lyrics_song_footer, span)
+      views.setViewVisibility(R.id.widget_lyrics_footer_bitmap, View.GONE)
+      views.setViewVisibility(R.id.widget_lyrics_song_footer, View.VISIBLE)
+      if (cleanArtist.isNotBlank()) {
+        val full = "$cleanTitle · $cleanArtist"
+        val span = SpannableString(full)
+        span.setSpan(StyleSpan(Typeface.BOLD), 0, cleanTitle.length, Spanned.SPAN_EXCLUSIVE_EXCLUSIVE)
+        span.setSpan(ForegroundColorSpan(footerTitleColor), 0, cleanTitle.length, Spanned.SPAN_EXCLUSIVE_EXCLUSIVE)
+        span.setSpan(ForegroundColorSpan(footerArtistColor), cleanTitle.length, full.length, Spanned.SPAN_EXCLUSIVE_EXCLUSIVE)
+        views.setTextViewText(R.id.widget_lyrics_song_footer, span)
+      } else {
+        val span = SpannableString(cleanTitle)
+        span.setSpan(StyleSpan(Typeface.BOLD), 0, cleanTitle.length, Spanned.SPAN_EXCLUSIVE_EXCLUSIVE)
+        span.setSpan(ForegroundColorSpan(footerTitleColor), 0, cleanTitle.length, Spanned.SPAN_EXCLUSIVE_EXCLUSIVE)
+        views.setTextViewText(R.id.widget_lyrics_song_footer, span)
+      }
     }
 
     return views
   }
 
+  /**
+   * Binds ONLY the currently active lyric line inside the ViewFlipper slot.
+   * Renders via Canvas with the user's selected Khmer lyrics font (Kantumruy Pro, Koulen, or Noto Sans Khmer)
+   * and optically equalized English + Khmer glyph heights.
+   */
   private fun bindLyricsFlipperSlot(
     context: Context,
     views: RemoteViews,
     slotIndex: Int,
     currentLine: String,
-    nextLine: String,
-    hasLyrics: Boolean,
-    language: String,
-    primaryTextColor: Int,
-    mutedTextColor: Int
+    khmerLyricsFont: com.example.ui.theme.KhmerLyricsFont,
+    primaryTextColor: Int
   ) {
     val khmerImgId = if (slotIndex == 0) R.id.widget_lyrics_khmer_bitmap_a else R.id.widget_lyrics_khmer_bitmap_b
     val textContainerId = if (slotIndex == 0) R.id.widget_lyrics_text_container_a else R.id.widget_lyrics_text_container_b
     val currentTextId = if (slotIndex == 0) R.id.widget_lyrics_current_line_a else R.id.widget_lyrics_current_line_b
     val nextTextId = if (slotIndex == 0) R.id.widget_lyrics_next_line_a else R.id.widget_lyrics_next_line_b
 
-    val usesKhmerFont = containsKhmerScript(currentLine) ||
-      containsKhmerScript(nextLine) ||
-      (!hasLyrics && language.equals("km", ignoreCase = true))
+    // Always hide legacy in-flipper next_line_a/b so upcoming lyrics never animate inside ViewFlipper
+    views.setViewVisibility(nextTextId, View.GONE)
 
-    if (usesKhmerFont) {
-      val khmerBmp = renderKhmerLyricsLinesBitmap(
-        context = context,
-        currentLine = currentLine,
-        nextLine = nextLine,
-        primaryColor = primaryTextColor,
-        mutedColor = mutedTextColor
-      )
-      if (khmerBmp != null) {
-        views.setViewVisibility(khmerImgId, View.VISIBLE)
-        views.setViewVisibility(textContainerId, View.GONE)
-        views.setImageViewBitmap(khmerImgId, khmerBmp)
-        return
-      }
+    val activeBmp = renderStyledActiveLyricBitmap(
+      context = context,
+      currentLine = currentLine,
+      khmerLyricsFont = khmerLyricsFont,
+      primaryColor = primaryTextColor
+    )
+    if (activeBmp != null) {
+      views.setViewVisibility(khmerImgId, View.VISIBLE)
+      views.setViewVisibility(textContainerId, View.GONE)
+      views.setImageViewBitmap(khmerImgId, activeBmp)
+      return
     }
 
     views.setViewVisibility(khmerImgId, View.GONE)
     views.setViewVisibility(textContainerId, View.VISIBLE)
     views.setTextViewText(currentTextId, currentLine)
     views.setTextColor(currentTextId, primaryTextColor)
-    if (nextLine.isNotBlank()) {
-      views.setViewVisibility(nextTextId, View.VISIBLE)
-      views.setTextViewText(nextTextId, nextLine)
-      views.setTextColor(nextTextId, mutedTextColor)
+  }
+
+  /**
+   * Binds the upcoming/next lyric line into the static container OUTSIDE ViewFlipper
+   * so it never receives animation before becoming the active lyric line.
+   */
+  private fun bindStaticNextLyricLine(
+    context: Context,
+    views: RemoteViews,
+    nextLine: String,
+    khmerLyricsFont: com.example.ui.theme.KhmerLyricsFont,
+    mutedTextColor: Int
+  ) {
+    val trimmed = nextLine.trim()
+    if (trimmed.isEmpty()) {
+      views.setViewVisibility(R.id.widget_lyrics_next_static_container, View.GONE)
+      views.setViewVisibility(R.id.widget_lyrics_next_khmer_bitmap, View.GONE)
+      views.setViewVisibility(R.id.widget_lyrics_next_line_static, View.GONE)
+      return
+    }
+
+    views.setViewVisibility(R.id.widget_lyrics_next_static_container, View.VISIBLE)
+    val nextBmp = renderStyledNextLyricBitmap(
+      context = context,
+      nextLine = trimmed,
+      khmerLyricsFont = khmerLyricsFont,
+      mutedColor = mutedTextColor
+    )
+    if (nextBmp != null) {
+      views.setViewVisibility(R.id.widget_lyrics_next_khmer_bitmap, View.VISIBLE)
+      views.setViewVisibility(R.id.widget_lyrics_next_line_static, View.GONE)
+      views.setImageViewBitmap(R.id.widget_lyrics_next_khmer_bitmap, nextBmp)
     } else {
-      views.setViewVisibility(nextTextId, View.GONE)
+      views.setViewVisibility(R.id.widget_lyrics_next_khmer_bitmap, View.GONE)
+      views.setViewVisibility(R.id.widget_lyrics_next_line_static, View.VISIBLE)
+      views.setTextViewText(R.id.widget_lyrics_next_line_static, trimmed)
+      views.setTextColor(R.id.widget_lyrics_next_line_static, mutedTextColor)
     }
   }
 
-  private fun renderKhmerLyricsLinesBitmap(
+  private fun renderStyledActiveLyricBitmap(
     context: Context,
     currentLine: String,
-    nextLine: String,
-    primaryColor: Int,
-    mutedColor: Int
+    khmerLyricsFont: com.example.ui.theme.KhmerLyricsFont,
+    primaryColor: Int
   ): Bitmap? {
     return runCatching {
-      // Keep Khmer bitmap Binder-safe (~183 KB ARGB_8888) so full & partial RemoteViews never overflow 1 MB IPC
+      val trimmed = currentLine.trim().ifBlank { "♪" }
       val scale = context.resources.displayMetrics.density.coerceIn(1.25f, 1.55f)
-      val widthPx = (284f * scale).roundToInt().coerceIn(340, 440)
-      val heightPx = (68f * scale).roundToInt().coerceIn(88, 104)
+      val widthPx = (276f * scale).roundToInt().coerceIn(330, 430)
+      val heightPx = (44f * scale).roundToInt().coerceIn(54, 70)
       val bmp = Bitmap.createBitmap(widthPx, heightPx, Bitmap.Config.ARGB_8888)
       val canvas = Canvas(bmp)
 
-      val khmerTypeface = runCatching {
-        ResourcesCompat.getFont(context, R.font.noto_sans_khmer)
-      }.getOrNull() ?: Typeface.DEFAULT
+      val styledText = com.example.ui.theme.KhmerTypography.buildStyledSpannable(
+        context = context,
+        text = trimmed,
+        isTitle = false,
+        khmerLyricsFont = khmerLyricsFont,
+        isBold = true
+      )
 
-      val currentPaint = TextPaint(Paint.ANTI_ALIAS_FLAG).apply {
-        typeface = Typeface.create(khmerTypeface, Typeface.BOLD)
+      val baseTypeface = com.example.ui.theme.KhmerTypography.loadInterTypeface(context, isBold = true)
+      val paint = TextPaint(Paint.ANTI_ALIAS_FLAG).apply {
+        typeface = baseTypeface
         color = primaryColor
-        textSize = 15.5f * scale
-        setShadowLayer(3.2f * scale, 0f, 1.1f * scale, 0x66000000)
+        textSize = 15.6f * scale
+        setShadowLayer(3.0f * scale, 0f, 1.0f * scale, 0x66000000)
       }
 
-      val currentLayout = StaticLayout.Builder
-        .obtain(currentLine, 0, currentLine.length, currentPaint, widthPx)
+      val layout = StaticLayout.Builder
+        .obtain(styledText, 0, styledText.length, paint, widthPx)
         .setAlignment(Layout.Alignment.ALIGN_NORMAL)
-        .setLineSpacing(2.8f * scale, 1.24f)
+        .setLineSpacing(2.0f * scale, 1.15f)
         .setIncludePad(true)
-        .setMaxLines(if (nextLine.isNotBlank()) 1 else 2)
+        .setMaxLines(2)
         .setEllipsize(TextUtils.TruncateAt.END)
         .build()
 
-      val nextPaint = TextPaint(Paint.ANTI_ALIAS_FLAG).apply {
-        typeface = Typeface.create(khmerTypeface, Typeface.NORMAL)
-        color = mutedColor
-        textSize = 12.0f * scale
-      }
-
-      val nextLayout = if (nextLine.isNotBlank()) {
-        StaticLayout.Builder
-          .obtain(nextLine, 0, nextLine.length, nextPaint, widthPx)
-          .setAlignment(Layout.Alignment.ALIGN_NORMAL)
-          .setLineSpacing(2.4f * scale, 1.22f)
-          .setIncludePad(true)
-          .setMaxLines(1)
-          .setEllipsize(TextUtils.TruncateAt.END)
-          .build()
-      } else null
-
-      val gapPx = if (nextLayout != null) (3.2f * scale) else 0f
-      val totalTextHeight = currentLayout.height + (nextLayout?.height ?: 0) + gapPx
-      val startY = ((heightPx - totalTextHeight) * 0.5f).coerceAtLeast(0f)
-
+      val startY = ((heightPx - layout.height) * 0.5f).coerceAtLeast(0f)
       canvas.save()
       canvas.translate(0f, startY)
-      currentLayout.draw(canvas)
-      if (nextLayout != null) {
-        canvas.translate(0f, currentLayout.height + gapPx)
-        nextLayout.draw(canvas)
+      layout.draw(canvas)
+      canvas.restore()
+      bmp
+    }.getOrNull()
+  }
+
+  private fun renderStyledNextLyricBitmap(
+    context: Context,
+    nextLine: String,
+    khmerLyricsFont: com.example.ui.theme.KhmerLyricsFont,
+    mutedColor: Int
+  ): Bitmap? {
+    return runCatching {
+      val trimmed = nextLine.trim()
+      if (trimmed.isEmpty()) return null
+      val scale = context.resources.displayMetrics.density.coerceIn(1.25f, 1.55f)
+      val widthPx = (276f * scale).roundToInt().coerceIn(330, 430)
+      val heightPx = (21f * scale).roundToInt().coerceIn(26, 34)
+      val bmp = Bitmap.createBitmap(widthPx, heightPx, Bitmap.Config.ARGB_8888)
+      val canvas = Canvas(bmp)
+
+      val styledText = com.example.ui.theme.KhmerTypography.buildStyledSpannable(
+        context = context,
+        text = trimmed,
+        isTitle = false,
+        khmerLyricsFont = khmerLyricsFont,
+        isBold = false
+      )
+
+      val baseTypeface = com.example.ui.theme.KhmerTypography.loadInterTypeface(context, isBold = false)
+      val paint = TextPaint(Paint.ANTI_ALIAS_FLAG).apply {
+        typeface = baseTypeface
+        color = mutedColor
+        textSize = 12.2f * scale
       }
+
+      val layout = StaticLayout.Builder
+        .obtain(styledText, 0, styledText.length, paint, widthPx)
+        .setAlignment(Layout.Alignment.ALIGN_NORMAL)
+        .setLineSpacing(1.5f * scale, 1.12f)
+        .setIncludePad(true)
+        .setMaxLines(1)
+        .setEllipsize(TextUtils.TruncateAt.END)
+        .build()
+
+      val startY = ((heightPx - layout.height) * 0.5f).coerceAtLeast(0f)
+      canvas.save()
+      canvas.translate(0f, startY)
+      layout.draw(canvas)
+      canvas.restore()
+      bmp
+    }.getOrNull()
+  }
+
+  /**
+   * Renders song title (using bundled Dangrek for Khmer + optically equalized Outfit for English)
+   * and optional artist suffix onto a single-line or two-line bitmap for RemoteViews.
+   */
+  private fun renderStyledTitleOrFooterBitmap(
+    context: Context,
+    titleText: String,
+    artistText: String,
+    khmerLyricsFont: com.example.ui.theme.KhmerLyricsFont,
+    titleColor: Int,
+    artistColor: Int,
+    baseTextSizeDp: Float,
+    heightDp: Float,
+    maxLines: Int
+  ): Bitmap? {
+    return runCatching {
+      val cleanTitle = titleText.trim()
+      if (cleanTitle.isEmpty()) return null
+      val cleanArtist = artistText.trim()
+      val fullText = if (cleanArtist.isNotEmpty()) "$cleanTitle · $cleanArtist" else cleanTitle
+
+      val scale = context.resources.displayMetrics.density.coerceIn(1.25f, 1.55f)
+      val widthPx = (284f * scale).roundToInt().coerceIn(340, 440)
+      val heightPx = (heightDp * scale).roundToInt().coerceIn(24, 56)
+      val bmp = Bitmap.createBitmap(widthPx, heightPx, Bitmap.Config.ARGB_8888)
+      val canvas = Canvas(bmp)
+
+      val styledSpan = SpannableString(
+        com.example.ui.theme.KhmerTypography.buildStyledSpannable(
+          context = context,
+          text = fullText,
+          isTitle = true,
+          khmerLyricsFont = khmerLyricsFont,
+          isBold = true
+        )
+      )
+      styledSpan.setSpan(
+        ForegroundColorSpan(titleColor),
+        0,
+        cleanTitle.length.coerceAtMost(styledSpan.length),
+        Spanned.SPAN_EXCLUSIVE_EXCLUSIVE
+      )
+      if (cleanArtist.isNotEmpty() && cleanTitle.length < styledSpan.length) {
+        styledSpan.setSpan(
+          ForegroundColorSpan(artistColor),
+          cleanTitle.length,
+          styledSpan.length,
+          Spanned.SPAN_EXCLUSIVE_EXCLUSIVE
+        )
+      }
+
+      val baseTypeface = com.example.ui.theme.KhmerTypography.loadOutfitTypeface(context)
+      val paint = TextPaint(Paint.ANTI_ALIAS_FLAG).apply {
+        typeface = baseTypeface
+        color = titleColor
+        textSize = baseTextSizeDp * scale
+        setShadowLayer(2.2f * scale, 0f, 0.8f * scale, 0x55000000)
+      }
+
+      val layout = StaticLayout.Builder
+        .obtain(styledSpan, 0, styledSpan.length, paint, widthPx)
+        .setAlignment(Layout.Alignment.ALIGN_NORMAL)
+        .setIncludePad(true)
+        .setMaxLines(maxLines)
+        .setEllipsize(TextUtils.TruncateAt.END)
+        .build()
+
+      val startY = ((heightPx - layout.height) * 0.5f).coerceAtLeast(0f)
+      canvas.save()
+      canvas.translate(0f, startY)
+      layout.draw(canvas)
       canvas.restore()
       bmp
     }.getOrNull()

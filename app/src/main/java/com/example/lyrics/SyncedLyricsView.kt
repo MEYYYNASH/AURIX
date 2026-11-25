@@ -288,6 +288,10 @@ class SyncedLyricsView @JvmOverloads constructor(
     }
   }
 
+  fun setKhmerLyricsFont(font: com.example.ui.theme.KhmerLyricsFont) {
+    adapter.setKhmerLyricsFont(font)
+  }
+
   fun setPlaybackAndForeground(playing: Boolean, foreground: Boolean) {
     val changed = isPlayingNow != playing || isForegroundActive != foreground
     isPlayingNow = playing

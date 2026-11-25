@@ -121,13 +121,13 @@ fun HomeScreen(
 ) {
   var selectedNewFilter by rememberSaveable { mutableStateOf(NewForYouFilter.ALL) }
   var showQuickAccessSection by rememberSaveable { mutableStateOf(true) }
-  var showArtistMixesSection by rememberSaveable { mutableStateOf(false) }
-  var showMyMixSection by rememberSaveable { mutableStateOf(false) }
-  var showNewForYouSection by rememberSaveable { mutableStateOf(false) }
-  var showRecentPlaySection by rememberSaveable { mutableStateOf(false) }
-  var showMoodsSection by rememberSaveable { mutableStateOf(false) }
-  var showMadeForYouSection by rememberSaveable { mutableStateOf(false) }
-  var showBecauseSection by rememberSaveable { mutableStateOf(false) }
+  var showArtistMixesSection by rememberSaveable { mutableStateOf(true) }
+  var showMyMixSection by rememberSaveable { mutableStateOf(true) }
+  var showNewForYouSection by rememberSaveable { mutableStateOf(true) }
+  var showRecentPlaySection by rememberSaveable { mutableStateOf(true) }
+  var showMoodsSection by rememberSaveable { mutableStateOf(true) }
+  var showMadeForYouSection by rememberSaveable { mutableStateOf(true) }
+  var showBecauseSection by rememberSaveable { mutableStateOf(true) }
   var showTrendingSection by rememberSaveable { mutableStateOf(true) }
 
   val sectionEnter = remember(reducedMotion) {

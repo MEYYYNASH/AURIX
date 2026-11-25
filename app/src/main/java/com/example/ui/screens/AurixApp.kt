@@ -279,11 +279,15 @@ private fun AurixMainShell(
   val githubRepo by viewModel.githubRepo.collectAsStateWithLifecycle()
   val lyricsAnimId by viewModel.lyricsAnim.collectAsStateWithLifecycle()
   val lyricsWidgetAnimId by viewModel.lyricsWidgetAnim.collectAsStateWithLifecycle()
+  val khmerLyricsFontId by viewModel.khmerLyricsFont.collectAsStateWithLifecycle()
   val appLyricsAnimStyle = remember(lyricsAnimId) {
     com.example.lyrics.LyricsAnimationStyle.fromId(lyricsAnimId)
   }
   val widgetLyricsAnimStyle = remember(lyricsWidgetAnimId) {
     com.example.lyrics.LyricsAnimationStyle.fromId(lyricsWidgetAnimId)
+  }
+  val khmerLyricsFont = remember(khmerLyricsFontId) {
+    com.example.ui.theme.KhmerLyricsFont.fromId(khmerLyricsFontId)
   }
 
   val featuredTracks by viewModel.featuredTracks.collectAsStateWithLifecycle()
@@ -1197,9 +1201,11 @@ private fun AurixMainShell(
               onResetDynamicBgCustomization = { viewModel.resetDynamicBgCustomization() },
               appLyricsAnim = appLyricsAnimStyle,
               widgetLyricsAnim = widgetLyricsAnimStyle,
+              khmerLyricsFont = khmerLyricsFont,
               onSelectLyricsAnimBoth = { viewModel.setLyricsAnimBoth(it) },
               onSelectLyricsAnimApp = { viewModel.setLyricsAnimApp(it) },
               onSelectLyricsAnimWidget = { viewModel.setLyricsAnimWidget(it) },
+              onSelectKhmerLyricsFont = { viewModel.setKhmerLyricsFont(it) },
               developerModeUnlocked = developerModeUnlocked,
               developerModeEnabled = developerModeEnabled,
               customLyricsList = allCustomLyrics,
@@ -1428,7 +1434,8 @@ private fun AurixMainShell(
             orbiTheme = activeOrbiTheme,
             orbiBeatEnergy = orbiBeatEnergy,
             onOpenOrbiCompanion = { showOrbiCompanionSheet = true },
-            widgetCustomizerConfig = widgetCustomizerConfig
+            widgetCustomizerConfig = widgetCustomizerConfig,
+            khmerLyricsFont = khmerLyricsFont
           )
         }
       }
@@ -1468,6 +1475,7 @@ private fun AurixMainShell(
           reducedMotion = reducedMotion,
           orbiMood = effectiveOrbiMood,
           orbiTheme = activeOrbiTheme,
+          khmerLyricsFont = khmerLyricsFont,
           onToggleVinylStyle = { isVinyl -> viewModel.setStandbyVinylStyle(isVinyl) },
           onPlayPause = { viewModel.togglePlayPause() },
           onNext = { viewModel.nextTrack() },

@@ -115,6 +115,7 @@ fun LiveWidgetPreviewCard(
   hasLyrics: Boolean,
   reducedMotion: Boolean,
   modifier: Modifier = Modifier,
+  khmerLyricsFont: com.example.ui.theme.KhmerLyricsFont = com.example.ui.theme.KhmerLyricsFont.KANTUMRUY_PRO,
   onContrastReport: ((WidgetContrastReport) -> Unit)? = null
 ) {
   val context = LocalContext.current
@@ -335,14 +336,19 @@ fun LiveWidgetPreviewCard(
 
         // Center lyric or title-only stage
         if (!showLyricsContent) {
+          val noLyricsTitleFontSize = if (sizeTier == WidgetSizeTier.SMALL) 14.sp else 16.sp
           Column(
             modifier = Modifier.fillMaxWidth(),
             verticalArrangement = Arrangement.Center
           ) {
             Text(
-              text = previewTitle,
+              text = com.example.ui.theme.rememberKhmerTitleText(
+                text = previewTitle,
+                baseFontSize = noLyricsTitleFontSize,
+                isBold = true
+              ),
               color = Color.White,
-              fontSize = if (sizeTier == WidgetSizeTier.SMALL) 14.sp else 16.sp,
+              fontSize = noLyricsTitleFontSize,
               fontWeight = FontWeight.Bold,
               maxLines = 2,
               overflow = TextOverflow.Ellipsis
@@ -357,48 +363,65 @@ fun LiveWidgetPreviewCard(
             )
           }
         } else {
-          Row(
+          val currentLyricFontSize = when (sizeTier) {
+            WidgetSizeTier.SMALL -> 13.5.sp
+            WidgetSizeTier.WIDE -> 15.5.sp
+            WidgetSizeTier.LARGE -> 17.5.sp
+          }
+          val nextLyricFontSize = if (sizeTier == WidgetSizeTier.SMALL) 10.5.sp else 12.sp
+          Column(
             modifier = Modifier.fillMaxWidth(),
-            verticalAlignment = Alignment.CenterVertically
+            verticalArrangement = Arrangement.Center
           ) {
-            Box(
-              modifier = Modifier
-                .width(3.dp)
-                .height(if (sizeTier == WidgetSizeTier.SMALL) 24.dp else 32.dp)
-                .clip(RoundedCornerShape(50))
-                .background(
-                  Brush.verticalGradient(listOf(Color(0xFF43C7F4), Color(0xFF7965FF)))
-                )
-            )
-            Spacer(modifier = Modifier.width(9.dp))
-            Column(modifier = Modifier.weight(1f)) {
+            Row(
+              modifier = Modifier.fillMaxWidth(),
+              verticalAlignment = Alignment.CenterVertically
+            ) {
+              Box(
+                modifier = Modifier
+                  .width(3.5.dp)
+                  .height(if (sizeTier == WidgetSizeTier.SMALL) 22.dp else 26.dp)
+                  .clip(RoundedCornerShape(50))
+                  .background(
+                    Brush.verticalGradient(listOf(Color(0xFF43C7F4), Color(0xFF7965FF)))
+                  )
+              )
+              Spacer(modifier = Modifier.width(10.dp))
               Text(
-                text = displayCurrent,
+                text = com.example.ui.theme.rememberKhmerLyricsText(
+                  text = displayCurrent,
+                  khmerLyricsFont = khmerLyricsFont,
+                  baseFontSize = currentLyricFontSize,
+                  isBold = true
+                ),
                 color = Color.White,
-                fontSize = when (sizeTier) {
-                  WidgetSizeTier.SMALL -> 13.5.sp
-                  WidgetSizeTier.WIDE -> 15.5.sp
-                  WidgetSizeTier.LARGE -> 17.5.sp
-                },
+                fontSize = currentLyricFontSize,
                 fontWeight = FontWeight.Bold,
                 lineHeight = when (sizeTier) {
-                  WidgetSizeTier.SMALL -> 18.sp
-                  WidgetSizeTier.WIDE -> 21.sp
-                  WidgetSizeTier.LARGE -> 23.sp
+                  WidgetSizeTier.SMALL -> 19.sp
+                  WidgetSizeTier.WIDE -> 22.sp
+                  WidgetSizeTier.LARGE -> 24.sp
                 },
                 maxLines = 2,
-                overflow = TextOverflow.Ellipsis
+                overflow = TextOverflow.Ellipsis,
+                modifier = Modifier.weight(1f)
               )
-              if (displayNext.isNotBlank()) {
-                Spacer(modifier = Modifier.height(2.dp))
-                Text(
+            }
+            if (displayNext.isNotBlank()) {
+              Spacer(modifier = Modifier.height(3.dp))
+              Text(
+                text = com.example.ui.theme.rememberKhmerLyricsText(
                   text = displayNext,
-                  color = Color.White.copy(alpha = 0.66f),
-                  fontSize = if (sizeTier == WidgetSizeTier.SMALL) 10.5.sp else 12.sp,
-                  maxLines = 1,
-                  overflow = TextOverflow.Ellipsis
-                )
-              }
+                  khmerLyricsFont = khmerLyricsFont,
+                  baseFontSize = nextLyricFontSize,
+                  isBold = false
+                ),
+                color = Color.White.copy(alpha = 0.66f),
+                fontSize = nextLyricFontSize,
+                maxLines = 1,
+                overflow = TextOverflow.Ellipsis,
+                modifier = Modifier.padding(start = 13.5.dp)
+              )
             }
           }
         }
@@ -406,10 +429,14 @@ fun LiveWidgetPreviewCard(
         // Bottom song footer (hidden when song has no lyrics since title+artist is centered)
         if (showLyricsContent) {
           Text(
-            text = "$previewTitle · $previewArtist",
-            color = Color.White.copy(alpha = 0.78f),
-            fontSize = 11.sp,
-            fontWeight = FontWeight.Medium,
+            text = com.example.ui.theme.rememberKhmerTitleText(
+              text = "$previewTitle · $previewArtist",
+              baseFontSize = 11.5.sp,
+              isBold = true
+            ),
+            color = Color.White.copy(alpha = 0.88f),
+            fontSize = 11.5.sp,
+            fontWeight = FontWeight.Bold,
             maxLines = 1,
             overflow = TextOverflow.Ellipsis
           )

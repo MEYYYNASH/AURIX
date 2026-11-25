@@ -126,9 +126,11 @@ fun SettingsScreen(
   onResetDynamicBgCustomization: () -> Unit = {},
   appLyricsAnim: com.example.lyrics.LyricsAnimationStyle = com.example.lyrics.LyricsAnimationStyle.SLIDE_UP,
   widgetLyricsAnim: com.example.lyrics.LyricsAnimationStyle = com.example.lyrics.LyricsAnimationStyle.SLIDE_UP,
+  khmerLyricsFont: com.example.ui.theme.KhmerLyricsFont = com.example.ui.theme.KhmerLyricsFont.KANTUMRUY_PRO,
   onSelectLyricsAnimBoth: (com.example.lyrics.LyricsAnimationStyle) -> Unit = {},
   onSelectLyricsAnimApp: (com.example.lyrics.LyricsAnimationStyle) -> Unit = {},
   onSelectLyricsAnimWidget: (com.example.lyrics.LyricsAnimationStyle) -> Unit = {},
+  onSelectKhmerLyricsFont: (com.example.ui.theme.KhmerLyricsFont) -> Unit = {},
   developerModeUnlocked: Boolean = false,
   developerModeEnabled: Boolean = false,
   customLyricsList: List<com.example.data.CustomLyricsEntity> = emptyList(),
@@ -963,6 +965,18 @@ fun SettingsScreen(
               tint = MaterialTheme.colorScheme.primary
             )
           }
+
+          HorizontalDivider(color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.08f))
+
+          // Khmer Lyrics Font Picker (Kantumruy Pro, Koulen, Noto Sans Khmer) + Dangrek Title Font
+          KhmerLyricsFontSelectorCard(
+            selectedFont = khmerLyricsFont,
+            darkTheme = darkTheme,
+            onSelectFont = onSelectKhmerLyricsFont,
+            modifier = Modifier
+              .padding(horizontal = 14.dp, vertical = 10.dp)
+              .testTag("settings_khmer_lyrics_font_section")
+          )
         }
       }
     }
@@ -1532,11 +1546,13 @@ fun SettingsScreen(
     LyricsAnimationSheet(
       appLyricsAnim = appLyricsAnim,
       widgetLyricsAnim = widgetLyricsAnim,
+      khmerLyricsFont = khmerLyricsFont,
       reducedMotion = reducedMotion,
       darkTheme = darkTheme,
       onSelectBoth = onSelectLyricsAnimBoth,
       onSelectApp = onSelectLyricsAnimApp,
       onSelectWidget = onSelectLyricsAnimWidget,
+      onSelectKhmerLyricsFont = onSelectKhmerLyricsFont,
       onDismiss = { showLyricsAnimationSheet = false }
     )
   }

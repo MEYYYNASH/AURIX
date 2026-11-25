@@ -127,6 +127,7 @@ fun AmbientStandbyScreen(
   reducedMotion: Boolean,
   orbiMood: OrbiMood = OrbiMood.CLASSIC_IDLE,
   orbiTheme: OrbiCompanionTheme = OrbiCompanionTheme.CLASSIC,
+  khmerLyricsFont: com.example.ui.theme.KhmerLyricsFont = com.example.ui.theme.KhmerLyricsFont.KANTUMRUY_PRO,
   onToggleVinylStyle: (Boolean) -> Unit,
   onPlayPause: () -> Unit,
   onNext: () -> Unit,
@@ -324,7 +325,8 @@ fun AmbientStandbyScreen(
             isPlaying = isPlaying,
             accent = accentPrimary,
             reducedMotion = reducedMotion,
-            centered = false
+            centered = false,
+            khmerLyricsFont = khmerLyricsFont
           )
         }
       }
@@ -367,7 +369,8 @@ fun AmbientStandbyScreen(
           isPlaying = isPlaying,
           accent = accentPrimary,
           reducedMotion = reducedMotion,
-          centered = true
+          centered = true,
+          khmerLyricsFont = khmerLyricsFont
         )
       }
     }
@@ -719,7 +722,8 @@ private fun StandbyLyricsAndTrackPanel(
   isPlaying: Boolean,
   accent: Color,
   reducedMotion: Boolean,
-  centered: Boolean
+  centered: Boolean,
+  khmerLyricsFont: com.example.ui.theme.KhmerLyricsFont = com.example.ui.theme.KhmerLyricsFont.KANTUMRUY_PRO
 ) {
   val horizontalAlign = if (centered) Alignment.CenterHorizontally else Alignment.Start
   val textAlign = if (centered) TextAlign.Center else TextAlign.Start
@@ -740,25 +744,31 @@ private fun StandbyLyricsAndTrackPanel(
     }
 
     if (lyricSnap.hasLyrics && lyricSnap.currentLine.isNotBlank()) {
-      AnimatedContent(
-        targetState = lyricSnap.currentLine to lyricSnap.nextLine,
-        transitionSpec = {
-          if (reducedMotion) {
-            fadeIn(snap()) togetherWith fadeOut(snap())
-          } else {
-            (slideInVertically(tween(340, easing = FastOutSlowInEasing)) { it / 3 } + fadeIn(tween(260))) togetherWith
-              (slideOutVertically(tween(260)) { -it / 3 } + fadeOut(tween(200)))
-          }
-        },
-        label = "standby_lyric_transition"
-      ) { (currentLine, nextLine) ->
-        Column(
-          modifier = Modifier.fillMaxWidth(),
-          horizontalAlignment = horizontalAlign,
-          verticalArrangement = Arrangement.spacedBy(6.dp)
-        ) {
+      Column(
+        modifier = Modifier.fillMaxWidth(),
+        horizontalAlignment = horizontalAlign,
+        verticalArrangement = Arrangement.spacedBy(6.dp)
+      ) {
+        // Animation applies ONLY to the currently displayed lyric line
+        AnimatedContent(
+          targetState = lyricSnap.currentLine,
+          transitionSpec = {
+            if (reducedMotion) {
+              fadeIn(snap()) togetherWith fadeOut(snap())
+            } else {
+              (slideInVertically(tween(340, easing = FastOutSlowInEasing)) { it / 3 } + fadeIn(tween(260))) togetherWith
+                (slideOutVertically(tween(260)) { -it / 3 } + fadeOut(tween(200)))
+            }
+          },
+          label = "standby_lyric_transition"
+        ) { currentLine ->
           Text(
-            text = currentLine,
+            text = com.example.ui.theme.rememberKhmerLyricsText(
+              text = currentLine,
+              khmerLyricsFont = khmerLyricsFont,
+              baseFontSize = 24.sp,
+              isBold = true
+            ),
             style = MaterialTheme.typography.headlineSmall.copy(
               fontWeight = FontWeight.Bold,
               lineHeight = 32.sp
@@ -768,16 +778,22 @@ private fun StandbyLyricsAndTrackPanel(
             maxLines = 2,
             overflow = TextOverflow.Ellipsis
           )
-          if (nextLine.isNotBlank()) {
-            Text(
-              text = nextLine,
-              style = MaterialTheme.typography.bodyMedium.copy(lineHeight = 22.sp),
-              color = Color.White.copy(alpha = 0.44f),
-              textAlign = textAlign,
-              maxLines = 1,
-              overflow = TextOverflow.Ellipsis
-            )
-          }
+        }
+        // Upcoming lyric stays completely static (no animation until it becomes the current line)
+        if (lyricSnap.nextLine.isNotBlank()) {
+          Text(
+            text = com.example.ui.theme.rememberKhmerLyricsText(
+              text = lyricSnap.nextLine,
+              khmerLyricsFont = khmerLyricsFont,
+              baseFontSize = 15.sp,
+              isBold = false
+            ),
+            style = MaterialTheme.typography.bodyMedium.copy(lineHeight = 22.sp),
+            color = Color.White.copy(alpha = 0.44f),
+            textAlign = textAlign,
+            maxLines = 1,
+            overflow = TextOverflow.Ellipsis
+          )
         }
       }
     }
@@ -799,7 +815,11 @@ private fun StandbyLyricsAndTrackPanel(
       verticalArrangement = Arrangement.spacedBy(2.dp)
     ) {
       Text(
-        text = song.title,
+        text = com.example.ui.theme.rememberKhmerTitleText(
+          text = song.title,
+          baseFontSize = 16.sp,
+          isBold = true
+        ),
         style = MaterialTheme.typography.titleMedium.copy(fontWeight = FontWeight.Bold),
         color = Color.White.copy(alpha = 0.92f),
         textAlign = textAlign,

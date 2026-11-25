@@ -755,4 +755,12 @@
     <string name="edit_cover_studio_blur_label">កម្រិតព្រិល</string>
     <string name="edit_cover_studio_title_label">ចំណងជើងគម្រប</string>
     <string name="edit_cover_studio_saved">បានរក្សាទុកគម្របស្ទូឌីយោ</string>
+
+    <!-- Khmer Lyrics Font Picker & Dangrek Title Typography (v2.1.3) -->
+    <string name="settings_khmer_lyrics_font_title">ពុម្ពអក្សរខ្មែរសម្រាប់ទំនុកច្រៀង</string>
+    <string name="settings_khmer_lyrics_font_subtitle">ចំណងជើងប្រើ Dangrek · ខ្មែរ និង English មានទំហំប៉ុនគ្នាស្វ័យប្រវត្តិ</string>
+    <string name="khmer_font_kantumruy_pro">Kantumruy Pro</string>
+    <string name="khmer_font_koulen">Koulen</string>
+    <string name="khmer_font_noto_sans_khmer">Noto Sans Khmer</string>
+    <string name="khmer_title_font_dangrek_badge">ចំណងជើង៖ Dangrek</string>
 </resources>

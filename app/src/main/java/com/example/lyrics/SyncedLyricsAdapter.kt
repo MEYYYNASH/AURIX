@@ -23,6 +23,8 @@ import android.view.animation.PathInterpolator
 import android.widget.FrameLayout
 import android.widget.TextView
 import androidx.recyclerview.widget.RecyclerView
+import com.example.ui.theme.KhmerLyricsFont
+import com.example.ui.theme.KhmerTypography
 import kotlin.math.abs
 import kotlin.math.roundToInt
 
@@ -80,13 +82,30 @@ class LyricLineTextView(context: Context) : TextView(context) {
     if (changed) invalidate()
   }
 
-  fun bindLine(line: ParsedLyricLine, active: Boolean) {
+  private var lastBoundDisplay: String = ""
+  private var lastBoundFont: KhmerLyricsFont? = null
+  private var lastBoundBold: Boolean? = null
+
+  fun bindLine(
+    line: ParsedLyricLine,
+    active: Boolean,
+    khmerLyricsFont: KhmerLyricsFont = KhmerLyricsFont.KANTUMRUY_PRO
+  ) {
     val lineChanged = parsedLine != line
     parsedLine = line
     isActiveLine = active
     val display = line.text.ifBlank { "•••" }
-    if (text.toString() != display) {
-      text = display
+    if (lastBoundDisplay != display || lastBoundFont != khmerLyricsFont || lastBoundBold != active) {
+      lastBoundDisplay = display
+      lastBoundFont = khmerLyricsFont
+      lastBoundBold = active
+      text = KhmerTypography.buildStyledSpannable(
+        context = context,
+        text = display,
+        isTitle = false,
+        khmerLyricsFont = khmerLyricsFont,
+        isBold = active
+      )
     }
     if (lineChanged && !active) {
       karaokeProgress = 1f
@@ -406,6 +425,7 @@ class SyncedLyricsAdapter(
   private var textColor = Color.WHITE
   private var reducedMotion = false
   private var animationStyle = LyricsAnimationStyle.SLIDE_UP
+  private var khmerLyricsFont = KhmerLyricsFont.KANTUMRUY_PRO
   private var isPlayingNow = true
   private var isForegroundActive = true
 
@@ -452,6 +472,16 @@ class SyncedLyricsAdapter(
     }
   }
 
+  fun setKhmerLyricsFont(font: KhmerLyricsFont) {
+    if (khmerLyricsFont == font) return
+    khmerLyricsFont = font
+    if (lines.isNotEmpty()) {
+      notifyItemRangeChanged(0, lines.size, PAYLOAD_STATE_CHANGED)
+    }
+  }
+
+  fun getKhmerLyricsFont(): KhmerLyricsFont = khmerLyricsFont
+
   fun getAnimationStyle(): LyricsAnimationStyle = animationStyle
 
   fun setPlaybackAndForeground(playing: Boolean, foreground: Boolean) {
@@ -491,34 +521,25 @@ class SyncedLyricsAdapter(
     previousActiveIndex = oldIndex
     activeIndex = newIndex
 
-    val safeNotify: (Int, Int, Int) -> Unit = { start, count, payload ->
-      val rv = attachedRecyclerView
-      if (rv != null && rv.isComputingLayout) {
-        rv.post {
-          runCatching { notifyItemRangeChanged(start, count, payload) }
+    val safeNotifyItem: (Int, Int) -> Unit = { idx, payload ->
+      if (idx in 0 until lines.size) {
+        val rv = attachedRecyclerView
+        if (rv != null && rv.isComputingLayout) {
+          rv.post {
+            runCatching { notifyItemChanged(idx, payload) }
+          }
+        } else {
+          runCatching { notifyItemChanged(idx, payload) }
         }
-      } else {
-        runCatching { notifyItemRangeChanged(start, count, payload) }
       }
     }
 
-    if (oldIndex >= 0 && lines.isNotEmpty()) {
-      val start = (oldIndex - 4).coerceAtLeast(0)
-      val end = (oldIndex + 4).coerceAtMost(lines.lastIndex)
-      if (end >= start) {
-        safeNotify(start, end - start + 1, PAYLOAD_STATE_CHANGED)
-      }
+    // Only notify the outgoing line and the newly active line so upcoming lines never animate early
+    if (oldIndex >= 0) {
+      safeNotifyItem(oldIndex, PAYLOAD_STATE_CHANGED)
     }
-    if (newIndex >= 0 && lines.isNotEmpty()) {
-      val start = (newIndex - 4).coerceAtLeast(0)
-      val end = (newIndex + 4).coerceAtMost(lines.lastIndex)
-      if (end >= start) {
-        safeNotify(start, end - start + 1, PAYLOAD_STATE_CHANGED)
-      }
-    }
-    if (oldIndex == -1 || newIndex == -1) {
-      val count = minOf(5, lines.size)
-      if (count > 0) safeNotify(0, count, PAYLOAD_STATE_CHANGED)
+    if (newIndex >= 0) {
+      safeNotifyItem(newIndex, PAYLOAD_STATE_CHANGED)
     }
   }
 
@@ -659,29 +680,18 @@ class SyncedLyricsAdapter(
       val targetAlpha = when {
         !isSynced -> 0.90f
         isActive -> 1.0f
-        distance == 1 -> 0.56f
-        distance == 2 -> 0.35f
-        distance == 3 -> 0.22f
-        else -> 0.15f
+        else -> 0.42f
       }
-      val targetScale = when {
-        !isSynced -> 1.0f
-        isActive -> 1.0f
-        distance == 1 -> 0.965f
-        else -> 0.945f
-      }
-      val targetTranslationY = when {
-        !isSynced || isActive -> 0f
-        position > activeIndex -> 2.5f * density
-        else -> -1.5f * density
-      }
+      val targetScale = 1.0f
+      val targetTranslationY = 0f
 
+      textView.typeface = if (isActive) extraBoldTypeface else semiBoldTypeface
       textView.setAnimationConfig(animationStyle, reducedMotion, isPlayingNow && isForegroundActive)
       if (fullBind) {
-        textView.bindLine(line, isActive)
+        textView.bindLine(line, isActive, khmerLyricsFont)
         textView.resetReveal(fullReveal = !isActive || reducedMotion)
       } else {
-        textView.bindLine(line, isActive)
+        textView.bindLine(line, isActive, khmerLyricsFont)
         if (!isActive || reducedMotion) {
           textView.resetReveal(fullReveal = true)
         } else if (!wasActive) {
@@ -700,19 +710,18 @@ class SyncedLyricsAdapter(
       )
       textView.setHighlightColors(textColor, dimmedHighlight)
 
-      val stateChanged = lastAppliedActive != isActive || lastAppliedAlpha != targetAlpha
       val justBecameActive = isActive && !wasActive
-      val justBecameInactive = !isActive && wasActive && position == previousActiveIndex
       lastAppliedActive = isActive
       lastAppliedAlpha = targetAlpha
 
-      textView.typeface = if (isActive) extraBoldTypeface else semiBoldTypeface
       textView.pivotX = 0f
       textView.pivotY = (textView.height.takeIf { it > 0 } ?: (26f * density).toInt()) * 0.5f
 
       val canRunMotion = !fullBind && !reducedMotion && isPlayingNow && isForegroundActive
 
-      if (!canRunMotion) {
+      // Strictly enforce: ONLY the currently active lyric line receives animation.
+      // Upcoming or inactive lyric lines stay completely static until they become the active line.
+      if (!isActive || !canRunMotion) {
         cancelAnimators()
         textView.alpha = targetAlpha
         textView.scaleX = targetScale
@@ -813,41 +822,6 @@ class SyncedLyricsAdapter(
             textView.alpha = 1f
           }
         }
-      } else if (justBecameInactive && animationStyle == LyricsAnimationStyle.SLIDE_UP) {
-        // Previous line fades out and briefly blurs as it yields to the incoming line
-        cancelAnimators()
-        val startAlpha = textView.alpha
-        val anim = ValueAnimator.ofFloat(0f, 1f).apply {
-          duration = 460L
-          interpolator = SMOOTH_EASE
-          addUpdateListener { va ->
-            val f = va.animatedValue as Float
-            textView.alpha = startAlpha + (targetAlpha - startAlpha) * f
-            textView.scaleX = 1f + (targetScale - 1f) * f
-            textView.scaleY = 1f + (targetScale - 1f) * f
-            textView.translationY = targetTranslationY * f
-            // Soft blur peak during hand-off then gently resolves to crisp history text
-            val blurPulse = kotlin.math.sin(f * Math.PI).toFloat() * 4.5f
-            applyBlurDp(blurPulse)
-          }
-          addListener(object : AnimatorListenerAdapter() {
-            override fun onAnimationEnd(animation: Animator) {
-              clearBlurEffect()
-            }
-          })
-        }
-        activeValueAnimator = anim
-        anim.start()
-      } else if (stateChanged) {
-        cancelAnimators()
-        textView.animate()
-          .alpha(targetAlpha)
-          .scaleX(targetScale)
-          .scaleY(targetScale)
-          .translationY(targetTranslationY)
-          .setDuration(280L)
-          .setInterpolator(SMOOTH_EASE)
-          .start()
       }
     }
 

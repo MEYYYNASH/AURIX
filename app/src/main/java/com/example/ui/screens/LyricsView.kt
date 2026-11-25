@@ -42,6 +42,7 @@ fun LyricsView(
   isPreviewClip: Boolean = false,
   isPlaying: Boolean = true,
   lyricsAnimationStyle: LyricsAnimationStyle = LyricsAnimationStyle.SLIDE_UP,
+  khmerLyricsFont: com.example.ui.theme.KhmerLyricsFont = com.example.ui.theme.KhmerLyricsFont.KANTUMRUY_PRO,
   accentColor: Color = Color.White,
   reducedMotion: Boolean = false,
   onLineClick: (Long) -> Unit,
@@ -203,6 +204,7 @@ fun LyricsView(
         .testTag("synced_lyrics_recycler_host"),
       factory = { context ->
         val lyricsView = SyncedLyricsView(context)
+        lyricsView.setKhmerLyricsFont(khmerLyricsFont)
         lyricsView.positionProvider = { latestPositionProvider() }
         lyricsView.onLineClick = { targetSeekMs ->
           if (latestIsPreview) {
@@ -219,6 +221,7 @@ fun LyricsView(
         view.setStyleColors(accentColor.toArgb(), android.graphics.Color.WHITE)
         view.setReducedMotion(reducedMotion)
         view.setAnimationStyle(lyricsAnimationStyle)
+        view.setKhmerLyricsFont(khmerLyricsFont)
         view.setPlaybackAndForeground(playing = isPlaying, foreground = isAppForeground)
         if (rawLyricsText.isNullOrBlank()) {
           view.clear()

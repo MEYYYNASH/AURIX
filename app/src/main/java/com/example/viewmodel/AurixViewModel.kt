@@ -210,6 +210,11 @@ class AurixViewModel(application: Application) : AndroidViewModel(application) {
     SharingStarted.Eagerly,
     com.example.lyrics.LyricsAnimationStyle.DEFAULT_ID
   )
+  val khmerLyricsFont: StateFlow<String> = prefsManager.khmerLyricsFont.stateIn(
+    viewModelScope,
+    SharingStarted.Eagerly,
+    com.example.ui.theme.KhmerLyricsFont.DEFAULT_ID
+  )
   val developerModeUnlocked: StateFlow<Boolean> = prefsManager.developerModeUnlocked.stateIn(
     viewModelScope,
     SharingStarted.Eagerly,
@@ -1470,6 +1475,18 @@ class AurixViewModel(application: Application) : AndroidViewModel(application) {
             language = settings.lang,
             reducedMotion = settings.reducedMotion,
             lyricsWidgetAnimStyle = settings.widgetAnim,
+            khmerLyricsFont = khmerLyricsFont.value,
+            refreshWidgetsNow = true
+          )
+        }
+      }
+    }
+    viewModelScope.launch {
+      khmerLyricsFont.collectLatest { fontId ->
+        runCatching {
+          AurixWidgetController.syncAmbientGlowAndSettings(
+            context = appCtx,
+            khmerLyricsFont = fontId,
             refreshWidgetsNow = true
           )
         }
@@ -5308,6 +5325,16 @@ class AurixViewModel(application: Application) : AndroidViewModel(application) {
       AurixWidgetController.syncAmbientGlowAndSettings(
         context = getApplication(),
         lyricsWidgetAnimStyle = style.id,
+        refreshWidgetsNow = true
+      )
+    }
+  }
+  fun setKhmerLyricsFont(font: com.example.ui.theme.KhmerLyricsFont) {
+    safeLaunch(notifyUser = false) {
+      prefsManager.setKhmerLyricsFont(font.id)
+      AurixWidgetController.syncAmbientGlowAndSettings(
+        context = getApplication(),
+        khmerLyricsFont = font.id,
         refreshWidgetsNow = true
       )
     }

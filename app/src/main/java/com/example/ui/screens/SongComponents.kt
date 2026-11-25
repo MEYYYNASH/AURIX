@@ -1107,7 +1107,11 @@ fun LibraryFramelessTrackRow(
       verticalArrangement = Arrangement.spacedBy(4.dp)
     ) {
       Text(
-        text = song.title,
+        text = com.example.ui.theme.rememberKhmerTitleText(
+          text = song.title,
+          baseFontSize = 15.sp,
+          isBold = true
+        ),
         style = MaterialTheme.typography.bodyMedium.copy(
           fontSize = 15.sp,
           lineHeight = 19.sp,
@@ -1499,7 +1503,11 @@ private fun StandaloneSongCard(
             verticalArrangement = Arrangement.spacedBy(4.dp)
           ) {
             Text(
-              text = song.title,
+              text = com.example.ui.theme.rememberKhmerTitleText(
+                text = song.title,
+                baseFontSize = 14.sp,
+                isBold = true
+              ),
               style = MaterialTheme.typography.bodyMedium.copy(fontWeight = FontWeight.Bold),
               maxLines = 1,
               overflow = TextOverflow.Ellipsis,

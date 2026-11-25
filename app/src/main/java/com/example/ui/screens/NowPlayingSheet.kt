@@ -146,7 +146,8 @@ fun NowPlayingSheet(
   orbiTheme: OrbiCompanionTheme = OrbiCompanionTheme.CLASSIC,
   orbiBeatEnergy: Float = 0f,
   onOpenOrbiCompanion: () -> Unit = {},
-  widgetCustomizerConfig: com.example.widget.WidgetCustomizerConfig = com.example.widget.WidgetCustomizerConfig.DEFAULT
+  widgetCustomizerConfig: com.example.widget.WidgetCustomizerConfig = com.example.widget.WidgetCustomizerConfig.DEFAULT,
+  khmerLyricsFont: com.example.ui.theme.KhmerLyricsFont = com.example.ui.theme.KhmerLyricsFont.KANTUMRUY_PRO
 ) {
   BackHandler { onClose() }
   LaunchedEffect(song.id) {
@@ -379,7 +380,8 @@ fun NowPlayingSheet(
             developerModeEnabled = developerModeEnabled,
             onOpenLyricsEditor = onOpenLyricsEditor,
             widgetCustomizerConfig = widgetCustomizerConfig,
-            songArtworkUrl = song.artworkUrl
+            songArtworkUrl = song.artworkUrl,
+            khmerLyricsFont = khmerLyricsFont
           )
         } else {
           Column(
@@ -461,7 +463,11 @@ fun NowPlayingSheet(
               Column(modifier = Modifier.weight(1f)) {
                 Row(verticalAlignment = Alignment.CenterVertically) {
                   Text(
-                    text = song.title,
+                    text = com.example.ui.theme.rememberKhmerTitleText(
+                      text = song.title,
+                      baseFontSize = 22.sp,
+                      isBold = true
+                    ),
                     style = MaterialTheme.typography.titleLarge.copy(fontSize = 22.sp, fontWeight = FontWeight.Bold),
                     maxLines = 2,
                     overflow = TextOverflow.Ellipsis,
@@ -519,7 +525,12 @@ fun NowPlayingSheet(
                   modifier = Modifier.size(16.dp)
                 )
                 Text(
-                  text = activeLyricLine.text,
+                  text = com.example.ui.theme.rememberKhmerLyricsText(
+                    text = activeLyricLine.text,
+                    khmerLyricsFont = khmerLyricsFont,
+                    baseFontSize = 13.sp,
+                    isBold = true
+                  ),
                   style = MaterialTheme.typography.bodySmall.copy(fontWeight = FontWeight.SemiBold),
                   color = Color.White.copy(alpha = 0.94f),
                   maxLines = 1,

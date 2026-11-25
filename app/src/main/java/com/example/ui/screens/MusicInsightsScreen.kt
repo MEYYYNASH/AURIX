@@ -83,11 +83,11 @@ fun MusicInsightsScreen(
   onSongClick: (Song, List<Song>) -> Unit,
   onFavoriteClick: (Song) -> Unit
 ) {
-  var showDnaCard by rememberSaveable { mutableStateOf(false) }
-  var showOrbiCard by rememberSaveable { mutableStateOf(false) }
-  var showMostPlayedCard by rememberSaveable { mutableStateOf(false) }
-  var showTrendingCard by rememberSaveable { mutableStateOf(false) }
-  var showRisingArtistsCard by rememberSaveable { mutableStateOf(false) }
+  var showDnaCard by rememberSaveable { mutableStateOf(true) }
+  var showOrbiCard by rememberSaveable { mutableStateOf(true) }
+  var showMostPlayedCard by rememberSaveable { mutableStateOf(true) }
+  var showTrendingCard by rememberSaveable { mutableStateOf(true) }
+  var showRisingArtistsCard by rememberSaveable { mutableStateOf(true) }
 
   val cardEnter = remember(reducedMotion) {
     if (reducedMotion) fadeIn(snap()) else expandVertically(tween(240)) + fadeIn(tween(200))

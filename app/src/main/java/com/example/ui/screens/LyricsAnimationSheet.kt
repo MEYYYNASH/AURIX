@@ -125,11 +125,13 @@ fun lyricsAnimDescription(style: LyricsAnimationStyle): String {
 fun LyricsAnimationSheet(
   appLyricsAnim: LyricsAnimationStyle,
   widgetLyricsAnim: LyricsAnimationStyle,
+  khmerLyricsFont: com.example.ui.theme.KhmerLyricsFont = com.example.ui.theme.KhmerLyricsFont.KANTUMRUY_PRO,
   reducedMotion: Boolean,
   darkTheme: Boolean,
   onSelectBoth: (LyricsAnimationStyle) -> Unit,
   onSelectApp: (LyricsAnimationStyle) -> Unit,
   onSelectWidget: (LyricsAnimationStyle) -> Unit,
+  onSelectKhmerLyricsFont: (com.example.ui.theme.KhmerLyricsFont) -> Unit = {},
   onDismiss: () -> Unit
 ) {
   val context = LocalContext.current
@@ -388,6 +390,18 @@ fun LyricsAnimationSheet(
         }
       }
 
+      Spacer(modifier = Modifier.height(10.dp))
+
+      // Khmer Lyrics Font Picker (Kantumruy Pro, Koulen, Noto Sans Khmer) + Dangrek Title badge
+      KhmerLyricsFontSelectorCard(
+        selectedFont = khmerLyricsFont,
+        darkTheme = darkTheme,
+        onSelectFont = { font ->
+          haptics.performHapticFeedback(HapticFeedbackType.TextHandleMove)
+          onSelectKhmerLyricsFont(font)
+        }
+      )
+
       Spacer(modifier = Modifier.height(12.dp))
 
       LazyColumn(
@@ -408,6 +422,7 @@ fun LyricsAnimationSheet(
             showAppTag = showAppTag,
             showWidgetTag = showWidgetTag,
             activeTarget = activeTarget,
+            khmerLyricsFont = khmerLyricsFont,
             previewClockMs = previewClockMs,
             motionDisabled = motionDisabled,
             darkTheme = darkTheme,
@@ -429,12 +444,143 @@ fun LyricsAnimationSheet(
 }
 
 @Composable
+fun KhmerLyricsFontSelectorCard(
+  selectedFont: com.example.ui.theme.KhmerLyricsFont,
+  darkTheme: Boolean,
+  onSelectFont: (com.example.ui.theme.KhmerLyricsFont) -> Unit,
+  modifier: Modifier = Modifier
+) {
+  Column(
+    modifier = modifier
+      .fillMaxWidth()
+      .clip(RoundedCornerShape(18.dp))
+      .background(
+        if (darkTheme) Color(0xFF151F30) else MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.56f)
+      )
+      .border(
+        1.dp,
+        if (darkTheme) Color(0xFF273348) else MaterialTheme.colorScheme.outline.copy(alpha = 0.18f),
+        RoundedCornerShape(18.dp)
+      )
+      .padding(horizontal = 14.dp, vertical = 11.dp)
+      .testTag("khmer_lyrics_font_selector_card"),
+    verticalArrangement = Arrangement.spacedBy(8.dp)
+  ) {
+    Row(
+      modifier = Modifier.fillMaxWidth(),
+      horizontalArrangement = Arrangement.SpaceBetween,
+      verticalAlignment = Alignment.CenterVertically
+    ) {
+      Column(modifier = Modifier.weight(1f)) {
+        Text(
+          text = stringResource(id = R.string.settings_khmer_lyrics_font_title),
+          style = MaterialTheme.typography.labelLarge.copy(fontWeight = FontWeight.Bold),
+          color = MaterialTheme.colorScheme.onSurface
+        )
+        Text(
+          text = stringResource(id = R.string.settings_khmer_lyrics_font_subtitle),
+          style = MaterialTheme.typography.labelSmall.copy(fontSize = 11.sp, lineHeight = 15.sp),
+          color = MaterialTheme.colorScheme.onSurfaceVariant
+        )
+      }
+      Spacer(modifier = Modifier.width(8.dp))
+      Surface(
+        shape = RoundedCornerShape(999.dp),
+        color = BorderCyan.copy(alpha = 0.14f),
+        border = BorderStroke(0.75.dp, BorderCyan.copy(alpha = 0.36f))
+      ) {
+        Text(
+          text = stringResource(id = R.string.khmer_title_font_dangrek_badge),
+          style = MaterialTheme.typography.labelSmall.copy(
+            fontFamily = com.example.ui.theme.AurixFontFamilies.DangrekTitleFamily,
+            fontWeight = FontWeight.Bold,
+            fontSize = 10.5.sp
+          ),
+          color = BorderCyan,
+          modifier = Modifier.padding(horizontal = 9.dp, vertical = 3.dp)
+        )
+      }
+    }
+
+    Row(
+      modifier = Modifier.fillMaxWidth(),
+      horizontalArrangement = Arrangement.spacedBy(6.dp)
+    ) {
+      com.example.ui.theme.KhmerLyricsFont.entries.forEach { fontOption ->
+        val selected = selectedFont == fontOption
+        val fontFamily = com.example.ui.theme.AurixFontFamilies.composeFamilyForLyricsFont(fontOption)
+        Box(
+          modifier = Modifier
+            .weight(1f)
+            .heightIn(min = 42.dp)
+            .clip(RoundedCornerShape(13.dp))
+            .background(
+              if (selected) {
+                Brush.linearGradient(
+                  listOf(
+                    BorderCyan.copy(alpha = if (darkTheme) 0.24f else 0.18f),
+                    BorderPurple.copy(alpha = if (darkTheme) 0.24f else 0.18f)
+                  )
+                )
+              } else {
+                Brush.linearGradient(
+                  listOf(
+                    if (darkTheme) Color.White.copy(alpha = 0.05f) else Color.White.copy(alpha = 0.72f),
+                    if (darkTheme) Color.White.copy(alpha = 0.05f) else Color.White.copy(alpha = 0.72f)
+                  )
+                )
+              }
+            )
+            .border(
+              width = if (selected) 1.5.dp else 1.dp,
+              color = if (selected) BorderCyan else if (darkTheme) Color.White.copy(alpha = 0.12f) else MaterialTheme.colorScheme.outline.copy(alpha = 0.18f),
+              shape = RoundedCornerShape(13.dp)
+            )
+            .clickable { onSelectFont(fontOption) }
+            .padding(horizontal = 6.dp, vertical = 7.dp)
+            .testTag("khmer_lyrics_font_chip_${fontOption.id}"),
+          contentAlignment = Alignment.Center
+        ) {
+          Column(
+            horizontalAlignment = Alignment.CenterHorizontally,
+            verticalArrangement = Arrangement.spacedBy(1.dp)
+          ) {
+            Text(
+              text = fontOption.displayName,
+              style = MaterialTheme.typography.labelMedium.copy(
+                fontFamily = fontFamily,
+                fontWeight = if (selected) FontWeight.Bold else FontWeight.SemiBold,
+                fontSize = 11.5.sp
+              ),
+              color = if (selected) BorderCyan else MaterialTheme.colorScheme.onSurface,
+              maxLines = 1,
+              overflow = TextOverflow.Ellipsis
+            )
+            Text(
+              text = fontOption.khmerLabel,
+              style = MaterialTheme.typography.labelSmall.copy(
+                fontFamily = fontFamily,
+                fontSize = 10.sp
+              ),
+              color = if (selected) MaterialTheme.colorScheme.onSurface else MaterialTheme.colorScheme.onSurfaceVariant,
+              maxLines = 1,
+              overflow = TextOverflow.Ellipsis
+            )
+          }
+        }
+      }
+    }
+  }
+}
+
+@Composable
 private fun LyricsAnimationOptionCard(
   style: LyricsAnimationStyle,
   isSelected: Boolean,
   showAppTag: Boolean,
   showWidgetTag: Boolean,
   activeTarget: LyricsAnimationTarget,
+  khmerLyricsFont: com.example.ui.theme.KhmerLyricsFont,
   previewClockMs: Long,
   motionDisabled: Boolean,
   darkTheme: Boolean,
@@ -505,6 +651,7 @@ private fun LyricsAnimationOptionCard(
       // Mini-widget looping live preview (2 sample lines)
       LyricsMiniWidgetPreview(
         style = style,
+        khmerLyricsFont = khmerLyricsFont,
         previewClockMs = previewClockMs,
         motionDisabled = motionDisabled,
         sampleLine1 = sampleLine1,
@@ -662,6 +809,7 @@ private fun TargetMiniTag(label: String, color: Color) {
 @Composable
 private fun LyricsMiniWidgetPreview(
   style: LyricsAnimationStyle,
+  khmerLyricsFont: com.example.ui.theme.KhmerLyricsFont,
   previewClockMs: Long,
   motionDisabled: Boolean,
   sampleLine1: String,
@@ -673,6 +821,25 @@ private fun LyricsMiniWidgetPreview(
   val currentLine = if (phaseIndex == 0) sampleLine1 else sampleLine2
   val nextLine = if (phaseIndex == 0) sampleLine2 else sampleLine1
   val previousLine = nextLine
+
+  val styledCurrentLine = com.example.ui.theme.rememberKhmerLyricsText(
+    text = currentLine,
+    khmerLyricsFont = khmerLyricsFont,
+    baseFontSize = 14.sp,
+    isBold = true
+  )
+  val styledPreviousLine = com.example.ui.theme.rememberKhmerLyricsText(
+    text = previousLine,
+    khmerLyricsFont = khmerLyricsFont,
+    baseFontSize = 14.sp,
+    isBold = true
+  )
+  val styledNextLine = com.example.ui.theme.rememberKhmerLyricsText(
+    text = nextLine,
+    khmerLyricsFont = khmerLyricsFont,
+    baseFontSize = 11.5.sp,
+    isBold = false
+  )
 
   val previewBgBrush = Brush.linearGradient(
     colors = listOf(
@@ -693,62 +860,70 @@ private fun LyricsMiniWidgetPreview(
       .border(1.dp, Color.White.copy(alpha = 0.12f), RoundedCornerShape(15.dp))
       .padding(horizontal = 12.dp, vertical = 10.dp)
   ) {
-    Row(
+    Column(
       modifier = Modifier.fillMaxSize(),
-      verticalAlignment = Alignment.CenterVertically
+      verticalArrangement = Arrangement.Center
     ) {
-      // Accent bar mirroring the AURIX Lyrics widget
-      Box(
-        modifier = Modifier
-          .width(3.dp)
-          .height(34.dp)
-          .clip(CircleShape)
-          .background(
-            Brush.verticalGradient(listOf(BorderCyan, BorderPurple))
-          )
-      )
-      Spacer(modifier = Modifier.width(10.dp))
-
-      Column(
-        modifier = Modifier.weight(1f),
-        verticalArrangement = Arrangement.Center
+      // Active lyric line row: vertically aligned beside the accent bar, ONLY currentLine animates
+      Row(
+        modifier = Modifier.fillMaxWidth(),
+        verticalAlignment = Alignment.CenterVertically
       ) {
-        if (motionDisabled) {
-          Text(
-            text = currentLine,
-            style = MaterialTheme.typography.bodyMedium.copy(
-              fontWeight = FontWeight.Bold,
-              fontSize = 14.sp,
-              lineHeight = 19.sp
-            ),
-            color = Color.White,
-            maxLines = 1,
-            overflow = TextOverflow.Ellipsis
-          )
-          Spacer(modifier = Modifier.height(3.dp))
-          Text(
-            text = nextLine,
-            style = MaterialTheme.typography.bodySmall.copy(
-              fontSize = 11.5.sp,
-              lineHeight = 15.sp
-            ),
-            color = Color.White.copy(alpha = 0.52f),
-            maxLines = 1,
-            overflow = TextOverflow.Ellipsis
-          )
-        } else {
-          when (style) {
-            LyricsAnimationStyle.SLIDE_UP -> {
-              val raw = (elapsedMs.toFloat() / 550f).coerceIn(0f, 1f)
-              val eased = 1f - (1f - raw) * (1f - raw) * (1f - raw)
-              val exitProgress = (elapsedMs.toFloat() / 420f).coerceIn(0f, 1f)
-              val prevAlpha = (1f - exitProgress).coerceIn(0f, 1f)
-              val prevBlurDp = (sin(exitProgress * Math.PI).toFloat() * 4.5f).coerceAtLeast(0f)
+        Box(
+          modifier = Modifier
+            .width(3.dp)
+            .height(22.dp)
+            .clip(CircleShape)
+            .background(
+              Brush.verticalGradient(listOf(BorderCyan, BorderPurple))
+            )
+        )
+        Spacer(modifier = Modifier.width(10.dp))
 
-              Box(modifier = Modifier.fillMaxWidth()) {
-                if (prevAlpha > 0.02f) {
+        Box(modifier = Modifier.weight(1f)) {
+          if (motionDisabled) {
+            Text(
+              text = styledCurrentLine,
+              style = MaterialTheme.typography.bodyMedium.copy(
+                fontWeight = FontWeight.Bold,
+                fontSize = 14.sp,
+                lineHeight = 19.sp
+              ),
+              color = Color.White,
+              maxLines = 1,
+              overflow = TextOverflow.Ellipsis
+            )
+          } else {
+            when (style) {
+              LyricsAnimationStyle.SLIDE_UP -> {
+                val raw = (elapsedMs.toFloat() / 550f).coerceIn(0f, 1f)
+                val eased = 1f - (1f - raw) * (1f - raw) * (1f - raw)
+                val exitProgress = (elapsedMs.toFloat() / 420f).coerceIn(0f, 1f)
+                val prevAlpha = (1f - exitProgress).coerceIn(0f, 1f)
+                val prevBlurDp = (sin(exitProgress * Math.PI).toFloat() * 4.5f).coerceAtLeast(0f)
+
+                Box(modifier = Modifier.fillMaxWidth()) {
+                  if (prevAlpha > 0.02f) {
+                    Text(
+                      text = styledPreviousLine,
+                      style = MaterialTheme.typography.bodyMedium.copy(
+                        fontWeight = FontWeight.Bold,
+                        fontSize = 14.sp,
+                        lineHeight = 19.sp
+                      ),
+                      color = Color.White,
+                      maxLines = 1,
+                      overflow = TextOverflow.Ellipsis,
+                      modifier = Modifier
+                        .blur(prevBlurDp.dp)
+                        .graphicsLayer {
+                          alpha = prevAlpha * 0.7f
+                          translationY = -slideOffsetPx * 0.45f * exitProgress
+                        }
+                    )
+                  }
                   Text(
-                    text = previousLine,
+                    text = styledCurrentLine,
                     style = MaterialTheme.typography.bodyMedium.copy(
                       fontWeight = FontWeight.Bold,
                       fontSize = 14.sp,
@@ -757,16 +932,126 @@ private fun LyricsMiniWidgetPreview(
                     color = Color.White,
                     maxLines = 1,
                     overflow = TextOverflow.Ellipsis,
-                    modifier = Modifier
-                      .blur(prevBlurDp.dp)
-                      .graphicsLayer {
-                        alpha = prevAlpha * 0.7f
-                        translationY = -slideOffsetPx * 0.45f * exitProgress
-                      }
+                    modifier = Modifier.graphicsLayer {
+                      translationY = slideOffsetPx * (1f - eased)
+                      alpha = eased
+                    }
                   )
                 }
+              }
+
+              LyricsAnimationStyle.BLUR_FADE -> {
+                val raw = (elapsedMs.toFloat() / 700f).coerceIn(0f, 1f)
+                val eased = 1f - (1f - raw) * (1f - raw) * (1f - raw)
+                val inv = 1f - eased
+                val blurRadius = (10f * inv).dp
                 Text(
-                  text = currentLine,
+                  text = styledCurrentLine,
+                  style = MaterialTheme.typography.bodyMedium.copy(
+                    fontWeight = FontWeight.Bold,
+                    fontSize = 14.sp,
+                    lineHeight = 19.sp,
+                    letterSpacing = (0.08f * inv).em
+                  ),
+                  color = Color.White,
+                  maxLines = 1,
+                  overflow = TextOverflow.Ellipsis,
+                  modifier = Modifier
+                    .blur(blurRadius)
+                    .graphicsLayer { alpha = eased }
+                )
+              }
+
+              LyricsAnimationStyle.KARAOKE_FILL -> {
+                val sweep = (elapsedMs.toFloat() / (cycleMs - 250L).toFloat()).coerceIn(0f, 1f)
+                Box(modifier = Modifier.fillMaxWidth()) {
+                  Text(
+                    text = styledCurrentLine,
+                    style = MaterialTheme.typography.bodyMedium.copy(
+                      fontWeight = FontWeight.Bold,
+                      fontSize = 14.sp,
+                      lineHeight = 19.sp
+                    ),
+                    color = Color.White.copy(alpha = 0.35f),
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis
+                  )
+                  Text(
+                    text = styledCurrentLine,
+                    style = MaterialTheme.typography.bodyMedium.copy(
+                      fontWeight = FontWeight.Bold,
+                      fontSize = 14.sp,
+                      lineHeight = 19.sp
+                    ),
+                    color = Color.White,
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis,
+                    modifier = Modifier.drawWithContent {
+                      clipRect(right = size.width * sweep) {
+                        this@drawWithContent.drawContent()
+                      }
+                    }
+                  )
+                }
+              }
+
+              LyricsAnimationStyle.TYPEWRITER -> {
+                val boundaries = remember(currentLine) {
+                  val list = mutableListOf(0)
+                  val bi = BreakIterator.getCharacterInstance()
+                  bi.setText(currentLine)
+                  var pos = bi.next()
+                  while (pos != BreakIterator.DONE) {
+                    list.add(pos)
+                    pos = bi.next()
+                  }
+                  list
+                }
+                val frac = (elapsedMs.toFloat() / 1400f).coerceIn(0f, 1f)
+                val idx = ((boundaries.size - 1) * frac).roundToInt().coerceIn(0, boundaries.lastIndex)
+                val revealed = currentLine.substring(0, boundaries[idx].coerceIn(0, currentLine.length))
+                val styledRevealed = com.example.ui.theme.rememberKhmerLyricsText(
+                  text = revealed,
+                  khmerLyricsFont = khmerLyricsFont,
+                  baseFontSize = 14.sp,
+                  isBold = true
+                )
+                val caretOn = ((previewClockMs / 440L) % 2L) == 0L
+
+                Row(
+                  verticalAlignment = Alignment.CenterVertically,
+                  modifier = Modifier.fillMaxWidth()
+                ) {
+                  Text(
+                    text = styledRevealed,
+                    style = MaterialTheme.typography.bodyMedium.copy(
+                      fontWeight = FontWeight.Bold,
+                      fontSize = 14.sp,
+                      lineHeight = 19.sp
+                    ),
+                    color = Color.White,
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis
+                  )
+                  Spacer(modifier = Modifier.width(2.dp))
+                  Box(
+                    modifier = Modifier
+                      .width(2.dp)
+                      .height(16.dp)
+                      .clip(CircleShape)
+                      .background(if (caretOn) BorderCyan else Color.Transparent)
+                  )
+                }
+              }
+
+              LyricsAnimationStyle.POP_ZOOM -> {
+                val raw = (elapsedMs.toFloat() / 600f).coerceIn(0f, 1f)
+                val t = raw - 1f
+                val tension = 1.35f
+                val overshoot = t * t * ((tension + 1f) * t + tension) + 1f
+                val scaleVal = (0.6f + 0.4f * overshoot).coerceAtLeast(0.6f)
+                Text(
+                  text = styledCurrentLine,
                   style = MaterialTheme.typography.bodyMedium.copy(
                     fontWeight = FontWeight.Bold,
                     fontSize = 14.sp,
@@ -776,150 +1061,31 @@ private fun LyricsMiniWidgetPreview(
                   maxLines = 1,
                   overflow = TextOverflow.Ellipsis,
                   modifier = Modifier.graphicsLayer {
-                    translationY = slideOffsetPx * (1f - eased)
-                    alpha = eased
+                    transformOrigin = androidx.compose.ui.graphics.TransformOrigin(0f, 0.5f)
+                    scaleX = scaleVal
+                    scaleY = scaleVal
+                    alpha = raw.coerceIn(0f, 1f)
                   }
                 )
               }
-            }
-
-            LyricsAnimationStyle.BLUR_FADE -> {
-              val raw = (elapsedMs.toFloat() / 700f).coerceIn(0f, 1f)
-              val eased = 1f - (1f - raw) * (1f - raw) * (1f - raw)
-              val inv = 1f - eased
-              val blurRadius = (10f * inv).dp
-              Text(
-                text = currentLine,
-                style = MaterialTheme.typography.bodyMedium.copy(
-                  fontWeight = FontWeight.Bold,
-                  fontSize = 14.sp,
-                  lineHeight = 19.sp,
-                  letterSpacing = (0.08f * inv).em
-                ),
-                color = Color.White,
-                maxLines = 1,
-                overflow = TextOverflow.Ellipsis,
-                modifier = Modifier
-                  .blur(blurRadius)
-                  .graphicsLayer { alpha = eased }
-              )
-            }
-
-            LyricsAnimationStyle.KARAOKE_FILL -> {
-              val sweep = (elapsedMs.toFloat() / (cycleMs - 250L).toFloat()).coerceIn(0f, 1f)
-              Box(modifier = Modifier.fillMaxWidth()) {
-                Text(
-                  text = currentLine,
-                  style = MaterialTheme.typography.bodyMedium.copy(
-                    fontWeight = FontWeight.Bold,
-                    fontSize = 14.sp,
-                    lineHeight = 19.sp
-                  ),
-                  color = Color.White.copy(alpha = 0.35f),
-                  maxLines = 1,
-                  overflow = TextOverflow.Ellipsis
-                )
-                Text(
-                  text = currentLine,
-                  style = MaterialTheme.typography.bodyMedium.copy(
-                    fontWeight = FontWeight.Bold,
-                    fontSize = 14.sp,
-                    lineHeight = 19.sp
-                  ),
-                  color = Color.White,
-                  maxLines = 1,
-                  overflow = TextOverflow.Ellipsis,
-                  modifier = Modifier.drawWithContent {
-                    clipRect(right = size.width * sweep) {
-                      this@drawWithContent.drawContent()
-                    }
-                  }
-                )
-              }
-            }
-
-            LyricsAnimationStyle.TYPEWRITER -> {
-              val boundaries = remember(currentLine) {
-                val list = mutableListOf(0)
-                val bi = BreakIterator.getCharacterInstance()
-                bi.setText(currentLine)
-                var pos = bi.next()
-                while (pos != BreakIterator.DONE) {
-                  list.add(pos)
-                  pos = bi.next()
-                }
-                list
-              }
-              val frac = (elapsedMs.toFloat() / 1400f).coerceIn(0f, 1f)
-              val idx = ((boundaries.size - 1) * frac).roundToInt().coerceIn(0, boundaries.lastIndex)
-              val revealed = currentLine.substring(0, boundaries[idx].coerceIn(0, currentLine.length))
-              val caretOn = ((previewClockMs / 440L) % 2L) == 0L
-
-              Row(
-                verticalAlignment = Alignment.CenterVertically,
-                modifier = Modifier.fillMaxWidth()
-              ) {
-                Text(
-                  text = revealed,
-                  style = MaterialTheme.typography.bodyMedium.copy(
-                    fontWeight = FontWeight.Bold,
-                    fontSize = 14.sp,
-                    lineHeight = 19.sp
-                  ),
-                  color = Color.White,
-                  maxLines = 1,
-                  overflow = TextOverflow.Ellipsis
-                )
-                Spacer(modifier = Modifier.width(2.dp))
-                Box(
-                  modifier = Modifier
-                    .width(2.dp)
-                    .height(16.dp)
-                    .clip(CircleShape)
-                    .background(if (caretOn) BorderCyan else Color.Transparent)
-                )
-              }
-            }
-
-            LyricsAnimationStyle.POP_ZOOM -> {
-              val raw = (elapsedMs.toFloat() / 600f).coerceIn(0f, 1f)
-              val t = raw - 1f
-              val tension = 1.35f
-              val overshoot = t * t * ((tension + 1f) * t + tension) + 1f
-              val scaleVal = (0.6f + 0.4f * overshoot).coerceAtLeast(0.6f)
-              Text(
-                text = currentLine,
-                style = MaterialTheme.typography.bodyMedium.copy(
-                  fontWeight = FontWeight.Bold,
-                  fontSize = 14.sp,
-                  lineHeight = 19.sp
-                ),
-                color = Color.White,
-                maxLines = 1,
-                overflow = TextOverflow.Ellipsis,
-                modifier = Modifier.graphicsLayer {
-                  transformOrigin = androidx.compose.ui.graphics.TransformOrigin(0f, 0.5f)
-                  scaleX = scaleVal
-                  scaleY = scaleVal
-                  alpha = raw.coerceIn(0f, 1f)
-                }
-              )
             }
           }
-
-          Spacer(modifier = Modifier.height(3.dp))
-          Text(
-            text = nextLine,
-            style = MaterialTheme.typography.bodySmall.copy(
-              fontSize = 11.5.sp,
-              lineHeight = 15.sp
-            ),
-            color = Color.White.copy(alpha = 0.52f),
-            maxLines = 1,
-            overflow = TextOverflow.Ellipsis
-          )
         }
       }
+
+      // Upcoming / Next lyric line: always static below the active line (never receives animation)
+      Spacer(modifier = Modifier.height(3.dp))
+      Text(
+        text = styledNextLine,
+        style = MaterialTheme.typography.bodySmall.copy(
+          fontSize = 11.5.sp,
+          lineHeight = 15.sp
+        ),
+        color = Color.White.copy(alpha = 0.52f),
+        maxLines = 1,
+        overflow = TextOverflow.Ellipsis,
+        modifier = Modifier.padding(start = 13.dp)
+      )
     }
   }
 }

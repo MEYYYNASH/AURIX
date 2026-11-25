@@ -11,10 +11,10 @@ import org.junit.Test
 class CrashFixStabilityTest {
 
   @Test
-  fun release212_metadataAndVersionCodeAreConsistent() {
-    assertEquals("2.1.2", BuildConfig.VERSION_NAME)
-    assertEquals(20102, BuildConfig.VERSION_CODE)
-    assertTrue("Release 2.1.2 versionCode must exceed 2.1.1 (20101)", BuildConfig.VERSION_CODE > 20101)
+  fun release213_metadataAndVersionCodeAreConsistent() {
+    assertEquals("2.1.3", BuildConfig.VERSION_NAME)
+    assertEquals(20103, BuildConfig.VERSION_CODE)
+    assertTrue("Release 2.1.3 versionCode must exceed 2.1.2 (20102)", BuildConfig.VERSION_CODE > 20102)
     assertEquals(420, com.example.ui.screens.SELECT_BAR_OPEN_DURATION_MS)
     assertEquals(600, com.example.ui.screens.SELECT_CIRCLE_OPEN_DURATION_MS)
     assertEquals(380L, com.example.ui.screens.SELECT_CLOSE_CLEAR_DELAY_MS)
@@ -481,5 +481,52 @@ class CrashFixStabilityTest {
     assertEquals("LN", com.example.data.AlbumCoverStorage.buildMonogramText("Late Night"))
     assertEquals("AU", com.example.data.AlbumCoverStorage.buildMonogramText("Aurix"))
     assertEquals("A", com.example.data.AlbumCoverStorage.buildMonogramText("   "))
+  }
+
+  @Test
+  fun khmerTypography_fontChoicesScriptRunsAndEqualVisualScalesWorkCorrectly() {
+    assertEquals("khmer_lyrics_font", com.example.data.PreferencesManager.KHMER_LYRICS_FONT.name)
+    assertEquals(3, com.example.ui.theme.KhmerLyricsFont.entries.size)
+    assertEquals(
+      com.example.ui.theme.KhmerLyricsFont.KANTUMRUY_PRO,
+      com.example.ui.theme.KhmerLyricsFont.fromId(null)
+    )
+    assertEquals(
+      com.example.ui.theme.KhmerLyricsFont.KANTUMRUY_PRO,
+      com.example.ui.theme.KhmerLyricsFont.fromId("kantumruy_pro")
+    )
+    assertEquals(
+      com.example.ui.theme.KhmerLyricsFont.KOULEN,
+      com.example.ui.theme.KhmerLyricsFont.fromId("koulen")
+    )
+    assertEquals(
+      com.example.ui.theme.KhmerLyricsFont.NOTO_SANS_KHMER,
+      com.example.ui.theme.KhmerLyricsFont.fromId("noto_sans_khmer")
+    )
+
+    val mixedTitle = "មួយជុំភ្នំពេញ Phnom Penh Nights · Suly Pheng"
+    assertTrue(com.example.ui.theme.KhmerTypography.containsKhmer(mixedTitle))
+    assertTrue(com.example.ui.theme.KhmerTypography.containsLatin(mixedTitle))
+    assertTrue(com.example.ui.theme.KhmerTypography.isMixedKhmerAndLatin(mixedTitle))
+
+    val runs = com.example.ui.theme.KhmerTypography.segmentScriptRuns(mixedTitle)
+    assertEquals(2, runs.size)
+    assertTrue(runs[0].isKhmer)
+    org.junit.Assert.assertFalse(runs[1].isKhmer)
+    assertEquals(mixedTitle, runs.joinToString("") { it.text })
+
+    val (titleKhScale, titleEnScale) = com.example.ui.theme.KhmerTypography.resolveEqualVisualScales(
+      text = mixedTitle,
+      isTitle = true,
+      khmerLyricsFont = com.example.ui.theme.KhmerLyricsFont.KANTUMRUY_PRO
+    )
+    assertTrue("Mixed title Khmer scale should boost Dangrek to match English height", titleKhScale > titleEnScale)
+
+    val (koulenKhScale, koulenEnScale) = com.example.ui.theme.KhmerTypography.resolveEqualVisualScales(
+      text = mixedTitle,
+      isTitle = false,
+      khmerLyricsFont = com.example.ui.theme.KhmerLyricsFont.KOULEN
+    )
+    assertTrue("Mixed lyrics Khmer scale should equalize visual glyph height", koulenKhScale > koulenEnScale)
   }
 }
