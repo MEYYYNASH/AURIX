@@ -292,9 +292,83 @@ class UpdateManagerTest {
   }
 
   @Test
-  fun `app release metadata targets 2_1_3`() {
-    assertEquals("2.1.3", BuildConfig.VERSION_NAME)
-    assertEquals(20103, BuildConfig.VERSION_CODE)
+  fun `http 404 during apk download sets friendly release building message and 30s cooldown without raw HTTP 404`() = runBlocking {
+    val context = ApplicationProvider.getApplicationContext<Context>()
+    val cm = context.getSystemService(Context.CONNECTIVITY_SERVICE) as ConnectivityManager
+    val shadowCm = Shadows.shadowOf(cm)
+    val network = cm.activeNetwork
+    if (network != null) {
+      val caps = ShadowNetworkCapabilities.newInstance()
+      Shadows.shadowOf(caps).addCapability(NetworkCapabilities.NET_CAPABILITY_INTERNET)
+      shadowCm.setNetworkCapabilities(network, caps)
+    }
+
+    val server = HttpServer.create(InetSocketAddress("127.0.0.1", 0), 0)
+    val port = server.address.port
+    server.createContext("/version.json") { exchange ->
+      val body = """
+        {
+          "versionName": "9.9.9",
+          "versionCode": 99999,
+          "releaseDate": "2026-11-24",
+          "apkUrl": "http://127.0.0.1:$port/missing-release.apk",
+          "sha256": "",
+          "notes": ["Release building test"],
+          "releasePageUrl": "http://127.0.0.1:$port/releases"
+        }
+      """.trimIndent().toByteArray()
+      exchange.sendResponseHeaders(200, body.size.toLong())
+      exchange.responseBody.use { it.write(body) }
+    }
+    server.createContext("/missing-release.apk") { exchange ->
+      exchange.sendResponseHeaders(404, -1)
+      exchange.close()
+    }
+    server.start()
+
+    val scope = CoroutineScope(SupervisorJob() + Dispatchers.Unconfined)
+    try {
+      LocaleHelper.saveLanguageSync(context, LocaleHelper.LANG_EN)
+      val manager = UpdateManager(
+        context = context,
+        scope = scope,
+        versionJsonUrl = "http://127.0.0.1:$port/version.json"
+      )
+      manager.checkForUpdates(silent = false)
+      repeat(50) {
+        if (manager.uiState.value.stage == UpdateStage.Available) return@repeat
+        delay(50)
+      }
+      assertEquals(UpdateStage.Available, manager.uiState.value.stage)
+
+      manager.startOrResumeDownload()
+      repeat(50) {
+        if (manager.uiState.value.stage == UpdateStage.Error) return@repeat
+        delay(50)
+      }
+      val errState = manager.uiState.value
+      assertEquals(UpdateStage.Error, errState.stage)
+      assertEquals(com.example.data.UpdateDownloadErrorKind.Http404ReleaseBuilding, errState.errorKind)
+      assertEquals(30, errState.retryCooldownSeconds)
+      assertEquals(
+        "Release is still building, wait 2-4 minutes and try again.",
+        errState.errorMessage
+      )
+      assertFalse(
+        "Must not show raw 'Download failed with HTTP 404'",
+        errState.errorMessage.orEmpty().contains("Download failed with HTTP 404", ignoreCase = true)
+      )
+    } finally {
+      scope.cancel()
+      server.stop(0)
+    }
+  }
+
+  @Test
+  fun `app release metadata targets 2_1_4`() {
+    assertEquals("2.1.4", BuildConfig.VERSION_NAME)
+    assertEquals(20104, BuildConfig.VERSION_CODE)
+    assertEquals(20104L, GitHubUpdater.deriveVersionCodeFromTag("v2.1.4"))
     assertEquals(20103L, GitHubUpdater.deriveVersionCodeFromTag("v2.1.3"))
     assertEquals(20102L, GitHubUpdater.deriveVersionCodeFromTag("v2.1.2"))
     assertEquals(20101L, GitHubUpdater.deriveVersionCodeFromTag("v2.1.1"))

@@ -349,6 +349,85 @@ private fun AurixMainShell(
   val widgetCustomizerConfig by viewModel.widgetCustomizerConfig.collectAsStateWithLifecycle()
   val orbiThemeId by viewModel.orbiCompanionTheme.collectAsStateWithLifecycle()
   val standbyVinylStyle by viewModel.standbyVinylStyle.collectAsStateWithLifecycle()
+  val standbyClockStyleId by viewModel.standbyClockStyle.collectAsStateWithLifecycle()
+  val standbyUse24h by viewModel.standbyUse24h.collectAsStateWithLifecycle()
+  val standbyMoodId by viewModel.standbyMood.collectAsStateWithLifecycle()
+  val standbyGyroEnabled by viewModel.standbyGyroEnabled.collectAsStateWithLifecycle()
+  val standbyAutoLaunch by viewModel.standbyAutoLaunch.collectAsStateWithLifecycle()
+  val activeStandbyClockStyle = remember(standbyClockStyleId) { StandbyClockStyle.fromId(standbyClockStyleId) }
+  val activeStandbyMood = remember(standbyMoodId) { StandbyColorMood.fromId(standbyMoodId) }
+
+  // Auto-open Standby Mode when charging in landscape or propped up (optional setting, default off)
+  val currentConfig = LocalConfiguration.current
+  val isDeviceLandscape = currentConfig.orientation == android.content.res.Configuration.ORIENTATION_LANDSCAPE
+  var isDeviceCharging by remember { mutableStateOf(false) }
+  var isDeviceProppedUp by remember { mutableStateOf(false) }
+  var autoStandbyDismissedForSession by remember { mutableStateOf(false) }
+
+  DisposableEffect(context, standbyAutoLaunch) {
+    if (!standbyAutoLaunch) {
+      return@DisposableEffect onDispose {}
+    }
+    fun checkBattery(intent: android.content.Intent?) {
+      if (intent == null) return
+      val status = intent.getIntExtra(android.os.BatteryManager.EXTRA_STATUS, -1)
+      val chargingNow = status == android.os.BatteryManager.BATTERY_STATUS_CHARGING ||
+        status == android.os.BatteryManager.BATTERY_STATUS_FULL
+      if (!chargingNow) {
+        autoStandbyDismissedForSession = false
+      }
+      isDeviceCharging = chargingNow
+    }
+    val batteryReceiver = object : android.content.BroadcastReceiver() {
+      override fun onReceive(ctx: Context?, intent: android.content.Intent?) {
+        checkBattery(intent)
+      }
+    }
+    val initialIntent = runCatching {
+      context.registerReceiver(batteryReceiver, android.content.IntentFilter(android.content.Intent.ACTION_BATTERY_CHANGED))
+    }.getOrNull()
+    checkBattery(initialIntent)
+
+    val sensorManager = context.getSystemService(Context.SENSOR_SERVICE) as? android.hardware.SensorManager
+    val accel = sensorManager?.getDefaultSensor(android.hardware.Sensor.TYPE_ACCELEROMETER)
+    val sensorListener = object : android.hardware.SensorEventListener {
+      override fun onSensorChanged(event: android.hardware.SensorEvent?) {
+        if (event == null) return
+        val gx = event.values.getOrNull(0) ?: 0f
+        val gy = event.values.getOrNull(1) ?: 0f
+        val gz = event.values.getOrNull(2) ?: 0f
+        val xyMag = kotlin.math.sqrt((gx * gx + gy * gy).toDouble()).toFloat()
+        // Phone is propped up on a desk stand when upright tilt (xyMag) is significant and not laying flat (gz < 8.2)
+        val propped = xyMag > 3.6f && kotlin.math.abs(gz) < 8.2f
+        isDeviceProppedUp = propped
+      }
+      override fun onAccuracyChanged(sensor: android.hardware.Sensor?, accuracy: Int) = Unit
+    }
+    if (accel != null) {
+      runCatching {
+        sensorManager.registerListener(sensorListener, accel, android.hardware.SensorManager.SENSOR_DELAY_NORMAL)
+      }
+    }
+
+    onDispose {
+      runCatching { context.unregisterReceiver(batteryReceiver) }
+      runCatching { sensorManager?.unregisterListener(sensorListener) }
+    }
+  }
+
+  LaunchedEffect(standbyAutoLaunch, isDeviceCharging, isDeviceLandscape, isDeviceProppedUp) {
+    if (
+      standbyAutoLaunch &&
+      isDeviceCharging &&
+      (isDeviceLandscape || isDeviceProppedUp) &&
+      !autoStandbyDismissedForSession &&
+      !showAmbientStandby
+    ) {
+      showAmbientStandby = true
+    } else if (!isDeviceCharging || (!isDeviceLandscape && !isDeviceProppedUp)) {
+      autoStandbyDismissedForSession = false
+    }
+  }
   val allCustomLyrics by viewModel.allCustomLyrics.collectAsStateWithLifecycle()
   val customLyricsDraftCount by viewModel.customLyricsDraftCount.collectAsStateWithLifecycle()
   val downloadQueueItems by viewModel.downloadQueueItems.collectAsStateWithLifecycle()
@@ -1216,6 +1295,8 @@ private fun AurixMainShell(
               widgetCustomizerConfig = widgetCustomizerConfig,
               onOpenWidgetCustomizer = { showWidgetCustomizer = true },
               onOpenStandby = { showAmbientStandby = true },
+              standbyAutoLaunch = standbyAutoLaunch,
+              onStandbyAutoLaunchChanged = { viewModel.setStandbyAutoLaunch(it) },
               onUnlockDeveloperMode = { viewModel.unlockDeveloperMode() },
               onDeveloperModeEnabledChanged = { viewModel.setDeveloperModeEnabled(it) },
               onOpenCurrentSongLyricsEditor = {
@@ -1464,23 +1545,48 @@ private fun AurixMainShell(
       }
 
       if (showAmbientStandby) {
+        val matchedStandbyAlbum = remember(currentSong?.id, currentSong?.album, libraryAlbums) {
+          val target = currentSong
+          if (target == null) null
+          else {
+            libraryAlbums.firstOrNull { album ->
+              album.tracks.any { it.id == target.id } ||
+                (target.album.isNotBlank() && album.title.equals(target.album, ignoreCase = true))
+            }
+          }
+        }
         AmbientStandbyScreen(
           song = currentSong,
           isPlaying = isPlaying,
           positionProvider = { viewModel.getLivePlaybackPositionMs() },
+          durationMs = durationMs,
+          albumTitleOverride = matchedStandbyAlbum?.title?.takeIf { it.isNotBlank() } ?: currentSong?.album,
+          customAlbumCoverUrl = matchedStandbyAlbum?.coverUrl,
           lyricsResult = lyrics,
           lyricOffsetMs = lyricOffsetMs,
           spectrumBars = spectrumBars,
           vinylStyle = standbyVinylStyle,
           reducedMotion = reducedMotion,
+          clockStyle = activeStandbyClockStyle,
+          use24h = standbyUse24h,
+          colorMood = activeStandbyMood,
+          gyroEnabled = standbyGyroEnabled,
           orbiMood = effectiveOrbiMood,
           orbiTheme = activeOrbiTheme,
           khmerLyricsFont = khmerLyricsFont,
+          onSelectClockStyle = { style -> viewModel.setStandbyClockStyle(style.id) },
+          onToggleUse24h = { use24 -> viewModel.setStandbyUse24h(use24) },
+          onSelectColorMood = { mood -> viewModel.setStandbyMood(mood.id) },
+          onToggleGyroEnabled = { enabled -> viewModel.setStandbyGyroEnabled(enabled) },
           onToggleVinylStyle = { isVinyl -> viewModel.setStandbyVinylStyle(isVinyl) },
+          onSeek = { targetMs -> viewModel.seekTo(targetMs) },
           onPlayPause = { viewModel.togglePlayPause() },
           onNext = { viewModel.nextTrack() },
           onPrevious = { viewModel.previousTrack() },
-          onClose = { showAmbientStandby = false }
+          onClose = {
+            autoStandbyDismissedForSession = true
+            showAmbientStandby = false
+          }
         )
       }
 
@@ -1666,6 +1772,32 @@ private fun AurixMainShell(
       if (mandatoryRelease != null) {
         val isDownloading = updateUiState.stage == UpdateStage.Downloading && !updateUiState.isPaused
         val isValidated = updateUiState.isValidatedReady
+        var mandatoryCooldownSec by remember(updateUiState.stage, updateUiState.errorTimestampMs, updateUiState.retryCooldownSeconds) {
+          mutableIntStateOf(
+            if (updateUiState.stage == UpdateStage.Error) updateUiState.retryCooldownSeconds else 0
+          )
+        }
+        LaunchedEffect(updateUiState.stage, updateUiState.errorTimestampMs, updateUiState.retryCooldownSeconds) {
+          if (updateUiState.stage == UpdateStage.Error && updateUiState.retryCooldownSeconds > 0) {
+            mandatoryCooldownSec = updateUiState.retryCooldownSeconds
+            while (mandatoryCooldownSec > 0) {
+              kotlinx.coroutines.delay(1000L)
+              mandatoryCooldownSec = (mandatoryCooldownSec - 1).coerceAtLeast(0)
+            }
+          } else {
+            mandatoryCooldownSec = 0
+          }
+        }
+        val isMandatoryCoolingDown = updateUiState.stage == UpdateStage.Error && mandatoryCooldownSec > 0
+        val localizedDialogError = when (updateUiState.errorKind) {
+          com.example.data.UpdateDownloadErrorKind.Http404ReleaseBuilding -> stringResource(id = R.string.update_error_404_building)
+          com.example.data.UpdateDownloadErrorKind.NoInternet -> stringResource(id = R.string.update_error_no_internet)
+          com.example.data.UpdateDownloadErrorKind.Timeout -> stringResource(id = R.string.update_error_timeout)
+          com.example.data.UpdateDownloadErrorKind.Server5xx -> stringResource(id = R.string.update_error_server_5xx)
+          com.example.data.UpdateDownloadErrorKind.Generic -> stringResource(id = R.string.update_error_generic)
+          com.example.data.UpdateDownloadErrorKind.None,
+          com.example.data.UpdateDownloadErrorKind.Custom -> updateUiState.errorMessage
+        }
         AlertDialog(
           onDismissRequest = {},
           properties = DialogProperties(dismissOnBackPress = false, dismissOnClickOutside = false),
@@ -1685,10 +1817,9 @@ private fun AurixMainShell(
                   modifier = Modifier.fillMaxWidth()
                 )
               }
-              val errorMsg = updateUiState.errorMessage
-              if (updateUiState.stage == UpdateStage.Error && !errorMsg.isNullOrBlank()) {
+              if (updateUiState.stage == UpdateStage.Error && !localizedDialogError.isNullOrBlank()) {
                 Text(
-                  text = errorMsg,
+                  text = localizedDialogError,
                   color = MaterialTheme.colorScheme.error,
                   style = MaterialTheme.typography.bodySmall
                 )
@@ -1697,7 +1828,7 @@ private fun AurixMainShell(
           },
           confirmButton = {
             Button(
-              enabled = !isDownloading,
+              enabled = !isDownloading && !isMandatoryCoolingDown,
               onClick = {
                 if (isValidated) viewModel.installDownloadedApk(context)
                 else viewModel.downloadAndInstallUpdate(context)
@@ -1707,6 +1838,11 @@ private fun AurixMainShell(
                 when {
                   isDownloading -> "Downloading..."
                   isValidated -> "Install Update"
+                  updateUiState.stage == UpdateStage.Error -> if (isMandatoryCoolingDown) {
+                    stringResource(id = R.string.update_retry_countdown, mandatoryCooldownSec)
+                  } else {
+                    stringResource(id = R.string.update_retry_button)
+                  }
                   else -> "Download & Install"
                 }
               )

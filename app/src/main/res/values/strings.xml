@@ -834,17 +834,28 @@
     <string name="orbi_badge_aurix_legend">AURIX Legend</string>
     <string name="orbi_badge_aurix_legend_req">Reach 30+ plays</string>
 
-    <!-- Ambient Standby Mode / Desk Clock Player (v2.1.0) -->
-    <string name="standby_title">Standby Desk Clock</string>
-    <string name="standby_subtitle">Full-screen OLED clock, spinning vinyl &amp; live lyrics</string>
-    <string name="standby_open_cd">Open Standby Desk Clock</string>
+    <!-- Ambient Standby Mode / Bedside Charging Clock Player -->
+    <string name="standby_title">Standby Mode</string>
+    <string name="standby_subtitle">Bedside &amp; charging clock, 10 clock styles, mood blobs &amp; 3D gyro parallax</string>
+    <string name="standby_open_cd">Open Standby Mode</string>
     <string name="standby_exit_cd">Exit Standby Mode</string>
     <string name="standby_style_vinyl">Vinyl</string>
     <string name="standby_style_art">Cover</string>
     <string name="standby_charging">Charging · %1$d%%</string>
     <string name="standby_battery">%1$d%%</string>
-    <string name="standby_tap_hint">Tap anywhere for controls</string>
-    <string name="standby_no_track">Nothing playing</string>
+    <string name="standby_tap_hint">Tap to toggle controls · Swipe down to exit</string>
+    <string name="standby_no_track">Not Playing</string>
+    <string name="standby_no_artist">Select a song in AURIX to play</string>
+    <string name="standby_now_playing_label">NOW PLAYING</string>
+    <string name="standby_clock_picker_title">Clock Style</string>
+    <string name="standby_clock_picker_subtitle">Choose your bedside clock face &amp; time format</string>
+    <string name="standby_time_12h">12h</string>
+    <string name="standby_time_24h">24h</string>
+    <string name="standby_mood_cd">Change color mood</string>
+    <string name="standby_clock_cd">Choose clock style</string>
+    <string name="standby_gyro_cd">Toggle 3D gyro parallax</string>
+    <string name="standby_auto_launch_title">Auto-open when charging</string>
+    <string name="standby_auto_launch_subtitle">Open automatically when charging in landscape or propped up</string>
 
     <!-- Custom Playlist Cover Collage & Blur Studio (v2.1.0) -->
     <string name="edit_cover_tab_studio">Studio</string>
@@ -866,4 +877,13 @@
     <string name="khmer_font_koulen">Koulen</string>
     <string name="khmer_font_noto_sans_khmer">Noto Sans Khmer</string>
     <string name="khmer_title_font_dangrek_badge">Title: Dangrek</string>
+
+    <!-- App Update APK Download Error Messages (v2.1.4) -->
+    <string name="update_error_404_building">Release is still building, wait 2-4 minutes and try again.</string>
+    <string name="update_error_no_internet">No internet connection. Please check your network and try again.</string>
+    <string name="update_error_timeout">Connection timed out. Please try again.</string>
+    <string name="update_error_server_5xx">Update server is temporarily unavailable. Please try again shortly.</string>
+    <string name="update_error_generic">Unable to download the update right now. Please try again.</string>
+    <string name="update_retry_button">Retry</string>
+    <string name="update_retry_countdown">Retry (%1$ds)</string>
 </resources>

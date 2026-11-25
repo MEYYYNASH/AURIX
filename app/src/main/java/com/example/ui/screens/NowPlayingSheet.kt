@@ -749,6 +749,20 @@ fun NowPlayingSheet(
                   modifier = Modifier.size(20.dp)
                 )
               }
+
+              IconButton(
+                onClick = onOpenStandby,
+                modifier = Modifier
+                  .minimumInteractiveComponentSize()
+                  .testTag("np_open_standby_button")
+              ) {
+                Icon(
+                  imageVector = Icons.Rounded.Schedule,
+                  contentDescription = stringResource(id = R.string.standby_open_cd),
+                  tint = Color.White.copy(alpha = 0.85f),
+                  modifier = Modifier.size(20.dp)
+                )
+              }
             }
 
             Surface(

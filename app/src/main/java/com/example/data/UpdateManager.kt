@@ -12,6 +12,8 @@ import android.os.StatFs
 import android.provider.Settings
 import androidx.core.content.FileProvider
 import com.example.BuildConfig
+import com.example.LocaleHelper
+import com.example.R
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
@@ -105,6 +107,16 @@ enum class UpdateMainAction {
   Retry
 }
 
+enum class UpdateDownloadErrorKind {
+  None,
+  Http404ReleaseBuilding,
+  NoInternet,
+  Timeout,
+  Server5xx,
+  Generic,
+  Custom
+}
+
 data class UpdateUiState(
   val stage: UpdateStage = UpdateStage.Idle,
   val installed: InstalledAppInfo,
@@ -121,6 +133,9 @@ data class UpdateUiState(
   val isValidatedReady: Boolean = false,
   val validatedApkPath: String? = null,
   val errorMessage: String? = null,
+  val errorKind: UpdateDownloadErrorKind = UpdateDownloadErrorKind.None,
+  val retryCooldownSeconds: Int = 0,
+  val errorTimestampMs: Long = 0L,
   val requiresUnknownAppsPermission: Boolean = false,
   val lastFailedOperation: FailedOperation = FailedOperation.None
 ) {
@@ -162,6 +177,7 @@ class UpdateManager(
     private const val META_FILE_NAME = "aurix_update.apk.meta.json"
 
     val CURRENT_RELEASE_NOTES = listOf(
+      "Standby Bedside & Charging Screen + Clean Bilingual Update Error Handling (v2.1.4): Redesigned Standby Mode with 10 clock styles (Thin, Bold, Minecraft 5x7 pixel blocks, LED Dots, Flip Cards, Neon Orbitron, Serif Playfair, Round Fredoka gradient, Stack, Outline) & 12h/24h toggle, 5 color moods (Auto cover palette lerp, Lo-fi, Sunset, Mint, Mono) with drifting radial blobs, 3D Gyro Parallax (up to 14° tilt with moving glare & auto-recentering neutral point), Khmer date + mood + battery % chips, 17-segment progress bar, burn-in pixel drift & 2-minute auto-dim, plus localized EN/KM APK update download error messages with a 30-second Retry countdown when a new release is still building (HTTP 404)",
       "Khmer Lyrics Font Picker, Dangrek Titles, Active-Only Lyric Animation & Restored Home Carousels (v2.1.3): Restored all Home Screen and Music Insights song carousels by default; refined the Home Screen Lyrics widget layout so the accent bar aligns cleanly beside the active lyric line without overlapping the side frame; restricted lyric transitions so only the currently displayed lyric line animates while upcoming lyrics remain static across widgets, in-app lyrics, and Standby Desk Clock; added a Khmer Lyrics Font selector in Settings > Lyrics (Kantumruy Pro, Koulen, Noto Sans Khmer) plus Dangrek for Khmer song titles with equalized visual glyph height when English and Khmer appear together",
       "Clean Now Playing Lyrics View & Collapsed-By-Default Sections (v2.1.2): Cleaned up the Now Playing top header and Lyrics reading view by moving Standby Desk Clock, Orbi Companion, and Edit Lyrics into the 3-dots Song Details menu (⋮) and keeping only the minimal Share button on the Lyrics screen",
       "Modified Official Orbi Logo Companion, Beat-Reactive Ring & Shareable Sticker Card (v2.1.1): Orbi Mini-Companion now uses AURIX's official tilted planet & 3D split orbit ring logo modified with reactive mood accessories (Lo-fi headphones, Phonk cyber shades, Late-Night sleepy moon, Romantic heart glow, Party star spark) and live beat-reactive ring pulsing; synced 6 unlockable themes with the 5 official Orbi App Icons (Classic, Midnight, Ember, AMOLED, Pearl) + Prismatic with 1-tap 'Apply as App Icon'; added interactive Mood Sticker preview chips, mini Orbi badge in Standby Desk Clock, and shareable Orbi Mood & Music DNA Sticker Card PNG export",
@@ -752,12 +768,16 @@ class UpdateManager(
     }
 
     if (!isNetworkAvailable()) {
+      val noNetMsg = localizedErrorString(UpdateDownloadErrorKind.NoInternet)
       _uiState.update {
         it.copy(
           stage = UpdateStage.Error,
-          subtitleMessage = "No internet connection — connect and retry",
-          statusMessage = "Offline — cannot download APK",
-          errorMessage = "Device is offline. Reconnect and tap Retry.",
+          subtitleMessage = noNetMsg,
+          statusMessage = noNetMsg,
+          errorMessage = noNetMsg,
+          errorKind = UpdateDownloadErrorKind.NoInternet,
+          retryCooldownSeconds = 0,
+          errorTimestampMs = System.currentTimeMillis(),
           lastFailedOperation = FailedOperation.Download
         )
       }
@@ -809,6 +829,9 @@ class UpdateManager(
         isPaused = false,
         canResumePartial = canAppend,
         errorMessage = null,
+        errorKind = UpdateDownloadErrorKind.None,
+        retryCooldownSeconds = 0,
+        errorTimestampMs = 0L,
         requiresUnknownAppsPermission = false,
         lastFailedOperation = FailedOperation.None
       )
@@ -838,7 +861,11 @@ class UpdateManager(
           }
 
           if (!response.isSuccessful) {
-            throw IOException("Download failed with HTTP ${response.code}")
+            android.util.Log.w(
+              "UpdateManager",
+              "Download failed with HTTP ${response.code} for ${release.apkUrl}"
+            )
+            throw ApkHttpStatusException(response.code, release.apkUrl)
           }
 
           val body = response.body ?: throw IOException("Empty download body from server")
@@ -1042,6 +1069,9 @@ class UpdateManager(
             validatedApkPath = null,
             canResumePartial = false,
             errorMessage = verifyError,
+            errorKind = UpdateDownloadErrorKind.Custom,
+            retryCooldownSeconds = 0,
+            errorTimestampMs = System.currentTimeMillis(),
             lastFailedOperation = FailedOperation.Download
           )
         }
@@ -1057,7 +1087,10 @@ class UpdateManager(
           progress = 1f,
           subtitleMessage = "Verified! Ready to install ${release.tagName}",
           statusMessage = "Verified ${release.tagName}",
-          errorMessage = null
+          errorMessage = null,
+          errorKind = UpdateDownloadErrorKind.None,
+          retryCooldownSeconds = 0,
+          errorTimestampMs = 0L
         )
       }
       AppNotificationHelper.notifyUpdateReadyToInstall(context, release)
@@ -1078,6 +1111,9 @@ class UpdateManager(
           statusMessage = msg,
           speedBytesPerSec = 0L,
           errorMessage = e.message,
+          errorKind = UpdateDownloadErrorKind.Custom,
+          retryCooldownSeconds = 0,
+          errorTimestampMs = System.currentTimeMillis(),
           lastFailedOperation = FailedOperation.Download
         )
       }
@@ -1085,17 +1121,22 @@ class UpdateManager(
       activeCall = null
       if (pauseRequested || cancelRequested) return
       val hasPartial = partFile.exists() && partFile.length() > 0L
-      val msg = mapErrorMessage(e)
+      val kind = classifyDownloadError(e)
+      val msg = localizedErrorString(kind)
+      val cooldownSec = if (kind == UpdateDownloadErrorKind.Http404ReleaseBuilding) 30 else 0
       AppNotificationHelper.notifyUpdateDownloadFailed(context, release, msg)
       _uiState.update {
         it.copy(
           stage = UpdateStage.Error,
-          subtitleMessage = if (hasPartial) "Interrupted — tap Retry to resume" else "Download failed — tap Retry",
+          subtitleMessage = msg,
           statusMessage = msg,
           downloadedBytes = if (hasPartial) partFile.length() else 0L,
           speedBytesPerSec = 0L,
           canResumePartial = hasPartial,
           errorMessage = msg,
+          errorKind = kind,
+          retryCooldownSeconds = cooldownSec,
+          errorTimestampMs = System.currentTimeMillis(),
           lastFailedOperation = FailedOperation.Download
         )
       }
@@ -1356,19 +1397,65 @@ class UpdateManager(
     }.getOrDefault(true)
   }
 
-  private fun mapErrorMessage(e: Throwable): String {
-    val raw = e.localizedMessage.orEmpty()
+  private fun classifyDownloadError(e: Throwable): UpdateDownloadErrorKind {
+    if (e is ApkHttpStatusException) {
+      return when {
+        e.statusCode == 404 -> UpdateDownloadErrorKind.Http404ReleaseBuilding
+        e.statusCode in 500..599 -> UpdateDownloadErrorKind.Server5xx
+        else -> UpdateDownloadErrorKind.Generic
+      }
+    }
+    val raw = e.message.orEmpty()
     return when {
-      e is UnknownHostException -> "Offline — no internet connection."
-      e is SocketTimeoutException -> "Connection timed out. Try again."
-      e is ConnectException -> "Unable to reach update server."
-      e is SSLHandshakeException -> "Secure connection (TLS) failed."
-      raw.contains("ENOSPC", ignoreCase = true) || raw.contains("No space left", ignoreCase = true) ->
-        "Low storage space on device."
-      raw.isNotBlank() -> raw
-      else -> "Update error occurred. Please retry."
+      raw.contains("HTTP 404", ignoreCase = true) || raw.contains(" 404", ignoreCase = true) -> {
+        android.util.Log.w("UpdateManager", "Download failed with HTTP 404 (intercepted): $raw")
+        UpdateDownloadErrorKind.Http404ReleaseBuilding
+      }
+      Regex("HTTP\\s+5\\d\\d", RegexOption.IGNORE_CASE).containsMatchIn(raw) -> {
+        android.util.Log.w("UpdateManager", "Download failed with HTTP 5xx (intercepted): $raw")
+        UpdateDownloadErrorKind.Server5xx
+      }
+      e is UnknownHostException || e is ConnectException || e is java.net.NoRouteToHostException || !isNetworkAvailable() ->
+        UpdateDownloadErrorKind.NoInternet
+      e is SocketTimeoutException || (e is java.io.InterruptedIOException && raw.contains("timeout", ignoreCase = true)) ->
+        UpdateDownloadErrorKind.Timeout
+      else -> {
+        if (raw.isNotBlank()) {
+          android.util.Log.w("UpdateManager", "Download failed: $raw", e)
+        }
+        UpdateDownloadErrorKind.Generic
+      }
     }
   }
+
+  private fun localizedErrorString(kind: UpdateDownloadErrorKind): String {
+    val resId = when (kind) {
+      UpdateDownloadErrorKind.Http404ReleaseBuilding -> R.string.update_error_404_building
+      UpdateDownloadErrorKind.NoInternet -> R.string.update_error_no_internet
+      UpdateDownloadErrorKind.Timeout -> R.string.update_error_timeout
+      UpdateDownloadErrorKind.Server5xx -> R.string.update_error_server_5xx
+      UpdateDownloadErrorKind.Generic,
+      UpdateDownloadErrorKind.None,
+      UpdateDownloadErrorKind.Custom -> R.string.update_error_generic
+    }
+    return runCatching {
+      val persistedLang = LocaleHelper.getPersistedLanguage(context)
+      val localizedCtx = LocaleHelper.wrapBaseContext(context, persistedLang)
+      localizedCtx.getString(resId)
+    }.getOrElse {
+      val enCtx = LocaleHelper.wrapBaseContext(context, LocaleHelper.LANG_EN)
+      val kmCtx = LocaleHelper.wrapBaseContext(context, LocaleHelper.LANG_KM)
+      "${enCtx.getString(resId)}\n${kmCtx.getString(resId)}"
+    }
+  }
+
+  private fun mapErrorMessage(e: Throwable): String {
+    val kind = classifyDownloadError(e)
+    return localizedErrorString(kind)
+  }
+
+  private class ApkHttpStatusException(val statusCode: Int, val apkUrl: String) :
+    IOException("APK HTTP $statusCode")
 
   private class LowStorageException(message: String) : IOException(message)
 }

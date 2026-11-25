@@ -253,6 +253,16 @@ class AurixViewModel(application: Application) : AndroidViewModel(application) {
     .stateIn(viewModelScope, SharingStarted.Eagerly, "aurora")
   val standbyVinylStyle: StateFlow<Boolean> = prefsManager.standbyVinylStyle
     .stateIn(viewModelScope, SharingStarted.Eagerly, true)
+  val standbyClockStyle: StateFlow<String> = prefsManager.standbyClockStyle
+    .stateIn(viewModelScope, SharingStarted.Eagerly, "thin")
+  val standbyUse24h: StateFlow<Boolean> = prefsManager.standbyUse24h
+    .stateIn(viewModelScope, SharingStarted.Eagerly, true)
+  val standbyMood: StateFlow<String> = prefsManager.standbyMood
+    .stateIn(viewModelScope, SharingStarted.Eagerly, "auto")
+  val standbyGyroEnabled: StateFlow<Boolean> = prefsManager.standbyGyroEnabled
+    .stateIn(viewModelScope, SharingStarted.Eagerly, true)
+  val standbyAutoLaunch: StateFlow<Boolean> = prefsManager.standbyAutoLaunch
+    .stateIn(viewModelScope, SharingStarted.Eagerly, false)
   val spectrumBars: StateFlow<FloatArray> = AudioSpectrumBus.bars
 
   // Search-Only Mode & YouTube Analyze/Download States
@@ -5344,6 +5354,11 @@ class AurixViewModel(application: Application) : AndroidViewModel(application) {
   fun setNowPlayingVisualizerEnabled(enabled: Boolean) { safeLaunch(notifyUser = false) { prefsManager.setNowPlayingVisualizerEnabled(enabled) } }
   fun setOrbiCompanionTheme(themeId: String) { safeLaunch(notifyUser = false) { prefsManager.setOrbiCompanionTheme(themeId) } }
   fun setStandbyVinylStyle(isVinyl: Boolean) { safeLaunch(notifyUser = false) { prefsManager.setStandbyVinylStyle(isVinyl) } }
+  fun setStandbyClockStyle(styleId: String) { safeLaunch(notifyUser = false) { prefsManager.setStandbyClockStyle(styleId) } }
+  fun setStandbyUse24h(use24h: Boolean) { safeLaunch(notifyUser = false) { prefsManager.setStandbyUse24h(use24h) } }
+  fun setStandbyMood(moodId: String) { safeLaunch(notifyUser = false) { prefsManager.setStandbyMood(moodId) } }
+  fun setStandbyGyroEnabled(enabled: Boolean) { safeLaunch(notifyUser = false) { prefsManager.setStandbyGyroEnabled(enabled) } }
+  fun setStandbyAutoLaunch(enabled: Boolean) { safeLaunch(notifyUser = false) { prefsManager.setStandbyAutoLaunch(enabled) } }
   fun setOnboardingCompleted(completed: Boolean) { safeLaunch(notifyUser = false) { prefsManager.setOnboardingCompleted(completed) } }
   fun setGithubOwner(owner: String) { safeLaunch(notifyUser = false) { prefsManager.setGithubOwner(owner) } }
   fun setGithubRepo(repo: String) { safeLaunch(notifyUser = false) { prefsManager.setGithubRepo(repo) } }

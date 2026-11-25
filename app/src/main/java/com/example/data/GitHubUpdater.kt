@@ -558,7 +558,22 @@ object GitHubUpdater {
 
       downloadClient.newCall(request).execute().use { response ->
         if (!response.isSuccessful) {
-          val err = ApkDownloadState.Error("Download failed (HTTP ${response.code}).")
+          android.util.Log.w(
+            "GitHubUpdater",
+            "Download failed with HTTP ${response.code} for ${release.apkUrl}"
+          )
+          val resId = when {
+            response.code == 404 -> com.example.R.string.update_error_404_building
+            response.code in 500..599 -> com.example.R.string.update_error_server_5xx
+            else -> com.example.R.string.update_error_generic
+          }
+          val msg = runCatching {
+            val lang = com.example.LocaleHelper.getPersistedLanguage(context)
+            com.example.LocaleHelper.wrapBaseContext(context, lang).getString(resId)
+          }.getOrElse {
+            context.getString(resId)
+          }
+          val err = ApkDownloadState.Error(msg)
           onProgress(err)
           return@withContext err
         }

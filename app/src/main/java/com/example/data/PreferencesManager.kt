@@ -90,6 +90,11 @@ class PreferencesManager(private val context: Context) {
     // Orbi Companion & Ambient Standby Mode keys
     val ORBI_COMPANION_THEME = stringPreferencesKey("orbi_companion_theme")
     val STANDBY_VINYL_STYLE = booleanPreferencesKey("standby_vinyl_style")
+    val STANDBY_CLOCK_STYLE = stringPreferencesKey("standby_clock_style")
+    val STANDBY_USE_24H = booleanPreferencesKey("standby_use_24h")
+    val STANDBY_MOOD = stringPreferencesKey("standby_mood")
+    val STANDBY_GYRO_ENABLED = booleanPreferencesKey("standby_gyro_enabled")
+    val STANDBY_AUTO_LAUNCH = booleanPreferencesKey("standby_auto_launch")
     val KHMER_LYRICS_FONT = stringPreferencesKey("khmer_lyrics_font")
 
     fun decodeRecentSearches(raw: String?): List<String> {
@@ -168,6 +173,21 @@ class PreferencesManager(private val context: Context) {
   }
   val standbyVinylStyle: Flow<Boolean> = safeDataFlow.map { prefs ->
     prefs[STANDBY_VINYL_STYLE] ?: true
+  }
+  val standbyClockStyle: Flow<String> = safeDataFlow.map { prefs ->
+    prefs[STANDBY_CLOCK_STYLE] ?: "thin"
+  }
+  val standbyUse24h: Flow<Boolean> = safeDataFlow.map { prefs ->
+    prefs[STANDBY_USE_24H] ?: true
+  }
+  val standbyMood: Flow<String> = safeDataFlow.map { prefs ->
+    prefs[STANDBY_MOOD] ?: "auto"
+  }
+  val standbyGyroEnabled: Flow<Boolean> = safeDataFlow.map { prefs ->
+    prefs[STANDBY_GYRO_ENABLED] ?: true
+  }
+  val standbyAutoLaunch: Flow<Boolean> = safeDataFlow.map { prefs ->
+    prefs[STANDBY_AUTO_LAUNCH] ?: false
   }
   val lyricsWidgetAnim: Flow<String> = safeDataFlow.map { prefs ->
     com.example.lyrics.LyricsAnimationStyle.fromId(prefs[LYRICS_WIDGET_ANIM] ?: prefs[LYRICS_ANIM]).id
@@ -420,6 +440,36 @@ class PreferencesManager(private val context: Context) {
   suspend fun setStandbyVinylStyle(isVinyl: Boolean) {
     context.dataStore.edit { prefs ->
       prefs[STANDBY_VINYL_STYLE] = isVinyl
+    }
+  }
+
+  suspend fun setStandbyClockStyle(styleId: String) {
+    context.dataStore.edit { prefs ->
+      prefs[STANDBY_CLOCK_STYLE] = styleId
+    }
+  }
+
+  suspend fun setStandbyUse24h(use24h: Boolean) {
+    context.dataStore.edit { prefs ->
+      prefs[STANDBY_USE_24H] = use24h
+    }
+  }
+
+  suspend fun setStandbyMood(moodId: String) {
+    context.dataStore.edit { prefs ->
+      prefs[STANDBY_MOOD] = moodId
+    }
+  }
+
+  suspend fun setStandbyGyroEnabled(enabled: Boolean) {
+    context.dataStore.edit { prefs ->
+      prefs[STANDBY_GYRO_ENABLED] = enabled
+    }
+  }
+
+  suspend fun setStandbyAutoLaunch(enabled: Boolean) {
+    context.dataStore.edit { prefs ->
+      prefs[STANDBY_AUTO_LAUNCH] = enabled
     }
   }
 }

@@ -731,17 +731,28 @@
     <string name="orbi_badge_aurix_legend">ជើងឯក AURIX</string>
     <string name="orbi_badge_aurix_legend_req">ចាក់ចម្រៀងបាន 30+ ដង</string>
 
-    <!-- Ambient Standby Mode / Desk Clock Player (v2.1.0) -->
-    <string name="standby_title">នាឡិកាតុ Standby</string>
-    <string name="standby_subtitle">អេក្រង់ OLED ពេញ នាឡិកា ឌីសវីនីល និងទំនុកច្រៀងផ្ទាល់</string>
-    <string name="standby_open_cd">បើកនាឡិកាតុ Standby</string>
+    <!-- Ambient Standby Mode / Bedside Charging Clock Player -->
+    <string name="standby_title">ម៉ូដ Standby</string>
+    <string name="standby_subtitle">នាឡិកាពេលសាកថ្ម ១០ ម៉ូត ផ្ទៃពណ៌អារម្មណ៍ និងចលនា 3D Gyro</string>
+    <string name="standby_open_cd">បើកម៉ូដ Standby</string>
     <string name="standby_exit_cd">ចាកចេញពី Standby</string>
     <string name="standby_style_vinyl">ឌីសវីនីល</string>
     <string name="standby_style_art">រូបភាព</string>
     <string name="standby_charging">កំពុងសាកថ្ម · %1$d%%</string>
     <string name="standby_battery">%1$d%%</string>
-    <string name="standby_tap_hint">ប៉ះអេក្រង់ដើម្បីបង្ហាញប៊ូតុង</string>
+    <string name="standby_tap_hint">ប៉ះដើម្បីបង្ហាញប៊ូតុង · អូសចុះក្រោមដើម្បីចាកចេញ</string>
     <string name="standby_no_track">មិនមានបទកំពុងចាក់</string>
+    <string name="standby_no_artist">ជ្រើសរើសបទចម្រៀងក្នុង AURIX ដើម្បីចាក់</string>
+    <string name="standby_now_playing_label">NOW PLAYING</string>
+    <string name="standby_clock_picker_title">ម៉ូតនាឡិកា</string>
+    <string name="standby_clock_picker_subtitle">ជ្រើសរើសម៉ូតនាឡិកា និងទម្រង់ម៉ោង 12h/24h</string>
+    <string name="standby_time_12h">12h</string>
+    <string name="standby_time_24h">24h</string>
+    <string name="standby_mood_cd">ប្ដូរពណ៌អារម្មណ៍</string>
+    <string name="standby_clock_cd">ជ្រើសរើសម៉ូតនាឡិកា</string>
+    <string name="standby_gyro_cd">បិទ/បើក ចលនា 3D Gyro</string>
+    <string name="standby_auto_launch_title">បើកស្វ័យប្រវត្តិពេលសាកថ្ម</string>
+    <string name="standby_auto_launch_subtitle">បើកស្វ័យប្រវត្តិពេលសាកថ្មជាទម្រង់ផ្ដេក ឬដាក់បញ្ឈរលើជើងទម្រ</string>
 
     <!-- Custom Playlist Cover Collage & Blur Studio (v2.1.0) -->
     <string name="edit_cover_tab_studio">ស្ទូឌីយោ</string>
@@ -763,4 +774,13 @@
     <string name="khmer_font_koulen">Koulen</string>
     <string name="khmer_font_noto_sans_khmer">Noto Sans Khmer</string>
     <string name="khmer_title_font_dangrek_badge">ចំណងជើង៖ Dangrek</string>
+
+    <!-- App Update APK Download Error Messages (v2.1.4) -->
+    <string name="update_error_404_building">Release កំពុង build សូមរង់ចាំ 2-4 នាទី រួចទាញយកម្តងទៀត។</string>
+    <string name="update_error_no_internet">គ្មានអ៊ីនធឺណិត សូមពិនិត្យការភ្ជាប់ រួចព្យាយាមម្តងទៀត។</string>
+    <string name="update_error_timeout">ការភ្ជាប់អស់ពេល សូមព្យាយាមម្តងទៀត។</string>
+    <string name="update_error_server_5xx">ម៉ាស៊ីនមេមានបញ្ហាបណ្ដោះអាសន្ន សូមព្យាយាមម្តងទៀតបន្តិចទៀត។</string>
+    <string name="update_error_generic">មិនអាចទាញយកកំណែថ្មីបានទេ សូមព្យាយាមម្តងទៀត។</string>
+    <string name="update_retry_button">ព្យាយាមម្តងទៀត</string>
+    <string name="update_retry_countdown">ព្យាយាមម្តងទៀត (%1$ds)</string>
 </resources>

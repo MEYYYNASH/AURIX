@@ -11,10 +11,10 @@ import org.junit.Test
 class CrashFixStabilityTest {
 
   @Test
-  fun release213_metadataAndVersionCodeAreConsistent() {
-    assertEquals("2.1.3", BuildConfig.VERSION_NAME)
-    assertEquals(20103, BuildConfig.VERSION_CODE)
-    assertTrue("Release 2.1.3 versionCode must exceed 2.1.2 (20102)", BuildConfig.VERSION_CODE > 20102)
+  fun release214_metadataAndVersionCodeAreConsistent() {
+    assertEquals("2.1.4", BuildConfig.VERSION_NAME)
+    assertEquals(20104, BuildConfig.VERSION_CODE)
+    assertTrue("Release 2.1.4 versionCode must exceed 2.1.3 (20103)", BuildConfig.VERSION_CODE > 20103)
     assertEquals(420, com.example.ui.screens.SELECT_BAR_OPEN_DURATION_MS)
     assertEquals(600, com.example.ui.screens.SELECT_CIRCLE_OPEN_DURATION_MS)
     assertEquals(380L, com.example.ui.screens.SELECT_CLOSE_CLEAR_DELAY_MS)
@@ -528,5 +528,44 @@ class CrashFixStabilityTest {
       khmerLyricsFont = com.example.ui.theme.KhmerLyricsFont.KOULEN
     )
     assertTrue("Mixed lyrics Khmer scale should equalize visual glyph height", koulenKhScale > koulenEnScale)
+  }
+
+  @Test
+  fun standbyModeAndUpdateDownloadError_workDeterministically() {
+    // 10 Standby clock styles + 5 color moods + Khmer date & 12h/24h clock parts
+    assertEquals(10, com.example.ui.screens.StandbyClockStyle.entries.size)
+    assertEquals(
+      com.example.ui.screens.StandbyClockStyle.MINECRAFT,
+      com.example.ui.screens.StandbyClockStyle.fromId("minecraft")
+    )
+    assertEquals(
+      com.example.ui.screens.StandbyClockStyle.ROUND,
+      com.example.ui.screens.StandbyClockStyle.fromId("round")
+    )
+    assertEquals(5, com.example.ui.screens.StandbyColorMood.entries.size)
+    assertEquals(
+      com.example.ui.screens.StandbyColorMood.AUTO,
+      com.example.ui.screens.StandbyColorMood.fromId("auto")
+    )
+    assertEquals(
+      com.example.ui.screens.StandbyColorMood.LOFI,
+      com.example.ui.screens.StandbyColorMood.fromId("lofi")
+    )
+    val khmerDate = com.example.ui.screens.formatKhmerStandbyDate(1763942400000L)
+    assertTrue("Khmer date chip should contain Khmer weekday prefix", khmerDate.contains("ថ្ងៃ"))
+
+    // UpdateDownloadErrorKind & 30s cooldown on HTTP 404
+    val installed = com.example.data.InstalledAppInfo("com.aurix.music", "2.1.4", 20104L, emptySet())
+    val state404 = com.example.data.UpdateUiState(
+      stage = com.example.data.UpdateStage.Error,
+      installed = installed,
+      errorMessage = "Release is still building, wait 2-4 minutes and try again.",
+      errorKind = com.example.data.UpdateDownloadErrorKind.Http404ReleaseBuilding,
+      retryCooldownSeconds = 30
+    )
+    assertEquals(com.example.data.UpdateMainAction.Retry, state404.mainAction)
+    assertEquals(com.example.data.UpdateDownloadErrorKind.Http404ReleaseBuilding, state404.errorKind)
+    assertEquals(30, state404.retryCooldownSeconds)
+    assertEquals(20104L, com.example.data.GitHubUpdater.deriveVersionCodeFromTag("v2.1.4"))
   }
 }

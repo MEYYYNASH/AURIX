@@ -55,10 +55,12 @@ import com.example.BuildConfig
 import com.example.R
 import com.example.data.InstalledAppInfo
 import com.example.data.RemoteVersionInfo
+import com.example.data.UpdateDownloadErrorKind
 import com.example.data.UpdateMainAction
 import com.example.data.UpdateManager
 import com.example.data.UpdateStage
 import com.example.data.UpdateUiState
+import kotlinx.coroutines.delay
 import com.example.playback.CrossfadeSettings
 import com.example.playback.EqPreset
 import com.example.playback.EqualizerUiState
@@ -141,6 +143,8 @@ fun SettingsScreen(
   widgetCustomizerConfig: com.example.widget.WidgetCustomizerConfig = com.example.widget.WidgetCustomizerConfig.DEFAULT,
   onOpenWidgetCustomizer: () -> Unit = {},
   onOpenStandby: () -> Unit = {},
+  standbyAutoLaunch: Boolean = false,
+  onStandbyAutoLaunchChanged: (Boolean) -> Unit = {},
   onUnlockDeveloperMode: () -> Unit = {},
   onDeveloperModeEnabledChanged: (Boolean) -> Unit = {},
   onOpenCurrentSongLyricsEditor: () -> Unit = {},
@@ -1047,45 +1051,81 @@ fun SettingsScreen(
       }
     }
 
-    // Standby Desk Clock Glass Card (OLED Full-Screen Player)
+    // Standby Mode Glass Card (Bedside & Charging Player + Optional Auto-Open Toggle)
     item {
       GlassCard(darkTheme = darkTheme, cornerRadius = 24.dp, modifier = Modifier.fillMaxWidth()) {
-        Row(
-          modifier = Modifier
-            .fillMaxWidth()
-            .clickable { onOpenStandby() }
-            .padding(18.dp)
-            .testTag("settings_standby_row"),
-          horizontalArrangement = Arrangement.SpaceBetween,
-          verticalAlignment = Alignment.CenterVertically
-        ) {
-          Column(modifier = Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(2.dp)) {
-            Text(
-              text = stringResource(id = R.string.standby_title),
-              style = MaterialTheme.typography.titleMedium.copy(fontWeight = FontWeight.Bold, lineHeight = 24.sp),
-              color = MaterialTheme.colorScheme.onSurface
-            )
-            Text(
-              text = stringResource(id = R.string.standby_subtitle),
-              style = MaterialTheme.typography.bodySmall.copy(lineHeight = 18.sp),
-              color = MaterialTheme.colorScheme.onSurfaceVariant
-            )
-          }
-          Spacer(modifier = Modifier.width(12.dp))
-          Box(
+        Column(modifier = Modifier.fillMaxWidth()) {
+          Row(
             modifier = Modifier
-              .size(40.dp)
-              .clip(RoundedCornerShape(14.dp))
-              .background(
-                Brush.linearGradient(listOf(Color(0xFF6366F1).copy(alpha = 0.24f), Color(0xFF22D3EE).copy(alpha = 0.22f)))
-              ),
-            contentAlignment = Alignment.Center
+              .fillMaxWidth()
+              .clickable { onOpenStandby() }
+              .padding(horizontal = 18.dp, vertical = 16.dp)
+              .testTag("settings_standby_row"),
+            horizontalArrangement = Arrangement.SpaceBetween,
+            verticalAlignment = Alignment.CenterVertically
           ) {
-            Icon(
-              imageVector = Icons.Rounded.Schedule,
-              contentDescription = stringResource(id = R.string.standby_open_cd),
-              tint = Color(0xFF43C7F4),
-              modifier = Modifier.size(22.dp)
+            Column(modifier = Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(2.dp)) {
+              Text(
+                text = stringResource(id = R.string.standby_title),
+                style = MaterialTheme.typography.titleMedium.copy(fontWeight = FontWeight.Bold, lineHeight = 24.sp),
+                color = MaterialTheme.colorScheme.onSurface
+              )
+              Text(
+                text = stringResource(id = R.string.standby_subtitle),
+                style = MaterialTheme.typography.bodySmall.copy(lineHeight = 18.sp),
+                color = MaterialTheme.colorScheme.onSurfaceVariant
+              )
+            }
+            Spacer(modifier = Modifier.width(12.dp))
+            Box(
+              modifier = Modifier
+                .size(40.dp)
+                .clip(RoundedCornerShape(14.dp))
+                .background(
+                  Brush.linearGradient(listOf(Color(0xFF6366F1).copy(alpha = 0.24f), Color(0xFF22D3EE).copy(alpha = 0.22f)))
+                ),
+              contentAlignment = Alignment.Center
+            ) {
+              Icon(
+                imageVector = Icons.Rounded.Schedule,
+                contentDescription = stringResource(id = R.string.standby_open_cd),
+                tint = Color(0xFF43C7F4),
+                modifier = Modifier.size(22.dp)
+              )
+            }
+          }
+
+          HorizontalDivider(
+            color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.08f),
+            modifier = Modifier.padding(horizontal = 18.dp)
+          )
+
+          Row(
+            modifier = Modifier
+              .fillMaxWidth()
+              .clickable { onStandbyAutoLaunchChanged(!standbyAutoLaunch) }
+              .padding(horizontal = 18.dp, vertical = 14.dp)
+              .testTag("settings_standby_auto_launch_row"),
+            horizontalArrangement = Arrangement.SpaceBetween,
+            verticalAlignment = Alignment.CenterVertically
+          ) {
+            Column(modifier = Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(2.dp)) {
+              Text(
+                text = stringResource(id = R.string.standby_auto_launch_title),
+                style = MaterialTheme.typography.bodyMedium.copy(fontWeight = FontWeight.SemiBold),
+                color = MaterialTheme.colorScheme.onSurface
+              )
+              Text(
+                text = stringResource(id = R.string.standby_auto_launch_subtitle),
+                style = MaterialTheme.typography.bodySmall.copy(lineHeight = 17.sp),
+                color = MaterialTheme.colorScheme.onSurfaceVariant
+              )
+            }
+            Spacer(modifier = Modifier.width(12.dp))
+            Switch(
+              checked = standbyAutoLaunch,
+              onCheckedChange = onStandbyAutoLaunchChanged,
+              modifier = Modifier.testTag("settings_standby_auto_launch_switch")
             )
           }
         }
@@ -1748,8 +1788,22 @@ fun AppUpdateReleaseCard(
             overflow = TextOverflow.Ellipsis
           )
 
+          val localizedErrorText = when (updateUiState.errorKind) {
+            UpdateDownloadErrorKind.Http404ReleaseBuilding -> stringResource(id = R.string.update_error_404_building)
+            UpdateDownloadErrorKind.NoInternet -> stringResource(id = R.string.update_error_no_internet)
+            UpdateDownloadErrorKind.Timeout -> stringResource(id = R.string.update_error_timeout)
+            UpdateDownloadErrorKind.Server5xx -> stringResource(id = R.string.update_error_server_5xx)
+            UpdateDownloadErrorKind.Generic -> stringResource(id = R.string.update_error_generic)
+            UpdateDownloadErrorKind.None, UpdateDownloadErrorKind.Custom -> null
+          }
+          val displaySubtitle = if (updateUiState.stage == UpdateStage.Error && localizedErrorText != null) {
+            localizedErrorText
+          } else {
+            updateUiState.subtitleMessage
+          }
+
           AnimatedContent(
-            targetState = updateUiState.subtitleMessage,
+            targetState = displaySubtitle,
             transitionSpec = {
               if (reducedMotion) {
                 fadeIn(snap()) togetherWith fadeOut(snap())
@@ -1763,7 +1817,7 @@ fun AppUpdateReleaseCard(
             Text(
               text = subtitle,
               style = MaterialTheme.typography.bodySmall.copy(lineHeight = 17.sp),
-              color = lightVioletAccent,
+              color = if (updateUiState.stage == UpdateStage.Error) stageStatusColor else lightVioletAccent,
               maxLines = 2,
               overflow = TextOverflow.Ellipsis
             )
@@ -1879,11 +1933,59 @@ fun AppUpdateReleaseCard(
             )
           }
 
-          // Status row with vector shield icon
+          val statusErrorText = when (updateUiState.errorKind) {
+            UpdateDownloadErrorKind.Http404ReleaseBuilding -> stringResource(id = R.string.update_error_404_building)
+            UpdateDownloadErrorKind.NoInternet -> stringResource(id = R.string.update_error_no_internet)
+            UpdateDownloadErrorKind.Timeout -> stringResource(id = R.string.update_error_timeout)
+            UpdateDownloadErrorKind.Server5xx -> stringResource(id = R.string.update_error_server_5xx)
+            UpdateDownloadErrorKind.Generic -> stringResource(id = R.string.update_error_generic)
+            UpdateDownloadErrorKind.None, UpdateDownloadErrorKind.Custom -> null
+          }
+          val displayStatusMessage = if (updateUiState.stage == UpdateStage.Error) {
+            statusErrorText ?: updateUiState.errorMessage ?: updateUiState.statusMessage
+          } else {
+            updateUiState.statusMessage
+          }
+
+          var retryCountdownSec by remember(updateUiState.stage, updateUiState.errorTimestampMs, updateUiState.retryCooldownSeconds) {
+            mutableIntStateOf(
+              if (updateUiState.stage == UpdateStage.Error) updateUiState.retryCooldownSeconds else 0
+            )
+          }
+          LaunchedEffect(updateUiState.stage, updateUiState.errorTimestampMs, updateUiState.retryCooldownSeconds) {
+            if (updateUiState.stage == UpdateStage.Error && updateUiState.retryCooldownSeconds > 0) {
+              retryCountdownSec = updateUiState.retryCooldownSeconds
+              while (retryCountdownSec > 0) {
+                delay(1000L)
+                retryCountdownSec = (retryCountdownSec - 1).coerceAtLeast(0)
+              }
+            } else {
+              retryCountdownSec = 0
+            }
+          }
+          val isRetryCoolingDown = updateUiState.stage == UpdateStage.Error && retryCountdownSec > 0
+          val inlineRetryText = if (isRetryCoolingDown) {
+            stringResource(id = R.string.update_retry_countdown, retryCountdownSec)
+          } else {
+            stringResource(id = R.string.update_retry_button)
+          }
+
+          // Status row with vector shield icon and inline Retry button when in Error stage
           Surface(
             shape = RoundedCornerShape(14.dp),
-            color = Color.White.copy(alpha = 0.04f),
-            border = androidx.compose.foundation.BorderStroke(1.dp, Color.White.copy(alpha = 0.08f)),
+            color = if (updateUiState.stage == UpdateStage.Error) {
+              stageStatusColor.copy(alpha = 0.12f)
+            } else {
+              Color.White.copy(alpha = 0.04f)
+            },
+            border = androidx.compose.foundation.BorderStroke(
+              1.dp,
+              if (updateUiState.stage == UpdateStage.Error) {
+                stageStatusColor.copy(alpha = 0.30f)
+              } else {
+                Color.White.copy(alpha = 0.08f)
+              }
+            ),
             modifier = Modifier.fillMaxWidth()
           ) {
             Row(
@@ -1894,13 +1996,17 @@ fun AppUpdateReleaseCard(
               horizontalArrangement = Arrangement.spacedBy(9.dp)
             ) {
               Icon(
-                imageVector = Icons.Rounded.VerifiedUser,
+                imageVector = if (updateUiState.stage == UpdateStage.Error) {
+                  Icons.Rounded.ErrorOutline
+                } else {
+                  Icons.Rounded.VerifiedUser
+                },
                 contentDescription = stringResource(id = R.string.settings_update_status),
                 tint = stageStatusColor,
                 modifier = Modifier.size(18.dp)
               )
               Text(
-                text = updateUiState.statusMessage,
+                text = displayStatusMessage,
                 style = MaterialTheme.typography.bodySmall.copy(
                   fontWeight = FontWeight.SemiBold,
                   lineHeight = 18.sp
@@ -1913,6 +2019,50 @@ fun AppUpdateReleaseCard(
                   .semantics { liveRegion = LiveRegionMode.Polite }
                   .testTag("settings_update_status_text")
               )
+              if (updateUiState.stage == UpdateStage.Error) {
+                Surface(
+                  shape = RoundedCornerShape(999.dp),
+                  color = if (isRetryCoolingDown) {
+                    Color.White.copy(alpha = 0.08f)
+                  } else {
+                    stageStatusColor.copy(alpha = 0.22f)
+                  },
+                  border = androidx.compose.foundation.BorderStroke(
+                    1.dp,
+                    if (isRetryCoolingDown) {
+                      Color.White.copy(alpha = 0.14f)
+                    } else {
+                      stageStatusColor.copy(alpha = 0.48f)
+                    }
+                  ),
+                  modifier = Modifier
+                    .clip(RoundedCornerShape(999.dp))
+                    .clickable(enabled = !isRetryCoolingDown) { onMainAction() }
+                    .testTag("update_error_inline_retry_button")
+                ) {
+                  Row(
+                    modifier = Modifier.padding(horizontal = 11.dp, vertical = 6.dp),
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.spacedBy(5.dp)
+                  ) {
+                    Icon(
+                      imageVector = Icons.Rounded.Refresh,
+                      contentDescription = inlineRetryText,
+                      tint = if (isRetryCoolingDown) mutedGlassText else Color.White,
+                      modifier = Modifier.size(13.dp)
+                    )
+                    Text(
+                      text = inlineRetryText,
+                      style = MaterialTheme.typography.labelSmall.copy(
+                        fontWeight = FontWeight.Bold,
+                        fontSize = 11.sp
+                      ),
+                      color = if (isRetryCoolingDown) mutedGlassText else Color.White,
+                      maxLines = 1
+                    )
+                  }
+                }
+              }
             }
           }
         }
@@ -2060,6 +2210,29 @@ fun AppUpdateReleaseCard(
       // Main Dynamic CTA Button ("Download & Install", "Resume Download", "Restart App", "Retry", etc.)
       val mainAction = updateUiState.mainAction
       if (mainAction != UpdateMainAction.None) {
+        var ctaCooldownSec by remember(updateUiState.stage, updateUiState.errorTimestampMs, updateUiState.retryCooldownSeconds) {
+          mutableIntStateOf(
+            if (updateUiState.stage == UpdateStage.Error) updateUiState.retryCooldownSeconds else 0
+          )
+        }
+        LaunchedEffect(updateUiState.stage, updateUiState.errorTimestampMs, updateUiState.retryCooldownSeconds) {
+          if (updateUiState.stage == UpdateStage.Error && updateUiState.retryCooldownSeconds > 0) {
+            ctaCooldownSec = updateUiState.retryCooldownSeconds
+            while (ctaCooldownSec > 0) {
+              delay(1000L)
+              ctaCooldownSec = (ctaCooldownSec - 1).coerceAtLeast(0)
+            }
+          } else {
+            ctaCooldownSec = 0
+          }
+        }
+        val ctaRetryCoolingDown = mainAction == UpdateMainAction.Retry && ctaCooldownSec > 0
+        val retryCtaText = if (ctaRetryCoolingDown) {
+          stringResource(id = R.string.update_retry_countdown, ctaCooldownSec)
+        } else {
+          stringResource(id = R.string.update_retry_button)
+        }
+
         val (ctaLabel, ctaIcon, ctaColor) = when (mainAction) {
           UpdateMainAction.DownloadAndInstall -> Triple(
             stringResource(id = R.string.settings_download_install),
@@ -2087,9 +2260,9 @@ fun AppUpdateReleaseCard(
             AccentGreen
           )
           UpdateMainAction.Retry -> Triple(
-            stringResource(id = R.string.settings_retry_update),
+            retryCtaText,
             Icons.Rounded.Refresh,
-            Color(0xFFEF4444)
+            if (ctaRetryCoolingDown) Color(0xFF4B5563) else Color(0xFFEF4444)
           )
           UpdateMainAction.None -> Triple("", Icons.Rounded.SystemUpdate, violetAccent)
         }
@@ -2105,7 +2278,7 @@ fun AppUpdateReleaseCard(
               )
             )
             .border(1.dp, Color.White.copy(alpha = 0.16f), RoundedCornerShape(18.dp))
-            .clickable { onMainAction() }
+            .clickable(enabled = !ctaRetryCoolingDown) { onMainAction() }
             .testTag("update_now_button"),
           contentAlignment = Alignment.Center
         ) {
@@ -2116,13 +2289,13 @@ fun AppUpdateReleaseCard(
             Icon(
               imageVector = ctaIcon,
               contentDescription = null,
-              tint = Color.White,
+              tint = Color.White.copy(alpha = if (ctaRetryCoolingDown) 0.7f else 1f),
               modifier = Modifier.size(19.dp)
             )
             Text(
               text = ctaLabel,
               style = MaterialTheme.typography.bodyMedium.copy(fontWeight = FontWeight.Bold, lineHeight = 20.sp),
-              color = Color.White,
+              color = Color.White.copy(alpha = if (ctaRetryCoolingDown) 0.7f else 1f),
               maxLines = 1,
               overflow = TextOverflow.Ellipsis
             )
