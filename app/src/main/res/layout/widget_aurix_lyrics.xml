@@ -196,7 +196,7 @@
                         android:shadowDy="1.5"
                         android:shadowRadius="4"
                         android:textColor="#FFFFFF"
-                        android:textSize="17sp"
+                        android:textSize="15sp"
                         android:textStyle="bold" />
 
                     <ImageView
@@ -217,7 +217,7 @@
                         android:ellipsize="end"
                         android:maxLines="1"
                         android:textColor="#C2D8EEFF"
-                        android:textSize="13sp" />
+                        android:textSize="12sp" />
                 </LinearLayout>
 
                 <!-- Center Stage: Active Lyric Row (animated) + Static Upcoming Lyric Row (never animated) -->
@@ -290,7 +290,7 @@
                                         android:shadowDy="1.5"
                                         android:shadowRadius="4"
                                         android:textColor="#FFFFFF"
-                                        android:textSize="16.5sp"
+                                        android:textSize="14.5sp"
                                         android:textStyle="bold" />
 
                                     <TextView
@@ -338,7 +338,7 @@
                                         android:shadowDy="1.5"
                                         android:shadowRadius="4"
                                         android:textColor="#FFFFFF"
-                                        android:textSize="16.5sp"
+                                        android:textSize="14.5sp"
                                         android:textStyle="bold" />
 
                                     <TextView
@@ -377,7 +377,7 @@
                             android:lineSpacingExtra="1.5dp"
                             android:maxLines="1"
                             android:textColor="#B8DCEEFF"
-                            android:textSize="12.5sp"
+                            android:textSize="11.5sp"
                             android:visibility="gone" />
                     </FrameLayout>
                 </LinearLayout>
@@ -420,7 +420,7 @@
                 android:maxLines="1"
                 android:singleLine="true"
                 android:textColor="#C2D8EEFF"
-                android:textSize="11.5sp" />
+                android:textSize="11sp" />
         </LinearLayout>
     </LinearLayout>
 

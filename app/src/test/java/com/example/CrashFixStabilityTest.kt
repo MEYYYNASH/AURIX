@@ -11,10 +11,10 @@ import org.junit.Test
 class CrashFixStabilityTest {
 
   @Test
-  fun release215_metadataAndVersionCodeAreConsistent() {
-    assertEquals("2.1.5", BuildConfig.VERSION_NAME)
-    assertEquals(20105, BuildConfig.VERSION_CODE)
-    assertTrue("Release 2.1.5 versionCode must exceed 2.1.4 (20104)", BuildConfig.VERSION_CODE > 20104)
+  fun release216_metadataAndVersionCodeAreConsistent() {
+    assertEquals("2.1.6", BuildConfig.VERSION_NAME)
+    assertEquals(20106, BuildConfig.VERSION_CODE)
+    assertTrue("Release 2.1.6 versionCode must exceed 2.1.5 (20105)", BuildConfig.VERSION_CODE > 20105)
     assertEquals(420, com.example.ui.screens.SELECT_BAR_OPEN_DURATION_MS)
     assertEquals(600, com.example.ui.screens.SELECT_CIRCLE_OPEN_DURATION_MS)
     assertEquals(380L, com.example.ui.screens.SELECT_CLOSE_CLEAR_DELAY_MS)
@@ -554,8 +554,8 @@ class CrashFixStabilityTest {
     val khmerDate = com.example.ui.screens.formatKhmerStandbyDate(1763942400000L)
     assertTrue("Khmer date chip should contain Khmer weekday prefix", khmerDate.contains("ថ្ងៃ"))
 
-    // UpdateDownloadErrorKind & 30s cooldown on HTTP 404
-    val installed = com.example.data.InstalledAppInfo("com.aurix.music", "2.1.5", 20105L, emptySet())
+    // UpdateDownloadErrorKind, 30s cooldown on HTTP 404 & release-pinned checksum URL derivation
+    val installed = com.example.data.InstalledAppInfo("com.aurix.music", "2.1.6", 20106L, emptySet())
     val state404 = com.example.data.UpdateUiState(
       stage = com.example.data.UpdateStage.Error,
       installed = installed,
@@ -566,7 +566,18 @@ class CrashFixStabilityTest {
     assertEquals(com.example.data.UpdateMainAction.Retry, state404.mainAction)
     assertEquals(com.example.data.UpdateDownloadErrorKind.Http404ReleaseBuilding, state404.errorKind)
     assertEquals(30, state404.retryCooldownSeconds)
-    assertEquals(20105L, com.example.data.GitHubUpdater.deriveVersionCodeFromTag("v2.1.5"))
+    assertEquals(20106L, com.example.data.GitHubUpdater.deriveVersionCodeFromTag("v2.1.6"))
+    assertEquals(
+      "https://github.com/MEYYYNASH/AURIX/releases/download/v2.1.6/version.json",
+      com.example.data.UpdateManager.deriveReleaseAssetVersionJsonUrl(
+        "https://github.com/MEYYYNASH/AURIX/releases/download/v2.1.6/AURIX-v2.1.6.apk"
+      )
+    )
+    assertNull(
+      com.example.data.UpdateManager.deriveReleaseAssetVersionJsonUrl(
+        "http://127.0.0.1:8080/aurix.apk"
+      )
+    )
   }
 
   @Test
@@ -584,13 +595,16 @@ class CrashFixStabilityTest {
     assertTrue(artistSepRuns[0].isKhmer)
     org.junit.Assert.assertFalse(artistSepRuns[1].isKhmer)
 
-    // 3. Verify widget text column widths & sizes across Small / Wide / Large and side frame toggles
-    assertEquals(152f, com.example.widget.AurixWidgetController.computeLyricsTextWidthDp(com.example.widget.WidgetSizeTier.SMALL, false), 0.01f)
-    assertEquals(274f, com.example.widget.AurixWidgetController.computeLyricsTextWidthDp(com.example.widget.WidgetSizeTier.WIDE, false), 0.01f)
-    assertEquals(178f, com.example.widget.AurixWidgetController.computeLyricsTextWidthDp(com.example.widget.WidgetSizeTier.WIDE, true), 0.01f)
-    assertEquals(294f, com.example.widget.AurixWidgetController.computeLyricsTextWidthDp(com.example.widget.WidgetSizeTier.LARGE, false), 0.01f)
-    assertEquals(192f, com.example.widget.AurixWidgetController.computeLyricsTextWidthDp(com.example.widget.WidgetSizeTier.LARGE, true), 0.01f)
-    assertEquals(284f, com.example.widget.AurixWidgetController.computeLyricsFooterWidthDp(com.example.widget.WidgetSizeTier.WIDE, true), 0.01f)
+    // 3. Verify widget text column widths & sizes across Small / Wide / Large and real launcher widths
+    assertEquals(147f, com.example.widget.AurixWidgetController.computeLyricsTextWidthDp(com.example.widget.WidgetSizeTier.SMALL, false), 0.01f)
+    assertEquals(298.5f, com.example.widget.AurixWidgetController.computeLyricsTextWidthDp(com.example.widget.WidgetSizeTier.WIDE, false), 0.01f)
+    assertEquals(204.5f, com.example.widget.AurixWidgetController.computeLyricsTextWidthDp(com.example.widget.WidgetSizeTier.WIDE, true), 0.01f)
+    assertEquals(224.5f, com.example.widget.AurixWidgetController.computeLyricsTextWidthDp(com.example.widget.WidgetSizeTier.WIDE, true, widgetWidthDp = 360), 0.01f)
+    assertEquals(313.5f, com.example.widget.AurixWidgetController.computeLyricsTextWidthDp(com.example.widget.WidgetSizeTier.LARGE, false), 0.01f)
+    assertEquals(197.5f, com.example.widget.AurixWidgetController.computeLyricsTextWidthDp(com.example.widget.WidgetSizeTier.LARGE, true), 0.01f)
+    assertEquals(312f, com.example.widget.AurixWidgetController.computeLyricsFooterWidthDp(com.example.widget.WidgetSizeTier.WIDE, true), 0.01f)
+    assertEquals(14.5f, com.example.widget.AurixWidgetController.computeLyricsActiveTextSizeDp(com.example.widget.WidgetSizeTier.WIDE), 0.01f)
+    assertEquals(11.5f, com.example.widget.AurixWidgetController.computeLyricsNextTextSizeDp(com.example.widget.WidgetSizeTier.WIDE), 0.01f)
     assertTrue(
       com.example.widget.AurixWidgetController.computeLyricsActiveTextSizeDp(com.example.widget.WidgetSizeTier.LARGE) >
         com.example.widget.AurixWidgetController.computeLyricsActiveTextSizeDp(com.example.widget.WidgetSizeTier.SMALL)

@@ -176,7 +176,10 @@ class UpdateManager(
     private const val PART_FILE_NAME = "aurix_update.apk.part"
     private const val META_FILE_NAME = "aurix_update.apk.meta.json"
 
+    private val SHA256_HEX_REGEX = Regex("^[a-f0-9]{64}$")
+
     val CURRENT_RELEASE_NOTES = listOf(
+      "Proportional Widget Lyrics & Reliable Release Verification (v2.1.6): Calibrated Home Screen Lyrics widget text sizes and launcher column widths for balanced 1:1 proportions across Small, Wide, and Large widgets (plus live preview); fixed OTA release APK SHA-256 verification against GitHub Release checksum assets so updates download and verify cleanly",
       "Bundled Full-Unicode Khmer Fonts & Redesigned Glass Widgets (v2.1.5): Replaced missing-glyph placeholder fonts with real full-Unicode Khmer & Latin .ttf fonts (Dangrek for titles, Kantumruy Pro, Koulen, Noto Sans Khmer for lyrics & UI, Outfit & Inter for English) across the entire app and all Home Screen widgets; fixed Khmer accent/header line-height clipping; redesigned Music & Lyrics Home Screen widgets with full-width header/footer, exact 1:1 text alignment matching the accent bar, tinted aurora glass pills, and cosmic midnight colors",
       "Standby Bedside & Charging Screen + Clean Bilingual Update Error Handling (v2.1.4): Redesigned Standby Mode with 10 clock styles (Thin, Bold, Minecraft 5x7 pixel blocks, LED Dots, Flip Cards, Neon Orbitron, Serif Playfair, Round Fredoka gradient, Stack, Outline) & 12h/24h toggle, 5 color moods (Auto cover palette lerp, Lo-fi, Sunset, Mint, Mono) with drifting radial blobs, 3D Gyro Parallax (up to 14° tilt with moving glare & auto-recentering neutral point), Khmer date + mood + battery % chips, 17-segment progress bar, burn-in pixel drift & 2-minute auto-dim, plus localized EN/KM APK update download error messages with a 30-second Retry countdown when a new release is still building (HTTP 404)",
       "Khmer Lyrics Font Picker, Dangrek Titles, Active-Only Lyric Animation & Restored Home Carousels (v2.1.3): Restored all Home Screen and Music Insights song carousels by default; refined the Home Screen Lyrics widget layout so the accent bar aligns cleanly beside the active lyric line without overlapping the side frame; restricted lyric transitions so only the currently displayed lyric line animates while upcoming lyrics remain static across widgets, in-app lyrics, and Standby Desk Clock; added a Khmer Lyrics Font selector in Settings > Lyrics (Kantumruy Pro, Koulen, Noto Sans Khmer) plus Dangrek for Khmer song titles with equalized visual glyph height when English and Khmer appear together",
@@ -303,6 +306,70 @@ class UpdateManager(
       .followRedirects(true)
       .build()
 
+    fun deriveReleaseAssetVersionJsonUrl(apkUrl: String): String? {
+      val trimmed = apkUrl.trim()
+      if (trimmed.isBlank()) return null
+      val parsed = runCatching { java.net.URI(trimmed) }.getOrNull() ?: return null
+      val host = parsed.host?.lowercase(Locale.ROOT).orEmpty()
+      if (host != "github.com" && !host.endsWith(".github.com")) return null
+      val pathSegments = parsed.path
+        ?.trim('/')
+        ?.split('/')
+        ?.filter { it.isNotEmpty() }
+        .orEmpty()
+      val dlIndex = pathSegments.indexOf("download")
+      if (dlIndex < 3 || pathSegments.getOrNull(dlIndex - 1) != "releases" || dlIndex + 2 >= pathSegments.size) {
+        return null
+      }
+      val owner = pathSegments[0]
+      val repo = pathSegments[1]
+      val tag = pathSegments[dlIndex + 1]
+      if (owner.isBlank() || repo.isBlank() || tag.isBlank()) return null
+      return "https://github.com/$owner/$repo/releases/download/$tag/version.json"
+    }
+
+    private fun fetchAuthoritativeReleaseSha256(apkUrl: String): String? {
+      val releaseVersionJsonUrl = deriveReleaseAssetVersionJsonUrl(apkUrl) ?: return null
+      // 1. Prefer version.json attached directly to this GitHub Release tag
+      runCatching {
+        val req = Request.Builder()
+          .url(releaseVersionJsonUrl)
+          .header("User-Agent", "AURIX-Android-Updater")
+          .header("Cache-Control", "no-cache")
+          .build()
+        sharedApiClient.newCall(req).execute().use { resp ->
+          if (resp.isSuccessful) {
+            val body = resp.body?.string().orEmpty()
+            if (body.isNotBlank()) {
+              val candidate = parseVersionJson(body).sha256.trim().lowercase(Locale.ROOT)
+              if (SHA256_HEX_REGEX.matches(candidate)) return candidate
+            }
+          }
+        }
+      }
+      // 2. Fallback to sibling <apkUrl>.sha256 release asset
+      runCatching {
+        val shaUrl = "${apkUrl.trim()}.sha256"
+        val req = Request.Builder()
+          .url(shaUrl)
+          .header("User-Agent", "AURIX-Android-Updater")
+          .header("Cache-Control", "no-cache")
+          .build()
+        sharedApiClient.newCall(req).execute().use { resp ->
+          if (resp.isSuccessful) {
+            val token = resp.body?.string().orEmpty()
+              .trim()
+              .split(Regex("\\s+"))
+              .firstOrNull()
+              ?.lowercase(Locale.ROOT)
+              .orEmpty()
+            if (SHA256_HEX_REGEX.matches(token)) return token
+          }
+        }
+      }
+      return null
+    }
+
     suspend fun fetchLatestReleaseDirect(
       context: Context,
       installed: InstalledAppInfo,
@@ -321,7 +388,18 @@ class UpdateManager(
           if (response.isSuccessful) {
             val body = response.body?.string().orEmpty()
             if (body.isNotBlank()) {
-              return@withContext Result.success(parseVersionJson(body))
+              val parsed = parseVersionJson(body)
+              val resolved = if (versionJsonUrl == VERSION_JSON_URL) {
+                val releaseSha = fetchAuthoritativeReleaseSha256(parsed.apkUrl)
+                if (releaseSha != null && !releaseSha.equals(parsed.sha256, ignoreCase = true)) {
+                  parsed.copy(sha256 = releaseSha)
+                } else {
+                  parsed
+                }
+              } else {
+                parsed
+              }
+              return@withContext Result.success(resolved)
             }
           }
           if (response.code == 404) {
@@ -604,6 +682,8 @@ class UpdateManager(
             val hasResumablePart = meta != null &&
               meta.release.versionCode == remote.versionCode &&
               meta.release.apkUrl == remote.apkUrl &&
+              (meta.release.sha256.isBlank() || remote.sha256.isBlank() ||
+                meta.release.sha256.equals(remote.sha256, ignoreCase = true)) &&
               partFile.exists() &&
               partFile.length() > 0L
 
@@ -804,6 +884,8 @@ class UpdateManager(
     val canAppend = existingMeta != null &&
       existingMeta.release.versionCode == release.versionCode &&
       existingMeta.release.apkUrl == release.apkUrl &&
+      (existingMeta.release.sha256.isBlank() || release.sha256.isBlank() ||
+        existingMeta.release.sha256.equals(release.sha256, ignoreCase = true)) &&
       partFile.exists() &&
       partFile.length() > 0L
 
@@ -1041,11 +1123,15 @@ class UpdateManager(
       }
 
       val verifyError = withContext(Dispatchers.IO) {
-        if (release.sha256.isNotBlank()) {
+        val expectedSha = release.sha256.trim().lowercase(Locale.ROOT)
+        if (expectedSha.isNotBlank()) {
           val actualSha = computeSha256Hex(finalFile)
-          if (!actualSha.equals(release.sha256.trim(), ignoreCase = true)) {
-            clearPartialFiles(keepFinalApk = false)
-            return@withContext "SHA-256 verification failed. The corrupted file was deleted."
+          if (!actualSha.equals(expectedSha, ignoreCase = true)) {
+            val authoritativeSha = fetchAuthoritativeReleaseSha256(release.apkUrl)
+            if (authoritativeSha == null || !actualSha.equals(authoritativeSha, ignoreCase = true)) {
+              clearPartialFiles(keepFinalApk = false)
+              return@withContext "SHA-256 verification failed. The corrupted file was deleted."
+            }
           }
         }
         when (val archiveCheck = GitHubUpdater.validateApkArchive(context, finalFile)) {

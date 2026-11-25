@@ -351,7 +351,11 @@ fun LiveWidgetPreviewCard(
         }
 
         if (!showLyricsContent) {
-          val noLyricsTitleFontSize = if (sizeTier == WidgetSizeTier.SMALL) 14.5.sp else 16.5.sp
+          val noLyricsTitleFontSize = when (sizeTier) {
+            WidgetSizeTier.SMALL -> 13.5.sp
+            WidgetSizeTier.WIDE -> 15.sp
+            WidgetSizeTier.LARGE -> 16.5.sp
+          }
           Column(
             modifier = Modifier.weight(1f),
             verticalArrangement = Arrangement.Center
@@ -374,18 +378,22 @@ fun LiveWidgetPreviewCard(
               text = previewArtist,
               color = Color(0xC2D8EEFF),
               fontFamily = com.example.ui.theme.AurixFontFamilies.AurixUiFamily,
-              fontSize = 12.5.sp,
+              fontSize = if (sizeTier == WidgetSizeTier.LARGE) 13.sp else 12.sp,
               maxLines = 1,
               overflow = TextOverflow.Ellipsis
             )
           }
         } else {
           val currentLyricFontSize = when (sizeTier) {
-            WidgetSizeTier.SMALL -> 14.5.sp
-            WidgetSizeTier.WIDE -> 16.5.sp
-            WidgetSizeTier.LARGE -> 18.5.sp
+            WidgetSizeTier.SMALL -> 13.sp
+            WidgetSizeTier.WIDE -> 14.5.sp
+            WidgetSizeTier.LARGE -> 16.sp
           }
-          val nextLyricFontSize = if (sizeTier == WidgetSizeTier.SMALL) 11.sp else 12.5.sp
+          val nextLyricFontSize = when (sizeTier) {
+            WidgetSizeTier.SMALL -> 10.5.sp
+            WidgetSizeTier.WIDE -> 11.5.sp
+            WidgetSizeTier.LARGE -> 12.5.sp
+          }
           Column(
             modifier = Modifier.weight(1f),
             verticalArrangement = Arrangement.Center
@@ -417,9 +425,9 @@ fun LiveWidgetPreviewCard(
                 fontSize = currentLyricFontSize,
                 fontWeight = FontWeight.Bold,
                 lineHeight = when (sizeTier) {
-                  WidgetSizeTier.SMALL -> 20.sp
-                  WidgetSizeTier.WIDE -> 23.sp
-                  WidgetSizeTier.LARGE -> 25.sp
+                  WidgetSizeTier.SMALL -> 18.sp
+                  WidgetSizeTier.WIDE -> 20.sp
+                  WidgetSizeTier.LARGE -> 22.sp
                 },
                 maxLines = 2,
                 overflow = TextOverflow.Ellipsis,
@@ -473,14 +481,19 @@ fun LiveWidgetPreviewCard(
               )
             }
           }
+          val footerFontSize = when (sizeTier) {
+            WidgetSizeTier.SMALL -> 10.5.sp
+            WidgetSizeTier.WIDE -> 11.2.sp
+            WidgetSizeTier.LARGE -> 12.sp
+          }
           Text(
             text = com.example.ui.theme.rememberKhmerTitleText(
               text = "$previewTitle · $previewArtist",
-              baseFontSize = 12.sp,
+              baseFontSize = footerFontSize,
               isBold = true
             ),
             color = Color(0xF5FFFFFF),
-            fontSize = 12.sp,
+            fontSize = footerFontSize,
             fontWeight = FontWeight.Bold,
             maxLines = 1,
             overflow = TextOverflow.Ellipsis

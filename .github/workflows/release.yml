@@ -10,9 +10,9 @@ on:
   workflow_dispatch:
     inputs:
       tag:
-        description: 'Release tag (e.g. v2.1.5)'
+        description: 'Release tag (e.g. v2.1.6)'
         required: false
-        default: 'v2.1.5'
+        default: 'v2.1.6'
 
 permissions:
   contents: write
@@ -52,13 +52,13 @@ jobs:
             RELEASE_TAG="${{ github.ref_name }}"
           else
             VERSION=$(grep -m1 'versionName' app/build.gradle.kts | sed -E 's/.*"([^"]+)".*/\1/' | tr '[:upper:]' '[:lower:]' | tr ' ' '-')
-            RELEASE_TAG="v${VERSION:-2.1.5}"
+            RELEASE_TAG="v${VERSION:-2.1.6}"
           fi
           VCODE=$(grep -m1 'versionCode' app/build.gradle.kts | sed -E 's/[^0-9]*([0-9]+).*/\1/')
           RDATE=$(grep -m1 'RELEASE_DATE' app/build.gradle.kts | sed -E 's/.*\\"([^\\"]+)\\".*/\1/')
           echo "RELEASE_TAG=${RELEASE_TAG}" >> "$GITHUB_ENV"
           echo "RELEASE_VERSION=${RELEASE_TAG#v}" >> "$GITHUB_ENV"
-          echo "RELEASE_VERSION_CODE=${VCODE:-20105}" >> "$GITHUB_ENV"
+          echo "RELEASE_VERSION_CODE=${VCODE:-20106}" >> "$GITHUB_ENV"
           echo "RELEASE_DATE=${RDATE:-$(date -u +%Y-%m-%d)}" >> "$GITHUB_ENV"
 
       - name: Ensure keystores exist
@@ -86,6 +86,7 @@ jobs:
           test -f app/build/outputs/apk/release/output-metadata.json
           cp app/build/outputs/apk/release/app-release.apk "AURIX-${RELEASE_TAG}.apk"
           export APK_SHA256=$(sha256sum "AURIX-${RELEASE_TAG}.apk" | awk '{print $1}')
+          printf "%s  AURIX-%s.apk\n" "$APK_SHA256" "$RELEASE_TAG" > "AURIX-${RELEASE_TAG}.apk.sha256"
           python3 - <<'PYEOF'
           import json, os
           tag = os.environ["RELEASE_TAG"]
@@ -98,7 +99,8 @@ jobs:
             "sha256": os.environ["APK_SHA256"],
             "mandatory": False,
             "notes": [
-              f"Bundled Full-Unicode Khmer Fonts & Redesigned Glass Widgets ({tag}): Real full-Unicode Khmer & Latin .ttf fonts (Dangrek, Kantumruy Pro, Koulen, Noto Sans Khmer, Outfit, Inter) across app & widgets, fixed Khmer line-height clipping, and redesigned AURIX cosmic glass widgets",
+              f"Proportional Widget Lyrics & Reliable Release Verification ({tag}): Calibrated Home Screen Lyrics widget text sizes and launcher column widths for balanced 1:1 proportions across Small, Wide, and Large widgets (plus live preview); fixed OTA release APK SHA-256 verification against GitHub Release checksum assets so updates download and verify cleanly",
+              "Bundled Full-Unicode Khmer Fonts & Redesigned Glass Widgets (v2.1.5): Real full-Unicode Khmer & Latin .ttf fonts (Dangrek, Kantumruy Pro, Koulen, Noto Sans Khmer, Outfit, Inter) across app & widgets, fixed Khmer line-height clipping, and redesigned AURIX cosmic glass widgets",
               "Standby Bedside & Charging Screen + Clean Bilingual Update Error Handling (v2.1.4): 10 clock styles, 5 moods with Auto cover palette lerp, 3D Gyro Parallax, Khmer chips, burn-in drift & localized EN/KM 404 Retry error handling",
               "Khmer Lyrics Font Picker, Dangrek Titles & Restored Home Carousels (v2.1.3): Active-only lyric animation, Khmer font selector, and Dangrek titles",
               "Widget Customizer & Live Settings Preview (v2.0.3): Added Settings > Widgets > Customize widget with live 2:1 preview"
@@ -127,12 +129,13 @@ jobs:
             mandatory: false
 
             What's New in AURIX ${{ env.RELEASE_TAG }}:
-            - Bundled Full-Unicode Khmer Fonts & Redesigned Glass Widgets: Real full-Unicode Khmer & Latin .ttf fonts (Dangrek, Kantumruy Pro, Koulen, Noto Sans Khmer, Outfit, Inter) across app & widgets, fixed Khmer line-height clipping, and redesigned AURIX cosmic glass widgets
+            - Proportional Widget Lyrics & Reliable Release Verification: Calibrated Home Screen Lyrics widget text sizes and real launcher column widths for crisp 1:1 proportions across Small, Wide, and Large widgets (and live preview); fixed OTA release APK SHA-256 verification against GitHub Release checksum assets
+            - Bundled Full-Unicode Khmer Fonts & Redesigned Glass Widgets (v2.1.5): Real full-Unicode Khmer & Latin .ttf fonts (Dangrek, Kantumruy Pro, Koulen, Noto Sans Khmer, Outfit, Inter) across app & widgets, fixed Khmer line-height clipping, and redesigned AURIX cosmic glass widgets
             - Standby Bedside & Charging Screen + Clean Bilingual Update Error Handling (v2.1.4): 10 clock styles, 5 moods with Auto cover palette lerp, 3D Gyro Parallax, Khmer chips, burn-in drift & localized EN/KM 404 Retry error handling
-            - Khmer Lyrics Font Picker, Dangrek Titles & Restored Home Carousels (v2.1.3): Active-only lyric animation, Khmer font selector, and Dangrek titles
           files: |
             app/build/outputs/apk/release/app-release.apk
             AURIX-${{ env.RELEASE_TAG }}.apk
+            AURIX-${{ env.RELEASE_TAG }}.apk.sha256
             app/build/outputs/apk/release/output-metadata.json
             version.json
         env:
@@ -146,6 +149,7 @@ jobs:
           git add version.json
           if ! git diff --cached --quiet; then
             git commit -m "chore: update version.json for ${RELEASE_TAG} [skip ci]"
+            git pull --rebase --autostash origin ${{ github.ref_name }} || true
             git push origin HEAD:${{ github.ref_name }} || true
           fi
 

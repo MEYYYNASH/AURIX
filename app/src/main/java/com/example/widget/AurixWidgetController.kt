@@ -179,32 +179,70 @@ object AurixWidgetController {
   private val lastFullLyricsLayoutByWidgetId = ConcurrentHashMap<Int, Int>()
   private val lastLyricsHasSideFrameByWidgetId = ConcurrentHashMap<Int, Boolean>()
   private val lastLyricsSizeTierByWidgetId = ConcurrentHashMap<Int, WidgetSizeTier>()
+  private val lastLyricsWidgetWidthDpByWidgetId = ConcurrentHashMap<Int, Int>()
 
   @Volatile
   private var partialUpdatesSinceFullLyrics: Int = 0
 
-  internal fun computeLyricsTextWidthDp(sizeTier: WidgetSizeTier, hasSideFrame: Boolean): Float = when (sizeTier) {
-    WidgetSizeTier.SMALL -> 152f
-    WidgetSizeTier.WIDE -> if (hasSideFrame) 178f else 274f
-    WidgetSizeTier.LARGE -> if (hasSideFrame) 192f else 294f
+  internal fun resolveWidgetWidthDp(options: Bundle?): Int {
+    val raw = options?.getInt(AppWidgetManager.OPTION_APPWIDGET_MIN_WIDTH, 0) ?: 0
+    return if (raw in 120..520) raw else 0
   }
 
-  internal fun computeLyricsFooterWidthDp(sizeTier: WidgetSizeTier, hasSideFrame: Boolean): Float = when (sizeTier) {
-    WidgetSizeTier.SMALL -> 166f
-    WidgetSizeTier.WIDE -> if (hasSideFrame) 284f else 266f
-    WidgetSizeTier.LARGE -> if (hasSideFrame) 308f else 290f
+  internal fun computeLyricsTextWidthDp(
+    sizeTier: WidgetSizeTier,
+    hasSideFrame: Boolean,
+    widgetWidthDp: Int = 0
+  ): Float {
+    val effectiveWidgetWidth = if (widgetWidthDp in 120..520) {
+      widgetWidthDp.toFloat()
+    } else {
+      when (sizeTier) {
+        WidgetSizeTier.SMALL -> 182f
+        WidgetSizeTier.WIDE -> 340f
+        WidgetSizeTier.LARGE -> 360f
+      }
+    }
+    val nonTextChromeDp = when (sizeTier) {
+      WidgetSizeTier.SMALL -> 35f
+      WidgetSizeTier.WIDE -> 28f + (if (hasSideFrame) 94f else 0f) + 13.5f
+      WidgetSizeTier.LARGE -> 32f + (if (hasSideFrame) 116f else 0f) + 14.5f
+    }
+    return (effectiveWidgetWidth - nonTextChromeDp).coerceIn(136f, 400f)
+  }
+
+  internal fun computeLyricsFooterWidthDp(
+    sizeTier: WidgetSizeTier,
+    hasSideFrame: Boolean,
+    widgetWidthDp: Int = 0
+  ): Float {
+    val effectiveWidgetWidth = if (widgetWidthDp in 120..520) {
+      widgetWidthDp.toFloat()
+    } else {
+      when (sizeTier) {
+        WidgetSizeTier.SMALL -> 182f
+        WidgetSizeTier.WIDE -> 340f
+        WidgetSizeTier.LARGE -> 360f
+      }
+    }
+    val miniArtAndPaddingDp = when (sizeTier) {
+      WidgetSizeTier.SMALL -> 46f
+      WidgetSizeTier.WIDE -> 28f + if (hasSideFrame) 0f else 25f
+      WidgetSizeTier.LARGE -> 32f + if (hasSideFrame) 0f else 30f
+    }
+    return (effectiveWidgetWidth - miniArtAndPaddingDp).coerceIn(132f, 440f)
   }
 
   internal fun computeLyricsActiveTextSizeDp(sizeTier: WidgetSizeTier): Float = when (sizeTier) {
-    WidgetSizeTier.SMALL -> 15.2f
-    WidgetSizeTier.WIDE -> 17.2f
-    WidgetSizeTier.LARGE -> 19.2f
+    WidgetSizeTier.SMALL -> 13.0f
+    WidgetSizeTier.WIDE -> 14.5f
+    WidgetSizeTier.LARGE -> 16.0f
   }
 
   internal fun computeLyricsNextTextSizeDp(sizeTier: WidgetSizeTier): Float = when (sizeTier) {
-    WidgetSizeTier.SMALL -> 11.5f
-    WidgetSizeTier.WIDE -> 12.8f
-    WidgetSizeTier.LARGE -> 14.0f
+    WidgetSizeTier.SMALL -> 10.5f
+    WidgetSizeTier.WIDE -> 11.5f
+    WidgetSizeTier.LARGE -> 12.5f
   }
 
   fun shouldShowLikeButton(minWidthDp: Int): Boolean {
@@ -903,11 +941,13 @@ object AurixWidgetController {
         val khmerFont = com.example.ui.theme.KhmerLyricsFont.fromId(state.khmerLyricsFont)
 
         for (widgetId in lyricsIds) {
-          val tier = lastLyricsSizeTierByWidgetId[widgetId] ?: resolveWidgetSizeTier(
-            runCatching { manager.getAppWidgetOptions(widgetId) }.getOrNull()
-          )
+          val liveOptions = runCatching { manager.getAppWidgetOptions(widgetId) }.getOrNull()
+          val tier = lastLyricsSizeTierByWidgetId[widgetId] ?: resolveWidgetSizeTier(liveOptions)
+          val widgetWidthDp = lastLyricsWidgetWidthDpByWidgetId[widgetId]
+            ?.takeIf { it > 0 }
+            ?: resolveWidgetWidthDp(liveOptions)
           val hasSideFrame = lastLyricsHasSideFrameByWidgetId[widgetId] ?: false
-          val textWidthDp = computeLyricsTextWidthDp(tier, hasSideFrame)
+          val textWidthDp = computeLyricsTextWidthDp(tier, hasSideFrame, widgetWidthDp)
           val activeTextSizeDp = computeLyricsActiveTextSizeDp(tier)
           val nextTextSizeDp = computeLyricsNextTextSizeDp(tier)
 
@@ -1005,6 +1045,7 @@ object AurixWidgetController {
       for (widgetId in lyricsIds) {
         val options = runCatching { manager.getAppWidgetOptions(widgetId) }.getOrNull()
         val sizeTier = resolveWidgetSizeTier(options)
+        val widgetWidthDp = resolveWidgetWidthDp(options)
         val compositeBg = WidgetBitmapBuilder.buildWidgetCompositeBitmap(
           context = appCtx,
           config = customizer,
@@ -1023,11 +1064,13 @@ object AurixWidgetController {
           roundedArt = roundedArt,
           standaloneFrameBmp = standaloneFrameBmp,
           customizer = customizer,
-          sizeTier = sizeTier
+          sizeTier = sizeTier,
+          widgetWidthDp = widgetWidthDp
         )
         runCatching { manager.updateAppWidget(widgetId, views) }
         lastFullLyricsLayoutByWidgetId[widgetId] = layoutRes
         lastLyricsSizeTierByWidgetId[widgetId] = sizeTier
+        lastLyricsWidgetWidthDpByWidgetId[widgetId] = widgetWidthDp
         lastLyricsHasSideFrameByWidgetId[widgetId] =
           customizer.frameStyle != WidgetFrameStyle.NONE && sizeTier != WidgetSizeTier.SMALL && standaloneFrameBmp != null
         lastFullLyricsLayoutRes = layoutRes
@@ -1075,6 +1118,7 @@ object AurixWidgetController {
         for (widgetId in appWidgetIds) {
           val options = runCatching { appWidgetManager.getAppWidgetOptions(widgetId) }.getOrNull()
           val sizeTier = resolveWidgetSizeTier(options)
+          val widgetWidthDp = resolveWidgetWidthDp(options)
           val compositeBg = WidgetBitmapBuilder.buildWidgetCompositeBitmap(
             context = appCtx,
             config = customizer,
@@ -1093,11 +1137,13 @@ object AurixWidgetController {
             roundedArt = roundedArt,
             standaloneFrameBmp = standaloneFrameBmp,
             customizer = customizer,
-            sizeTier = sizeTier
+            sizeTier = sizeTier,
+            widgetWidthDp = widgetWidthDp
           )
           runCatching { appWidgetManager.updateAppWidget(widgetId, views) }
           lastFullLyricsLayoutByWidgetId[widgetId] = layoutRes
           lastLyricsSizeTierByWidgetId[widgetId] = sizeTier
+          lastLyricsWidgetWidthDpByWidgetId[widgetId] = widgetWidthDp
           lastLyricsHasSideFrameByWidgetId[widgetId] =
             customizer.frameStyle != WidgetFrameStyle.NONE && sizeTier != WidgetSizeTier.SMALL && standaloneFrameBmp != null
           lastFullLyricsLayoutRes = layoutRes
@@ -1342,7 +1388,8 @@ object AurixWidgetController {
     roundedArt: Bitmap,
     standaloneFrameBmp: Bitmap?,
     customizer: WidgetCustomizerConfig,
-    sizeTier: WidgetSizeTier
+    sizeTier: WidgetSizeTier,
+    widgetWidthDp: Int = 0
   ): RemoteViews {
     val localizedCtx = LocaleHelper.wrapBaseContext(context, state.language)
     val reduceMotion = isReducedMotionActive(context, state.reducedMotion)
@@ -1400,18 +1447,19 @@ object AurixWidgetController {
     views.setOnClickPendingIntent(R.id.widget_lyrics_content_container, openLyricsPi)
 
     // Render the styled frame inside the dedicated ImageView so centerCrop on bg_glow never shifts or overlaps the accent bar
-    val showSideFrameSpacer = customizer.frameStyle != WidgetFrameStyle.NONE &&
-      sizeTier != WidgetSizeTier.SMALL &&
-      standaloneFrameBmp != null
-    if (showSideFrameSpacer && standaloneFrameBmp != null) {
+    val sideFrame = standaloneFrameBmp?.takeIf {
+      customizer.frameStyle != WidgetFrameStyle.NONE && sizeTier != WidgetSizeTier.SMALL
+    }
+    val showSideFrameSpacer = sideFrame != null
+    if (sideFrame != null) {
       views.setViewVisibility(R.id.widget_lyrics_frame_spacer, View.VISIBLE)
-      views.setImageViewBitmap(R.id.widget_lyrics_frame_spacer, standaloneFrameBmp)
+      views.setImageViewBitmap(R.id.widget_lyrics_frame_spacer, sideFrame)
     } else {
       views.setViewVisibility(R.id.widget_lyrics_frame_spacer, View.GONE)
     }
 
-    val textWidthDp = computeLyricsTextWidthDp(sizeTier, showSideFrameSpacer)
-    val footerWidthDp = computeLyricsFooterWidthDp(sizeTier, showSideFrameSpacer)
+    val textWidthDp = computeLyricsTextWidthDp(sizeTier, showSideFrameSpacer, widgetWidthDp)
+    val footerWidthDp = computeLyricsFooterWidthDp(sizeTier, showSideFrameSpacer, widgetWidthDp)
     val activeTextSizeDp = computeLyricsActiveTextSizeDp(sizeTier)
     val nextTextSizeDp = computeLyricsNextTextSizeDp(sizeTier)
 
@@ -1426,10 +1474,19 @@ object AurixWidgetController {
       views.setViewVisibility(R.id.widget_lyrics_footer_row, View.GONE)
       views.setViewVisibility(R.id.widget_lyrics_no_lyrics_container, View.VISIBLE)
 
+      val effectiveWidgetWidth = if (widgetWidthDp in 120..520) {
+        widgetWidthDp.toFloat()
+      } else {
+        when (sizeTier) {
+          WidgetSizeTier.SMALL -> 182f
+          WidgetSizeTier.WIDE -> 340f
+          WidgetSizeTier.LARGE -> 360f
+        }
+      }
       val noLyricsWidthDp = when (sizeTier) {
-        WidgetSizeTier.SMALL -> 152f
-        WidgetSizeTier.WIDE -> if (showSideFrameSpacer) 186f else 284f
-        WidgetSizeTier.LARGE -> if (showSideFrameSpacer) 202f else 306f
+        WidgetSizeTier.SMALL -> (effectiveWidgetWidth - 24f).coerceIn(136f, 220f)
+        WidgetSizeTier.WIDE -> (effectiveWidgetWidth - 28f - (if (showSideFrameSpacer) 94f else 0f)).coerceIn(148f, 400f)
+        WidgetSizeTier.LARGE -> (effectiveWidgetWidth - 32f - (if (showSideFrameSpacer) 116f else 0f)).coerceIn(156f, 420f)
       }
       val titleBmp = renderStyledTitleOrFooterBitmap(
         context = context,
@@ -1439,9 +1496,9 @@ object AurixWidgetController {
         titleColor = primaryTextColor,
         artistColor = mutedTextColor,
         baseTextSizeDp = when (sizeTier) {
-          WidgetSizeTier.SMALL -> 15.0f
-          WidgetSizeTier.WIDE -> 17.0f
-          WidgetSizeTier.LARGE -> 18.5f
+          WidgetSizeTier.SMALL -> 13.5f
+          WidgetSizeTier.WIDE -> 15.0f
+          WidgetSizeTier.LARGE -> 16.5f
         },
         widthDp = noLyricsWidthDp,
         maxLines = 2
@@ -1462,7 +1519,11 @@ object AurixWidgetController {
         context = context,
         text = resolvedArtist,
         textColor = mutedTextColor,
-        baseTextSizeDp = if (sizeTier == WidgetSizeTier.LARGE) 14.0f else 12.5f,
+        baseTextSizeDp = when (sizeTier) {
+          WidgetSizeTier.SMALL -> 11.5f
+          WidgetSizeTier.WIDE -> 12.0f
+          WidgetSizeTier.LARGE -> 13.0f
+        },
         isBold = false,
         widthDp = noLyricsWidthDp
       )
@@ -1576,9 +1637,9 @@ object AurixWidgetController {
       titleColor = footerTitleColor,
       artistColor = footerArtistColor,
       baseTextSizeDp = when (sizeTier) {
-        WidgetSizeTier.SMALL -> 11.0f
-        WidgetSizeTier.WIDE -> 12.0f
-        WidgetSizeTier.LARGE -> 13.0f
+        WidgetSizeTier.SMALL -> 10.5f
+        WidgetSizeTier.WIDE -> 11.2f
+        WidgetSizeTier.LARGE -> 12.0f
       },
       widthDp = footerWidthDp,
       maxLines = 1
@@ -1702,12 +1763,12 @@ object AurixWidgetController {
     khmerLyricsFont: com.example.ui.theme.KhmerLyricsFont,
     primaryColor: Int,
     widthDp: Float = 266f,
-    textSizeDp: Float = 17.2f
+    textSizeDp: Float = 14.5f
   ): Bitmap? {
     return runCatching {
       val trimmed = currentLine.trim().ifBlank { "♪" }
       val scale = context.resources.displayMetrics.density.coerceIn(1.35f, 1.60f)
-      val widthPx = (widthDp * scale).roundToInt().coerceIn(210, 500)
+      val widthPx = (widthDp * scale).roundToInt().coerceIn(200, 640)
       val styledText = com.example.ui.theme.KhmerTypography.buildStyledSpannable(
         context = context,
         text = trimmed,
@@ -1721,7 +1782,7 @@ object AurixWidgetController {
         typeface = baseTypeface
         color = primaryColor
         textSize = textSizeDp * scale
-        setShadowLayer(3.0f * scale, 0f, 1.0f * scale, 0x66000000)
+        setShadowLayer(2.4f * scale, 0f, 0.9f * scale, 0x66000000)
       }
 
       val layout = StaticLayout.Builder
@@ -1734,7 +1795,7 @@ object AurixWidgetController {
         .build()
 
       val padY = (2f * scale).roundToInt()
-      val heightPx = (layout.height + padY * 2).coerceIn(24, 128)
+      val heightPx = (layout.height + padY * 2).coerceIn(22, 118)
       val bmp = Bitmap.createBitmap(widthPx, heightPx, Bitmap.Config.ARGB_8888)
       val canvas = Canvas(bmp)
       canvas.save()
@@ -1751,13 +1812,13 @@ object AurixWidgetController {
     khmerLyricsFont: com.example.ui.theme.KhmerLyricsFont,
     mutedColor: Int,
     widthDp: Float = 266f,
-    textSizeDp: Float = 12.8f
+    textSizeDp: Float = 11.5f
   ): Bitmap? {
     return runCatching {
       val trimmed = nextLine.trim()
       if (trimmed.isEmpty()) return null
       val scale = context.resources.displayMetrics.density.coerceIn(1.35f, 1.60f)
-      val widthPx = (widthDp * scale).roundToInt().coerceIn(210, 500)
+      val widthPx = (widthDp * scale).roundToInt().coerceIn(200, 640)
       val styledText = com.example.ui.theme.KhmerTypography.buildStyledSpannable(
         context = context,
         text = trimmed,
@@ -1783,7 +1844,7 @@ object AurixWidgetController {
         .build()
 
       val padY = (1.5f * scale).roundToInt()
-      val heightPx = (layout.height + padY * 2).coerceIn(20, 64)
+      val heightPx = (layout.height + padY * 2).coerceIn(18, 56)
       val bmp = Bitmap.createBitmap(widthPx, heightPx, Bitmap.Config.ARGB_8888)
       val canvas = Canvas(bmp)
       canvas.save()
@@ -1816,7 +1877,7 @@ object AurixWidgetController {
       val fullText = if (cleanArtist.isNotEmpty()) "$cleanTitle · $cleanArtist" else cleanTitle
 
       val scale = context.resources.displayMetrics.density.coerceIn(1.35f, 1.60f)
-      val widthPx = (widthDp * scale).roundToInt().coerceIn(180, 520)
+      val widthPx = (widthDp * scale).roundToInt().coerceIn(180, 660)
 
       val styledSpan = SpannableString(
         com.example.ui.theme.KhmerTypography.buildStyledSpannable(

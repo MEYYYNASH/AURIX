@@ -165,7 +165,7 @@
                 android:shadowDy="1.5"
                 android:shadowRadius="4"
                 android:textColor="#FFFFFF"
-                android:textSize="15sp"
+                android:textSize="13.5sp"
                 android:textStyle="bold" />
 
             <ImageView
@@ -186,7 +186,7 @@
                 android:ellipsize="end"
                 android:maxLines="1"
                 android:textColor="#C2D8EEFF"
-                android:textSize="12sp" />
+                android:textSize="11.5sp" />
         </LinearLayout>
 
         <!-- Lyrics Stage: Active line animates inside ViewFlipper, next line stays static below -->
@@ -267,7 +267,7 @@
                                 android:shadowDy="1"
                                 android:shadowRadius="3"
                                 android:textColor="#FFFFFF"
-                                android:textSize="14.5sp"
+                                android:textSize="13sp"
                                 android:textStyle="bold" />
 
                             <TextView
@@ -313,7 +313,7 @@
                                 android:shadowDy="1"
                                 android:shadowRadius="3"
                                 android:textColor="#FFFFFF"
-                                android:textSize="14.5sp"
+                                android:textSize="13sp"
                                 android:textStyle="bold" />
 
                             <TextView
@@ -350,7 +350,7 @@
                     android:ellipsize="end"
                     android:maxLines="1"
                     android:textColor="#B8DCEEFF"
-                    android:textSize="11sp"
+                    android:textSize="10.5sp"
                     android:visibility="gone" />
             </FrameLayout>
         </LinearLayout>
