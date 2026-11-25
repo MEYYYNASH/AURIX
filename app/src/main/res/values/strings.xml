@@ -902,8 +902,19 @@
     <string name="widget_cover_desc">Compact 2×2 album cover with play/pause control</string>
     <string name="widget_mini_label">AURIX Mini</string>
     <string name="widget_mini_desc">Compact 2×2 live equalizer and current track info</string>
-    <string name="widget_preview_title">Party Funk</string>
-    <string name="widget_preview_artist">Young Madz</string>
+    <string name="widget_preview_title">Heaven Sent</string>
+    <string name="widget_preview_artist">Tevomxntana</string>
     <string name="widget_preview_lyric_current">Current lyric line shows here</string>
     <string name="widget_preview_lyric_next">Next line, dimmed</string>
+
+    <!-- Per-Widget Glass Style Configurator (v2.3.0) -->
+    <string name="widget_cfg_title">Choose Widget Style</string>
+    <string name="widget_cfg_subtitle">Applies only to this widget</string>
+    <string name="widget_cfg_preview_section">Live previews · 5 glass styles</string>
+    <string name="widget_cfg_apply_widget">Apply to this widget</string>
+    <string name="widget_cfg_apply_all">Apply to all widgets</string>
+    <string name="widget_cfg_applied_toast">Style applied to this widget</string>
+    <string name="widget_cfg_applied_all_toast">Applied to all AURIX widgets</string>
+    <string name="widget_cfg_close_cd">Cancel widget setup</string>
+    <string name="widget_cfg_style_badge">Style %1$d</string>
 </resources>

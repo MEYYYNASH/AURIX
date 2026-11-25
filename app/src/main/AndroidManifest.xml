@@ -188,13 +188,12 @@
                 android:resource="@xml/aurix_mini_widget_info" />
         </receiver>
 
-        <!-- Widget Long-Press Reconfigure Trampoline -->
+        <!-- Per-Widget Style Configurator -->
         <activity
             android:name=".widget.WidgetConfigureActivity"
             android:exported="true"
             android:excludeFromRecents="true"
-            android:noHistory="true"
-            android:theme="@android:style/Theme.Translucent.NoTitleBar">
+            android:theme="@style/Theme.MyApplication">
             <intent-filter>
                 <action android:name="android.appwidget.action.APPWIDGET_CONFIGURE" />
             </intent-filter>

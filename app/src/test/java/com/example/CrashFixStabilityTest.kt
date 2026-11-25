@@ -11,10 +11,10 @@ import org.junit.Test
 class CrashFixStabilityTest {
 
   @Test
-  fun release220_metadataAndVersionCodeAreConsistent() {
-    assertEquals("2.2.0", BuildConfig.VERSION_NAME)
-    assertEquals(20200, BuildConfig.VERSION_CODE)
-    assertTrue("Release 2.2.0 versionCode must exceed 2.1.6 (20106)", BuildConfig.VERSION_CODE > 20106)
+  fun release230_metadataAndVersionCodeAreConsistent() {
+    assertEquals("2.3.0", BuildConfig.VERSION_NAME)
+    assertEquals(20300, BuildConfig.VERSION_CODE)
+    assertTrue("Release 2.3.0 versionCode must exceed 2.2.0 (20200)", BuildConfig.VERSION_CODE > 20200)
     assertEquals(420, com.example.ui.screens.SELECT_BAR_OPEN_DURATION_MS)
     assertEquals(600, com.example.ui.screens.SELECT_CIRCLE_OPEN_DURATION_MS)
     assertEquals(380L, com.example.ui.screens.SELECT_CLOSE_CLEAR_DELAY_MS)
@@ -565,7 +565,7 @@ class CrashFixStabilityTest {
     assertTrue("Khmer date chip should contain Khmer weekday prefix", khmerDate.contains("ថ្ងៃ"))
 
     // UpdateDownloadErrorKind, 30s cooldown on HTTP 404 & release-pinned checksum URL derivation
-    val installed = com.example.data.InstalledAppInfo("com.aurix.music", "2.2.0", 20200L, emptySet())
+    val installed = com.example.data.InstalledAppInfo("com.aurix.music", "2.3.0", 20300L, emptySet())
     val state404 = com.example.data.UpdateUiState(
       stage = com.example.data.UpdateStage.Error,
       installed = installed,
@@ -576,11 +576,11 @@ class CrashFixStabilityTest {
     assertEquals(com.example.data.UpdateMainAction.Retry, state404.mainAction)
     assertEquals(com.example.data.UpdateDownloadErrorKind.Http404ReleaseBuilding, state404.errorKind)
     assertEquals(30, state404.retryCooldownSeconds)
-    assertEquals(20200L, com.example.data.GitHubUpdater.deriveVersionCodeFromTag("v2.2.0"))
+    assertEquals(20300L, com.example.data.GitHubUpdater.deriveVersionCodeFromTag("v2.3.0"))
     assertEquals(
-      "https://github.com/MEYYYNASH/AURIX/releases/download/v2.2.0/version.json",
+      "https://github.com/MEYYYNASH/AURIX/releases/download/v2.3.0/version.json",
       com.example.data.UpdateManager.deriveReleaseAssetVersionJsonUrl(
-        "https://github.com/MEYYYNASH/AURIX/releases/download/v2.2.0/AURIX-v2.2.0.apk"
+        "https://github.com/MEYYYNASH/AURIX/releases/download/v2.3.0/AURIX-v2.3.0.apk"
       )
     )
     assertNull(
@@ -592,34 +592,65 @@ class CrashFixStabilityTest {
 
   @Test
   fun widgetRedesignStylesAndPreviews_areDeterministic() {
-    assertEquals("widget_style", com.example.data.PreferencesManager.WIDGET_STYLE.name)
-    assertEquals(3, com.example.widget.WidgetStyle.entries.size)
-    assertEquals("glass", com.example.widget.WidgetStyle.DEFAULT_ID)
-    assertEquals(com.example.widget.WidgetStyle.GLASS, com.example.widget.WidgetStyle.fromId(null))
-    assertEquals(com.example.widget.WidgetStyle.COLOR, com.example.widget.WidgetStyle.fromId("color"))
-    assertEquals(com.example.widget.WidgetStyle.MONO, com.example.widget.WidgetStyle.fromId("mono"))
+    // Per-widget 5 glass styles & 4 widget kinds
+    assertEquals(5, com.example.widget.WidgetGlassStyle.entries.size)
+    assertEquals(4, com.example.widget.WidgetKind.entries.size)
+    assertEquals("frost_pill", com.example.widget.WidgetGlassStyle.DEFAULT_ID)
+    assertEquals(com.example.widget.WidgetGlassStyle.FROST_PILL, com.example.widget.WidgetGlassStyle.fromId(null))
+    assertEquals(com.example.widget.WidgetGlassStyle.ORB, com.example.widget.WidgetGlassStyle.fromId("orb"))
+    assertEquals(com.example.widget.WidgetGlassStyle.SMOKED_NEON, com.example.widget.WidgetGlassStyle.fromId("smoked_neon"))
+    assertEquals(com.example.widget.WidgetGlassStyle.LIGHT_FROST, com.example.widget.WidgetGlassStyle.fromId("light_frost"))
+    assertEquals(com.example.widget.WidgetGlassStyle.POSTER_GLASS, com.example.widget.WidgetGlassStyle.fromId("poster_glass"))
+    assertEquals("style_42", com.example.widget.WidgetStyleStore.styleKey(42).name)
+    assertEquals("style_99", com.example.widget.WidgetStyleStore.styleKey(99).name)
 
-    // Music widget layout resolution per style
-    assertEquals(R.layout.widget_aurix_music, com.example.widget.AurixWidgetController.resolveMusicWidgetLayoutRes(com.example.widget.WidgetStyle.GLASS))
-    assertEquals(R.layout.widget_aurix_music_color, com.example.widget.AurixWidgetController.resolveMusicWidgetLayoutRes(com.example.widget.WidgetStyle.COLOR))
-    assertEquals(R.layout.widget_aurix_music_mono, com.example.widget.AurixWidgetController.resolveMusicWidgetLayoutRes(com.example.widget.WidgetStyle.MONO))
+    // WCAG >= 4.5:1 auto contrast check across bright, mid, and dark covers
+    fun blendOverCover(tintArgb: Int, coverGray: Int): Int {
+      val a = ((tintArgb ushr 24) and 0xFF) / 255.0
+      val r = (((tintArgb ushr 16) and 0xFF) * a + coverGray * (1.0 - a)).toInt().coerceIn(0, 255)
+      val g = (((tintArgb ushr 8) and 0xFF) * a + coverGray * (1.0 - a)).toInt().coerceIn(0, 255)
+      val b = ((tintArgb and 0xFF) * a + coverGray * (1.0 - a)).toInt().coerceIn(0, 255)
+      return (0xFF shl 24) or (r shl 16) or (g shl 8) or b
+    }
+    for (coverLum in listOf(0.10f, 0.50f, 0.90f)) {
+      val coverGray = (coverLum * 255f).toInt().coerceIn(0, 255)
+      for (style in com.example.widget.WidgetGlassStyle.entries) {
+        if (style == com.example.widget.WidgetGlassStyle.POSTER_GLASS) continue
+        val tint = com.example.widget.WidgetGlassRenderer.computeAutoContrastTint(style, coverLum)
+        val compositedBg = blendOverCover(tint, coverGray)
+        val fg = if (style == com.example.widget.WidgetGlassStyle.LIGHT_FROST) 0xFF14172A.toInt() else 0xFFFFFFFF.toInt()
+        val ratio = com.example.widget.WidgetGlassRenderer.contrastRatio(fg, compositedBg)
+        assertTrue(
+          "Contrast ratio for ${style.id} at lum=$coverLum was $ratio (< 4.5)",
+          ratio >= 4.5
+        )
+      }
+    }
 
-    // Static picker preview layouts across all 4 widget families and all 3 styles
-    assertEquals(R.layout.widget_preview_aurix_music_glass, com.example.widget.AurixWidgetController.resolveMusicPreviewLayoutRes(com.example.widget.WidgetStyle.GLASS))
-    assertEquals(R.layout.widget_preview_aurix_music_color, com.example.widget.AurixWidgetController.resolveMusicPreviewLayoutRes(com.example.widget.WidgetStyle.COLOR))
-    assertEquals(R.layout.widget_preview_aurix_music_mono, com.example.widget.AurixWidgetController.resolveMusicPreviewLayoutRes(com.example.widget.WidgetStyle.MONO))
+    // Music widget live layout resolution across all 5 glass styles
+    assertEquals(R.layout.widget_aurix_music, com.example.widget.AurixWidgetController.resolveMusicWidgetLayoutRes(com.example.widget.WidgetGlassStyle.FROST_PILL))
+    assertEquals(R.layout.widget_aurix_music_orb, com.example.widget.AurixWidgetController.resolveMusicWidgetLayoutRes(com.example.widget.WidgetGlassStyle.ORB))
+    assertEquals(R.layout.widget_aurix_music_neon, com.example.widget.AurixWidgetController.resolveMusicWidgetLayoutRes(com.example.widget.WidgetGlassStyle.SMOKED_NEON))
+    assertEquals(R.layout.widget_aurix_music_light, com.example.widget.AurixWidgetController.resolveMusicWidgetLayoutRes(com.example.widget.WidgetGlassStyle.LIGHT_FROST))
+    assertEquals(R.layout.widget_aurix_music_poster, com.example.widget.AurixWidgetController.resolveMusicWidgetLayoutRes(com.example.widget.WidgetGlassStyle.POSTER_GLASS))
 
-    assertEquals(R.layout.widget_preview_aurix_lyrics_glass, com.example.widget.AurixWidgetController.resolveLyricsPreviewLayoutRes(com.example.widget.WidgetStyle.GLASS))
-    assertEquals(R.layout.widget_preview_aurix_lyrics_color, com.example.widget.AurixWidgetController.resolveLyricsPreviewLayoutRes(com.example.widget.WidgetStyle.COLOR))
-    assertEquals(R.layout.widget_preview_aurix_lyrics_mono, com.example.widget.AurixWidgetController.resolveLyricsPreviewLayoutRes(com.example.widget.WidgetStyle.MONO))
+    // Lyrics widget live layout resolution across all 5 glass styles
+    assertEquals(R.layout.widget_aurix_lyrics, com.example.widget.AurixWidgetController.resolveLyricsWidgetLayoutRes(com.example.widget.WidgetGlassStyle.FROST_PILL, "slide_up", false))
+    assertEquals(R.layout.widget_aurix_lyrics_orb, com.example.widget.AurixWidgetController.resolveLyricsWidgetLayoutRes(com.example.widget.WidgetGlassStyle.ORB, "slide_up", false))
+    assertEquals(R.layout.widget_aurix_lyrics_neon, com.example.widget.AurixWidgetController.resolveLyricsWidgetLayoutRes(com.example.widget.WidgetGlassStyle.SMOKED_NEON, "slide_up", false))
+    assertEquals(R.layout.widget_aurix_lyrics_light, com.example.widget.AurixWidgetController.resolveLyricsWidgetLayoutRes(com.example.widget.WidgetGlassStyle.LIGHT_FROST, "slide_up", false))
+    assertEquals(R.layout.widget_aurix_lyrics_poster, com.example.widget.AurixWidgetController.resolveLyricsWidgetLayoutRes(com.example.widget.WidgetGlassStyle.POSTER_GLASS, "slide_up", false))
 
-    assertEquals(R.layout.widget_preview_aurix_cover_glass, com.example.widget.AurixWidgetController.resolveCoverPreviewLayoutRes(com.example.widget.WidgetStyle.GLASS))
-    assertEquals(R.layout.widget_preview_aurix_cover_color, com.example.widget.AurixWidgetController.resolveCoverPreviewLayoutRes(com.example.widget.WidgetStyle.COLOR))
-    assertEquals(R.layout.widget_preview_aurix_cover_mono, com.example.widget.AurixWidgetController.resolveCoverPreviewLayoutRes(com.example.widget.WidgetStyle.MONO))
-
-    assertEquals(R.layout.widget_preview_aurix_mini_glass, com.example.widget.AurixWidgetController.resolveMiniPreviewLayoutRes(com.example.widget.WidgetStyle.GLASS))
-    assertEquals(R.layout.widget_preview_aurix_mini_color, com.example.widget.AurixWidgetController.resolveMiniPreviewLayoutRes(com.example.widget.WidgetStyle.COLOR))
-    assertEquals(R.layout.widget_preview_aurix_mini_mono, com.example.widget.AurixWidgetController.resolveMiniPreviewLayoutRes(com.example.widget.WidgetStyle.MONO))
+    // All 20 static picker preview layouts (4 kinds x 5 glass styles) are distinct valid layouts
+    val previewLayouts = mutableSetOf<Int>()
+    for (kind in com.example.widget.WidgetKind.entries) {
+      for (style in com.example.widget.WidgetGlassStyle.entries) {
+        val layoutId = com.example.widget.AurixWidgetController.resolvePreviewLayoutRes(kind, style)
+        assertTrue("Missing preview layout for ${kind.id}/${style.id}", layoutId != 0)
+        previewLayouts.add(layoutId)
+      }
+    }
+    assertEquals(20, previewLayouts.size)
   }
 
   @Test

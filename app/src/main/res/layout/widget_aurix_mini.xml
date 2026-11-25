@@ -1,148 +1,194 @@
 <?xml version="1.0" encoding="utf-8"?>
 <FrameLayout xmlns:android="http://schemas.android.com/apk/res/android"
-    android:id="@+id/widget_mini_root"
+    android:id="@+id/widget_mini_outer_shadow"
     android:layout_width="match_parent"
     android:layout_height="match_parent"
-    android:background="@drawable/widget_clip_28dp"
-    android:clipToOutline="true">
+    android:background="@drawable/widget_shadow_soft"
+    android:layoutDirection="locale"
+    android:paddingBottom="4dp">
 
-    <!-- Low-opacity ambient album glow -->
-    <ImageView
-        android:id="@+id/widget_mini_bg_glow"
-        android:layout_width="match_parent"
-        android:layout_height="match_parent"
-        android:alpha="0.30"
-        android:contentDescription="@null"
-        android:scaleType="centerCrop" />
-
-    <!-- Style surface -->
     <FrameLayout
-        android:id="@+id/widget_mini_card_border"
+        android:id="@+id/widget_mini_root"
         android:layout_width="match_parent"
         android:layout_height="match_parent"
-        android:background="@drawable/widget_music_glass_bg" />
+        android:background="@drawable/widget_clip_30dp"
+        android:clipToOutline="true">
 
-    <!-- Empty state -->
-    <LinearLayout
-        android:id="@+id/widget_mini_empty_container"
-        android:layout_width="match_parent"
-        android:layout_height="match_parent"
-        android:gravity="center"
-        android:orientation="vertical"
-        android:padding="14dp"
-        android:visibility="gone">
-
+        <!-- Layer 1: Pre-blurred ambient cover (or sharp poster cover for Poster Glass) -->
         <ImageView
-            android:id="@+id/widget_mini_empty_orbi"
-            android:layout_width="34dp"
-            android:layout_height="34dp"
-            android:contentDescription="@null"
-            android:src="@drawable/ic_widget_orbi" />
-
-        <ImageView
-            android:id="@+id/widget_mini_empty_bitmap"
-            android:layout_width="wrap_content"
-            android:layout_height="wrap_content"
-            android:layout_marginTop="8dp"
-            android:adjustViewBounds="true"
-            android:contentDescription="@null"
-            android:scaleType="fitCenter"
-            android:visibility="gone" />
-
-        <TextView
-            android:id="@+id/widget_mini_empty_text"
-            android:layout_width="wrap_content"
-            android:layout_height="wrap_content"
-            android:layout_marginTop="8dp"
-            android:ellipsize="end"
-            android:gravity="center"
-            android:maxLines="2"
-            android:text="@string/widget_tap_to_play"
-            android:textColor="#FFFFFF"
-            android:textSize="13sp"
-            android:textStyle="bold" />
-    </LinearLayout>
-
-    <!-- Active 2x2 Mini Content: 4-bar equalizer + title + artist -->
-    <LinearLayout
-        android:id="@+id/widget_mini_content_container"
-        android:layout_width="match_parent"
-        android:layout_height="match_parent"
-        android:orientation="vertical"
-        android:padding="16dp">
-
-        <LinearLayout
+            android:id="@+id/widget_mini_bg_glow"
             android:layout_width="match_parent"
-            android:layout_height="wrap_content"
-            android:gravity="center_vertical"
-            android:orientation="horizontal">
+            android:layout_height="match_parent"
+            android:contentDescription="@null"
+            android:scaleType="centerCrop" />
+
+        <!-- Layer 2: Auto-contrast frosted tint -->
+        <FrameLayout
+            android:id="@+id/widget_mini_bg_tint"
+            android:layout_width="match_parent"
+            android:layout_height="match_parent"
+            android:background="#57121628" />
+
+        <!-- Layer 3: Light sheen -->
+        <FrameLayout
+            android:id="@+id/widget_mini_sheen"
+            android:layout_width="match_parent"
+            android:layout_height="match_parent"
+            android:background="@drawable/widget_sheen_top_left" />
+
+        <!-- Edge: 1dp inner border + 1dp top highlight -->
+        <FrameLayout
+            android:id="@+id/widget_mini_card_border"
+            android:layout_width="match_parent"
+            android:layout_height="match_parent"
+            android:background="@drawable/widget_edge_glass_30dp" />
+
+        <!-- Empty state -->
+        <LinearLayout
+            android:id="@+id/widget_mini_empty_container"
+            android:layout_width="match_parent"
+            android:layout_height="match_parent"
+            android:gravity="center"
+            android:orientation="vertical"
+            android:padding="14dp"
+            android:visibility="gone">
 
             <ImageView
-                android:id="@+id/widget_mini_eq_bitmap"
-                android:layout_width="32dp"
-                android:layout_height="22dp"
-                android:contentDescription="@null"
-                android:scaleType="fitStart" />
-
-            <FrameLayout
-                android:layout_width="0dp"
-                android:layout_height="1dp"
-                android:layout_weight="1" />
-
-            <ImageView
-                android:id="@+id/widget_mini_brand_orbi"
-                android:layout_width="16dp"
-                android:layout_height="16dp"
-                android:alpha="0.82"
+                android:id="@+id/widget_mini_empty_orbi"
+                android:layout_width="34dp"
+                android:layout_height="34dp"
                 android:contentDescription="@null"
                 android:src="@drawable/ic_widget_orbi" />
+
+            <ImageView
+                android:id="@+id/widget_mini_empty_bitmap"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:layout_marginTop="8dp"
+                android:adjustViewBounds="true"
+                android:contentDescription="@null"
+                android:scaleType="fitCenter"
+                android:visibility="gone" />
+
+            <TextView
+                android:id="@+id/widget_mini_empty_text"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:layout_marginTop="8dp"
+                android:ellipsize="end"
+                android:gravity="center"
+                android:maxLines="2"
+                android:text="@string/widget_tap_to_play"
+                android:textColor="#FFFFFF"
+                android:textSize="13sp"
+                android:textStyle="bold" />
         </LinearLayout>
 
-        <FrameLayout
+        <!-- Active 2x2 Mini Content: 4-bar equalizer + title + artist -->
+        <LinearLayout
+            android:id="@+id/widget_mini_content_container"
             android:layout_width="match_parent"
-            android:layout_height="0dp"
-            android:layout_weight="1" />
+            android:layout_height="match_parent"
+            android:orientation="vertical"
+            android:padding="14dp">
 
-        <ImageView
-            android:id="@+id/widget_mini_title_bitmap"
-            android:layout_width="match_parent"
-            android:layout_height="wrap_content"
-            android:adjustViewBounds="true"
-            android:contentDescription="@null"
-            android:scaleType="fitStart"
-            android:visibility="gone" />
+            <LinearLayout
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:gravity="center_vertical"
+                android:orientation="horizontal">
 
-        <TextView
-            android:id="@+id/widget_mini_title"
-            android:layout_width="match_parent"
-            android:layout_height="wrap_content"
-            android:ellipsize="end"
-            android:includeFontPadding="true"
-            android:maxLines="2"
-            android:textColor="#FFFFFF"
-            android:textSize="16sp"
-            android:textStyle="bold" />
+                <ImageView
+                    android:id="@+id/widget_mini_eq_bitmap"
+                    android:layout_width="32dp"
+                    android:layout_height="22dp"
+                    android:contentDescription="@null"
+                    android:scaleType="fitStart" />
 
-        <ImageView
-            android:id="@+id/widget_mini_artist_bitmap"
-            android:layout_width="match_parent"
-            android:layout_height="wrap_content"
-            android:layout_marginTop="3dp"
-            android:adjustViewBounds="true"
-            android:contentDescription="@null"
-            android:scaleType="fitStart"
-            android:visibility="gone" />
+                <FrameLayout
+                    android:layout_width="0dp"
+                    android:layout_height="1dp"
+                    android:layout_weight="1" />
 
-        <TextView
-            android:id="@+id/widget_mini_artist"
-            android:layout_width="match_parent"
-            android:layout_height="wrap_content"
-            android:layout_marginTop="3dp"
-            android:ellipsize="end"
-            android:includeFontPadding="true"
-            android:maxLines="1"
-            android:singleLine="true"
-            android:textColor="#94FFFFFF"
-            android:textSize="13sp" />
-    </LinearLayout>
+                <ImageView
+                    android:id="@+id/widget_mini_brand_orbi"
+                    android:layout_width="18dp"
+                    android:layout_height="18dp"
+                    android:alpha="0.88"
+                    android:contentDescription="@null"
+                    android:src="@drawable/ic_widget_orbi" />
+            </LinearLayout>
+
+            <FrameLayout
+                android:layout_width="match_parent"
+                android:layout_height="0dp"
+                android:layout_weight="1" />
+
+            <FrameLayout
+                android:id="@+id/widget_mini_meta_frame"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:background="@drawable/widget_clip_24dp"
+                android:clipToOutline="true">
+
+                <ImageView
+                    android:id="@+id/widget_mini_poster_panel_bg"
+                    android:layout_width="match_parent"
+                    android:layout_height="match_parent"
+                    android:contentDescription="@null"
+                    android:scaleType="centerCrop"
+                    android:visibility="gone" />
+
+                <LinearLayout
+                    android:id="@+id/widget_mini_meta_inner"
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:orientation="vertical"
+                    android:padding="6dp">
+
+                    <ImageView
+                        android:id="@+id/widget_mini_title_bitmap"
+                        android:layout_width="match_parent"
+                        android:layout_height="wrap_content"
+                        android:adjustViewBounds="true"
+                        android:contentDescription="@null"
+                        android:scaleType="fitStart"
+                        android:visibility="gone" />
+
+                    <TextView
+                        android:id="@+id/widget_mini_title"
+                        android:layout_width="match_parent"
+                        android:layout_height="wrap_content"
+                        android:ellipsize="end"
+                        android:includeFontPadding="true"
+                        android:maxLines="2"
+                        android:textColor="#FFFFFF"
+                        android:textSize="16sp"
+                        android:textStyle="bold" />
+
+                    <ImageView
+                        android:id="@+id/widget_mini_artist_bitmap"
+                        android:layout_width="match_parent"
+                        android:layout_height="wrap_content"
+                        android:layout_marginTop="2dp"
+                        android:adjustViewBounds="true"
+                        android:contentDescription="@null"
+                        android:scaleType="fitStart"
+                        android:visibility="gone" />
+
+                    <TextView
+                        android:id="@+id/widget_mini_artist"
+                        android:layout_width="match_parent"
+                        android:layout_height="wrap_content"
+                        android:layout_marginTop="2dp"
+                        android:ellipsize="end"
+                        android:includeFontPadding="true"
+                        android:maxLines="1"
+                        android:singleLine="true"
+                        android:textColor="#B3FFFFFF"
+                        android:textSize="13sp" />
+                </LinearLayout>
+            </FrameLayout>
+        </LinearLayout>
+    </FrameLayout>
 </FrameLayout>

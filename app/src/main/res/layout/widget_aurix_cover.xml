@@ -1,86 +1,104 @@
 <?xml version="1.0" encoding="utf-8"?>
 <FrameLayout xmlns:android="http://schemas.android.com/apk/res/android"
-    android:id="@+id/widget_cover_root"
+    android:id="@+id/widget_cover_outer_shadow"
     android:layout_width="match_parent"
     android:layout_height="match_parent"
-    android:background="@drawable/widget_clip_28dp"
-    android:clipToOutline="true">
+    android:background="@drawable/widget_shadow_soft"
+    android:layoutDirection="locale"
+    android:paddingBottom="4dp">
 
-    <!-- Empty state -->
-    <LinearLayout
-        android:id="@+id/widget_cover_empty_container"
+    <FrameLayout
+        android:id="@+id/widget_cover_root"
         android:layout_width="match_parent"
         android:layout_height="match_parent"
-        android:gravity="center"
-        android:orientation="vertical"
-        android:padding="14dp"
-        android:visibility="gone">
+        android:background="@drawable/widget_clip_30dp"
+        android:clipToOutline="true">
 
-        <ImageView
-            android:id="@+id/widget_cover_empty_orbi"
-            android:layout_width="36dp"
-            android:layout_height="36dp"
-            android:contentDescription="@null"
-            android:src="@drawable/ic_widget_orbi" />
-
-        <ImageView
-            android:id="@+id/widget_cover_empty_bitmap"
-            android:layout_width="wrap_content"
-            android:layout_height="wrap_content"
-            android:layout_marginTop="8dp"
-            android:adjustViewBounds="true"
-            android:contentDescription="@null"
-            android:scaleType="fitCenter"
-            android:visibility="gone" />
-
-        <TextView
-            android:id="@+id/widget_cover_empty_text"
-            android:layout_width="wrap_content"
-            android:layout_height="wrap_content"
-            android:layout_marginTop="8dp"
-            android:ellipsize="end"
+        <!-- Empty state -->
+        <LinearLayout
+            android:id="@+id/widget_cover_empty_container"
+            android:layout_width="match_parent"
+            android:layout_height="match_parent"
+            android:background="#B0121628"
             android:gravity="center"
-            android:maxLines="2"
-            android:text="@string/widget_tap_to_play"
-            android:textColor="#FFFFFF"
-            android:textSize="13sp"
-            android:textStyle="bold" />
-    </LinearLayout>
-
-    <!-- Active 2x2 Cover Content: Full-bleed art + 44dp blurred dark circle play/pause -->
-    <FrameLayout
-        android:id="@+id/widget_cover_content_container"
-        android:layout_width="match_parent"
-        android:layout_height="match_parent">
-
-        <ImageView
-            android:id="@+id/widget_cover_image"
-            android:layout_width="match_parent"
-            android:layout_height="match_parent"
-            android:contentDescription="@string/widget_cd_album_art"
-            android:scaleType="centerCrop" />
-
-        <FrameLayout
-            android:id="@+id/widget_cover_border"
-            android:layout_width="match_parent"
-            android:layout_height="match_parent"
-            android:background="@drawable/widget_card_border_dark" />
-
-        <FrameLayout
-            android:id="@+id/widget_cover_play_pause"
-            android:layout_width="44dp"
-            android:layout_height="44dp"
-            android:layout_gravity="bottom|end"
-            android:layout_margin="12dp"
-            android:background="@drawable/widget_circle_blur_dark">
+            android:orientation="vertical"
+            android:padding="14dp"
+            android:visibility="gone">
 
             <ImageView
-                android:id="@+id/widget_cover_play_pause_icon"
-                android:layout_width="20dp"
-                android:layout_height="20dp"
-                android:layout_gravity="center"
-                android:contentDescription="@string/widget_cd_play_pause"
-                android:src="@drawable/ic_widget_play" />
+                android:id="@+id/widget_cover_empty_orbi"
+                android:layout_width="36dp"
+                android:layout_height="36dp"
+                android:contentDescription="@null"
+                android:src="@drawable/ic_widget_orbi" />
+
+            <ImageView
+                android:id="@+id/widget_cover_empty_bitmap"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:layout_marginTop="8dp"
+                android:adjustViewBounds="true"
+                android:contentDescription="@null"
+                android:scaleType="fitCenter"
+                android:visibility="gone" />
+
+            <TextView
+                android:id="@+id/widget_cover_empty_text"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:layout_marginTop="8dp"
+                android:ellipsize="end"
+                android:gravity="center"
+                android:maxLines="2"
+                android:text="@string/widget_tap_to_play"
+                android:textColor="#FFFFFF"
+                android:textSize="13sp"
+                android:textStyle="bold" />
+        </LinearLayout>
+
+        <!-- Active 2x2 Cover Content: Full cover art + glass sheen/border + 44dp play/pause button -->
+        <FrameLayout
+            android:id="@+id/widget_cover_content_container"
+            android:layout_width="match_parent"
+            android:layout_height="match_parent">
+
+            <ImageView
+                android:id="@+id/widget_cover_image"
+                android:layout_width="match_parent"
+                android:layout_height="match_parent"
+                android:contentDescription="@string/widget_cd_album_art"
+                android:scaleType="centerCrop" />
+
+            <FrameLayout
+                android:id="@+id/widget_cover_sheen"
+                android:layout_width="match_parent"
+                android:layout_height="match_parent"
+                android:background="@drawable/widget_sheen_top_left" />
+
+            <FrameLayout
+                android:id="@+id/widget_cover_border"
+                android:layout_width="match_parent"
+                android:layout_height="match_parent"
+                android:background="@drawable/widget_edge_glass_30dp" />
+
+            <FrameLayout
+                android:id="@+id/widget_cover_play_pause"
+                android:layout_width="44dp"
+                android:layout_height="44dp"
+                android:layout_gravity="bottom|end"
+                android:layout_margin="12dp"
+                android:background="@drawable/widget_frost_pill_btn"
+                android:minWidth="44dp"
+                android:minHeight="44dp">
+
+                <ImageView
+                    android:id="@+id/widget_cover_play_pause_icon"
+                    android:layout_width="20dp"
+                    android:layout_height="20dp"
+                    android:layout_gravity="center"
+                    android:contentDescription="@string/widget_cd_play_pause"
+                    android:src="@drawable/ic_widget_play" />
+            </FrameLayout>
         </FrameLayout>
     </FrameLayout>
 </FrameLayout>

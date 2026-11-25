@@ -10,9 +10,9 @@ on:
   workflow_dispatch:
     inputs:
       tag:
-        description: 'Release tag (e.g. v2.2.0)'
+        description: 'Release tag (e.g. v2.3.0)'
         required: false
-        default: 'v2.2.0'
+        default: 'v2.3.0'
 
 permissions:
   contents: write
@@ -52,13 +52,13 @@ jobs:
             RELEASE_TAG="${{ github.ref_name }}"
           else
             VERSION=$(grep -m1 'versionName' app/build.gradle.kts | sed -E 's/.*"([^"]+)".*/\1/' | tr '[:upper:]' '[:lower:]' | tr ' ' '-')
-            RELEASE_TAG="v${VERSION:-2.2.0}"
+            RELEASE_TAG="v${VERSION:-2.3.0}"
           fi
           VCODE=$(grep -m1 'versionCode' app/build.gradle.kts | sed -E 's/[^0-9]*([0-9]+).*/\1/')
           RDATE=$(grep -m1 'RELEASE_DATE' app/build.gradle.kts | sed -E 's/.*\\"([^\\"]+)\\".*/\1/')
           echo "RELEASE_TAG=${RELEASE_TAG}" >> "$GITHUB_ENV"
           echo "RELEASE_VERSION=${RELEASE_TAG#v}" >> "$GITHUB_ENV"
-          echo "RELEASE_VERSION_CODE=${VCODE:-20200}" >> "$GITHUB_ENV"
+          echo "RELEASE_VERSION_CODE=${VCODE:-20300}" >> "$GITHUB_ENV"
           echo "RELEASE_DATE=${RDATE:-$(date -u +%Y-%m-%d)}" >> "$GITHUB_ENV"
 
       - name: Ensure keystores exist
@@ -99,11 +99,11 @@ jobs:
             "sha256": os.environ["APK_SHA256"],
             "mandatory": False,
             "notes": [
-              f"Redesigned Widgets, Real Picker Previews & Standby Overhaul ({tag}): Redesigned AURIX Music (4x2) and AURIX Lyrics (4x2) home screen widgets plus new AURIX Cover (2x2) and AURIX Mini (2x2) widgets with Glass, Color, and Mono styles in Settings, extracted ambient album glow, 24% rounded cover art, real static picker previews (Android 12–15+), and refreshed Standby Mode with Mint default mood and Split/Poster/Lyrics layouts",
+              f"5 Glass Widget Styles & Per-Widget Configurator ({tag}): Redesigned AURIX Music (4x2), AURIX Lyrics (4x2), AURIX Cover (2x2), and AURIX Mini (2x2) widgets with 5 distinct glass styles (Frost Pill, Orb, Smoked Neon, Light Frost, Poster Glass), automatic WCAG 4.5:1 cover-luminance contrast, independent per-widget style persistence by appWidgetId, instant setup & long-press Reconfigure picker with live previews and optional 'Apply to all widgets', plus real widget picker previews across Android 12–15+",
+              "Redesigned Widgets, Real Picker Previews & Standby Overhaul (v2.2.0): Redesigned AURIX Music (4x2) and AURIX Lyrics (4x2) home screen widgets plus new AURIX Cover (2x2) and AURIX Mini (2x2) widgets with Glass, Color, and Mono styles in Settings, extracted ambient album glow, 24% rounded cover art, real static picker previews (Android 12–15+), and refreshed Standby Mode with Mint default mood and Split/Poster/Lyrics layouts",
               "Proportional Widget Lyrics & Reliable Release Verification (v2.1.6): Calibrated Home Screen Lyrics widget text sizes and launcher column widths for balanced 1:1 proportions across Small, Wide, and Large widgets (plus live preview); fixed OTA release APK SHA-256 verification against GitHub Release checksum assets",
               "Bundled Full-Unicode Khmer Fonts & Redesigned Glass Widgets (v2.1.5): Real full-Unicode Khmer & Latin .ttf fonts (Dangrek, Kantumruy Pro, Koulen, Noto Sans Khmer, Outfit, Inter) across app & widgets, fixed Khmer line-height clipping, and redesigned AURIX cosmic glass widgets",
-              "Standby Bedside & Charging Screen + Clean Bilingual Update Error Handling (v2.1.4): 10 clock styles, 5 moods with Auto cover palette lerp, 3D Gyro Parallax, Khmer chips, burn-in drift & localized EN/KM 404 Retry error handling",
-              "Khmer Lyrics Font Picker, Dangrek Titles & Restored Home Carousels (v2.1.3): Active-only lyric animation, Khmer font selector, and Dangrek titles"
+              "Standby Bedside & Charging Screen + Clean Bilingual Update Error Handling (v2.1.4): 10 clock styles, 5 moods with Auto cover palette lerp, 3D Gyro Parallax, Khmer chips, burn-in drift & localized EN/KM 404 Retry error handling"
             ],
             "releasePageUrl": f"https://github.com/{repo}/releases/tag/{tag}"
           }
@@ -129,9 +129,9 @@ jobs:
             mandatory: false
 
             What's New in AURIX ${{ env.RELEASE_TAG }}:
-            - Redesigned Widgets, Real Picker Previews & Standby Overhaul: Redesigned AURIX Music (4x2) and AURIX Lyrics (4x2) widgets plus new AURIX Cover (2x2) and AURIX Mini (2x2) widgets with Glass/Color/Mono styles, extracted ambient album glow, real widget picker previews, and Standby Split/Poster/Lyrics layouts with Mint default mood
+            - 5 Glass Widget Styles & Per-Widget Configurator: Redesigned AURIX Music (4x2), AURIX Lyrics (4x2), AURIX Cover (2x2), and AURIX Mini (2x2) widgets with 5 distinct glass styles (Frost Pill, Orb, Smoked Neon, Light Frost, Poster Glass), automatic WCAG 4.5:1 cover-luminance contrast, per-widget persistence by appWidgetId, instant setup & long-press Reconfigure picker with live previews, and real Android 12–15+ picker previews
+            - Redesigned Widgets, Real Picker Previews & Standby Overhaul (v2.2.0): Redesigned AURIX Music/Lyrics/Cover/Mini widgets and Standby Split/Poster/Lyrics layouts with Mint default mood
             - Proportional Widget Lyrics & Reliable Release Verification (v2.1.6): Calibrated Home Screen Lyrics widget text sizes and real launcher column widths; fixed OTA release APK SHA-256 verification against GitHub Release checksum assets
-            - Bundled Full-Unicode Khmer Fonts & Redesigned Glass Widgets (v2.1.5): Real full-Unicode Khmer & Latin .ttf fonts (Dangrek, Kantumruy Pro, Koulen, Noto Sans Khmer, Outfit, Inter) across app & widgets, fixed Khmer line-height clipping, and redesigned AURIX cosmic glass widgets
           files: |
             app/build/outputs/apk/release/app-release.apk
             AURIX-${{ env.RELEASE_TAG }}.apk

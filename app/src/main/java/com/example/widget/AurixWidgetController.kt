@@ -183,8 +183,21 @@ object AurixWidgetController {
   private val lastLyricsHasSideFrameByWidgetId = ConcurrentHashMap<Int, Boolean>()
   private val lastLyricsSizeTierByWidgetId = ConcurrentHashMap<Int, WidgetSizeTier>()
   private val lastLyricsWidgetWidthDpByWidgetId = ConcurrentHashMap<Int, Int>()
+  private val lastLyricsGlassStyleByWidgetId = ConcurrentHashMap<Int, WidgetGlassStyle>()
   private val lastCoverSignatureByWidgetId = ConcurrentHashMap<Int, String>()
   private val lastMiniSignatureByWidgetId = ConcurrentHashMap<Int, String>()
+
+  fun clearPerWidgetCaches(appWidgetIds: IntArray) {
+    for (id in appWidgetIds) {
+      lastFullLyricsLayoutByWidgetId.remove(id)
+      lastLyricsHasSideFrameByWidgetId.remove(id)
+      lastLyricsSizeTierByWidgetId.remove(id)
+      lastLyricsWidgetWidthDpByWidgetId.remove(id)
+      lastLyricsGlassStyleByWidgetId.remove(id)
+      lastCoverSignatureByWidgetId.remove(id)
+      lastMiniSignatureByWidgetId.remove(id)
+    }
+  }
 
   @Volatile
   private var partialUpdatesSinceFullLyrics: Int = 0
@@ -357,40 +370,87 @@ object AurixWidgetController {
     }
   }
 
-  fun resolveMusicWidgetLayoutRes(style: WidgetStyle): Int = when (style) {
-    WidgetStyle.GLASS -> R.layout.widget_aurix_music
-    WidgetStyle.COLOR -> R.layout.widget_aurix_music_color
-    WidgetStyle.MONO -> R.layout.widget_aurix_music_mono
+  private fun mapLegacyWidgetStyle(style: WidgetStyle): WidgetGlassStyle = when (style) {
+    WidgetStyle.GLASS -> WidgetGlassStyle.FROST_PILL
+    WidgetStyle.COLOR -> WidgetGlassStyle.LIGHT_FROST
+    WidgetStyle.MONO -> WidgetGlassStyle.SMOKED_NEON
   }
 
-  fun resolveMusicPreviewLayoutRes(style: WidgetStyle): Int = when (style) {
-    WidgetStyle.GLASS -> R.layout.widget_preview_aurix_music_glass
-    WidgetStyle.COLOR -> R.layout.widget_preview_aurix_music_color
-    WidgetStyle.MONO -> R.layout.widget_preview_aurix_music_mono
+  fun resolveMusicWidgetLayoutRes(style: WidgetGlassStyle): Int = when (style) {
+    WidgetGlassStyle.FROST_PILL -> R.layout.widget_aurix_music
+    WidgetGlassStyle.ORB -> R.layout.widget_aurix_music_orb
+    WidgetGlassStyle.SMOKED_NEON -> R.layout.widget_aurix_music_neon
+    WidgetGlassStyle.LIGHT_FROST -> R.layout.widget_aurix_music_light
+    WidgetGlassStyle.POSTER_GLASS -> R.layout.widget_aurix_music_poster
   }
 
-  fun resolveLyricsPreviewLayoutRes(style: WidgetStyle): Int = when (style) {
-    WidgetStyle.GLASS -> R.layout.widget_preview_aurix_lyrics_glass
-    WidgetStyle.COLOR -> R.layout.widget_preview_aurix_lyrics_color
-    WidgetStyle.MONO -> R.layout.widget_preview_aurix_lyrics_mono
+  fun resolveLyricsWidgetLayoutRes(
+    glassStyle: WidgetGlassStyle,
+    animStyleId: String,
+    reducedMotion: Boolean
+  ): Int = when (glassStyle) {
+    WidgetGlassStyle.FROST_PILL -> resolveLyricsWidgetLayoutRes(animStyleId, reducedMotion)
+    WidgetGlassStyle.ORB -> R.layout.widget_aurix_lyrics_orb
+    WidgetGlassStyle.SMOKED_NEON -> R.layout.widget_aurix_lyrics_neon
+    WidgetGlassStyle.LIGHT_FROST -> R.layout.widget_aurix_lyrics_light
+    WidgetGlassStyle.POSTER_GLASS -> R.layout.widget_aurix_lyrics_poster
   }
 
-  fun resolveCoverPreviewLayoutRes(style: WidgetStyle): Int = when (style) {
-    WidgetStyle.GLASS -> R.layout.widget_preview_aurix_cover_glass
-    WidgetStyle.COLOR -> R.layout.widget_preview_aurix_cover_color
-    WidgetStyle.MONO -> R.layout.widget_preview_aurix_cover_mono
+  fun resolvePreviewLayoutRes(kind: WidgetKind, style: WidgetGlassStyle): Int = when (kind) {
+    WidgetKind.MUSIC -> when (style) {
+      WidgetGlassStyle.FROST_PILL -> R.layout.widget_preview_aurix_music_frost_pill
+      WidgetGlassStyle.ORB -> R.layout.widget_preview_aurix_music_orb
+      WidgetGlassStyle.SMOKED_NEON -> R.layout.widget_preview_aurix_music_smoked_neon
+      WidgetGlassStyle.LIGHT_FROST -> R.layout.widget_preview_aurix_music_light_frost
+      WidgetGlassStyle.POSTER_GLASS -> R.layout.widget_preview_aurix_music_poster_glass
+    }
+    WidgetKind.LYRICS -> when (style) {
+      WidgetGlassStyle.FROST_PILL -> R.layout.widget_preview_aurix_lyrics_frost_pill
+      WidgetGlassStyle.ORB -> R.layout.widget_preview_aurix_lyrics_orb
+      WidgetGlassStyle.SMOKED_NEON -> R.layout.widget_preview_aurix_lyrics_smoked_neon
+      WidgetGlassStyle.LIGHT_FROST -> R.layout.widget_preview_aurix_lyrics_light_frost
+      WidgetGlassStyle.POSTER_GLASS -> R.layout.widget_preview_aurix_lyrics_poster_glass
+    }
+    WidgetKind.COVER -> when (style) {
+      WidgetGlassStyle.FROST_PILL -> R.layout.widget_preview_aurix_cover_frost_pill
+      WidgetGlassStyle.ORB -> R.layout.widget_preview_aurix_cover_orb
+      WidgetGlassStyle.SMOKED_NEON -> R.layout.widget_preview_aurix_cover_smoked_neon
+      WidgetGlassStyle.LIGHT_FROST -> R.layout.widget_preview_aurix_cover_light_frost
+      WidgetGlassStyle.POSTER_GLASS -> R.layout.widget_preview_aurix_cover_poster_glass
+    }
+    WidgetKind.MINI -> when (style) {
+      WidgetGlassStyle.FROST_PILL -> R.layout.widget_preview_aurix_mini_frost_pill
+      WidgetGlassStyle.ORB -> R.layout.widget_preview_aurix_mini_orb
+      WidgetGlassStyle.SMOKED_NEON -> R.layout.widget_preview_aurix_mini_smoked_neon
+      WidgetGlassStyle.LIGHT_FROST -> R.layout.widget_preview_aurix_mini_light_frost
+      WidgetGlassStyle.POSTER_GLASS -> R.layout.widget_preview_aurix_mini_poster_glass
+    }
   }
 
-  fun resolveMiniPreviewLayoutRes(style: WidgetStyle): Int = when (style) {
-    WidgetStyle.GLASS -> R.layout.widget_preview_aurix_mini_glass
-    WidgetStyle.COLOR -> R.layout.widget_preview_aurix_mini_color
-    WidgetStyle.MONO -> R.layout.widget_preview_aurix_mini_mono
-  }
+  fun resolveMusicWidgetLayoutRes(style: WidgetStyle): Int =
+    resolveMusicWidgetLayoutRes(mapLegacyWidgetStyle(style))
 
+  fun resolveMusicPreviewLayoutRes(style: WidgetStyle): Int =
+    resolvePreviewLayoutRes(WidgetKind.MUSIC, mapLegacyWidgetStyle(style))
+
+  fun resolveLyricsPreviewLayoutRes(style: WidgetStyle): Int =
+    resolvePreviewLayoutRes(WidgetKind.LYRICS, mapLegacyWidgetStyle(style))
+
+  fun resolveCoverPreviewLayoutRes(style: WidgetStyle): Int =
+    resolvePreviewLayoutRes(WidgetKind.COVER, mapLegacyWidgetStyle(style))
+
+  fun resolveMiniPreviewLayoutRes(style: WidgetStyle): Int =
+    resolvePreviewLayoutRes(WidgetKind.MINI, mapLegacyWidgetStyle(style))
+
+  /**
+   * Legacy app-settings hook preserved for AurixViewModel compatibility.
+   * Per-widget styles are owned strictly by WidgetStyleStore ("style_<id>"), so this never
+   * alters existing placed widgets.
+   */
   fun syncWidgetStyle(
     context: Context,
     styleId: String,
-    refreshWidgetsNow: Boolean = true
+    @Suppress("UNUSED_PARAMETER") refreshWidgetsNow: Boolean = true
   ) {
     val appCtx = context.applicationContext
     val resolved = WidgetStyle.fromId(styleId)
@@ -398,16 +458,38 @@ object AurixWidgetController {
       val current = readSnapshot(appCtx)
       saveSnapshot(appCtx, current.copy(widgetStyle = resolved.id))
     }
-    updateWidgetPickerPreviews(appCtx, resolved)
-    if (refreshWidgetsNow) {
-      refreshAllWidgetsAsync(
-        context = appCtx,
-        refreshMusic = true,
-        refreshLyrics = true,
-        refreshCover = true,
-        refreshMini = true,
-        forceArtworkReload = false
+  }
+
+  fun updateWidgetPickerPreviewForKind(
+    context: Context,
+    kind: WidgetKind,
+    style: WidgetGlassStyle
+  ) {
+    if (Build.VERSION.SDK_INT < Build.VERSION_CODES.VANILLA_ICE_CREAM) return
+    val appCtx = context.applicationContext
+    val manager = runCatching { AppWidgetManager.getInstance(appCtx) }.getOrNull() ?: return
+    val category = AppWidgetProviderInfo.WIDGET_CATEGORY_HOME_SCREEN
+    val providerCls = when (kind) {
+      WidgetKind.MUSIC -> AurixMusicWidgetProvider::class.java
+      WidgetKind.LYRICS -> AurixLyricsWidgetProvider::class.java
+      WidgetKind.COVER -> AurixCoverWidgetProvider::class.java
+      WidgetKind.MINI -> AurixMiniWidgetProvider::class.java
+    }
+    runCatching {
+      manager.setWidgetPreview(
+        ComponentName(appCtx, providerCls),
+        category,
+        RemoteViews(appCtx.packageName, resolvePreviewLayoutRes(kind, style))
       )
+    }
+  }
+
+  fun updateWidgetPickerPreviews(
+    context: Context,
+    style: WidgetGlassStyle
+  ) {
+    for (kind in WidgetKind.entries) {
+      updateWidgetPickerPreviewForKind(context, kind, style)
     }
   }
 
@@ -415,52 +497,26 @@ object AurixWidgetController {
     context: Context,
     style: WidgetStyle
   ) {
-    if (Build.VERSION.SDK_INT < Build.VERSION_CODES.VANILLA_ICE_CREAM) return
-    val appCtx = context.applicationContext
-    val manager = runCatching { AppWidgetManager.getInstance(appCtx) }.getOrNull() ?: return
-    val category = AppWidgetProviderInfo.WIDGET_CATEGORY_HOME_SCREEN
-    val pkg = appCtx.packageName
-    runCatching {
-      manager.setWidgetPreview(
-        ComponentName(appCtx, AurixMusicWidgetProvider::class.java),
-        category,
-        RemoteViews(pkg, resolveMusicPreviewLayoutRes(style))
-      )
-    }
-    runCatching {
-      manager.setWidgetPreview(
-        ComponentName(appCtx, AurixLyricsWidgetProvider::class.java),
-        category,
-        RemoteViews(pkg, resolveLyricsPreviewLayoutRes(style))
-      )
-    }
-    runCatching {
-      manager.setWidgetPreview(
-        ComponentName(appCtx, AurixCoverWidgetProvider::class.java),
-        category,
-        RemoteViews(pkg, resolveCoverPreviewLayoutRes(style))
-      )
-    }
-    runCatching {
-      manager.setWidgetPreview(
-        ComponentName(appCtx, AurixMiniWidgetProvider::class.java),
-        category,
-        RemoteViews(pkg, resolveMiniPreviewLayoutRes(style))
-      )
-    }
+    updateWidgetPickerPreviews(context, mapLegacyWidgetStyle(style))
   }
 
   /**
-   * Developer Mode utility: clears cached bitmaps, rebuilds the composite Lyrics widget bitmap
-   * immediately on Dispatchers.IO, updates all placed Lyrics widgets, and returns total build time (ms).
+   * Developer Mode utility: clears cached bitmaps, updates placed Lyrics widgets immediately
+   * using each widget's own WidgetGlassStyle, and returns total build time (ms).
    */
   suspend fun rebuildLyricsWidgetBitmapNow(context: Context): Long = kotlinx.coroutines.withContext(Dispatchers.IO) {
+    val startMs = System.currentTimeMillis()
     val appCtx = context.applicationContext
     WidgetBitmapBuilder.clearCache()
+    WidgetGlassRenderer.clearCache()
     val snapshot = readSnapshot(appCtx)
     val customizer = readWidgetCustomizerConfig(appCtx)
     val rawArt = loadOrRestoreRawArtwork(appCtx, snapshot, forceReload = false)
-    val roundedArt = getOrRenderRoundedAlbumArt(appCtx, rawArt)
+    val coverSet = WidgetGlassRenderer.getOrCreateBlurredCoverSet(
+      context = appCtx,
+      coverKey = "${snapshot.songId}|${snapshot.artworkUrl}",
+      rawArt = rawArt
+    )
     val manager = AppWidgetManager.getInstance(appCtx)
     val lyricsIds = runCatching {
       manager.getAppWidgetIds(ComponentName(appCtx, AurixLyricsWidgetProvider::class.java))
@@ -481,45 +537,32 @@ object AurixWidgetController {
       return@withContext result.buildTimeMs
     }
 
-    var totalBuildMs = 0L
     val reduceMotion = isReducedMotionActive(appCtx, snapshot.reducedMotion)
-    val standaloneFrameBmp = buildStandaloneSideFrameIfNeeded(appCtx, customizer, rawArt)
     for (widgetId in lyricsIds) {
       val options = runCatching { manager.getAppWidgetOptions(widgetId) }.getOrNull()
       val sizeTier = resolveWidgetSizeTier(options)
       val widgetWidthDp = resolveWidgetWidthDp(options)
-      val built = WidgetBitmapBuilder.buildWidgetCompositeBitmap(
-        context = appCtx,
-        config = customizer,
-        sizeTier = sizeTier,
-        albumArtBitmap = rawArt,
-        songArtworkKey = songKey,
-        includeFrameInComposite = false,
-        auroraPhase = 0f,
-        forceRebuild = true
-      )
-      totalBuildMs += built.buildTimeMs
-      val layoutRes = resolveLyricsWidgetLayoutRes(snapshot.lyricsWidgetAnimStyle, reduceMotion, sizeTier)
+      val glassStyle = WidgetStyleStore.getStyle(appCtx, widgetId)
+      val layoutRes = resolveLyricsWidgetLayoutRes(glassStyle, snapshot.lyricsWidgetAnimStyle, reduceMotion)
       val views = buildLyricsWidgetRemoteViews(
         context = appCtx,
         state = snapshot,
-        compositeBg = built.bitmap,
-        roundedArt = roundedArt,
-        standaloneFrameBmp = standaloneFrameBmp,
-        customizer = customizer,
+        coverSet = coverSet,
+        rawArt = rawArt,
+        glassStyle = glassStyle,
         sizeTier = sizeTier,
-        widgetWidthDp = widgetWidthDp
+        widgetWidthDp = widgetWidthDp,
+        widgetId = widgetId
       )
       runCatching { manager.updateAppWidget(widgetId, views) }
       lastFullLyricsLayoutByWidgetId[widgetId] = layoutRes
       lastLyricsSizeTierByWidgetId[widgetId] = sizeTier
       lastLyricsWidgetWidthDpByWidgetId[widgetId] = widgetWidthDp
-      lastLyricsHasSideFrameByWidgetId[widgetId] =
-        customizer.frameStyle != WidgetFrameStyle.NONE && sizeTier != WidgetSizeTier.SMALL && standaloneFrameBmp != null
+      lastLyricsGlassStyleByWidgetId[widgetId] = glassStyle
       lastFullLyricsLayoutRes = layoutRes
     }
     partialUpdatesSinceFullLyrics = 0
-    totalBuildMs.coerceAtLeast(1L)
+    (System.currentTimeMillis() - startMs).coerceAtLeast(1L)
   }
 
   fun hasMusicWidgets(context: Context): Boolean {
@@ -942,9 +985,36 @@ object AurixWidgetController {
         refreshMini = true,
         forceArtworkReload = false
       )
+      if (!lineChanged) {
+        updateOrbLyricsDiscIfNeededAsync(appCtx, updatedSnapshot)
+      }
     }
     if (lineChanged) {
       updatedSnapshot?.let { animateLyricsLineTransitionAsync(appCtx, it) }
+    }
+  }
+
+  private fun updateOrbLyricsDiscIfNeededAsync(context: Context, state: WidgetSnapshotState?) {
+    val snap = state ?: return
+    if (!snap.isPlaying) return
+    val appCtx = context.applicationContext
+    if (isReducedMotionActive(appCtx, snap.reducedMotion)) return
+    widgetScope.launch {
+      runCatching {
+        val manager = AppWidgetManager.getInstance(appCtx)
+        val lyricsIds = manager.getAppWidgetIds(ComponentName(appCtx, AurixLyricsWidgetProvider::class.java))
+        if (lyricsIds.isEmpty()) return@launch
+        val orbIds = lyricsIds.filter { WidgetStyleStore.getStyle(appCtx, it) == WidgetGlassStyle.ORB }
+        if (orbIds.isEmpty()) return@launch
+        val rawArt = loadOrRestoreRawArtwork(appCtx, snap, forceReload = false)
+        val angle = ((snap.positionMs % 14_000L) / 14_000f) * 360f
+        val discBmp = WidgetGlassRenderer.renderOrbDiscBitmap(appCtx, rawArt, sizePx = 140, rotationDegrees = angle)
+        for (widgetId in orbIds) {
+          val partial = RemoteViews(appCtx.packageName, R.layout.widget_aurix_lyrics_orb)
+          partial.setImageViewBitmap(R.id.widget_lyrics_header_art, discBmp)
+          runCatching { manager.partiallyUpdateAppWidget(widgetId, partial) }
+        }
+      }
     }
   }
 
@@ -1023,13 +1093,40 @@ object AurixWidgetController {
     }
   }
 
+  private fun computeLyricsTextWidthForGlassStyle(
+    glassStyle: WidgetGlassStyle,
+    widgetWidthDp: Int
+  ): Float {
+    val effW = if (widgetWidthDp in 120..520) widgetWidthDp.toFloat() else 340f
+    return when (glassStyle) {
+      WidgetGlassStyle.FROST_PILL -> (effW - 160f).coerceIn(140f, 360f)
+      WidgetGlassStyle.ORB -> (effW - 36f).coerceIn(160f, 400f)
+      WidgetGlassStyle.SMOKED_NEON -> (effW - 86f).coerceIn(150f, 380f)
+      WidgetGlassStyle.LIGHT_FROST -> ((effW * 0.62f) - 24f).coerceIn(130f, 320f)
+      WidgetGlassStyle.POSTER_GLASS -> (effW - 48f).coerceIn(150f, 400f)
+    }
+  }
+
+  private fun activeLyricSizeDpForGlassStyle(glassStyle: WidgetGlassStyle): Float = when (glassStyle) {
+    WidgetGlassStyle.FROST_PILL -> 21.0f
+    WidgetGlassStyle.ORB -> 22.0f
+    WidgetGlassStyle.SMOKED_NEON -> 26.0f
+    WidgetGlassStyle.LIGHT_FROST -> 19.0f
+    WidgetGlassStyle.POSTER_GLASS -> 19.0f
+  }
+
+  private fun nextLyricSizeDpForGlassStyle(glassStyle: WidgetGlassStyle): Float = when (glassStyle) {
+    WidgetGlassStyle.FROST_PILL -> 14.0f
+    WidgetGlassStyle.ORB -> 14.0f
+    WidgetGlassStyle.SMOKED_NEON -> 15.0f
+    WidgetGlassStyle.LIGHT_FROST -> 13.0f
+    WidgetGlassStyle.POSTER_GLASS -> 13.0f
+  }
+
   /**
    * Uses partiallyUpdateAppWidget to write ONLY the incoming ViewFlipper slot and call
    * setDisplayedChild(targetSlot), triggering the hardware-accelerated XML in/out
    * transition on the launcher without flickering or reloading the ambient glow background.
-   * Falls back to a full updateAppWidget whenever the hosted layoutRes changed (e.g. after APK
-   * update or animation style switch) or every N partial updates to prevent action-queue bloat
-   * while preserving ViewFlipper animation via RemoteViews.reapply().
    */
   private fun animateLyricsLineTransitionAsync(context: Context, state: WidgetSnapshotState) {
     val appCtx = context.applicationContext
@@ -1040,19 +1137,20 @@ object AurixWidgetController {
         if (lyricsIds.isEmpty()) return@launch
 
         val hasLyrics = state.hasLyrics && state.currentLyricLine.isNotBlank()
-        // Songs without lyrics show no animation and no tag
         if (!hasLyrics) return@launch
 
         val reduceMotion = isReducedMotionActive(appCtx, state.reducedMotion)
+        val stylesByWidgetId = HashMap<Int, WidgetGlassStyle>(lyricsIds.size)
+        for (widgetId in lyricsIds) {
+          stylesByWidgetId[widgetId] = WidgetStyleStore.getStyle(appCtx, widgetId)
+        }
 
-        // Ensure every placed widget hosts its matching layoutRes and periodically reset
-        // AppWidgetService's merged action queue.
         val needsFullSync = partialUpdatesSinceFullLyrics >= MAX_PARTIAL_UPDATES_BEFORE_FULL_SYNC ||
           lyricsIds.any { widgetId ->
-            val options = runCatching { manager.getAppWidgetOptions(widgetId) }.getOrNull()
-            val tier = resolveWidgetSizeTier(options)
-            val expected = resolveLyricsWidgetLayoutRes(state.lyricsWidgetAnimStyle, reduceMotion, tier)
-            lastFullLyricsLayoutByWidgetId[widgetId] != expected
+            val glassStyle = stylesByWidgetId[widgetId] ?: WidgetGlassStyle.FROST_PILL
+            val expected = resolveLyricsWidgetLayoutRes(glassStyle, state.lyricsWidgetAnimStyle, reduceMotion)
+            lastFullLyricsLayoutByWidgetId[widgetId] != expected ||
+              lastLyricsGlassStyleByWidgetId[widgetId] != glassStyle
           }
 
         if (needsFullSync) {
@@ -1065,35 +1163,36 @@ object AurixWidgetController {
           return@launch
         }
 
-        val widgetStyle = WidgetStyle.fromId(state.widgetStyle)
-        val primaryTextColor = when (widgetStyle) {
-          WidgetStyle.COLOR -> 0xFFF3EEFF.toInt()
-          else -> 0xFFFFFFFF.toInt()
-        }
-        val mutedTextColor = when (widgetStyle) {
-          WidgetStyle.COLOR -> 0x4DF3EEFF.toInt()
-          else -> 0x4DFFFFFF.toInt()
-        }
         val displayCurrentLine = state.currentLyricLine
         val displayNextLine = state.nextLyricLine
         val targetSlot = state.lyricsFlipperSlot.coerceIn(0, 1)
         val khmerFont = com.example.ui.theme.KhmerLyricsFont.fromId(state.khmerLyricsFont)
 
         for (widgetId in lyricsIds) {
+          val glassStyle = stylesByWidgetId[widgetId] ?: WidgetGlassStyle.FROST_PILL
           val liveOptions = runCatching { manager.getAppWidgetOptions(widgetId) }.getOrNull()
-          val tier = lastLyricsSizeTierByWidgetId[widgetId] ?: resolveWidgetSizeTier(liveOptions)
           val widgetWidthDp = lastLyricsWidgetWidthDpByWidgetId[widgetId]
             ?.takeIf { it > 0 }
             ?: resolveWidgetWidthDp(liveOptions)
-          val hasSideFrame = lastLyricsHasSideFrameByWidgetId[widgetId] ?: false
-          val textWidthDp = computeLyricsTextWidthDp(tier, hasSideFrame, widgetWidthDp)
-          val activeTextSizeDp = computeLyricsActiveTextSizeDp(tier)
-          val nextTextSizeDp = computeLyricsNextTextSizeDp(tier)
+          val textWidthDp = computeLyricsTextWidthForGlassStyle(glassStyle, widgetWidthDp)
+          val activeTextSizeDp = activeLyricSizeDpForGlassStyle(glassStyle)
+          val nextTextSizeDp = nextLyricSizeDpForGlassStyle(glassStyle)
+
+          val isLight = glassStyle == WidgetGlassStyle.LIGHT_FROST
+          val centered = glassStyle == WidgetGlassStyle.ORB
+          val primaryTextColor = if (isLight) 0xFF14172A.toInt() else 0xFFFFFFFF.toInt()
+          val mutedTextColor = when (glassStyle) {
+            WidgetGlassStyle.FROST_PILL -> 0x9EFFFFFF.toInt()
+            WidgetGlassStyle.ORB -> 0x9EFFFFFF.toInt()
+            WidgetGlassStyle.SMOKED_NEON -> 0x73FFFFFF.toInt()
+            WidgetGlassStyle.LIGHT_FROST -> 0x8014172A.toInt()
+            WidgetGlassStyle.POSTER_GLASS -> 0xB3FFFFFF.toInt()
+          }
+          val shadowColor = if (isLight) Color.TRANSPARENT else 0x66000000
 
           val layoutRes = lastFullLyricsLayoutByWidgetId[widgetId]
-            ?: resolveLyricsWidgetLayoutRes(state.lyricsWidgetAnimStyle, reduceMotion, tier)
+            ?: resolveLyricsWidgetLayoutRes(glassStyle, state.lyricsWidgetAnimStyle, reduceMotion)
           val partialViews = RemoteViews(appCtx.packageName, layoutRes)
-          // Animate ONLY the active lyric line inside ViewFlipper
           bindLyricsFlipperSlot(
             context = appCtx,
             views = partialViews,
@@ -1102,9 +1201,10 @@ object AurixWidgetController {
             khmerLyricsFont = khmerFont,
             primaryTextColor = primaryTextColor,
             textWidthDp = textWidthDp,
-            activeTextSizeDp = activeTextSizeDp
+            activeTextSizeDp = activeTextSizeDp,
+            centered = centered,
+            shadowColor = shadowColor
           )
-          // Update the upcoming lyric line OUTSIDE ViewFlipper statically (zero premature animation)
           bindStaticNextLyricLine(
             context = appCtx,
             views = partialViews,
@@ -1112,7 +1212,8 @@ object AurixWidgetController {
             khmerLyricsFont = khmerFont,
             mutedTextColor = mutedTextColor,
             textWidthDp = textWidthDp,
-            nextTextSizeDp = nextTextSizeDp
+            nextTextSizeDp = nextTextSizeDp,
+            centered = centered
           )
           partialViews.setDisplayedChild(R.id.widget_lyrics_flipper, targetSlot)
           runCatching { manager.partiallyUpdateAppWidget(widgetId, partialViews) }
@@ -1183,22 +1284,27 @@ object AurixWidgetController {
 
     val snapshot = readSnapshot(appCtx)
     val rawArt = loadOrRestoreRawArtwork(appCtx, snapshot, forceArtworkReload)
-    val roundedArt = getOrRenderRoundedAlbumArt(appCtx, rawArt)
-    val glowBg = getOrRenderBackgroundBitmap(appCtx, snapshot, rawArt)
+    val coverSet = WidgetGlassRenderer.getOrCreateBlurredCoverSet(
+      context = appCtx,
+      coverKey = "${snapshot.songId}|${snapshot.artworkUrl}",
+      rawArt = rawArt
+    )
 
     if (musicIds.isNotEmpty()) {
       for (widgetId in musicIds) {
         val options = runCatching { manager.getAppWidgetOptions(widgetId) }.getOrNull()
-        val views = buildMusicWidgetRemoteViews(appCtx, snapshot, glowBg, roundedArt, options)
+        val glassStyle = WidgetStyleStore.getStyle(appCtx, widgetId)
+        val views = buildMusicWidgetRemoteViews(appCtx, snapshot, coverSet, rawArt, glassStyle, options, widgetId)
         runCatching { manager.updateAppWidget(widgetId, views) }
       }
     }
 
     if (coverIds.isNotEmpty()) {
       for (widgetId in coverIds) {
-        val sig = "${snapshot.songId}|${snapshot.artworkUrl}|${snapshot.isPlaying}|${snapshot.widgetStyle}|${snapshot.language}"
+        val glassStyle = WidgetStyleStore.getStyle(appCtx, widgetId)
+        val sig = "${snapshot.songId}|${snapshot.artworkUrl}|${snapshot.isPlaying}|${glassStyle.id}|${snapshot.language}"
         if (!forceArtworkReload && lastCoverSignatureByWidgetId[widgetId] == sig) continue
-        val views = buildCoverWidgetRemoteViews(appCtx, snapshot, rawArt)
+        val views = buildCoverWidgetRemoteViews(appCtx, snapshot, rawArt, glassStyle, widgetId)
         runCatching { manager.updateAppWidget(widgetId, views) }
         lastCoverSignatureByWidgetId[widgetId] = sig
       }
@@ -1206,60 +1312,113 @@ object AurixWidgetController {
 
     if (miniIds.isNotEmpty()) {
       for (widgetId in miniIds) {
+        val glassStyle = WidgetStyleStore.getStyle(appCtx, widgetId)
         val eqBucket = if (snapshot.isPlaying) (snapshot.positionMs / 500L) else -1L
-        val sig = "${snapshot.songId}|${snapshot.title}|${snapshot.artist}|${snapshot.isPlaying}|$eqBucket|${snapshot.widgetStyle}|${snapshot.ambientGlowEnabled}|${snapshot.khmerLyricsFont}|${snapshot.language}"
+        val sig = "${snapshot.songId}|${snapshot.title}|${snapshot.artist}|${snapshot.isPlaying}|$eqBucket|${glassStyle.id}|${snapshot.ambientGlowEnabled}|${snapshot.khmerLyricsFont}|${snapshot.language}"
         if (!forceArtworkReload && lastMiniSignatureByWidgetId[widgetId] == sig) continue
-        val views = buildMiniWidgetRemoteViews(appCtx, snapshot, glowBg)
+        val views = buildMiniWidgetRemoteViews(appCtx, snapshot, coverSet, rawArt, glassStyle, widgetId)
         runCatching { manager.updateAppWidget(widgetId, views) }
         lastMiniSignatureByWidgetId[widgetId] = sig
       }
     }
 
     if (lyricsIds.isNotEmpty()) {
-      val customizer = readWidgetCustomizerConfig(appCtx)
       val reduceMotion = isReducedMotionActive(appCtx, snapshot.reducedMotion)
-      val songKey = "${snapshot.songId}|${snapshot.artworkUrl}"
-      val standaloneFrameBmp = buildStandaloneSideFrameIfNeeded(appCtx, customizer, rawArt)
-      val useCustomizerBg = customizer.bgType != WidgetBgType.PHOTO ||
-        (!customizer.samePhoto && customizer.bgSource == WidgetPhotoSource.CUSTOM)
       for (widgetId in lyricsIds) {
         val options = runCatching { manager.getAppWidgetOptions(widgetId) }.getOrNull()
         val sizeTier = resolveWidgetSizeTier(options)
         val widgetWidthDp = resolveWidgetWidthDp(options)
-        val bgBitmap = if (useCustomizerBg) {
-          WidgetBitmapBuilder.buildWidgetCompositeBitmap(
-            context = appCtx,
-            config = customizer,
-            sizeTier = sizeTier,
-            albumArtBitmap = rawArt,
-            songArtworkKey = songKey,
-            includeFrameInComposite = false,
-            auroraPhase = 0f,
-            forceRebuild = false
-          ).bitmap
-        } else {
-          glowBg
-        }
-        val layoutRes = resolveLyricsWidgetLayoutRes(snapshot.lyricsWidgetAnimStyle, reduceMotion, sizeTier)
+        val glassStyle = WidgetStyleStore.getStyle(appCtx, widgetId)
+        val layoutRes = resolveLyricsWidgetLayoutRes(glassStyle, snapshot.lyricsWidgetAnimStyle, reduceMotion)
         val views = buildLyricsWidgetRemoteViews(
           context = appCtx,
           state = snapshot,
-          compositeBg = bgBitmap,
-          roundedArt = roundedArt,
-          standaloneFrameBmp = standaloneFrameBmp,
-          customizer = customizer,
+          coverSet = coverSet,
+          rawArt = rawArt,
+          glassStyle = glassStyle,
           sizeTier = sizeTier,
-          widgetWidthDp = widgetWidthDp
+          widgetWidthDp = widgetWidthDp,
+          widgetId = widgetId
         )
         runCatching { manager.updateAppWidget(widgetId, views) }
         lastFullLyricsLayoutByWidgetId[widgetId] = layoutRes
         lastLyricsSizeTierByWidgetId[widgetId] = sizeTier
         lastLyricsWidgetWidthDpByWidgetId[widgetId] = widgetWidthDp
-        lastLyricsHasSideFrameByWidgetId[widgetId] =
-          customizer.frameStyle != WidgetFrameStyle.NONE && sizeTier != WidgetSizeTier.SMALL && standaloneFrameBmp != null
+        lastLyricsGlassStyleByWidgetId[widgetId] = glassStyle
         lastFullLyricsLayoutRes = layoutRes
       }
       partialUpdatesSinceFullLyrics = 0
+    }
+  }
+
+  suspend fun loadArtworkBitmapForPreview(
+    context: Context,
+    snapshot: WidgetSnapshotState
+  ): Bitmap? = kotlinx.coroutines.withContext(Dispatchers.IO) {
+    loadOrRestoreRawArtwork(context.applicationContext, snapshot, forceReload = false)
+  }
+
+  suspend fun updateSingleWidgetBlocking(
+    context: Context,
+    appWidgetId: Int,
+    kind: WidgetKind
+  ) = kotlinx.coroutines.withContext(Dispatchers.IO) {
+    if (appWidgetId <= 0) return@withContext
+    val appCtx = context.applicationContext
+    val manager = AppWidgetManager.getInstance(appCtx)
+    val snapshot = readSnapshot(appCtx)
+    val rawArt = loadOrRestoreRawArtwork(appCtx, snapshot, forceReload = false)
+    val coverSet = WidgetGlassRenderer.getOrCreateBlurredCoverSet(
+      context = appCtx,
+      coverKey = "${snapshot.songId}|${snapshot.artworkUrl}",
+      rawArt = rawArt
+    )
+    val glassStyle = WidgetStyleStore.getStyle(appCtx, appWidgetId)
+    val options = runCatching { manager.getAppWidgetOptions(appWidgetId) }.getOrNull()
+    when (kind) {
+      WidgetKind.MUSIC -> {
+        val views = buildMusicWidgetRemoteViews(appCtx, snapshot, coverSet, rawArt, glassStyle, options, appWidgetId)
+        runCatching { manager.updateAppWidget(appWidgetId, views) }
+      }
+      WidgetKind.COVER -> {
+        val views = buildCoverWidgetRemoteViews(appCtx, snapshot, rawArt, glassStyle, appWidgetId)
+        runCatching { manager.updateAppWidget(appWidgetId, views) }
+        lastCoverSignatureByWidgetId[appWidgetId] =
+          "${snapshot.songId}|${snapshot.artworkUrl}|${snapshot.isPlaying}|${glassStyle.id}|${snapshot.language}"
+      }
+      WidgetKind.MINI -> {
+        val views = buildMiniWidgetRemoteViews(appCtx, snapshot, coverSet, rawArt, glassStyle, appWidgetId)
+        runCatching { manager.updateAppWidget(appWidgetId, views) }
+        val eqBucket = if (snapshot.isPlaying) (snapshot.positionMs / 500L) else -1L
+        lastMiniSignatureByWidgetId[appWidgetId] =
+          "${snapshot.songId}|${snapshot.title}|${snapshot.artist}|${snapshot.isPlaying}|$eqBucket|${glassStyle.id}|${snapshot.ambientGlowEnabled}|${snapshot.khmerLyricsFont}|${snapshot.language}"
+      }
+      WidgetKind.LYRICS -> {
+        val reduceMotion = isReducedMotionActive(appCtx, snapshot.reducedMotion)
+        val sizeTier = resolveWidgetSizeTier(options)
+        val widgetWidthDp = resolveWidgetWidthDp(options)
+        val layoutRes = resolveLyricsWidgetLayoutRes(glassStyle, snapshot.lyricsWidgetAnimStyle, reduceMotion)
+        val views = buildLyricsWidgetRemoteViews(
+          context = appCtx,
+          state = snapshot,
+          coverSet = coverSet,
+          rawArt = rawArt,
+          glassStyle = glassStyle,
+          sizeTier = sizeTier,
+          widgetWidthDp = widgetWidthDp,
+          widgetId = appWidgetId
+        )
+        runCatching { manager.updateAppWidget(appWidgetId, views) }
+        lastFullLyricsLayoutByWidgetId[appWidgetId] = layoutRes
+        lastLyricsSizeTierByWidgetId[appWidgetId] = sizeTier
+        lastLyricsWidgetWidthDpByWidgetId[appWidgetId] = widgetWidthDp
+        lastLyricsGlassStyleByWidgetId[appWidgetId] = glassStyle
+        lastFullLyricsLayoutRes = layoutRes
+        partialUpdatesSinceFullLyrics = 0
+        if (snapshot.isPlaying && snapshot.rawLrc.isNotBlank()) {
+          onLyricsSyncStateChanged?.invoke()
+        }
+      }
     }
   }
 
@@ -1273,11 +1432,15 @@ object AurixWidgetController {
       runCatching {
         val snapshot = readSnapshot(appCtx)
         val rawArt = loadOrRestoreRawArtwork(appCtx, snapshot, forceReload = false)
-        val glowBg = getOrRenderBackgroundBitmap(appCtx, snapshot, rawArt)
-        val roundedArt = getOrRenderRoundedAlbumArt(appCtx, rawArt)
+        val coverSet = WidgetGlassRenderer.getOrCreateBlurredCoverSet(
+          context = appCtx,
+          coverKey = "${snapshot.songId}|${snapshot.artworkUrl}",
+          rawArt = rawArt
+        )
         for (widgetId in appWidgetIds) {
           val options = runCatching { appWidgetManager.getAppWidgetOptions(widgetId) }.getOrNull()
-          val views = buildMusicWidgetRemoteViews(appCtx, snapshot, glowBg, roundedArt, options)
+          val glassStyle = WidgetStyleStore.getStyle(appCtx, widgetId)
+          val views = buildMusicWidgetRemoteViews(appCtx, snapshot, coverSet, rawArt, glassStyle, options, widgetId)
           runCatching { appWidgetManager.updateAppWidget(widgetId, views) }
         }
       }
@@ -1295,10 +1458,11 @@ object AurixWidgetController {
         val snapshot = readSnapshot(appCtx)
         val rawArt = loadOrRestoreRawArtwork(appCtx, snapshot, forceReload = false)
         for (widgetId in appWidgetIds) {
-          val views = buildCoverWidgetRemoteViews(appCtx, snapshot, rawArt)
+          val glassStyle = WidgetStyleStore.getStyle(appCtx, widgetId)
+          val views = buildCoverWidgetRemoteViews(appCtx, snapshot, rawArt, glassStyle, widgetId)
           runCatching { appWidgetManager.updateAppWidget(widgetId, views) }
           lastCoverSignatureByWidgetId[widgetId] =
-            "${snapshot.songId}|${snapshot.artworkUrl}|${snapshot.isPlaying}|${snapshot.widgetStyle}|${snapshot.language}"
+            "${snapshot.songId}|${snapshot.artworkUrl}|${snapshot.isPlaying}|${glassStyle.id}|${snapshot.language}"
         }
       }
     }
@@ -1314,13 +1478,18 @@ object AurixWidgetController {
       runCatching {
         val snapshot = readSnapshot(appCtx)
         val rawArt = loadOrRestoreRawArtwork(appCtx, snapshot, forceReload = false)
-        val glowBg = getOrRenderBackgroundBitmap(appCtx, snapshot, rawArt)
+        val coverSet = WidgetGlassRenderer.getOrCreateBlurredCoverSet(
+          context = appCtx,
+          coverKey = "${snapshot.songId}|${snapshot.artworkUrl}",
+          rawArt = rawArt
+        )
         for (widgetId in appWidgetIds) {
-          val views = buildMiniWidgetRemoteViews(appCtx, snapshot, glowBg)
+          val glassStyle = WidgetStyleStore.getStyle(appCtx, widgetId)
+          val views = buildMiniWidgetRemoteViews(appCtx, snapshot, coverSet, rawArt, glassStyle, widgetId)
           runCatching { appWidgetManager.updateAppWidget(widgetId, views) }
           val eqBucket = if (snapshot.isPlaying) (snapshot.positionMs / 500L) else -1L
           lastMiniSignatureByWidgetId[widgetId] =
-            "${snapshot.songId}|${snapshot.title}|${snapshot.artist}|${snapshot.isPlaying}|$eqBucket|${snapshot.widgetStyle}|${snapshot.ambientGlowEnabled}|${snapshot.khmerLyricsFont}|${snapshot.language}"
+            "${snapshot.songId}|${snapshot.title}|${snapshot.artist}|${snapshot.isPlaying}|$eqBucket|${glassStyle.id}|${snapshot.ambientGlowEnabled}|${snapshot.khmerLyricsFont}|${snapshot.language}"
         }
       }
     }
@@ -1335,50 +1504,34 @@ object AurixWidgetController {
     widgetScope.launch {
       runCatching {
         val snapshot = readSnapshot(appCtx)
-        val customizer = readWidgetCustomizerConfig(appCtx)
         val rawArt = loadOrRestoreRawArtwork(appCtx, snapshot, forceReload = false)
-        val roundedArt = getOrRenderRoundedAlbumArt(appCtx, rawArt)
-        val glowBg = getOrRenderBackgroundBitmap(appCtx, snapshot, rawArt)
+        val coverSet = WidgetGlassRenderer.getOrCreateBlurredCoverSet(
+          context = appCtx,
+          coverKey = "${snapshot.songId}|${snapshot.artworkUrl}",
+          rawArt = rawArt
+        )
         val reduceMotion = isReducedMotionActive(appCtx, snapshot.reducedMotion)
-        val songKey = "${snapshot.songId}|${snapshot.artworkUrl}"
-        val standaloneFrameBmp = buildStandaloneSideFrameIfNeeded(appCtx, customizer, rawArt)
-        val useCustomizerBg = customizer.bgType != WidgetBgType.PHOTO ||
-          (!customizer.samePhoto && customizer.bgSource == WidgetPhotoSource.CUSTOM)
         for (widgetId in appWidgetIds) {
           val options = runCatching { appWidgetManager.getAppWidgetOptions(widgetId) }.getOrNull()
           val sizeTier = resolveWidgetSizeTier(options)
           val widgetWidthDp = resolveWidgetWidthDp(options)
-          val compositeBg = if (useCustomizerBg) {
-            WidgetBitmapBuilder.buildWidgetCompositeBitmap(
-              context = appCtx,
-              config = customizer,
-              sizeTier = sizeTier,
-              albumArtBitmap = rawArt,
-              songArtworkKey = songKey,
-              includeFrameInComposite = false,
-              auroraPhase = 0f,
-              forceRebuild = false
-            ).bitmap
-          } else {
-            glowBg
-          }
-          val layoutRes = resolveLyricsWidgetLayoutRes(snapshot.lyricsWidgetAnimStyle, reduceMotion, sizeTier)
+          val glassStyle = WidgetStyleStore.getStyle(appCtx, widgetId)
+          val layoutRes = resolveLyricsWidgetLayoutRes(glassStyle, snapshot.lyricsWidgetAnimStyle, reduceMotion)
           val views = buildLyricsWidgetRemoteViews(
             context = appCtx,
             state = snapshot,
-            compositeBg = compositeBg,
-            roundedArt = roundedArt,
-            standaloneFrameBmp = standaloneFrameBmp,
-            customizer = customizer,
+            coverSet = coverSet,
+            rawArt = rawArt,
+            glassStyle = glassStyle,
             sizeTier = sizeTier,
-            widgetWidthDp = widgetWidthDp
+            widgetWidthDp = widgetWidthDp,
+            widgetId = widgetId
           )
           runCatching { appWidgetManager.updateAppWidget(widgetId, views) }
           lastFullLyricsLayoutByWidgetId[widgetId] = layoutRes
           lastLyricsSizeTierByWidgetId[widgetId] = sizeTier
           lastLyricsWidgetWidthDpByWidgetId[widgetId] = widgetWidthDp
-          lastLyricsHasSideFrameByWidgetId[widgetId] =
-            customizer.frameStyle != WidgetFrameStyle.NONE && sizeTier != WidgetSizeTier.SMALL && standaloneFrameBmp != null
+          lastLyricsGlassStyleByWidgetId[widgetId] = glassStyle
           lastFullLyricsLayoutRes = layoutRes
         }
         partialUpdatesSinceFullLyrics = 0
@@ -1406,59 +1559,77 @@ object AurixWidgetController {
   private fun buildMusicWidgetRemoteViews(
     context: Context,
     state: WidgetSnapshotState,
-    glowBg: Bitmap,
-    roundedArt: Bitmap,
-    options: Bundle?
+    coverSet: CachedGlassCoverSet,
+    rawArt: Bitmap?,
+    glassStyle: WidgetGlassStyle,
+    options: Bundle?,
+    widgetId: Int
   ): RemoteViews {
     val localizedCtx = LocaleHelper.wrapBaseContext(context, state.language)
-    val style = WidgetStyle.fromId(state.widgetStyle)
-    val layoutRes = resolveMusicWidgetLayoutRes(style)
+    val layoutRes = resolveMusicWidgetLayoutRes(glassStyle)
     val views = RemoteViews(context.packageName, layoutRes)
+    val isLight = glassStyle == WidgetGlassStyle.LIGHT_FROST
+    val isRtl = context.resources.configuration.layoutDirection == View.LAYOUT_DIRECTION_RTL
+    val reduceMotion = isReducedMotionActive(context, state.reducedMotion)
 
-    val titleColor = when (style) {
-      WidgetStyle.COLOR -> 0xFF16121F.toInt()
-      else -> 0xFFFFFFFF.toInt()
-    }
-    val artistColor = when (style) {
-      WidgetStyle.COLOR -> 0x9416121F.toInt()
-      else -> 0x94FFFFFF.toInt()
-    }
-    val controlIconTint = when (style) {
-      WidgetStyle.COLOR -> 0xFF16121F.toInt()
-      else -> 0x94FFFFFF.toInt()
-    }
-    val playIconTint = when (style) {
-      WidgetStyle.GLASS -> 0xFF04120C.toInt()
-      WidgetStyle.COLOR -> 0xFFF3EEFF.toInt()
-      WidgetStyle.MONO -> 0xFF000000.toInt()
+    if (glassStyle != WidgetGlassStyle.POSTER_GLASS) {
+      val bgLayer = when (glassStyle) {
+        WidgetGlassStyle.SMOKED_NEON -> coverSet.blurredStrong
+        WidgetGlassStyle.LIGHT_FROST -> coverSet.blurredLightFrost
+        else -> coverSet.blurred26
+      }
+      views.setImageViewBitmap(R.id.widget_music_bg_glow, bgLayer)
+      views.setInt(
+        R.id.widget_music_bg_tint,
+        "setBackgroundColor",
+        WidgetGlassRenderer.computeAutoContrastTint(glassStyle, coverSet.luminance)
+      )
     }
 
-    if (style == WidgetStyle.MONO || !state.ambientGlowEnabled) {
-      views.setViewVisibility(R.id.widget_music_bg_glow, View.GONE)
-    } else {
-      views.setViewVisibility(R.id.widget_music_bg_glow, View.VISIBLE)
-      views.setImageViewBitmap(R.id.widget_music_bg_glow, glowBg)
+    val titleColor = if (isLight) 0xFF14172A.toInt() else 0xFFFFFFFF.toInt()
+    val artistColor = when (glassStyle) {
+      WidgetGlassStyle.LIGHT_FROST -> 0x9E14172A.toInt()
+      WidgetGlassStyle.SMOKED_NEON -> 0x99FFFFFF.toInt()
+      WidgetGlassStyle.POSTER_GLASS -> 0xB8FFFFFF.toInt()
+      WidgetGlassStyle.FROST_PILL, WidgetGlassStyle.ORB -> 0xB3FFFFFF.toInt()
+    }
+    val textShadowColor = if (isLight) Color.TRANSPARENT else 0x55000000
+    val controlIconTint = if (isLight) 0xFF14172A.toInt() else 0xFFFFFFFF.toInt()
+    val playIconTint = when (glassStyle) {
+      WidgetGlassStyle.ORB, WidgetGlassStyle.POSTER_GLASS -> 0xFF121628.toInt()
+      WidgetGlassStyle.LIGHT_FROST -> 0xFFF5F7FF.toInt()
+      WidgetGlassStyle.FROST_PILL, WidgetGlassStyle.SMOKED_NEON -> 0xFFFFFFFF.toInt()
     }
 
     val openPlayerPi = buildOpenAppPendingIntent(
       context = context,
-      requestCode = 7101,
+      requestCode = 71000 + widgetId.coerceAtLeast(0),
       openScreen = AppNotificationHelper.SCREEN_NOW_PLAYING_PLAYER
     )
     val khmerFont = com.example.ui.theme.KhmerLyricsFont.fromId(state.khmerLyricsFont)
 
     if (state.songId.isBlank() || state.title.isBlank()) {
+      if (glassStyle == WidgetGlassStyle.POSTER_GLASS) {
+        views.setImageViewBitmap(
+          R.id.widget_music_album_art,
+          WidgetGlassRenderer.renderPosterCoverWithBottomGradient(context, rawArt, widthPx = 360, heightPx = 190)
+        )
+      }
       views.setViewVisibility(R.id.widget_music_empty_container, View.VISIBLE)
       views.setViewVisibility(R.id.widget_music_content_container, View.GONE)
       val tapToPlayText = localizedCtx.getString(R.string.widget_tap_to_play)
-      val emptyBmp = renderStyledUiBitmap(
+      val emptyBmp = WidgetGlassRenderer.renderTextBitmap(
         context = context,
         text = tapToPlayText,
+        khmerLyricsFont = com.example.ui.theme.KhmerLyricsFont.KANTUMRUY_PRO,
+        isTitle = false,
         textColor = titleColor,
         baseTextSizeDp = 15.0f,
         isBold = true,
         widthDp = 210f,
-        wrapToTextWidth = true
+        maxLines = 1,
+        centered = false,
+        shadowColor = textShadowColor
       )
       if (emptyBmp != null) {
         views.setViewVisibility(R.id.widget_music_empty_bitmap, View.VISIBLE)
@@ -1478,25 +1649,94 @@ object AurixWidgetController {
     views.setViewVisibility(R.id.widget_music_empty_container, View.GONE)
     views.setViewVisibility(R.id.widget_music_content_container, View.VISIBLE)
 
-    views.setImageViewBitmap(R.id.widget_music_album_art, roundedArt)
+    val artBmp = when (glassStyle) {
+      WidgetGlassStyle.FROST_PILL -> WidgetGlassRenderer.renderRoundedCoverBitmap(
+        context = context,
+        rawArt = rawArt,
+        sizePx = 192,
+        cornerRadiusFraction = 20f / 66f,
+        warmRim = false
+      )
+      WidgetGlassStyle.ORB -> {
+        val angle = if (state.isPlaying && !reduceMotion) ((state.positionMs % 14_000L) / 14_000f) * 360f else 0f
+        WidgetGlassRenderer.renderOrbDiscBitmap(
+          context = context,
+          rawArt = rawArt,
+          sizePx = 220,
+          rotationDegrees = angle
+        )
+      }
+      WidgetGlassStyle.SMOKED_NEON -> WidgetGlassRenderer.renderTiltedArtBitmap(
+        context = context,
+        rawArt = rawArt,
+        artSizePx = 156,
+        tiltDegrees = 6f
+      )
+      WidgetGlassStyle.LIGHT_FROST -> WidgetGlassRenderer.renderLeftEdgeFadeCoverBitmap(
+        context = context,
+        rawArt = rawArt,
+        widthPx = 160,
+        heightPx = 220,
+        isRtl = isRtl
+      )
+      WidgetGlassStyle.POSTER_GLASS -> WidgetGlassRenderer.renderPosterCoverWithBottomGradient(
+        context = context,
+        rawArt = rawArt,
+        widthPx = 360,
+        heightPx = 190
+      )
+    }
+    views.setImageViewBitmap(R.id.widget_music_album_art, artBmp)
     views.setOnClickPendingIntent(R.id.widget_music_album_art, openPlayerPi)
     views.setOnClickPendingIntent(R.id.widget_music_meta_container, openPlayerPi)
     views.setOnClickPendingIntent(R.id.widget_music_root, openPlayerPi)
 
+    if (glassStyle == WidgetGlassStyle.POSTER_GLASS) {
+      views.setImageViewBitmap(
+        R.id.widget_music_poster_panel_bg,
+        WidgetGlassRenderer.renderPosterFloatingGlassPanelBitmap(
+          blurredStrong = coverSet.blurredStrong,
+          widthPx = 340,
+          heightPx = 96,
+          luminance = coverSet.luminance
+        )
+      )
+    }
+
     val minWidthDp = options?.getInt(AppWidgetManager.OPTION_APPWIDGET_MIN_WIDTH, 280) ?: 280
     val showCornerOrbi = minWidthDp <= 0 || minWidthDp >= 210
-    views.setViewVisibility(
-      R.id.widget_music_brand_orbi,
-      if (showCornerOrbi && style != WidgetStyle.MONO) View.VISIBLE else View.GONE
-    )
-
-    val artOccupiedDp = when (style) {
-      WidgetStyle.COLOR -> 138
-      WidgetStyle.MONO -> 128
-      WidgetStyle.GLASS -> 108
+    if (glassStyle == WidgetGlassStyle.FROST_PILL) {
+      views.setViewVisibility(
+        R.id.widget_music_brand_orbi,
+        if (showCornerOrbi) View.VISIBLE else View.GONE
+      )
     }
-    val metaWidthDp = (minWidthDp - artOccupiedDp).coerceIn(120, 340).toFloat()
-    val titleWidthDp = (metaWidthDp - if (showCornerOrbi && style != WidgetStyle.MONO) 24f else 0f).coerceAtLeast(100f)
+
+    val metaWidthDp = when (glassStyle) {
+      WidgetGlassStyle.FROST_PILL -> (minWidthDp - 116).coerceIn(130, 320).toFloat()
+      WidgetGlassStyle.ORB -> (minWidthDp - 138).coerceIn(120, 300).toFloat()
+      WidgetGlassStyle.SMOKED_NEON -> (minWidthDp - 116).coerceIn(130, 320).toFloat()
+      WidgetGlassStyle.LIGHT_FROST -> ((minWidthDp * 0.62f) - 24f).coerceIn(130f, 320f)
+      WidgetGlassStyle.POSTER_GLASS -> (minWidthDp - 108).coerceIn(140, 340).toFloat()
+    }
+    val titleWidthDp = if (glassStyle == WidgetGlassStyle.FROST_PILL && showCornerOrbi) {
+      (metaWidthDp - 34f).coerceAtLeast(100f)
+    } else {
+      metaWidthDp
+    }
+    val titleSizeDp = when (glassStyle) {
+      WidgetGlassStyle.FROST_PILL -> 19.0f
+      WidgetGlassStyle.ORB -> 20.0f
+      WidgetGlassStyle.SMOKED_NEON -> 26.0f
+      WidgetGlassStyle.LIGHT_FROST -> 19.0f
+      WidgetGlassStyle.POSTER_GLASS -> 18.0f
+    }
+    val artistSizeDp = when (glassStyle) {
+      WidgetGlassStyle.POSTER_GLASS -> 13.0f
+      WidgetGlassStyle.ORB -> 13.5f
+      else -> 14.0f
+    }
+
     val cleanTitle = state.title.trim()
     val cleanArtist = state.artist.trim().ifBlank { "AURIX" }
 
@@ -1507,9 +1747,10 @@ object AurixWidgetController {
       khmerLyricsFont = khmerFont,
       titleColor = titleColor,
       artistColor = artistColor,
-      baseTextSizeDp = 17.0f,
+      baseTextSizeDp = titleSizeDp,
       widthDp = titleWidthDp,
-      maxLines = 1
+      maxLines = 1,
+      shadowColor = textShadowColor
     )
     if (titleBmp != null) {
       views.setViewVisibility(R.id.widget_music_title_bitmap, View.VISIBLE)
@@ -1522,13 +1763,18 @@ object AurixWidgetController {
       views.setTextColor(R.id.widget_music_title, titleColor)
     }
 
-    val artistBmp = renderStyledUiBitmap(
+    val artistBmp = WidgetGlassRenderer.renderTextBitmap(
       context = context,
       text = cleanArtist,
+      khmerLyricsFont = khmerFont,
+      isTitle = false,
       textColor = artistColor,
-      baseTextSizeDp = 13.0f,
+      baseTextSizeDp = artistSizeDp,
       isBold = false,
-      widthDp = metaWidthDp
+      widthDp = metaWidthDp,
+      maxLines = 1,
+      centered = false,
+      shadowColor = textShadowColor
     )
     if (artistBmp != null) {
       views.setViewVisibility(R.id.widget_music_artist_bitmap, View.VISIBLE)
@@ -1541,12 +1787,34 @@ object AurixWidgetController {
       views.setTextColor(R.id.widget_music_artist, artistColor)
     }
 
-    val progressPermille = if (state.durationMs > 0L) {
-      ((state.positionMs.toDouble() / state.durationMs.toDouble()) * 1000.0)
-        .roundToInt()
-        .coerceIn(0, 1000)
-    } else 0
-    views.setProgressBar(R.id.widget_music_progress, 1000, progressPermille, false)
+    val progressFraction = if (state.durationMs > 0L) {
+      (state.positionMs.toFloat() / state.durationMs.toFloat()).coerceIn(0f, 1f)
+    } else 0f
+    val progressPermille = (progressFraction * 1000f).roundToInt().coerceIn(0, 1000)
+
+    when (glassStyle) {
+      WidgetGlassStyle.SMOKED_NEON -> {
+        views.setImageViewBitmap(
+          R.id.widget_music_segmented_progress,
+          WidgetGlassRenderer.renderSegmentedProgressBitmap(
+            progressFraction = progressFraction,
+            isRtl = isRtl
+          )
+        )
+      }
+      WidgetGlassStyle.LIGHT_FROST -> {
+        views.setImageViewBitmap(
+          R.id.widget_music_waveform_progress,
+          WidgetGlassRenderer.renderWaveformProgressBitmap(
+            progressFraction = progressFraction,
+            isRtl = isRtl
+          )
+        )
+      }
+      else -> {
+        views.setProgressBar(R.id.widget_music_progress, 1000, progressPermille, false)
+      }
+    }
 
     views.setImageViewResource(
       R.id.widget_btn_play_pause_icon,
@@ -1556,12 +1824,13 @@ object AurixWidgetController {
     views.setContentDescription(R.id.widget_music_album_art, localizedCtx.getString(R.string.widget_cd_album_art))
     views.setContentDescription(R.id.widget_btn_play_pause_icon, localizedCtx.getString(R.string.widget_cd_play_pause))
 
+    val baseReq = 72000 + widgetId.coerceAtLeast(0) * 10
     views.setOnClickPendingIntent(
       R.id.widget_btn_play_pause,
-      buildWidgetActionPendingIntent(context, ACTION_WIDGET_PLAY_PAUSE, 7202)
+      buildWidgetActionPendingIntent(context, ACTION_WIDGET_PLAY_PAUSE, baseReq + 2)
     )
 
-    if (style != WidgetStyle.MONO) {
+    if (glassStyle != WidgetGlassStyle.POSTER_GLASS) {
       views.setImageViewResource(
         R.id.widget_btn_like_icon,
         if (state.isFavorite) R.drawable.ic_widget_heart_filled else R.drawable.ic_widget_heart_outline
@@ -1585,40 +1854,63 @@ object AurixWidgetController {
 
       views.setOnClickPendingIntent(
         R.id.widget_btn_prev,
-        buildWidgetActionPendingIntent(context, ACTION_WIDGET_PREV, 7201)
+        buildWidgetActionPendingIntent(context, ACTION_WIDGET_PREV, baseReq + 1)
       )
       views.setOnClickPendingIntent(
         R.id.widget_btn_next,
-        buildWidgetActionPendingIntent(context, ACTION_WIDGET_NEXT, 7203)
+        buildWidgetActionPendingIntent(context, ACTION_WIDGET_NEXT, baseReq + 3)
       )
       views.setOnClickPendingIntent(
         R.id.widget_btn_like,
-        buildWidgetActionPendingIntent(context, ACTION_WIDGET_LIKE, 7204)
+        buildWidgetActionPendingIntent(context, ACTION_WIDGET_LIKE, baseReq + 4)
       )
     }
 
     return views
   }
 
+  private fun clipDrawableForGlassStyle(style: WidgetGlassStyle): Int = when (style) {
+    WidgetGlassStyle.FROST_PILL -> R.drawable.widget_clip_30dp
+    WidgetGlassStyle.ORB -> R.drawable.widget_clip_44dp
+    WidgetGlassStyle.SMOKED_NEON -> R.drawable.widget_clip_26dp
+    WidgetGlassStyle.LIGHT_FROST -> R.drawable.widget_clip_32dp
+    WidgetGlassStyle.POSTER_GLASS -> R.drawable.widget_clip_34dp
+  }
+
+  private fun edgeDrawableForGlassStyle(style: WidgetGlassStyle): Int = when (style) {
+    WidgetGlassStyle.FROST_PILL -> R.drawable.widget_edge_glass_30dp
+    WidgetGlassStyle.ORB -> R.drawable.widget_edge_orb_44dp
+    WidgetGlassStyle.SMOKED_NEON -> R.drawable.widget_edge_neon_26dp
+    WidgetGlassStyle.LIGHT_FROST -> R.drawable.widget_edge_light_32dp
+    WidgetGlassStyle.POSTER_GLASS -> R.drawable.widget_edge_poster_34dp
+  }
+
   private fun buildCoverWidgetRemoteViews(
     context: Context,
     state: WidgetSnapshotState,
-    rawArt: Bitmap?
+    rawArt: Bitmap?,
+    glassStyle: WidgetGlassStyle,
+    widgetId: Int
   ): RemoteViews {
     val localizedCtx = LocaleHelper.wrapBaseContext(context, state.language)
-    val style = WidgetStyle.fromId(state.widgetStyle)
     val views = RemoteViews(context.packageName, R.layout.widget_aurix_cover)
 
-    val clipRes = when (style) {
-      WidgetStyle.COLOR -> R.drawable.widget_clip_32dp
-      WidgetStyle.MONO -> R.drawable.widget_clip_22dp
-      WidgetStyle.GLASS -> R.drawable.widget_clip_28dp
-    }
-    views.setInt(R.id.widget_cover_root, "setBackgroundResource", clipRes)
+    views.setInt(
+      R.id.widget_cover_outer_shadow,
+      "setBackgroundResource",
+      if (glassStyle == WidgetGlassStyle.SMOKED_NEON) R.drawable.widget_shadow_cyan_neon else R.drawable.widget_shadow_soft
+    )
+    views.setInt(R.id.widget_cover_root, "setBackgroundResource", clipDrawableForGlassStyle(glassStyle))
+    views.setInt(
+      R.id.widget_cover_sheen,
+      "setBackgroundResource",
+      if (glassStyle == WidgetGlassStyle.SMOKED_NEON) R.drawable.widget_sheen_neon_top_right else R.drawable.widget_sheen_top_left
+    )
+    views.setInt(R.id.widget_cover_border, "setBackgroundResource", edgeDrawableForGlassStyle(glassStyle))
 
     val openPlayerPi = buildOpenAppPendingIntent(
       context = context,
-      requestCode = 7401,
+      requestCode = 74000 + widgetId.coerceAtLeast(0),
       openScreen = AppNotificationHelper.SCREEN_NOW_PLAYING_PLAYER
     )
     views.setOnClickPendingIntent(R.id.widget_cover_root, openPlayerPi)
@@ -1652,24 +1944,30 @@ object AurixWidgetController {
     views.setViewVisibility(R.id.widget_cover_empty_container, View.GONE)
     views.setViewVisibility(R.id.widget_cover_content_container, View.VISIBLE)
 
-    val coverBmp = rawArt ?: getOrRenderRoundedAlbumArt(context, null)
+    val coverBmp = if (glassStyle == WidgetGlassStyle.POSTER_GLASS) {
+      WidgetGlassRenderer.renderPosterCoverWithBottomGradient(context, rawArt, widthPx = 260, heightPx = 260)
+    } else {
+      rawArt ?: getOrRenderRoundedAlbumArt(context, null)
+    }
     views.setImageViewBitmap(R.id.widget_cover_image, coverBmp)
     views.setOnClickPendingIntent(R.id.widget_cover_image, openPlayerPi)
 
-    views.setInt(
-      R.id.widget_cover_play_pause,
-      "setBackgroundResource",
-      if (style == WidgetStyle.COLOR) R.drawable.widget_circle_dark else R.drawable.widget_circle_blur_dark
-    )
+    val playBtnBgRes = when (glassStyle) {
+      WidgetGlassStyle.FROST_PILL -> R.drawable.widget_frost_pill_btn
+      WidgetGlassStyle.SMOKED_NEON -> R.drawable.widget_circle_neon_edge
+      WidgetGlassStyle.ORB, WidgetGlassStyle.LIGHT_FROST, WidgetGlassStyle.POSTER_GLASS -> R.drawable.widget_circle_white
+    }
+    val playBtnIconTint = when (glassStyle) {
+      WidgetGlassStyle.LIGHT_FROST -> 0xFF14172A.toInt()
+      WidgetGlassStyle.ORB, WidgetGlassStyle.POSTER_GLASS -> 0xFF121628.toInt()
+      WidgetGlassStyle.FROST_PILL, WidgetGlassStyle.SMOKED_NEON -> 0xFFFFFFFF.toInt()
+    }
+    views.setInt(R.id.widget_cover_play_pause, "setBackgroundResource", playBtnBgRes)
     views.setImageViewResource(
       R.id.widget_cover_play_pause_icon,
       if (state.isPlaying) R.drawable.ic_widget_pause else R.drawable.ic_widget_play
     )
-    views.setInt(
-      R.id.widget_cover_play_pause_icon,
-      "setColorFilter",
-      if (style == WidgetStyle.COLOR) 0xFFF3EEFF.toInt() else 0xFFFFFFFF.toInt()
-    )
+    views.setInt(R.id.widget_cover_play_pause_icon, "setColorFilter", playBtnIconTint)
     views.setContentDescription(R.id.widget_cover_image, localizedCtx.getString(R.string.widget_cd_album_art))
     views.setContentDescription(R.id.widget_cover_play_pause_icon, localizedCtx.getString(R.string.widget_cd_play_pause))
     views.setOnClickPendingIntent(
@@ -1677,7 +1975,7 @@ object AurixWidgetController {
       buildWidgetActionPendingIntent(
         context = context,
         action = ACTION_WIDGET_PLAY_PAUSE,
-        requestCode = 7402,
+        requestCode = 74500 + widgetId.coerceAtLeast(0),
         providerClass = AurixCoverWidgetProvider::class.java
       )
     )
@@ -1687,43 +1985,73 @@ object AurixWidgetController {
   private fun buildMiniWidgetRemoteViews(
     context: Context,
     state: WidgetSnapshotState,
-    glowBg: Bitmap
+    coverSet: CachedGlassCoverSet,
+    rawArt: Bitmap?,
+    glassStyle: WidgetGlassStyle,
+    widgetId: Int
   ): RemoteViews {
     val localizedCtx = LocaleHelper.wrapBaseContext(context, state.language)
-    val style = WidgetStyle.fromId(state.widgetStyle)
     val views = RemoteViews(context.packageName, R.layout.widget_aurix_mini)
+    val isLight = glassStyle == WidgetGlassStyle.LIGHT_FROST
+    val isPoster = glassStyle == WidgetGlassStyle.POSTER_GLASS
 
-    val clipRes = when (style) {
-      WidgetStyle.COLOR -> R.drawable.widget_clip_32dp
-      WidgetStyle.MONO -> R.drawable.widget_clip_22dp
-      WidgetStyle.GLASS -> R.drawable.widget_clip_28dp
-    }
-    val surfaceRes = when (style) {
-      WidgetStyle.COLOR -> R.drawable.widget_music_color_bg
-      WidgetStyle.MONO -> R.drawable.widget_music_mono_bg
-      WidgetStyle.GLASS -> R.drawable.widget_music_glass_bg
-    }
-    views.setInt(R.id.widget_mini_root, "setBackgroundResource", clipRes)
-    views.setInt(R.id.widget_mini_card_border, "setBackgroundResource", surfaceRes)
+    views.setInt(
+      R.id.widget_mini_outer_shadow,
+      "setBackgroundResource",
+      if (glassStyle == WidgetGlassStyle.SMOKED_NEON) R.drawable.widget_shadow_cyan_neon else R.drawable.widget_shadow_soft
+    )
+    views.setInt(R.id.widget_mini_root, "setBackgroundResource", clipDrawableForGlassStyle(glassStyle))
+    views.setInt(
+      R.id.widget_mini_sheen,
+      "setBackgroundResource",
+      if (glassStyle == WidgetGlassStyle.SMOKED_NEON) R.drawable.widget_sheen_neon_top_right else R.drawable.widget_sheen_top_left
+    )
+    views.setInt(R.id.widget_mini_card_border, "setBackgroundResource", edgeDrawableForGlassStyle(glassStyle))
 
-    if (style == WidgetStyle.MONO || !state.ambientGlowEnabled) {
-      views.setViewVisibility(R.id.widget_mini_bg_glow, View.GONE)
+    if (isPoster) {
+      views.setImageViewBitmap(
+        R.id.widget_mini_bg_glow,
+        WidgetGlassRenderer.renderPosterCoverWithBottomGradient(context, rawArt, widthPx = 240, heightPx = 240)
+      )
+      views.setViewVisibility(R.id.widget_mini_bg_tint, View.GONE)
+      views.setViewVisibility(R.id.widget_mini_poster_panel_bg, View.VISIBLE)
+      views.setImageViewBitmap(
+        R.id.widget_mini_poster_panel_bg,
+        WidgetGlassRenderer.renderPosterFloatingGlassPanelBitmap(
+          blurredStrong = coverSet.blurredStrong,
+          widthPx = 220,
+          heightPx = 88,
+          luminance = coverSet.luminance
+        )
+      )
     } else {
-      views.setViewVisibility(R.id.widget_mini_bg_glow, View.VISIBLE)
-      views.setImageViewBitmap(R.id.widget_mini_bg_glow, glowBg)
+      val bgLayer = when (glassStyle) {
+        WidgetGlassStyle.SMOKED_NEON -> coverSet.blurredStrong
+        WidgetGlassStyle.LIGHT_FROST -> coverSet.blurredLightFrost
+        else -> coverSet.blurred26
+      }
+      views.setImageViewBitmap(R.id.widget_mini_bg_glow, bgLayer)
+      views.setViewVisibility(R.id.widget_mini_bg_tint, View.VISIBLE)
+      views.setInt(
+        R.id.widget_mini_bg_tint,
+        "setBackgroundColor",
+        WidgetGlassRenderer.computeAutoContrastTint(glassStyle, coverSet.luminance)
+      )
+      views.setViewVisibility(R.id.widget_mini_poster_panel_bg, View.GONE)
     }
 
-    val titleColor = if (style == WidgetStyle.COLOR) 0xFF16121F.toInt() else 0xFFFFFFFF.toInt()
-    val artistColor = if (style == WidgetStyle.COLOR) 0x9416121F.toInt() else 0x94FFFFFF.toInt()
-    val eqColor = when (style) {
-      WidgetStyle.GLASS -> 0xFF7EF0C5.toInt()
-      WidgetStyle.COLOR -> 0xFF16121F.toInt()
-      WidgetStyle.MONO -> 0xFFFFFFFF.toInt()
+    val titleColor = if (isLight) 0xFF14172A.toInt() else 0xFFFFFFFF.toInt()
+    val artistColor = if (isLight) 0x9E14172A.toInt() else 0xB3FFFFFF.toInt()
+    val shadowColor = if (isLight) Color.TRANSPARENT else 0x55000000
+    val eqColor = when (glassStyle) {
+      WidgetGlassStyle.FROST_PILL, WidgetGlassStyle.SMOKED_NEON -> 0xFF4FC3FF.toInt()
+      WidgetGlassStyle.LIGHT_FROST -> 0xFF3B46E0.toInt()
+      WidgetGlassStyle.ORB, WidgetGlassStyle.POSTER_GLASS -> 0xFFFFFFFF.toInt()
     }
 
     val openPlayerPi = buildOpenAppPendingIntent(
       context = context,
-      requestCode = 7501,
+      requestCode = 75000 + widgetId.coerceAtLeast(0),
       openScreen = AppNotificationHelper.SCREEN_NOW_PLAYING_PLAYER
     )
     views.setOnClickPendingIntent(R.id.widget_mini_root, openPlayerPi)
@@ -1732,14 +2060,18 @@ object AurixWidgetController {
       views.setViewVisibility(R.id.widget_mini_empty_container, View.VISIBLE)
       views.setViewVisibility(R.id.widget_mini_content_container, View.GONE)
       val tapToPlay = localizedCtx.getString(R.string.widget_tap_to_play)
-      val emptyBmp = renderStyledUiBitmap(
+      val emptyBmp = WidgetGlassRenderer.renderTextBitmap(
         context = context,
         text = tapToPlay,
+        khmerLyricsFont = com.example.ui.theme.KhmerLyricsFont.KANTUMRUY_PRO,
+        isTitle = false,
         textColor = titleColor,
         baseTextSizeDp = 13.0f,
         isBold = true,
         widthDp = 130f,
-        wrapToTextWidth = true
+        maxLines = 2,
+        centered = true,
+        shadowColor = shadowColor
       )
       if (emptyBmp != null) {
         views.setViewVisibility(R.id.widget_mini_empty_bitmap, View.VISIBLE)
@@ -1762,7 +2094,12 @@ object AurixWidgetController {
     val phase = ((state.positionMs / 450L) % 6L).toInt()
     views.setImageViewBitmap(
       R.id.widget_mini_eq_bitmap,
-      renderMiniEqualizerBitmap(eqColor = eqColor, isPlaying = state.isPlaying, phase = phase)
+      WidgetGlassRenderer.renderEqualizerBitmap(
+        barCount = 4,
+        color = eqColor,
+        isPlaying = state.isPlaying,
+        phase = phase
+      )
     )
 
     val khmerFont = com.example.ui.theme.KhmerLyricsFont.fromId(state.khmerLyricsFont)
@@ -1778,7 +2115,8 @@ object AurixWidgetController {
       artistColor = artistColor,
       baseTextSizeDp = 16.0f,
       widthDp = 148f,
-      maxLines = 2
+      maxLines = 2,
+      shadowColor = shadowColor
     )
     if (titleBmp != null) {
       views.setViewVisibility(R.id.widget_mini_title_bitmap, View.VISIBLE)
@@ -1791,13 +2129,18 @@ object AurixWidgetController {
       views.setTextColor(R.id.widget_mini_title, titleColor)
     }
 
-    val artistBmp = renderStyledUiBitmap(
+    val artistBmp = WidgetGlassRenderer.renderTextBitmap(
       context = context,
       text = cleanArtist,
+      khmerLyricsFont = khmerFont,
+      isTitle = false,
       textColor = artistColor,
       baseTextSizeDp = 13.0f,
       isBold = false,
-      widthDp = 148f
+      widthDp = 148f,
+      maxLines = 1,
+      centered = false,
+      shadowColor = shadowColor
     )
     if (artistBmp != null) {
       views.setViewVisibility(R.id.widget_mini_artist_bitmap, View.VISIBLE)
@@ -1813,98 +2156,64 @@ object AurixWidgetController {
     return views
   }
 
-  private fun renderMiniEqualizerBitmap(
-    eqColor: Int,
-    isPlaying: Boolean,
-    phase: Int
-  ): Bitmap {
-    val w = 78
-    val h = 54
-    val bmp = Bitmap.createBitmap(w, h, Bitmap.Config.ARGB_8888)
-    val canvas = Canvas(bmp)
-    val paint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
-      color = eqColor
-      style = Paint.Style.FILL
-    }
-    val heights = if (!isPlaying) {
-      floatArrayOf(0.32f, 0.42f, 0.36f, 0.28f)
-    } else {
-      when (phase.mod(4)) {
-        0 -> floatArrayOf(0.54f, 0.96f, 0.74f, 0.44f)
-        1 -> floatArrayOf(0.84f, 0.62f, 0.94f, 0.68f)
-        2 -> floatArrayOf(0.46f, 0.88f, 0.56f, 0.92f)
-        else -> floatArrayOf(0.72f, 0.48f, 0.86f, 0.58f)
-      }
-    }
-    val barW = 11f
-    val gap = 8f
-    val startX = 4f
-    val bottomY = h - 4f
-    val maxBarH = h - 8f
-    for (i in 0 until 4) {
-      val left = startX + i * (barW + gap)
-      val barH = (maxBarH * heights[i]).coerceAtLeast(10f)
-      val rect = RectF(left, bottomY - barH, left + barW, bottomY)
-      canvas.drawRoundRect(rect, barW * 0.5f, barW * 0.5f, paint)
-    }
-    return bmp
-  }
-
   private fun buildLyricsWidgetRemoteViews(
     context: Context,
     state: WidgetSnapshotState,
-    compositeBg: Bitmap,
-    roundedArt: Bitmap,
-    standaloneFrameBmp: Bitmap?,
-    customizer: WidgetCustomizerConfig,
-    sizeTier: WidgetSizeTier,
-    widgetWidthDp: Int = 0
+    coverSet: CachedGlassCoverSet,
+    rawArt: Bitmap?,
+    glassStyle: WidgetGlassStyle,
+    @Suppress("UNUSED_PARAMETER") sizeTier: WidgetSizeTier,
+    widgetWidthDp: Int = 0,
+    widgetId: Int = 0
   ): RemoteViews {
     val localizedCtx = LocaleHelper.wrapBaseContext(context, state.language)
     val reduceMotion = isReducedMotionActive(context, state.reducedMotion)
-    val layoutRes = resolveLyricsWidgetLayoutRes(state.lyricsWidgetAnimStyle, reduceMotion, sizeTier)
+    val layoutRes = resolveLyricsWidgetLayoutRes(glassStyle, state.lyricsWidgetAnimStyle, reduceMotion)
     val views = RemoteViews(context.packageName, layoutRes)
-    val style = WidgetStyle.fromId(state.widgetStyle)
+    val isLight = glassStyle == WidgetGlassStyle.LIGHT_FROST
+    val centered = glassStyle == WidgetGlassStyle.ORB
+    val isRtl = context.resources.configuration.layoutDirection == View.LAYOUT_DIRECTION_RTL
 
-    val primaryTextColor = when (style) {
-      WidgetStyle.COLOR -> 0xFFF3EEFF.toInt()
-      else -> 0xFFFFFFFF.toInt()
+    val primaryTextColor = if (isLight) 0xFF14172A.toInt() else 0xFFFFFFFF.toInt()
+    val mutedTextColor = when (glassStyle) {
+      WidgetGlassStyle.FROST_PILL -> 0x9EFFFFFF.toInt()
+      WidgetGlassStyle.ORB -> 0x9EFFFFFF.toInt()
+      WidgetGlassStyle.SMOKED_NEON -> 0x73FFFFFF.toInt()
+      WidgetGlassStyle.LIGHT_FROST -> 0x8014172A.toInt()
+      WidgetGlassStyle.POSTER_GLASS -> 0xB3FFFFFF.toInt()
     }
-    val mutedTextColor = when (style) {
-      WidgetStyle.COLOR -> 0x4DF3EEFF.toInt()
-      else -> 0x4DFFFFFF.toInt()
+    val secondaryColor = when (glassStyle) {
+      WidgetGlassStyle.LIGHT_FROST -> 0xA614172A.toInt()
+      WidgetGlassStyle.POSTER_GLASS -> 0xE6FFFFFF.toInt()
+      WidgetGlassStyle.ORB -> 0xB8FFFFFF.toInt()
+      WidgetGlassStyle.SMOKED_NEON -> 0xC2FFFFFF.toInt()
+      WidgetGlassStyle.FROST_PILL -> 0xB3FFFFFF.toInt()
     }
-    val secondaryColor = when (style) {
-      WidgetStyle.COLOR -> 0x94F3EEFF.toInt()
-      else -> 0x94FFFFFF.toInt()
-    }
+    val shadowColor = if (isLight) Color.TRANSPARENT else 0x66000000
     val khmerFont = com.example.ui.theme.KhmerLyricsFont.fromId(state.khmerLyricsFont)
 
-    val clipRes = if (style == WidgetStyle.MONO) R.drawable.widget_clip_22dp else R.drawable.widget_clip_28dp
-    val surfaceRes = when (style) {
-      WidgetStyle.GLASS -> R.drawable.widget_music_glass_bg
-      WidgetStyle.COLOR -> R.drawable.widget_lyrics_color_bg
-      WidgetStyle.MONO -> R.drawable.widget_music_mono_bg
-    }
-    val barRes = when (style) {
-      WidgetStyle.GLASS -> R.drawable.widget_lyric_mint_bar
-      WidgetStyle.COLOR -> R.drawable.widget_lyric_lavender_bar
-      WidgetStyle.MONO -> R.drawable.widget_lyric_white_bar
-    }
-    views.setInt(R.id.widget_lyrics_root, "setBackgroundResource", clipRes)
-    views.setInt(R.id.widget_lyrics_card_border, "setBackgroundResource", surfaceRes)
-    views.setInt(R.id.widget_lyrics_accent_bar, "setBackgroundResource", barRes)
-
-    if (style == WidgetStyle.MONO || !state.ambientGlowEnabled) {
-      views.setViewVisibility(R.id.widget_lyrics_bg_glow, View.GONE)
+    if (glassStyle == WidgetGlassStyle.POSTER_GLASS) {
+      views.setImageViewBitmap(
+        R.id.widget_lyrics_bg_glow,
+        WidgetGlassRenderer.renderPosterCoverWithBottomGradient(context, rawArt, widthPx = 360, heightPx = 190)
+      )
     } else {
-      views.setViewVisibility(R.id.widget_lyrics_bg_glow, View.VISIBLE)
-      views.setImageViewBitmap(R.id.widget_lyrics_bg_glow, compositeBg)
+      val bgLayer = when (glassStyle) {
+        WidgetGlassStyle.SMOKED_NEON -> coverSet.blurredStrong
+        WidgetGlassStyle.LIGHT_FROST -> coverSet.blurredLightFrost
+        else -> coverSet.blurred26
+      }
+      views.setImageViewBitmap(R.id.widget_lyrics_bg_glow, bgLayer)
+      views.setInt(
+        R.id.widget_lyrics_bg_tint,
+        "setBackgroundColor",
+        WidgetGlassRenderer.computeAutoContrastTint(glassStyle, coverSet.luminance)
+      )
     }
 
     val openLyricsPi = buildOpenAppPendingIntent(
       context = context,
-      requestCode = 7301,
+      requestCode = 73000 + widgetId.coerceAtLeast(0),
       openScreen = AppNotificationHelper.SCREEN_NOW_PLAYING_LYRICS
     )
     views.setOnClickPendingIntent(R.id.widget_lyrics_root, openLyricsPi)
@@ -1913,14 +2222,18 @@ object AurixWidgetController {
       views.setViewVisibility(R.id.widget_lyrics_empty_container, View.VISIBLE)
       views.setViewVisibility(R.id.widget_lyrics_content_container, View.GONE)
       val tapToPlay = localizedCtx.getString(R.string.widget_tap_to_play)
-      val emptyBmp = renderStyledUiBitmap(
+      val emptyBmp = WidgetGlassRenderer.renderTextBitmap(
         context = context,
         text = tapToPlay,
+        khmerLyricsFont = com.example.ui.theme.KhmerLyricsFont.KANTUMRUY_PRO,
+        isTitle = false,
         textColor = primaryTextColor,
-        baseTextSizeDp = if (sizeTier == WidgetSizeTier.SMALL) 13.0f else 15.0f,
+        baseTextSizeDp = 15.0f,
         isBold = true,
-        widthDp = if (sizeTier == WidgetSizeTier.SMALL) 140f else 210f,
-        wrapToTextWidth = true
+        widthDp = 210f,
+        maxLines = 1,
+        centered = false,
+        shadowColor = shadowColor
       )
       if (emptyBmp != null) {
         views.setViewVisibility(R.id.widget_lyrics_empty_bitmap, View.VISIBLE)
@@ -1940,107 +2253,145 @@ object AurixWidgetController {
     views.setViewVisibility(R.id.widget_lyrics_content_container, View.VISIBLE)
     views.setOnClickPendingIntent(R.id.widget_lyrics_content_container, openLyricsPi)
 
-    val sideFrame = standaloneFrameBmp?.takeIf {
-      customizer.frameStyle != WidgetFrameStyle.NONE &&
-        sizeTier != WidgetSizeTier.SMALL &&
-        style != WidgetStyle.MONO &&
-        (customizer.frameSource == WidgetPhotoSource.CUSTOM || customizer.frameStyle != WidgetFrameStyle.ROUNDED)
-    }
-    val showSideFrameSpacer = sideFrame != null
-    if (sideFrame != null) {
-      views.setViewVisibility(R.id.widget_lyrics_frame_spacer, View.VISIBLE)
-      views.setImageViewBitmap(R.id.widget_lyrics_frame_spacer, sideFrame)
-    } else {
-      views.setViewVisibility(R.id.widget_lyrics_frame_spacer, View.GONE)
-    }
-
     val cleanTitle = state.title.trim()
     val cleanArtist = state.artist.trim().ifBlank { "AURIX" }
     val showCornerOrbi = widgetWidthDp <= 0 || widgetWidthDp >= 210
-    views.setViewVisibility(
-      R.id.widget_lyrics_brand_orbi,
-      if (showCornerOrbi) View.VISIBLE else View.GONE
-    )
-
-    // Glass & Color show compact 44dp art + title + artist header; Mono shows lyric first then title & artist footer
-    if (style == WidgetStyle.MONO) {
-      views.setViewVisibility(R.id.widget_lyrics_header_row, View.GONE)
-    } else {
-      views.setViewVisibility(R.id.widget_lyrics_header_row, View.VISIBLE)
-      views.setImageViewBitmap(R.id.widget_lyrics_header_art, roundedArt)
-      val headerWidthDp = ((if (widgetWidthDp in 120..520) widgetWidthDp else 320) - 120).coerceIn(110, 320).toFloat()
-      val hTitleBmp = renderStyledTitleOrFooterBitmap(
-        context = context,
-        titleText = cleanTitle,
-        artistText = "",
-        khmerLyricsFont = khmerFont,
-        titleColor = primaryTextColor,
-        artistColor = secondaryColor,
-        baseTextSizeDp = 14.5f,
-        widthDp = headerWidthDp,
-        maxLines = 1
+    if (glassStyle == WidgetGlassStyle.FROST_PILL || glassStyle == WidgetGlassStyle.LIGHT_FROST) {
+      views.setViewVisibility(
+        R.id.widget_lyrics_brand_orbi,
+        if (showCornerOrbi) View.VISIBLE else View.GONE
       )
-      if (hTitleBmp != null) {
-        views.setViewVisibility(R.id.widget_lyrics_header_title_bitmap, View.VISIBLE)
-        views.setViewVisibility(R.id.widget_lyrics_header_title, View.GONE)
-        views.setImageViewBitmap(R.id.widget_lyrics_header_title_bitmap, hTitleBmp)
-      } else {
-        views.setViewVisibility(R.id.widget_lyrics_header_title_bitmap, View.GONE)
-        views.setViewVisibility(R.id.widget_lyrics_header_title, View.VISIBLE)
-        views.setTextViewText(R.id.widget_lyrics_header_title, cleanTitle)
-        views.setTextColor(R.id.widget_lyrics_header_title, primaryTextColor)
-      }
-
-      val hArtistBmp = renderStyledUiBitmap(
-        context = context,
-        text = cleanArtist,
-        textColor = secondaryColor,
-        baseTextSizeDp = 12.0f,
-        isBold = false,
-        widthDp = headerWidthDp
-      )
-      if (hArtistBmp != null) {
-        views.setViewVisibility(R.id.widget_lyrics_header_artist_bitmap, View.VISIBLE)
-        views.setViewVisibility(R.id.widget_lyrics_header_artist, View.GONE)
-        views.setImageViewBitmap(R.id.widget_lyrics_header_artist_bitmap, hArtistBmp)
-      } else {
-        views.setViewVisibility(R.id.widget_lyrics_header_artist_bitmap, View.GONE)
-        views.setViewVisibility(R.id.widget_lyrics_header_artist, View.VISIBLE)
-        views.setTextViewText(R.id.widget_lyrics_header_artist, cleanArtist)
-        views.setTextColor(R.id.widget_lyrics_header_artist, secondaryColor)
-      }
     }
 
-    val textWidthDp = computeLyricsTextWidthDp(sizeTier, showSideFrameSpacer, widgetWidthDp)
-    val footerWidthDp = computeLyricsFooterWidthDp(sizeTier, showSideFrameSpacer, widgetWidthDp)
-    val activeTextSizeDp = computeLyricsActiveTextSizeDp(sizeTier)
-    val nextTextSizeDp = computeLyricsNextTextSizeDp(sizeTier)
+    if (glassStyle != WidgetGlassStyle.POSTER_GLASS) {
+      val headerArtBmp = when (glassStyle) {
+        WidgetGlassStyle.FROST_PILL -> WidgetGlassRenderer.renderRoundedCoverBitmap(
+          context = context,
+          rawArt = rawArt,
+          sizePx = 220,
+          cornerRadiusFraction = 28f / 104f,
+          warmRim = true
+        )
+        WidgetGlassStyle.ORB -> {
+          val angle = if (state.isPlaying && !reduceMotion) ((state.positionMs % 14_000L) / 14_000f) * 360f else 0f
+          WidgetGlassRenderer.renderOrbDiscBitmap(
+            context = context,
+            rawArt = rawArt,
+            sizePx = 140,
+            rotationDegrees = angle
+          )
+        }
+        WidgetGlassStyle.SMOKED_NEON -> WidgetGlassRenderer.renderTiltedArtBitmap(
+          context = context,
+          rawArt = rawArt,
+          artSizePx = 120,
+          tiltDegrees = 6f
+        )
+        WidgetGlassStyle.LIGHT_FROST -> WidgetGlassRenderer.renderLeftEdgeFadeCoverBitmap(
+          context = context,
+          rawArt = rawArt,
+          widthPx = 160,
+          heightPx = 220,
+          isRtl = isRtl
+        )
+        WidgetGlassStyle.POSTER_GLASS -> null
+      }
+      if (headerArtBmp != null) {
+        views.setImageViewBitmap(R.id.widget_lyrics_header_art, headerArtBmp)
+      }
+    } else {
+      views.setImageViewBitmap(
+        R.id.widget_lyrics_poster_panel_bg,
+        WidgetGlassRenderer.renderPosterFloatingGlassPanelBitmap(
+          blurredStrong = coverSet.blurredStrong,
+          widthPx = 340,
+          heightPx = 104,
+          luminance = coverSet.luminance
+        )
+      )
+    }
+
+    if (glassStyle == WidgetGlassStyle.FROST_PILL ||
+      glassStyle == WidgetGlassStyle.LIGHT_FROST ||
+      glassStyle == WidgetGlassStyle.POSTER_GLASS
+    ) {
+      val eqColor = when (glassStyle) {
+        WidgetGlassStyle.FROST_PILL -> 0xFF4FC3FF.toInt()
+        WidgetGlassStyle.LIGHT_FROST -> 0xFF3B46E0.toInt()
+        else -> 0xFFFFFFFF.toInt()
+      }
+      val phase = ((state.positionMs / 450L) % 6L).toInt()
+      views.setImageViewBitmap(
+        R.id.widget_lyrics_eq_bitmap,
+        WidgetGlassRenderer.renderEqualizerBitmap(
+          barCount = 3,
+          color = eqColor,
+          isPlaying = state.isPlaying,
+          phase = phase
+        )
+      )
+      views.setTextViewText(R.id.widget_lyrics_chip_text, localizedCtx.getString(R.string.widget_lyrics_tag))
+    }
+
+    val textWidthDp = computeLyricsTextWidthForGlassStyle(glassStyle, widgetWidthDp)
+    val footerWidthDp = when (glassStyle) {
+      WidgetGlassStyle.POSTER_GLASS -> ((if (widgetWidthDp in 120..520) widgetWidthDp else 340) - 130).coerceIn(110, 260).toFloat()
+      WidgetGlassStyle.SMOKED_NEON -> (textWidthDp - 16f).coerceIn(120f, 360f)
+      else -> textWidthDp
+    }
+    val activeTextSizeDp = activeLyricSizeDpForGlassStyle(glassStyle)
+    val nextTextSizeDp = nextLyricSizeDpForGlassStyle(glassStyle)
     val hasLyrics = state.hasLyrics && state.currentLyricLine.isNotBlank()
+
+    // Footer Title · Artist shown on all styles when lyrics are present
+    val footerBmp = renderStyledTitleOrFooterBitmap(
+      context = context,
+      titleText = cleanTitle,
+      artistText = cleanArtist,
+      khmerLyricsFont = khmerFont,
+      titleColor = secondaryColor,
+      artistColor = mutedTextColor,
+      baseTextSizeDp = if (glassStyle == WidgetGlassStyle.ORB || glassStyle == WidgetGlassStyle.SMOKED_NEON) 13.0f else 12.0f,
+      widthDp = footerWidthDp,
+      maxLines = 1,
+      centered = centered,
+      shadowColor = shadowColor,
+      wrapToTextWidth = (glassStyle == WidgetGlassStyle.POSTER_GLASS)
+    )
+    if (footerBmp != null) {
+      views.setViewVisibility(R.id.widget_lyrics_footer_bitmap, View.VISIBLE)
+      views.setViewVisibility(R.id.widget_lyrics_song_footer, View.GONE)
+      views.setImageViewBitmap(R.id.widget_lyrics_footer_bitmap, footerBmp)
+    } else {
+      views.setViewVisibility(R.id.widget_lyrics_footer_bitmap, View.GONE)
+      views.setViewVisibility(R.id.widget_lyrics_song_footer, View.VISIBLE)
+      val full = "$cleanTitle · $cleanArtist"
+      views.setTextViewText(R.id.widget_lyrics_song_footer, full)
+      views.setTextColor(R.id.widget_lyrics_song_footer, secondaryColor)
+    }
 
     if (!hasLyrics) {
       views.setViewVisibility(R.id.widget_lyrics_stage_row, View.GONE)
-      views.setViewVisibility(R.id.widget_lyrics_footer_row, View.GONE)
+      if (glassStyle != WidgetGlassStyle.POSTER_GLASS) {
+        views.setViewVisibility(R.id.widget_lyrics_footer_row, View.GONE)
+      } else {
+        views.setViewVisibility(R.id.widget_lyrics_footer_row, View.VISIBLE)
+      }
       views.setViewVisibility(R.id.widget_lyrics_no_lyrics_container, View.VISIBLE)
 
       val noLyricsLabel = localizedCtx.getString(R.string.widget_no_lyrics_for_song)
-      val effectiveWidgetWidth = if (widgetWidthDp in 120..520) {
-        widgetWidthDp.toFloat()
-      } else {
-        when (sizeTier) {
-          WidgetSizeTier.SMALL -> 182f
-          WidgetSizeTier.WIDE -> 340f
-          WidgetSizeTier.LARGE -> 360f
-        }
-      }
-      val noLyricsWidthDp = (effectiveWidgetWidth - 36f - (if (showSideFrameSpacer) 84f else 0f)).coerceIn(132f, 400f)
-
-      val noLabelBmp = renderStyledUiBitmap(
+      val noLabelBmp = WidgetGlassRenderer.renderTextBitmap(
         context = context,
         text = noLyricsLabel,
+        khmerLyricsFont = com.example.ui.theme.KhmerLyricsFont.KANTUMRUY_PRO,
+        isTitle = false,
         textColor = secondaryColor,
-        baseTextSizeDp = 14.0f,
+        baseTextSizeDp = 13.5f,
         isBold = false,
-        widthDp = noLyricsWidthDp
+        widthDp = textWidthDp,
+        maxLines = 1,
+        centered = centered,
+        shadowColor = shadowColor
       )
       if (noLabelBmp != null) {
         views.setViewVisibility(R.id.widget_lyrics_no_lyrics_label_bitmap, View.VISIBLE)
@@ -2060,9 +2411,11 @@ object AurixWidgetController {
         khmerLyricsFont = khmerFont,
         titleColor = primaryTextColor,
         artistColor = secondaryColor,
-        baseTextSizeDp = 17.0f,
-        widthDp = noLyricsWidthDp,
-        maxLines = 2
+        baseTextSizeDp = 16.5f,
+        widthDp = textWidthDp,
+        maxLines = 2,
+        centered = centered,
+        shadowColor = shadowColor
       )
       if (titleBmp != null) {
         views.setViewVisibility(R.id.widget_lyrics_no_lyrics_title_bitmap, View.VISIBLE)
@@ -2075,14 +2428,40 @@ object AurixWidgetController {
         views.setTextColor(R.id.widget_lyrics_no_lyrics_title, primaryTextColor)
       }
 
-      views.setViewVisibility(R.id.widget_lyrics_no_lyrics_artist_bitmap, View.GONE)
-      views.setViewVisibility(R.id.widget_lyrics_no_lyrics_artist, View.GONE)
+      if (glassStyle == WidgetGlassStyle.FROST_PILL) {
+        val artistBmp = WidgetGlassRenderer.renderTextBitmap(
+          context = context,
+          text = cleanArtist,
+          khmerLyricsFont = khmerFont,
+          isTitle = false,
+          textColor = secondaryColor,
+          baseTextSizeDp = 12.5f,
+          isBold = false,
+          widthDp = textWidthDp,
+          maxLines = 1,
+          centered = false,
+          shadowColor = shadowColor
+        )
+        if (artistBmp != null) {
+          views.setViewVisibility(R.id.widget_lyrics_no_lyrics_artist_bitmap, View.VISIBLE)
+          views.setViewVisibility(R.id.widget_lyrics_no_lyrics_artist, View.GONE)
+          views.setImageViewBitmap(R.id.widget_lyrics_no_lyrics_artist_bitmap, artistBmp)
+        } else {
+          views.setViewVisibility(R.id.widget_lyrics_no_lyrics_artist_bitmap, View.GONE)
+          views.setViewVisibility(R.id.widget_lyrics_no_lyrics_artist, View.VISIBLE)
+          views.setTextViewText(R.id.widget_lyrics_no_lyrics_artist, cleanArtist)
+          views.setTextColor(R.id.widget_lyrics_no_lyrics_artist, secondaryColor)
+        }
+      }
       return views
     }
 
     views.setViewVisibility(R.id.widget_lyrics_no_lyrics_container, View.GONE)
     views.setViewVisibility(R.id.widget_lyrics_stage_row, View.VISIBLE)
-    views.setViewVisibility(R.id.widget_lyrics_accent_bar, View.VISIBLE)
+    views.setViewVisibility(R.id.widget_lyrics_footer_row, View.VISIBLE)
+    if (glassStyle == WidgetGlassStyle.FROST_PILL) {
+      views.setViewVisibility(R.id.widget_lyrics_accent_bar, View.VISIBLE)
+    }
 
     val displayCurrentLine = state.currentLyricLine
     val displayNextLine = state.nextLyricLine
@@ -2097,7 +2476,9 @@ object AurixWidgetController {
       khmerLyricsFont = khmerFont,
       primaryTextColor = primaryTextColor,
       textWidthDp = textWidthDp,
-      activeTextSizeDp = activeTextSizeDp
+      activeTextSizeDp = activeTextSizeDp,
+      centered = centered,
+      shadowColor = shadowColor
     )
     val outgoingLine = state.prevLyricLine.takeIf { it.isNotBlank() } ?: displayCurrentLine
     bindLyricsFlipperSlot(
@@ -2109,6 +2490,8 @@ object AurixWidgetController {
       primaryTextColor = primaryTextColor,
       textWidthDp = textWidthDp,
       activeTextSizeDp = activeTextSizeDp,
+      centered = centered,
+      shadowColor = shadowColor,
       preRenderedBitmap = if (outgoingLine == displayCurrentLine) activeBmp else null
     )
     views.setDisplayedChild(R.id.widget_lyrics_flipper, activeSlot)
@@ -2120,44 +2503,15 @@ object AurixWidgetController {
       khmerLyricsFont = khmerFont,
       mutedTextColor = mutedTextColor,
       textWidthDp = textWidthDp,
-      nextTextSizeDp = nextTextSizeDp
+      nextTextSizeDp = nextTextSizeDp,
+      centered = centered
     )
-
-    if (style == WidgetStyle.MONO) {
-      views.setViewVisibility(R.id.widget_lyrics_footer_row, View.VISIBLE)
-      val footerBmp = renderStyledTitleOrFooterBitmap(
-        context = context,
-        titleText = cleanTitle,
-        artistText = cleanArtist,
-        khmerLyricsFont = khmerFont,
-        titleColor = secondaryColor,
-        artistColor = mutedTextColor,
-        baseTextSizeDp = 13.0f,
-        widthDp = footerWidthDp,
-        maxLines = 1
-      )
-      if (footerBmp != null) {
-        views.setViewVisibility(R.id.widget_lyrics_footer_bitmap, View.VISIBLE)
-        views.setViewVisibility(R.id.widget_lyrics_song_footer, View.GONE)
-        views.setImageViewBitmap(R.id.widget_lyrics_footer_bitmap, footerBmp)
-      } else {
-        views.setViewVisibility(R.id.widget_lyrics_footer_bitmap, View.GONE)
-        views.setViewVisibility(R.id.widget_lyrics_song_footer, View.VISIBLE)
-        val full = "$cleanTitle · $cleanArtist"
-        views.setTextViewText(R.id.widget_lyrics_song_footer, full)
-        views.setTextColor(R.id.widget_lyrics_song_footer, secondaryColor)
-      }
-    } else {
-      views.setViewVisibility(R.id.widget_lyrics_footer_row, View.GONE)
-    }
 
     return views
   }
 
   /**
    * Binds ONLY the currently active lyric line inside the ViewFlipper slot.
-   * Renders via Canvas with the user's selected Khmer lyrics font (Kantumruy Pro, Koulen, or Noto Sans Khmer)
-   * and optically equalized English + Khmer glyph heights at exact 1:1 widget column width.
    */
   private fun bindLyricsFlipperSlot(
     context: Context,
@@ -2167,7 +2521,9 @@ object AurixWidgetController {
     khmerLyricsFont: com.example.ui.theme.KhmerLyricsFont,
     primaryTextColor: Int,
     textWidthDp: Float = 266f,
-    activeTextSizeDp: Float = 17.2f,
+    activeTextSizeDp: Float = 21.0f,
+    centered: Boolean = false,
+    shadowColor: Int = 0x66000000,
     preRenderedBitmap: Bitmap? = null
   ): Bitmap? {
     val khmerImgId = if (slotIndex == 0) R.id.widget_lyrics_khmer_bitmap_a else R.id.widget_lyrics_khmer_bitmap_b
@@ -2175,7 +2531,6 @@ object AurixWidgetController {
     val currentTextId = if (slotIndex == 0) R.id.widget_lyrics_current_line_a else R.id.widget_lyrics_current_line_b
     val nextTextId = if (slotIndex == 0) R.id.widget_lyrics_next_line_a else R.id.widget_lyrics_next_line_b
 
-    // Always hide legacy in-flipper next_line_a/b so upcoming lyrics never animate inside ViewFlipper
     views.setViewVisibility(nextTextId, View.GONE)
 
     val activeBmp = preRenderedBitmap ?: renderStyledActiveLyricBitmap(
@@ -2184,7 +2539,9 @@ object AurixWidgetController {
       khmerLyricsFont = khmerLyricsFont,
       primaryColor = primaryTextColor,
       widthDp = textWidthDp,
-      textSizeDp = activeTextSizeDp
+      textSizeDp = activeTextSizeDp,
+      centered = centered,
+      shadowColor = shadowColor
     )
     if (activeBmp != null) {
       views.setViewVisibility(khmerImgId, View.VISIBLE)
@@ -2211,7 +2568,8 @@ object AurixWidgetController {
     khmerLyricsFont: com.example.ui.theme.KhmerLyricsFont,
     mutedTextColor: Int,
     textWidthDp: Float = 266f,
-    nextTextSizeDp: Float = 12.8f
+    nextTextSizeDp: Float = 14.0f,
+    centered: Boolean = false
   ) {
     val trimmed = nextLine.trim()
     if (trimmed.isEmpty()) {
@@ -2228,7 +2586,8 @@ object AurixWidgetController {
       khmerLyricsFont = khmerLyricsFont,
       mutedColor = mutedTextColor,
       widthDp = textWidthDp,
-      textSizeDp = nextTextSizeDp
+      textSizeDp = nextTextSizeDp,
+      centered = centered
     )
     if (nextBmp != null) {
       views.setViewVisibility(R.id.widget_lyrics_next_khmer_bitmap, View.VISIBLE)
@@ -2248,10 +2607,13 @@ object AurixWidgetController {
     khmerLyricsFont: com.example.ui.theme.KhmerLyricsFont,
     primaryColor: Int,
     widthDp: Float = 266f,
-    textSizeDp: Float = 14.5f
+    textSizeDp: Float = 21.0f,
+    centered: Boolean = false,
+    shadowColor: Int = 0x66000000
   ): Bitmap? {
     return runCatching {
       val trimmed = currentLine.trim().ifBlank { "♪" }
+      val isRtl = context.resources.configuration.layoutDirection == View.LAYOUT_DIRECTION_RTL
       val scale = context.resources.displayMetrics.density.coerceIn(1.35f, 1.60f)
       val widthPx = (widthDp * scale).roundToInt().coerceIn(200, 640)
       val styledText = com.example.ui.theme.KhmerTypography.buildStyledSpannable(
@@ -2267,12 +2629,19 @@ object AurixWidgetController {
         typeface = baseTypeface
         color = primaryColor
         textSize = textSizeDp * scale
-        setShadowLayer(2.4f * scale, 0f, 0.9f * scale, 0x66000000)
+        if (shadowColor != Color.TRANSPARENT) {
+          setShadowLayer(2.4f * scale, 0f, 0.9f * scale, shadowColor)
+        }
+      }
+      val align = when {
+        centered -> Layout.Alignment.ALIGN_CENTER
+        isRtl -> Layout.Alignment.ALIGN_OPPOSITE
+        else -> Layout.Alignment.ALIGN_NORMAL
       }
 
       val layout = StaticLayout.Builder
         .obtain(styledText, 0, styledText.length, paint, widthPx)
-        .setAlignment(Layout.Alignment.ALIGN_NORMAL)
+        .setAlignment(align)
         .setLineSpacing(2.0f * scale, 1.12f)
         .setIncludePad(true)
         .setMaxLines(2)
@@ -2280,7 +2649,7 @@ object AurixWidgetController {
         .build()
 
       val padY = (2f * scale).roundToInt()
-      val heightPx = (layout.height + padY * 2).coerceIn(22, 118)
+      val heightPx = (layout.height + padY * 2).coerceIn(22, 132)
       val bmp = Bitmap.createBitmap(widthPx, heightPx, Bitmap.Config.ARGB_8888)
       val canvas = Canvas(bmp)
       canvas.save()
@@ -2297,11 +2666,13 @@ object AurixWidgetController {
     khmerLyricsFont: com.example.ui.theme.KhmerLyricsFont,
     mutedColor: Int,
     widthDp: Float = 266f,
-    textSizeDp: Float = 11.5f
+    textSizeDp: Float = 14.0f,
+    centered: Boolean = false
   ): Bitmap? {
     return runCatching {
       val trimmed = nextLine.trim()
       if (trimmed.isEmpty()) return null
+      val isRtl = context.resources.configuration.layoutDirection == View.LAYOUT_DIRECTION_RTL
       val scale = context.resources.displayMetrics.density.coerceIn(1.35f, 1.60f)
       val widthPx = (widthDp * scale).roundToInt().coerceIn(200, 640)
       val styledText = com.example.ui.theme.KhmerTypography.buildStyledSpannable(
@@ -2318,10 +2689,15 @@ object AurixWidgetController {
         color = mutedColor
         textSize = textSizeDp * scale
       }
+      val align = when {
+        centered -> Layout.Alignment.ALIGN_CENTER
+        isRtl -> Layout.Alignment.ALIGN_OPPOSITE
+        else -> Layout.Alignment.ALIGN_NORMAL
+      }
 
       val layout = StaticLayout.Builder
         .obtain(styledText, 0, styledText.length, paint, widthPx)
-        .setAlignment(Layout.Alignment.ALIGN_NORMAL)
+        .setAlignment(align)
         .setLineSpacing(1.5f * scale, 1.08f)
         .setIncludePad(true)
         .setMaxLines(1)
@@ -2329,7 +2705,7 @@ object AurixWidgetController {
         .build()
 
       val padY = (1.5f * scale).roundToInt()
-      val heightPx = (layout.height + padY * 2).coerceIn(18, 56)
+      val heightPx = (layout.height + padY * 2).coerceIn(18, 60)
       val bmp = Bitmap.createBitmap(widthPx, heightPx, Bitmap.Config.ARGB_8888)
       val canvas = Canvas(bmp)
       canvas.save()
@@ -2353,16 +2729,20 @@ object AurixWidgetController {
     artistColor: Int,
     baseTextSizeDp: Float,
     widthDp: Float = 284f,
-    maxLines: Int = 1
+    maxLines: Int = 1,
+    centered: Boolean = false,
+    shadowColor: Int = 0x55000000,
+    wrapToTextWidth: Boolean = false
   ): Bitmap? {
     return runCatching {
       val cleanTitle = titleText.trim()
       if (cleanTitle.isEmpty()) return null
+      val isRtl = context.resources.configuration.layoutDirection == View.LAYOUT_DIRECTION_RTL
       val cleanArtist = artistText.trim()
       val fullText = if (cleanArtist.isNotEmpty()) "$cleanTitle · $cleanArtist" else cleanTitle
 
       val scale = context.resources.displayMetrics.density.coerceIn(1.35f, 1.60f)
-      val widthPx = (widthDp * scale).roundToInt().coerceIn(180, 660)
+      val maxWidthPx = (widthDp * scale).roundToInt().coerceIn(160, 660)
 
       val styledSpan = SpannableString(
         com.example.ui.theme.KhmerTypography.buildStyledSpannable(
@@ -2393,20 +2773,33 @@ object AurixWidgetController {
         typeface = baseTypeface
         color = titleColor
         textSize = baseTextSizeDp * scale
-        setShadowLayer(2.2f * scale, 0f, 0.8f * scale, 0x55000000)
+        if (shadowColor != Color.TRANSPARENT) {
+          setShadowLayer(2.2f * scale, 0f, 0.8f * scale, shadowColor)
+        }
+      }
+      val measuredPx = if (wrapToTextWidth) {
+        (StaticLayout.getDesiredWidth(styledSpan, paint).roundToInt() + (4f * scale).roundToInt())
+          .coerceIn(48, maxWidthPx)
+      } else {
+        maxWidthPx
+      }
+      val align = when {
+        centered -> Layout.Alignment.ALIGN_CENTER
+        isRtl -> Layout.Alignment.ALIGN_OPPOSITE
+        else -> Layout.Alignment.ALIGN_NORMAL
       }
 
       val layout = StaticLayout.Builder
-        .obtain(styledSpan, 0, styledSpan.length, paint, widthPx)
-        .setAlignment(Layout.Alignment.ALIGN_NORMAL)
+        .obtain(styledSpan, 0, styledSpan.length, paint, measuredPx)
+        .setAlignment(align)
         .setIncludePad(true)
         .setMaxLines(maxLines)
         .setEllipsize(TextUtils.TruncateAt.END)
         .build()
 
       val padY = (1.5f * scale).roundToInt()
-      val heightPx = (layout.height + padY * 2).coerceIn(20, 96)
-      val bmp = Bitmap.createBitmap(widthPx, heightPx, Bitmap.Config.ARGB_8888)
+      val heightPx = (layout.height + padY * 2).coerceIn(20, 110)
+      val bmp = Bitmap.createBitmap(measuredPx, heightPx, Bitmap.Config.ARGB_8888)
       val canvas = Canvas(bmp)
       canvas.save()
       canvas.translate(0f, padY.toFloat())

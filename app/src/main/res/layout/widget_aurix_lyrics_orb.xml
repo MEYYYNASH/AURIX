@@ -1,0 +1,331 @@
+<?xml version="1.0" encoding="utf-8"?>
+<FrameLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    android:id="@+id/widget_lyrics_outer_shadow"
+    android:layout_width="match_parent"
+    android:layout_height="match_parent"
+    android:background="@drawable/widget_shadow_soft"
+    android:layoutDirection="locale"
+    android:paddingBottom="4dp">
+
+    <FrameLayout
+        android:id="@+id/widget_lyrics_root"
+        android:layout_width="match_parent"
+        android:layout_height="match_parent"
+        android:background="@drawable/widget_clip_44dp"
+        android:clipToOutline="true">
+
+        <!-- Layer 1: Cover art pre-blurred ~26px, sat +50%, scaled 1.2x -->
+        <ImageView
+            android:id="@+id/widget_lyrics_bg_glow"
+            android:layout_width="match_parent"
+            android:layout_height="match_parent"
+            android:contentDescription="@null"
+            android:scaleType="centerCrop" />
+
+        <!-- Layer 2: Auto-contrast frosted tint -->
+        <FrameLayout
+            android:id="@+id/widget_lyrics_bg_tint"
+            android:layout_width="match_parent"
+            android:layout_height="match_parent"
+            android:background="#57121628" />
+
+        <!-- Layer 3: Top-left light sheen -->
+        <FrameLayout
+            android:id="@+id/widget_lyrics_sheen"
+            android:layout_width="match_parent"
+            android:layout_height="match_parent"
+            android:background="@drawable/widget_sheen_top_left" />
+
+        <!-- Edge: 1dp inner border white 16% + 1dp top highlight white 45% -->
+        <FrameLayout
+            android:id="@+id/widget_lyrics_card_border"
+            android:layout_width="match_parent"
+            android:layout_height="match_parent"
+            android:background="@drawable/widget_edge_orb_44dp" />
+
+        <!-- Empty state -->
+        <LinearLayout
+            android:id="@+id/widget_lyrics_empty_container"
+            android:layout_width="match_parent"
+            android:layout_height="match_parent"
+            android:gravity="center"
+            android:orientation="horizontal"
+            android:padding="18dp"
+            android:visibility="gone">
+
+            <ImageView
+                android:id="@+id/widget_lyrics_empty_orbi"
+                android:layout_width="34dp"
+                android:layout_height="34dp"
+                android:contentDescription="@null"
+                android:src="@drawable/ic_widget_orbi" />
+
+            <ImageView
+                android:id="@+id/widget_lyrics_empty_bitmap"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:layout_marginStart="10dp"
+                android:adjustViewBounds="true"
+                android:contentDescription="@null"
+                android:scaleType="fitStart"
+                android:visibility="gone" />
+
+            <TextView
+                android:id="@+id/widget_lyrics_empty_text"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:layout_marginStart="10dp"
+                android:ellipsize="end"
+                android:maxLines="1"
+                android:text="@string/widget_tap_to_play"
+                android:textColor="#FFFFFF"
+                android:textSize="15sp"
+                android:textStyle="bold" />
+        </LinearLayout>
+
+        <!-- Style 2 Orb Lyrics: 44dp corners, 18dp pad, centered column: 48dp disc, 22sp current, 14sp next, 13sp Title · Artist -->
+        <LinearLayout
+            android:id="@+id/widget_lyrics_content_container"
+            android:layout_width="match_parent"
+            android:layout_height="match_parent"
+            android:gravity="center"
+            android:orientation="vertical"
+            android:padding="18dp">
+
+            <ImageView
+                android:id="@+id/widget_lyrics_header_art"
+                android:layout_width="48dp"
+                android:layout_height="48dp"
+                android:layout_gravity="center_horizontal"
+                android:contentDescription="@string/widget_cd_album_art"
+                android:scaleType="fitCenter" />
+
+            <!-- No-lyrics fallback state -->
+            <LinearLayout
+                android:id="@+id/widget_lyrics_no_lyrics_container"
+                android:layout_width="match_parent"
+                android:layout_height="0dp"
+                android:layout_marginTop="6dp"
+                android:layout_weight="1"
+                android:gravity="center"
+                android:orientation="vertical"
+                android:visibility="gone">
+
+                <ImageView
+                    android:id="@+id/widget_lyrics_no_lyrics_label_bitmap"
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:adjustViewBounds="true"
+                    android:contentDescription="@null"
+                    android:scaleType="fitCenter"
+                    android:visibility="gone" />
+
+                <TextView
+                    android:id="@+id/widget_lyrics_no_lyrics_label"
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:ellipsize="end"
+                    android:gravity="center"
+                    android:maxLines="1"
+                    android:text="@string/widget_no_lyrics_for_song"
+                    android:textColor="#9EFFFFFF"
+                    android:textSize="13sp" />
+
+                <ImageView
+                    android:id="@+id/widget_lyrics_no_lyrics_title_bitmap"
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:layout_marginTop="2dp"
+                    android:adjustViewBounds="true"
+                    android:contentDescription="@null"
+                    android:scaleType="fitCenter"
+                    android:visibility="gone" />
+
+                <TextView
+                    android:id="@+id/widget_lyrics_no_lyrics_title"
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:layout_marginTop="2dp"
+                    android:ellipsize="end"
+                    android:gravity="center"
+                    android:maxLines="1"
+                    android:textColor="#FFFFFF"
+                    android:textSize="16sp"
+                    android:textStyle="bold" />
+            </LinearLayout>
+
+            <!-- Active synced stage -->
+            <LinearLayout
+                android:id="@+id/widget_lyrics_stage_row"
+                android:layout_width="match_parent"
+                android:layout_height="0dp"
+                android:layout_marginTop="6dp"
+                android:layout_weight="1"
+                android:gravity="center"
+                android:orientation="vertical">
+
+                <ViewFlipper
+                    android:id="@+id/widget_lyrics_flipper"
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:animateFirstView="false"
+                    android:autoStart="false"
+                    android:inAnimation="@anim/widget_lyric_slide_in"
+                    android:outAnimation="@anim/widget_lyric_slide_out">
+
+                    <!-- Slot A -->
+                    <FrameLayout
+                        android:id="@+id/widget_lyrics_slot_a"
+                        android:layout_width="match_parent"
+                        android:layout_height="wrap_content"
+                        android:layout_gravity="center">
+
+                        <ImageView
+                            android:id="@+id/widget_lyrics_khmer_bitmap_a"
+                            android:layout_width="wrap_content"
+                            android:layout_height="wrap_content"
+                            android:layout_gravity="center"
+                            android:adjustViewBounds="true"
+                            android:contentDescription="@null"
+                            android:scaleType="fitCenter"
+                            android:visibility="gone" />
+
+                        <LinearLayout
+                            android:id="@+id/widget_lyrics_text_container_a"
+                            android:layout_width="match_parent"
+                            android:layout_height="wrap_content"
+                            android:gravity="center"
+                            android:orientation="vertical">
+
+                            <TextView
+                                android:id="@+id/widget_lyrics_current_line_a"
+                                android:layout_width="match_parent"
+                                android:layout_height="wrap_content"
+                                android:ellipsize="end"
+                                android:gravity="center"
+                                android:includeFontPadding="true"
+                                android:lineSpacingExtra="2dp"
+                                android:maxLines="2"
+                                android:textColor="#FFFFFF"
+                                android:textSize="22sp"
+                                android:textStyle="bold" />
+
+                            <TextView
+                                android:id="@+id/widget_lyrics_next_line_a"
+                                android:layout_width="match_parent"
+                                android:layout_height="wrap_content"
+                                android:visibility="gone" />
+                        </LinearLayout>
+                    </FrameLayout>
+
+                    <!-- Slot B -->
+                    <FrameLayout
+                        android:id="@+id/widget_lyrics_slot_b"
+                        android:layout_width="match_parent"
+                        android:layout_height="wrap_content"
+                        android:layout_gravity="center">
+
+                        <ImageView
+                            android:id="@+id/widget_lyrics_khmer_bitmap_b"
+                            android:layout_width="wrap_content"
+                            android:layout_height="wrap_content"
+                            android:layout_gravity="center"
+                            android:adjustViewBounds="true"
+                            android:contentDescription="@null"
+                            android:scaleType="fitCenter"
+                            android:visibility="gone" />
+
+                        <LinearLayout
+                            android:id="@+id/widget_lyrics_text_container_b"
+                            android:layout_width="match_parent"
+                            android:layout_height="wrap_content"
+                            android:gravity="center"
+                            android:orientation="vertical">
+
+                            <TextView
+                                android:id="@+id/widget_lyrics_current_line_b"
+                                android:layout_width="match_parent"
+                                android:layout_height="wrap_content"
+                                android:ellipsize="end"
+                                android:gravity="center"
+                                android:includeFontPadding="true"
+                                android:lineSpacingExtra="2dp"
+                                android:maxLines="2"
+                                android:textColor="#FFFFFF"
+                                android:textSize="22sp"
+                                android:textStyle="bold" />
+
+                            <TextView
+                                android:id="@+id/widget_lyrics_next_line_b"
+                                android:layout_width="match_parent"
+                                android:layout_height="wrap_content"
+                                android:visibility="gone" />
+                        </LinearLayout>
+                    </FrameLayout>
+                </ViewFlipper>
+
+                <!-- Static Next Line OUTSIDE ViewFlipper -->
+                <FrameLayout
+                    android:id="@+id/widget_lyrics_next_static_container"
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:layout_marginTop="4dp">
+
+                    <ImageView
+                        android:id="@+id/widget_lyrics_next_khmer_bitmap"
+                        android:layout_width="wrap_content"
+                        android:layout_height="wrap_content"
+                        android:layout_gravity="center"
+                        android:adjustViewBounds="true"
+                        android:contentDescription="@null"
+                        android:scaleType="fitCenter"
+                        android:visibility="gone" />
+
+                    <TextView
+                        android:id="@+id/widget_lyrics_next_line_static"
+                        android:layout_width="match_parent"
+                        android:layout_height="wrap_content"
+                        android:ellipsize="end"
+                        android:gravity="center"
+                        android:includeFontPadding="true"
+                        android:maxLines="1"
+                        android:textColor="#9EFFFFFF"
+                        android:textSize="14sp"
+                        android:visibility="gone" />
+                </FrameLayout>
+            </LinearLayout>
+
+            <!-- Bottom Title · Artist Footer (13sp, centered) -->
+            <LinearLayout
+                android:id="@+id/widget_lyrics_footer_row"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:layout_marginTop="4dp"
+                android:gravity="center"
+                android:orientation="horizontal">
+
+                <ImageView
+                    android:id="@+id/widget_lyrics_footer_bitmap"
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:layout_gravity="center"
+                    android:adjustViewBounds="true"
+                    android:contentDescription="@null"
+                    android:scaleType="fitCenter"
+                    android:visibility="gone" />
+
+                <TextView
+                    android:id="@+id/widget_lyrics_song_footer"
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:ellipsize="end"
+                    android:gravity="center"
+                    android:includeFontPadding="true"
+                    android:maxLines="1"
+                    android:singleLine="true"
+                    android:textColor="#B8FFFFFF"
+                    android:textSize="13sp" />
+            </LinearLayout>
+        </LinearLayout>
+    </FrameLayout>
+</FrameLayout>

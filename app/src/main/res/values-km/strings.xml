@@ -799,8 +799,19 @@
     <string name="widget_cover_desc">វិដ្ជិត 2×2 បង្ហាញគម្របអាល់ប៊ុម និងប៊ូតុងចាក់/ផ្អាក</string>
     <string name="widget_mini_label">AURIX Mini</string>
     <string name="widget_mini_desc">វិដ្ជិត 2×2 បង្ហាញ Equalizer និងព័ត៌មានបទចម្រៀង</string>
-    <string name="widget_preview_title">Party Funk</string>
-    <string name="widget_preview_artist">Young Madz</string>
+    <string name="widget_preview_title">Heaven Sent</string>
+    <string name="widget_preview_artist">Tevomxntana</string>
     <string name="widget_preview_lyric_current">ទំនុកច្រៀងកំពុងចាក់បង្ហាញនៅទីនេះ</string>
     <string name="widget_preview_lyric_next">បន្ទាត់បន្ទាប់ស្រាល</string>
+
+    <!-- Per-Widget Glass Style Configurator (v2.3.0) -->
+    <string name="widget_cfg_title">ជ្រើសរើសរចនាប័ទ្មវិដ្ជិត</string>
+    <string name="widget_cfg_subtitle">អនុវត្តសម្រាប់តែវិដ្ជិតនេះប៉ុណ្ណោះ</string>
+    <string name="widget_cfg_preview_section">មើលជាមុន · រចនាប័ទ្មកញ្ចក់ 5 បែប</string>
+    <string name="widget_cfg_apply_widget">អនុវត្តលើវិដ្ជិតនេះ</string>
+    <string name="widget_cfg_apply_all">អនុវត្តលើវិដ្ជិតទាំងអស់</string>
+    <string name="widget_cfg_applied_toast">បានអនុវត្តរចនាប័ទ្មលើវិដ្ជិតនេះ</string>
+    <string name="widget_cfg_applied_all_toast">បានអនុវត្តលើវិដ្ជិត AURIX ទាំងអស់</string>
+    <string name="widget_cfg_close_cd">បោះបង់ការកំណត់វិដ្ជិត</string>
+    <string name="widget_cfg_style_badge">ម៉ូត %1$d</string>
 </resources>

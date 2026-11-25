@@ -1,0 +1,47 @@
+<?xml version="1.0" encoding="utf-8"?>
+<FrameLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    android:layout_width="match_parent"
+    android:layout_height="match_parent"
+    android:background="@drawable/widget_shadow_cyan_neon"
+    android:paddingBottom="5dp">
+
+    <FrameLayout
+        android:layout_width="match_parent"
+        android:layout_height="match_parent"
+        android:background="@drawable/widget_clip_26dp"
+        android:clipToOutline="true">
+
+        <ImageView
+            android:layout_width="match_parent"
+            android:layout_height="match_parent"
+            android:contentDescription="@string/widget_cd_album_art"
+            android:scaleType="centerCrop"
+            android:src="@drawable/widget_preview_sample_cover" />
+
+        <FrameLayout
+            android:layout_width="match_parent"
+            android:layout_height="match_parent"
+            android:background="@drawable/widget_sheen_neon_top_right" />
+
+        <FrameLayout
+            android:layout_width="match_parent"
+            android:layout_height="match_parent"
+            android:background="@drawable/widget_edge_neon_26dp" />
+
+        <FrameLayout
+            android:layout_width="44dp"
+            android:layout_height="44dp"
+            android:layout_gravity="bottom|end"
+            android:layout_margin="12dp"
+            android:background="@drawable/widget_circle_neon_edge">
+
+            <ImageView
+                android:layout_width="20dp"
+                android:layout_height="20dp"
+                android:layout_gravity="center"
+                android:contentDescription="@string/widget_cd_play_pause"
+                android:src="@drawable/ic_widget_pause"
+                android:tint="#FFFFFF" />
+        </FrameLayout>
+    </FrameLayout>
+</FrameLayout>
