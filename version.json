@@ -2,9 +2,9 @@
   "versionName": "2.3.2",
   "versionCode": 20302,
   "releaseDate": "2026-11-25",
-  "releaseTimestampMs": 1795650226000,
+  "releaseTimestampMs": 1795653068000,
   "apkUrl": "https://github.com/MEYYYNASH/AURIX/releases/download/v2.3.2/AURIX-v2.3.2.apk",
-  "sha256": "358f160128d304ce163ccc8f8c59a63ef02faa0df78e9556b3715ee456aa019a",
+  "sha256": "72351ad3ec29b2a5c1972aaac7cad0467e71367eeec74ebda55215cb9f9afb8e",
   "mandatory": false,
   "notes": [
     "Redesigned Animated Album Studio, Single-Download Fix & Material You Dynamic Theme (v2.3.2): Redesigned the Album screen and Library album cards with cover-harmonized palette accents, a peeking spinning vinyl disc, breathing aurora backdrop, sticky frosted top bar, and spring-animated controls; fixed single-song downloads so downloading 1 track saves directly to My songs without auto-creating an 'Unknown Album'; plus live Album-Art Material You theming via Palette API and cache-bypassing network JSON update checking",
