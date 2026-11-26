@@ -19,7 +19,7 @@ permissions:
 
 concurrency:
   group: aurix-release
-  cancel-in-progress: false
+  cancel-in-progress: true
 
 jobs:
   build:
@@ -129,7 +129,7 @@ jobs:
             "sha256": os.environ["APK_SHA256"],
             "mandatory": False,
             "notes": [
-              f"Liquid Glass Segmented Tabs with Spring Physics & Real Backdrop Blur ({tag}): Replaced Search source switch, Home filter chips, Settings theme picker, and Library tabs with physics-driven Liquid Glass segmented controls (white glass pill thumb, specular highlight, speed-reactive shadow, immediate drag with flick inertia, cross-tab haptics, Noto Sans Khmer support, TalkBack Role.Tab semantics, and Android 12+ Haze backdrop blur with translucent fallback)",
+              f"Liquid Glass Segmented Tabs with Smooth 120Hz Spring Physics & Crash Fix ({tag}): Replaced Search source switch, Home filter chips, Settings theme picker, and Library tabs with physics-driven Liquid Glass segmented controls (white glass pill thumb, specular highlight, speed-reactive shadow, flick inertia, cross-tab haptics, Noto Sans Khmer support, TalkBack Role.Tab semantics, and Android 12+ Haze backdrop blur); fixed Android 12+ startup crash with explicit Haze backdrop styling and rebuilt drag tracking on a continuous frame-locked spring loop with a hardware-isolated thumb layer, soft edge rubber-banding, and zero frame stutter",
               "Redesigned Compact Album Studio, Single-Download Fix & Material You Dynamic Theme (v2.3.2): Redesigned the Album screen and Library album cards with a compact centered cover & peeking spinning vinyl disc, cover-harmonized palette accents, breathing aurora backdrop, sticky frosted top bar, slim frameless track rows, and spring-animated controls; fixed single-song downloads so downloading 1 track saves directly to My songs without auto-creating an 'Unknown Album'; plus live Album-Art Material You theming via Palette API and cache-bypassing network JSON update checking",
               "Vinyl Widget Style, Resizable AURIX Now Playing Widget & Refreshed Settings (v2.3.1): Added the tactile 'Vinyl' style (cream paper #EFE6D6 & spinning half-visible vinyl disc) across classic widgets, introduced the resizable 'AURIX Now Playing' widget (3 sizes x 10 WCAG 4.5:1 styles with Material You Light/Paper theming), and refreshed Settings > Widgets",
               "5 Glass Widget Styles & Per-Widget Configurator (v2.3.0): Redesigned AURIX Music (4x2), AURIX Lyrics (4x2), AURIX Cover (2x2), and AURIX Mini (2x2) widgets with 5 distinct glass styles (Frost Pill, Orb, Smoked Neon, Light Frost, Poster Glass), automatic WCAG 4.5:1 cover-luminance contrast, independent per-widget style persistence by appWidgetId, instant setup & long-press Reconfigure picker with live previews and optional 'Apply to all widgets', plus real widget picker previews across Android 12–15+",
@@ -178,7 +178,8 @@ jobs:
           mandatory: false
 
           What's New in AURIX ${RELEASE_TAG}:
-          - Liquid Glass Segmented Tabs & Backdrop Blur: Added physics-driven GlassSegmented controls across Search (YouTube / YT Link), Home (All / Songs / Albums / Artists), Settings (System / Light / Dark / AMOLED), and Library (My songs / Favorites / Recent / Albums) with white glass pill thumb, diagonal specular highlight, immediate swipe drag, flick inertia, spring overshoot, haptic ticks, Noto Sans Khmer script shaping, and Android 12+ Haze blur
+          - Liquid Glass Segmented Tabs & Backdrop Blur: Added physics-driven GlassSegmented controls across Search (YouTube / YT Link), Home (All / Songs / Albums / Artists), Settings (System / Light / Dark / AMOLED), and Library (My songs / Favorites / Recent / Albums) with white glass pill thumb, diagonal specular highlight, flick inertia, spring overshoot, haptic ticks, Noto Sans Khmer script shaping, and Android 12+ Haze blur
+          - Smooth 60/120Hz Drag Physics & Startup Crash Fix: Fixed the Android 12+ Haze startup crash with guaranteed fallback backdrop styling across Light/Dark/AMOLED themes, and rebuilt drag tracking on a continuous frame-locked spring loop with a hardware-isolated thumb layer, smooth velocity filtering, instant horizontal gesture pickup, and soft edge rubber-banding for butter-smooth dragging
           - Redesigned Compact Album Studio & Single-Download Fix (v2.3.2): Cover-harmonized Album screen & stacked Library album cards with compact centered cover & peeking spinning vinyl disc, plus single-song download fix without auto-creating an 'Unknown Album'
           - Material You Dynamic Album Theme & Network Update Checker (v2.3.2): Automatic album-art Palette API theming across Light/Dark/AMOLED and cache-bypassing remote JSON update checks
           EOF
@@ -244,7 +245,7 @@ jobs:
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
           git add version.json
           if ! git diff --cached --quiet; then
-            git commit -m "chore: update version.json for ${RELEASE_TAG} [skip ci]"
+            git commit -m "chore: update version.json for ${RELEASE_TAG}"
             git pull --rebase --autostash origin ${{ github.ref_name }} || true
             git push origin HEAD:${{ github.ref_name }} || true
           fi

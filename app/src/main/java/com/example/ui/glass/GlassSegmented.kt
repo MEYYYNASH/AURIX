@@ -18,14 +18,10 @@ import androidx.compose.foundation.gestures.awaitFirstDown
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
-import androidx.compose.foundation.layout.IntrinsicSize
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.defaultMinSize
-import androidx.compose.foundation.layout.fillMaxHeight
-import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
-import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
@@ -41,14 +37,18 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.Immutable
 import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.State
 import androidx.compose.runtime.compositionLocalOf
+import androidx.compose.runtime.derivedStateOf
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableFloatStateOf
 import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.rememberUpdatedState
 import androidx.compose.runtime.setValue
+import androidx.compose.runtime.withFrameNanos
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
@@ -113,7 +113,10 @@ import dev.chrisbanes.haze.LocalHazeStyle
 import dev.chrisbanes.haze.haze
 import dev.chrisbanes.haze.hazeChild
 import kotlin.math.abs
+import kotlin.math.exp
+import kotlin.math.sqrt
 import kotlinx.coroutines.Job
+import kotlinx.coroutines.isActive
 import kotlinx.coroutines.launch
 
 val LocalAurixHazeState = compositionLocalOf<HazeState?> { null }
@@ -141,6 +144,20 @@ data class SegOption(
   val testTag: String? = null
 )
 
+/** Non-recomposition mutable physics holder for 60/120Hz zero-jank drag tracking. */
+private class GlassDragPhysicsState {
+  var isDragging: Boolean = false
+  var targetX: Float = 0f
+  var targetW: Float = 0f
+  var currentX: Float = 0f
+  var currentW: Float = 0f
+  var velX: Float = 0f
+  var velW: Float = 0f
+  var smoothedVisualVelX: Float = 0f
+  var dragFollowerJob: Job? = null
+  var settleJob: Job? = null
+}
+
 internal fun computeGlassVelocitySpeed(
   velocityPxPerSec: Float,
   referenceVelocityPxPerSec: Float
@@ -159,6 +176,51 @@ internal fun projectFlickCenter(
   val currentCenter = thumbLeftPx + thumbWidthPx * 0.5f
   return (currentCenter + releaseVelocityPxPerSec * projectionSeconds)
     .coerceIn(0f, trackTotalWidthPx.coerceAtLeast(1f))
+}
+
+internal fun applyLiquidEdgeResistance(
+  rawLeft: Float,
+  minLeft: Float,
+  maxLeft: Float,
+  maxOverdragPx: Float
+): Float {
+  if (maxOverdragPx <= 0f) return rawLeft.coerceIn(minLeft, maxLeft)
+  return when {
+    rawLeft < minLeft -> {
+      val over = minLeft - rawLeft
+      val resisted = maxOverdragPx * (1f - 1f / (1f + over / (maxOverdragPx * 2.5f)))
+      minLeft - resisted
+    }
+    rawLeft > maxLeft -> {
+      val over = rawLeft - maxLeft
+      val resisted = maxOverdragPx * (1f - 1f / (1f + over / (maxOverdragPx * 2.5f)))
+      maxLeft + resisted
+    }
+    else -> rawLeft
+  }
+}
+
+internal fun stepGlassDragSpring(
+  value: Float,
+  velocity: Float,
+  target: Float,
+  dtSeconds: Float,
+  stiffness: Float = 450f,
+  dampingRatio: Float = 0.70f,
+  subSteps: Int = 4
+): Pair<Float, Float> {
+  val clampedDt = dtSeconds.coerceIn(1f / 240f, 1f / 30f)
+  val steps = subSteps.coerceAtLeast(1)
+  val subDt = clampedDt / steps
+  val damping = 2f * dampingRatio * sqrt(stiffness)
+  var curVal = value
+  var curVel = velocity
+  repeat(steps) {
+    val accel = stiffness * (target - curVal) - damping * curVel
+    curVel += accel * subDt
+    curVal += curVel * subDt
+  }
+  return curVal to curVel
 }
 
 internal fun findNearestSegmentIndex(
@@ -284,15 +346,29 @@ fun GlassSegmented(
     )
   }
 
+  // Animatable drives tap & release settle with true Compose spring(0.45f, 200f);
+  // render* states are updated in-frame (withFrameNanos / animateTo) and read ONLY in drawWithContent.
   val thumbX = remember { Animatable(0f) }
   val thumbWidth = remember { Animatable(0f) }
+  val renderXState = remember { mutableFloatStateOf(0f) }
+  val renderWState = remember { mutableFloatStateOf(0f) }
+  val renderVelXState = remember { mutableFloatStateOf(0f) }
+  val physics = remember { GlassDragPhysicsState() }
+  val dragHoverIndexState = remember { mutableIntStateOf(-1) }
+  val activeVisualIndexState = remember(options.size) {
+    derivedStateOf {
+      val hovered = dragHoverIndexState.intValue
+      if (hovered in options.indices) hovered else currentSelectedIndex
+    }
+  }
+
   var hasInitializedThumb by remember { mutableStateOf(false) }
   var lastAnimatedIndex by remember { mutableIntStateOf(-1) }
-  var isDragging by remember { mutableStateOf(false) }
-  var dragHoverIndex by remember { mutableIntStateOf(-1) }
 
   val velRefPx = with(density) { 1100.dp.toPx() }
   val tapPushPx = with(density) { 320.dp.toPx() }
+  val maxReleaseVelPx = with(density) { 4200.dp.toPx() }
+  val maxOverdragPx = with(density) { 8.dp.toPx() }
   val baseShadowSpreadPx = with(density) { 5.dp.toPx() }
   val extraShadowSpreadPx = with(density) { 9.dp.toPx() }
   val baseShadowOffsetYPx = with(density) { 2.dp.toPx() }
@@ -315,6 +391,70 @@ fun GlassSegmented(
     }
   }
 
+  fun launchSettleToIndex(
+    targetIdx: Int,
+    initialVelX: Float,
+    initialVelW: Float = 0f
+  ) {
+    val safeIdx = targetIdx.coerceIn(0, options.lastIndex)
+    val targetX = tabLefts[safeIdx]
+    val targetW = tabWidths[safeIdx]
+    if (targetW <= 0f) return
+
+    lastAnimatedIndex = safeIdx
+    physics.settleJob?.cancel()
+    physics.settleJob = scope.launch {
+      if (currentReducedMotion) {
+        thumbX.snapTo(targetX)
+        thumbWidth.snapTo(targetW)
+        physics.currentX = targetX
+        physics.currentW = targetW
+        physics.velX = 0f
+        physics.velW = 0f
+        physics.smoothedVisualVelX = 0f
+        renderXState.floatValue = targetX
+        renderWState.floatValue = targetW
+        renderVelXState.floatValue = 0f
+      } else {
+        // Sync Animatable start position seamlessly from live drag coordinates
+        thumbX.snapTo(physics.currentX)
+        thumbWidth.snapTo(physics.currentW.coerceAtLeast(1f))
+        val springX = spring<Float>(dampingRatio = 0.45f, stiffness = 200f)
+        val springW = spring<Float>(dampingRatio = 0.45f, stiffness = 200f)
+        val xJob = launch {
+          thumbX.animateTo(
+            targetValue = targetX,
+            initialVelocity = initialVelX,
+            animationSpec = springX
+          ) {
+            physics.currentX = value
+            physics.velX = velocity
+            renderXState.floatValue = value
+            physics.smoothedVisualVelX = physics.smoothedVisualVelX * 0.55f + velocity * 0.45f
+            renderVelXState.floatValue = physics.smoothedVisualVelX
+          }
+          physics.velX = 0f
+          physics.smoothedVisualVelX = 0f
+          renderVelXState.floatValue = 0f
+        }
+        val wJob = launch {
+          thumbWidth.animateTo(
+            targetValue = targetW,
+            initialVelocity = initialVelW,
+            animationSpec = springW
+          ) {
+            physics.currentW = value
+            physics.velW = velocity
+            renderWState.floatValue = value
+          }
+          physics.velW = 0f
+        }
+        xJob.join()
+        wJob.join()
+      }
+    }
+  }
+
   // Animate or snap thumb when selection or re-measured tab bounds change
   LaunchedEffect(clampedSelectedIndex, layoutEpoch, configSignature, reducedMotion) {
     val allMeasured = tabWidths.all { it > 0f }
@@ -324,41 +464,51 @@ fun GlassSegmented(
     val targetW = tabWidths[clampedSelectedIndex]
 
     if (!hasInitializedThumb || reducedMotion) {
+      physics.dragFollowerJob?.cancel()
+      physics.settleJob?.cancel()
       thumbX.snapTo(targetX)
       thumbWidth.snapTo(targetW)
+      physics.currentX = targetX
+      physics.currentW = targetW
+      physics.targetX = targetX
+      physics.targetW = targetW
+      physics.velX = 0f
+      physics.velW = 0f
+      physics.smoothedVisualVelX = 0f
+      renderXState.floatValue = targetX
+      renderWState.floatValue = targetW
+      renderVelXState.floatValue = 0f
       hasInitializedThumb = true
       lastAnimatedIndex = clampedSelectedIndex
       return@LaunchedEffect
     }
 
-    if (isDragging) return@LaunchedEffect
+    if (physics.isDragging) return@LaunchedEffect
 
     if (lastAnimatedIndex != clampedSelectedIndex) {
-      val dir = if (targetX >= thumbX.value) 1f else -1f
-      val initialVel = if (abs(thumbX.velocity) > tapPushPx * 0.5f) {
-        thumbX.velocity
+      val currentVel = if (abs(physics.velX) > 1f) physics.velX else thumbX.velocity
+      val dir = if (targetX >= physics.currentX) 1f else -1f
+      val initialVel = if (abs(currentVel) > tapPushPx * 0.5f) {
+        currentVel
       } else {
         dir * tapPushPx
       }
-      lastAnimatedIndex = clampedSelectedIndex
-      val targetSpringX = spring<Float>(dampingRatio = 0.45f, stiffness = 200f)
-      val targetSpringW = spring<Float>(dampingRatio = 0.45f, stiffness = 200f)
-      launch {
-        thumbX.animateTo(
-          targetValue = targetX,
-          initialVelocity = initialVel,
-          animationSpec = targetSpringX
-        )
-      }
-      launch {
-        thumbWidth.animateTo(
-          targetValue = targetW,
-          animationSpec = targetSpringW
-        )
-      }
-    } else if (abs(thumbX.targetValue - targetX) > 0.5f || abs(thumbWidth.targetValue - targetW) > 0.5f) {
+      launchSettleToIndex(
+        targetIdx = clampedSelectedIndex,
+        initialVelX = initialVel,
+        initialVelW = physics.velW
+      )
+    } else if (
+      physics.settleJob?.isActive != true &&
+      (abs(physics.currentX - targetX) > 0.5f || abs(physics.currentW - targetW) > 0.5f)
+    ) {
       thumbX.snapTo(targetX)
       thumbWidth.snapTo(targetW)
+      physics.currentX = targetX
+      physics.currentW = targetW
+      renderXState.floatValue = targetX
+      renderWState.floatValue = targetW
+      renderVelXState.floatValue = 0f
     }
   }
 
@@ -376,15 +526,20 @@ fun GlassSegmented(
   val thumbBorderBottom = Color.White.copy(alpha = if (darkTheme) 0.18f else 0.60f)
   val specularColor = Color.White.copy(alpha = if (darkTheme) 0.30f else 0.62f)
 
+  // Pre-remembered draw objects to guarantee 0 allocations per 120Hz frame
+  val thumbGradientColors = remember(thumbTopColor, thumbBottomColor) {
+    listOf(thumbTopColor, thumbBottomColor)
+  }
+  val specularGradientColors = remember(specularColor) {
+    listOf(Color.Transparent, specularColor, Color.Transparent)
+  }
+  val borderGradientColors = remember(thumbBorderTop, thumbBorderBottom) {
+    listOf(thumbBorderTop, thumbBorderBottom)
+  }
+  val pillPath = remember { Path() }
+
   val selectedTextColor = MaterialTheme.colorScheme.onSurface
   val unselectedTextColor = MaterialTheme.colorScheme.onSurfaceVariant
-  val colorAnimSpec = if (reducedMotion) snap<Color>() else tween<Color>(durationMillis = 190, easing = FastOutSlowInEasing)
-
-  val activeVisualIndex = if (isDragging && dragHoverIndex in options.indices) {
-    dragHoverIndex
-  } else {
-    clampedSelectedIndex
-  }
 
   val currentHazeStyle = LocalHazeStyle.current
   val themeBackground = MaterialTheme.colorScheme.background
@@ -397,186 +552,279 @@ fun GlassSegmented(
   }
 
   CompositionLocalProvider(LocalHazeStyle provides resolvedHazeStyle) {
-  Box(
-    modifier = modifier
-      .then(if (fillWidth) Modifier.fillMaxWidth() else Modifier.wrapContentWidth())
-      .clip(CircleShape)
-      .then(if (supportsBackdropBlur) backdrop else Modifier)
-      .background(trackFill)
-      .border(1.dp, trackBorder, CircleShape)
-      .padding(4.dp)
-  ) {
     Box(
-      modifier = Modifier
+      modifier = modifier
         .then(if (fillWidth) Modifier.fillMaxWidth() else Modifier.wrapContentWidth())
-        .height(IntrinsicSize.Min)
-        .semantics { selectableGroup() }
-        .pointerInput(options.size, reducedMotion) {
-          awaitEachGesture {
-            val down = awaitFirstDown(requireUnconsumed = false)
-            val pointerId = down.id
-            val downX = down.position.x
-            val velocityTracker = VelocityTracker()
-            velocityTracker.addPosition(down.uptimeMillis, down.position)
+        .clip(CircleShape)
+    ) {
+      // Static frosted backdrop layer isolated from the 120Hz animated thumb layer
+      Box(
+        modifier = Modifier
+          .matchParentSize()
+          .then(if (supportsBackdropBlur) backdrop else Modifier)
+          .background(trackFill)
+          .border(1.dp, trackBorder, CircleShape)
+      )
 
-            val touchSlop = viewConfiguration.touchSlop
-            var dragStarted = false
-            var dragAnimJob: Job? = null
-            var lastCrossedTab = currentSelectedIndex
-            val startThumbW = thumbWidth.value.coerceAtLeast(1f)
-            val startThumbX = thumbX.value
-            val startedInThumb = downX in startThumbX..(startThumbX + startThumbW)
-            val grabOffset = if (startedInThumb) (downX - startThumbX) else (startThumbW * 0.5f)
+      // Interactive segmented track
+      Box(
+        modifier = Modifier
+          .then(if (fillWidth) Modifier.fillMaxWidth() else Modifier.wrapContentWidth())
+          .padding(4.dp)
+          .semantics { selectableGroup() }
+          .pointerInput(options.size, reducedMotion) {
+            awaitEachGesture {
+              val down = awaitFirstDown(requireUnconsumed = false)
+              val pointerId = down.id
+              val downX = down.position.x
+              val downY = down.position.y
+              val velocityTracker = VelocityTracker()
+              velocityTracker.addPosition(down.uptimeMillis, down.position)
 
-            try {
-              while (true) {
-                val event = awaitPointerEvent()
-                val change = event.changes.firstOrNull { it.id == pointerId } ?: break
-                if (!change.pressed) {
-                  velocityTracker.addPosition(change.uptimeMillis, change.position)
-                  if (!dragStarted) {
-                    val tappedIndex = findSegmentIndexAtX(downX, tabLefts, tabWidths)
-                    if (tappedIndex != currentSelectedIndex) {
-                      performTickHaptic()
-                    }
-                    currentOnSelect(tappedIndex)
-                  } else {
-                    dragAnimJob?.cancel()
-                    isDragging = false
-                    dragHoverIndex = -1
+              val touchSlop = viewConfiguration.touchSlop
+              var dragStarted = false
+              var completedNormally = false
+              var lastCrossedTab = currentSelectedIndex
 
-                    val releaseVelX = velocityTracker.calculateVelocity().x
-                    val totalTrackW = tabWidths.sum().coerceAtLeast(1f)
-                    val projectedCenter = projectFlickCenter(
-                      thumbLeftPx = thumbX.value,
-                      thumbWidthPx = thumbWidth.value,
-                      releaseVelocityPxPerSec = releaseVelX,
-                      trackTotalWidthPx = totalTrackW,
-                      projectionSeconds = 0.20f
-                    )
-                    val targetIdx = findNearestSegmentIndex(projectedCenter, tabLefts, tabWidths)
-                    if (targetIdx != lastCrossedTab) {
-                      performTickHaptic()
-                    }
-                    val targetX = tabLefts[targetIdx]
-                    val targetW = tabWidths[targetIdx]
-                    lastAnimatedIndex = targetIdx
-                    currentOnSelect(targetIdx)
+              val startThumbW = physics.currentW.coerceAtLeast(1f)
+              val startThumbX = physics.currentX
+              val startedInThumb = downX in startThumbX..(startThumbX + startThumbW)
+              // Tight horizontal threshold so drag begins immediately with zero snag
+              val horizontalSlop = if (startedInThumb) {
+                (touchSlop * 0.25f).coerceAtLeast(3f)
+              } else {
+                (touchSlop * 0.42f).coerceAtLeast(5f)
+              }
+              // Center-relative grab offset prevents sideways jumps when crossing uneven-width tabs
+              val centerGrabOffset = if (startedInThumb) {
+                downX - (startThumbX + startThumbW * 0.5f)
+              } else {
+                0f
+              }
 
-                    scope.launch {
-                      if (currentReducedMotion) {
-                        thumbX.snapTo(targetX)
-                        thumbWidth.snapTo(targetW)
+              try {
+                while (true) {
+                  val event = awaitPointerEvent()
+                  val change = event.changes.firstOrNull { it.id == pointerId } ?: break
+
+                  if (!change.pressed) {
+                    velocityTracker.addPosition(change.uptimeMillis, change.position)
+                    completedNormally = true
+                    if (!dragStarted) {
+                      val tappedIndex = findSegmentIndexAtX(downX, tabLefts, tabWidths)
+                      if (tappedIndex != currentSelectedIndex) {
+                        performTickHaptic()
+                      }
+                      currentOnSelect(tappedIndex)
+                    } else {
+                      physics.dragFollowerJob?.cancel()
+                      physics.dragFollowerJob = null
+                      physics.isDragging = false
+                      dragHoverIndexState.intValue = -1
+
+                      val rawTrackerVelX = velocityTracker.calculateVelocity().x
+                      val trackerVelX = if (rawTrackerVelX.isFinite()) {
+                        rawTrackerVelX.coerceIn(-maxReleaseVelPx, maxReleaseVelPx)
                       } else {
-                        val releaseSpringX = spring<Float>(dampingRatio = 0.45f, stiffness = 200f)
-                        val releaseSpringW = spring<Float>(dampingRatio = 0.45f, stiffness = 200f)
-                        launch {
-                          thumbX.animateTo(
-                            targetValue = targetX,
-                            initialVelocity = releaseVelX,
-                            animationSpec = releaseSpringX
-                          )
-                        }
-                        launch {
-                          thumbWidth.animateTo(
-                            targetValue = targetW,
-                            animationSpec = releaseSpringW
-                          )
+                        0f
+                      }
+                      // Preserve spring momentum smoothly while honoring fast flicks
+                      val releaseVelX = if (abs(trackerVelX) > abs(physics.velX)) {
+                        trackerVelX
+                      } else {
+                        physics.velX * 0.65f + trackerVelX * 0.35f
+                      }.coerceIn(-maxReleaseVelPx, maxReleaseVelPx)
+
+                      val totalTrackW = tabWidths.sum().coerceAtLeast(1f)
+                      val projectedCenter = projectFlickCenter(
+                        thumbLeftPx = physics.currentX,
+                        thumbWidthPx = physics.currentW.coerceAtLeast(1f),
+                        releaseVelocityPxPerSec = releaseVelX,
+                        trackTotalWidthPx = totalTrackW,
+                        projectionSeconds = 0.20f
+                      )
+                      val targetIdx = findNearestSegmentIndex(projectedCenter, tabLefts, tabWidths)
+                      if (targetIdx != lastCrossedTab) {
+                        performTickHaptic()
+                      }
+                      currentOnSelect(targetIdx)
+                      launchSettleToIndex(
+                        targetIdx = targetIdx,
+                        initialVelX = releaseVelX,
+                        initialVelW = physics.velW
+                      )
+                    }
+                    break
+                  }
+
+                  val dx = change.position.x - downX
+                  val dy = change.position.y - downY
+                  velocityTracker.addPosition(change.uptimeMillis, change.position)
+
+                  if (!dragStarted) {
+                    // Yield cleanly to vertical scrolling (e.g., LazyColumn) when swiping vertically
+                    if (abs(dy) > touchSlop && abs(dy) > abs(dx) * 1.15f) {
+                      break
+                    }
+                    if (abs(dx) > horizontalSlop && abs(dx) >= abs(dy)) {
+                      dragStarted = true
+                      physics.isDragging = true
+                      physics.settleJob?.cancel()
+                      physics.settleJob = null
+                      physics.currentX = renderXState.floatValue
+                      physics.currentW = renderWState.floatValue.coerceAtLeast(1f)
+                      physics.velX = if (abs(physics.velX) > 1f) physics.velX else thumbX.velocity
+                      physics.targetX = physics.currentX
+                      physics.targetW = physics.currentW
+                      change.consume()
+
+                      // Launch ONE zero-mutex, frame-locked 60/120Hz spring-damper loop for the entire drag
+                      physics.dragFollowerJob?.cancel()
+                      physics.dragFollowerJob = scope.launch {
+                        var lastFrameNanos = 0L
+                        while (isActive && physics.isDragging) {
+                          withFrameNanos { frameNanos ->
+                            if (!physics.isDragging) return@withFrameNanos
+                            if (lastFrameNanos == 0L) {
+                              lastFrameNanos = frameNanos
+                              return@withFrameNanos
+                            }
+                            val dt = ((frameNanos - lastFrameNanos) / 1_000_000_000f)
+                              .coerceIn(1f / 240f, 1f / 30f)
+                            lastFrameNanos = frameNanos
+
+                            if (currentReducedMotion) {
+                              physics.currentX = physics.targetX
+                              physics.currentW = physics.targetW
+                              physics.velX = 0f
+                              physics.velW = 0f
+                              physics.smoothedVisualVelX = 0f
+                            } else {
+                              val (nextX, nextVx) = stepGlassDragSpring(
+                                value = physics.currentX,
+                                velocity = physics.velX,
+                                target = physics.targetX,
+                                dtSeconds = dt,
+                                stiffness = 450f,
+                                dampingRatio = 0.70f,
+                                subSteps = 4
+                              )
+                              val (nextW, nextVw) = stepGlassDragSpring(
+                                value = physics.currentW,
+                                velocity = physics.velW,
+                                target = physics.targetW,
+                                dtSeconds = dt,
+                                stiffness = 450f,
+                                dampingRatio = 0.70f,
+                                subSteps = 4
+                              )
+                              physics.currentX = nextX
+                              physics.velX = nextVx
+                              physics.currentW = nextW
+                              physics.velW = nextVw
+                              // Frame-rate-independent exponential velocity filter for silky squash/stretch
+                              val smoothFactor = 1f - exp(-24f * dt)
+                              physics.smoothedVisualVelX += (nextVx - physics.smoothedVisualVelX) * smoothFactor
+                            }
+
+                            // Write directly during the animation phase for zero-frame latency & zero mutex overhead
+                            renderXState.floatValue = physics.currentX
+                            renderWState.floatValue = physics.currentW
+                            renderVelXState.floatValue = physics.smoothedVisualVelX
+                          }
                         }
                       }
                     }
                   }
-                  break
-                }
 
-                val dx = change.position.x - downX
-                velocityTracker.addPosition(change.uptimeMillis, change.position)
+                  if (dragStarted) {
+                    change.consume()
+                    val totalTrackW = tabWidths.sum().coerceAtLeast(1f)
+                    val pointerCenter = (change.position.x - centerGrabOffset).coerceIn(0f, totalTrackW)
+                    val hoveredIdx = findNearestSegmentIndex(pointerCenter, tabLefts, tabWidths)
 
-                if (!dragStarted && abs(dx) > touchSlop) {
-                  dragStarted = true
-                  isDragging = true
-                  change.consume()
-                }
-
-                if (dragStarted) {
-                  change.consume()
-                  val totalTrackW = tabWidths.sum().coerceAtLeast(1f)
-                  val currentW = thumbWidth.value.coerceAtLeast(startThumbW)
-                  val maxLeft = (totalTrackW - currentW).coerceAtLeast(0f)
-                  val desiredLeft = (change.position.x - grabOffset).coerceIn(0f, maxLeft)
-                  val thumbCenter = desiredLeft + currentW * 0.5f
-                  val hoveredIdx = findNearestSegmentIndex(thumbCenter, tabLefts, tabWidths)
-
-                  if (hoveredIdx != lastCrossedTab) {
-                    lastCrossedTab = hoveredIdx
-                    dragHoverIndex = hoveredIdx
-                    performTickHaptic()
-                  } else if (dragHoverIndex != hoveredIdx) {
-                    dragHoverIndex = hoveredIdx
-                  }
-
-                  val targetW = tabWidths[hoveredIdx]
-                  dragAnimJob?.cancel()
-                  dragAnimJob = scope.launch {
-                    if (currentReducedMotion) {
-                      thumbX.snapTo(desiredLeft)
-                      thumbWidth.snapTo(targetW)
-                    } else {
-                      val dragSpringX = spring<Float>(dampingRatio = 0.70f, stiffness = 450f)
-                      val dragSpringW = spring<Float>(dampingRatio = 0.70f, stiffness = 450f)
-                      launch { thumbX.animateTo(desiredLeft, animationSpec = dragSpringX) }
-                      launch { thumbWidth.animateTo(targetW, animationSpec = dragSpringW) }
+                    if (hoveredIdx != lastCrossedTab) {
+                      lastCrossedTab = hoveredIdx
+                      dragHoverIndexState.intValue = hoveredIdx
+                      performTickHaptic()
+                    } else if (dragHoverIndexState.intValue != hoveredIdx) {
+                      dragHoverIndexState.intValue = hoveredIdx
                     }
+
+                    val targetW = tabWidths[hoveredIdx].coerceAtLeast(startThumbW)
+                    val maxLeft = (totalTrackW - targetW).coerceAtLeast(0f)
+                    val rawDesiredLeft = (change.position.x - centerGrabOffset) - targetW * 0.5f
+                    val desiredLeft = applyLiquidEdgeResistance(
+                      rawLeft = rawDesiredLeft,
+                      minLeft = 0f,
+                      maxLeft = maxLeft,
+                      maxOverdragPx = maxOverdragPx
+                    )
+                    physics.targetX = desiredLeft
+                    physics.targetW = targetW
                   }
+                }
+              } finally {
+                if (dragStarted && !completedNormally) {
+                  // Gesture was cancelled mid-drag (e.g., system swipe) — smoothly spring back to current tab
+                  physics.dragFollowerJob?.cancel()
+                  physics.dragFollowerJob = null
+                  physics.isDragging = false
+                  dragHoverIndexState.intValue = -1
+                  launchSettleToIndex(
+                    targetIdx = currentSelectedIndex,
+                    initialVelX = physics.velX,
+                    initialVelW = physics.velW
+                  )
+                } else {
+                  physics.isDragging = false
+                  dragHoverIndexState.intValue = -1
                 }
               }
-            } finally {
-              isDragging = false
-              dragHoverIndex = -1
             }
           }
-        }
-    ) {
-      // Liquid White Glass Thumb drawn purely in the Draw phase (zero frame recomposition)
-      Box(
-        modifier = Modifier
-          .matchParentSize()
-          .drawWithContent {
-            val w = thumbWidth.value
-            val h = size.height
-            if (w > 0f && h > 0f) {
-              val x = thumbX.value
-              val vel = thumbX.velocity
-              val speed = if (reducedMotion) 0f else computeGlassVelocitySpeed(vel, velRefPx)
-              val signedDir = if (reducedMotion) 0f else (vel / velRefPx).coerceIn(-1f, 1f)
+      ) {
+        // Liquid White Glass Thumb in its own hardware RenderNode (zero Haze re-blur & zero frame recomposition)
+        Box(
+          modifier = Modifier
+            .matchParentSize()
+            .graphicsLayer { clip = false }
+            .drawWithContent {
+              val w = renderWState.floatValue
+              val h = size.height
+              if (w > 0f && h > 0f) {
+                val x = renderXState.floatValue
+                val vel = renderVelXState.floatValue
+                val speed = if (reducedMotion) 0f else computeGlassVelocitySpeed(vel, velRefPx)
+                val signedDir = if (reducedMotion) 0f else (vel / velRefPx).coerceIn(-1f, 1f)
 
-              val sx = 1f + 0.30f * speed
-              val sy = 1f - 0.20f * speed
-              val drawnW = w * sx
-              val drawnH = h * sy
-              val drawnLeft = (x + w * 0.5f) - drawnW * 0.5f
-              val drawnTop = (h - drawnH) * 0.5f
-              val corner = drawnH * 0.5f
+                val sx = 1f + 0.30f * speed
+                val sy = 1f - 0.20f * speed
+                val drawnW = w * sx
+                val drawnH = h * sy
+                val drawnLeft = (x + w * 0.5f) - drawnW * 0.5f
+                val drawnTop = (h - drawnH) * 0.5f
+                val corner = drawnH * 0.5f
 
-              // 1. Dynamic soft shadow growing with velocity
-              val spread = baseShadowSpreadPx + extraShadowSpreadPx * speed
-              val yOff = baseShadowOffsetYPx + extraShadowOffsetYPx * speed
-              val baseAlpha = (if (darkTheme) 0.28f else 0.10f) + (if (darkTheme) 0.18f else 0.12f) * speed
-              for (layer in 3 downTo 1) {
-                val frac = layer / 3f
-                val s = spread * frac
-                val alphaLayer = (baseAlpha * (1.15f - frac * 0.65f) * 0.45f).coerceIn(0f, 0.45f)
-                drawRoundRect(
-                  color = Color.Black.copy(alpha = alphaLayer),
-                  topLeft = Offset(drawnLeft - s * 0.45f, drawnTop + yOff * frac - s * 0.20f),
-                  size = Size(drawnW + s * 0.90f, drawnH + s * 0.75f),
-                  cornerRadius = CornerRadius(corner + s * 0.45f, corner + s * 0.45f)
-                )
-              }
+                // 1. Dynamic soft shadow growing with velocity
+                val spread = baseShadowSpreadPx + extraShadowSpreadPx * speed
+                val yOff = baseShadowOffsetYPx + extraShadowOffsetYPx * speed
+                val baseAlpha = (if (darkTheme) 0.28f else 0.10f) + (if (darkTheme) 0.18f else 0.12f) * speed
+                for (layer in 3 downTo 1) {
+                  val frac = layer / 3f
+                  val s = spread * frac
+                  val alphaLayer = (baseAlpha * (1.15f - frac * 0.65f) * 0.45f).coerceIn(0f, 0.45f)
+                  drawRoundRect(
+                    color = Color.Black.copy(alpha = alphaLayer),
+                    topLeft = Offset(drawnLeft - s * 0.45f, drawnTop + yOff * frac - s * 0.20f),
+                    size = Size(drawnW + s * 0.90f, drawnH + s * 0.75f),
+                    cornerRadius = CornerRadius(corner + s * 0.45f, corner + s * 0.45f)
+                  )
+                }
 
-              // 2. Crisp WHITE glass thumb pill + directional diagonal specular highlight
-              val pillPath = Path().apply {
-                addRoundRect(
+                // 2. Crisp WHITE glass thumb pill + directional diagonal specular highlight (reused Path -> 0 allocs)
+                pillPath.rewind()
+                pillPath.addRoundRect(
                   RoundRect(
                     rect = Rect(
                       offset = Offset(drawnLeft, drawnTop),
@@ -585,165 +833,195 @@ fun GlassSegmented(
                     cornerRadius = CornerRadius(corner, corner)
                   )
                 )
-              }
 
-              clipPath(pillPath) {
-                drawRect(
+                clipPath(pillPath) {
+                  drawRect(
+                    brush = Brush.verticalGradient(
+                      colors = thumbGradientColors,
+                      startY = drawnTop,
+                      endY = drawnTop + drawnH
+                    ),
+                    topLeft = Offset(drawnLeft, drawnTop),
+                    size = Size(drawnW, drawnH)
+                  )
+
+                  // Diagonal specular highlight stripe shifting in the direction of motion
+                  val stripeShift = signedDir * drawnW * 0.24f
+                  val stripeCenterX = drawnLeft + drawnW * 0.40f + stripeShift
+                  val stripeHalfSpan = (drawnW * 0.24f).coerceAtLeast(18f)
+                  drawRect(
+                    brush = Brush.linearGradient(
+                      colors = specularGradientColors,
+                      start = Offset(stripeCenterX - stripeHalfSpan, drawnTop),
+                      end = Offset(stripeCenterX + stripeHalfSpan * 0.65f, drawnTop + drawnH)
+                    ),
+                    topLeft = Offset(drawnLeft, drawnTop),
+                    size = Size(drawnW, drawnH)
+                  )
+                }
+
+                // 3. 1dp light border
+                val halfStroke = borderStrokePx * 0.5f
+                drawRoundRect(
                   brush = Brush.verticalGradient(
-                    colors = listOf(thumbTopColor, thumbBottomColor),
+                    colors = borderGradientColors,
                     startY = drawnTop,
                     endY = drawnTop + drawnH
                   ),
-                  topLeft = Offset(drawnLeft, drawnTop),
-                  size = Size(drawnW, drawnH)
-                )
-
-                // Diagonal specular highlight stripe shifting in the direction of motion
-                val stripeShift = signedDir * drawnW * 0.24f
-                val stripeCenterX = drawnLeft + drawnW * 0.40f + stripeShift
-                val stripeHalfSpan = (drawnW * 0.24f).coerceAtLeast(18f)
-                drawRect(
-                  brush = Brush.linearGradient(
-                    colors = listOf(
-                      Color.Transparent,
-                      specularColor,
-                      Color.Transparent
-                    ),
-                    start = Offset(stripeCenterX - stripeHalfSpan, drawnTop),
-                    end = Offset(stripeCenterX + stripeHalfSpan * 0.65f, drawnTop + drawnH)
+                  topLeft = Offset(drawnLeft + halfStroke, drawnTop + halfStroke),
+                  size = Size(
+                    (drawnW - borderStrokePx).coerceAtLeast(0f),
+                    (drawnH - borderStrokePx).coerceAtLeast(0f)
                   ),
-                  topLeft = Offset(drawnLeft, drawnTop),
-                  size = Size(drawnW, drawnH)
+                  cornerRadius = CornerRadius(
+                    (corner - halfStroke).coerceAtLeast(0f),
+                    (corner - halfStroke).coerceAtLeast(0f)
+                  ),
+                  style = Stroke(width = borderStrokePx)
                 )
               }
-
-              // 3. 1dp light border
-              val halfStroke = borderStrokePx * 0.5f
-              drawRoundRect(
-                brush = Brush.verticalGradient(
-                  colors = listOf(thumbBorderTop, thumbBorderBottom),
-                  startY = drawnTop,
-                  endY = drawnTop + drawnH
-                ),
-                topLeft = Offset(drawnLeft + halfStroke, drawnTop + halfStroke),
-                size = Size(
-                  (drawnW - borderStrokePx).coerceAtLeast(0f),
-                  (drawnH - borderStrokePx).coerceAtLeast(0f)
-                ),
-                cornerRadius = CornerRadius(
-                  (corner - halfStroke).coerceAtLeast(0f),
-                  (corner - halfStroke).coerceAtLeast(0f)
-                ),
-                style = Stroke(width = borderStrokePx)
-              )
+              drawContent()
             }
-            drawContent()
-          }
-      )
+        )
 
-      Row(
-        modifier = if (fillWidth) Modifier.fillMaxWidth() else Modifier.wrapContentWidth(),
-        verticalAlignment = Alignment.CenterVertically
-      ) {
-        options.forEachIndexed { index, option ->
-          val isVisuallySelected = activeVisualIndex == index
-          val isCommittedSelected = clampedSelectedIndex == index
-          val contentColor by animateColorAsState(
-            targetValue = if (isVisuallySelected) selectedTextColor else unselectedTextColor,
-            animationSpec = colorAnimSpec,
-            label = "glass_seg_color_$index"
-          )
-          val labelScale by animateFloatAsState(
-            targetValue = if (isVisuallySelected) 1.05f else 1.0f,
-            animationSpec = if (reducedMotion) {
-              snap()
-            } else {
-              spring(dampingRatio = 0.52f, stiffness = 360f)
-            },
-            label = "glass_seg_label_scale_$index"
-          )
-          val styledLabel = rememberSegmentStyledLabel(option.label)
-          val hasKhmer = remember(option.label) { KhmerTypography.containsKhmer(option.label) }
-
-          Box(
-            modifier = Modifier
-              .then(if (fillWidth) Modifier.weight(1f) else Modifier.wrapContentWidth())
-              .defaultMinSize(minWidth = 48.dp, minHeight = 48.dp)
-              .clip(CircleShape)
-              .focusable()
-              .onPreviewKeyEvent { keyEvent ->
-                if (keyEvent.type == KeyEventType.KeyDown &&
-                  (keyEvent.key == Key.Enter || keyEvent.key == Key.DirectionCenter || keyEvent.key == Key.Spacebar)
-                ) {
+        Row(
+          modifier = if (fillWidth) Modifier.fillMaxWidth() else Modifier.wrapContentWidth(),
+          verticalAlignment = Alignment.CenterVertically
+        ) {
+          options.forEachIndexed { index, option ->
+            GlassSegmentTab(
+              index = index,
+              option = option,
+              activeVisualIndexState = activeVisualIndexState,
+              committedSelectedIndex = clampedSelectedIndex,
+              fillWidth = fillWidth,
+              reducedMotion = reducedMotion,
+              selectedTextColor = selectedTextColor,
+              unselectedTextColor = unselectedTextColor,
+              onSelectIndex = {
+                if (index != currentSelectedIndex) {
                   performTickHaptic()
-                  onSelect(index)
-                  true
-                } else {
-                  false
                 }
-              }
-              .onGloballyPositioned { coords ->
-                val newLeft = coords.positionInParent().x
-                val newWidth = coords.size.width.toFloat()
+                currentOnSelect(index)
+              },
+              onMeasured = { newLeft, newWidth ->
                 if (abs(tabLefts[index] - newLeft) > 0.5f || abs(tabWidths[index] - newWidth) > 0.5f) {
                   tabLefts[index] = newLeft
                   tabWidths[index] = newWidth
                   layoutEpoch++
                 }
-              }
-              .semantics {
-                role = Role.Tab
-                selected = isCommittedSelected
-                contentDescription = option.label
-                onClick(label = option.label) {
-                  if (index != currentSelectedIndex) {
-                    performTickHaptic()
-                  }
-                  currentOnSelect(index)
-                  true
-                }
-              }
-              .then(if (!option.testTag.isNullOrBlank()) Modifier.testTag(option.testTag) else Modifier)
-              .padding(horizontal = if (fillWidth) 8.dp else 12.dp, vertical = 8.dp),
-            contentAlignment = Alignment.Center
-          ) {
-            Row(
-              modifier = Modifier.graphicsLayer {
-                scaleX = labelScale
-                scaleY = labelScale
               },
-              horizontalArrangement = Arrangement.Center,
-              verticalAlignment = Alignment.CenterVertically
-            ) {
-              if (option.icon != null) {
-                Icon(
-                  imageVector = option.icon,
-                  contentDescription = null,
-                  tint = contentColor,
-                  modifier = Modifier.size(16.dp)
-                )
-                Spacer(modifier = Modifier.width(6.dp))
-              }
-              Text(
-                text = styledLabel,
-                style = MaterialTheme.typography.labelLarge.copy(
-                  fontFamily = if (hasKhmer) AurixFontFamilies.NotoSansKhmerFamily else AurixFontFamilies.AurixUiFamily,
-                  fontSize = 13.sp,
-                  lineHeight = 20.sp,
-                  fontWeight = if (isVisuallySelected) FontWeight.Bold else FontWeight.SemiBold,
-                  platformStyle = PlatformTextStyle(includeFontPadding = true)
-                ),
-                color = contentColor,
-                maxLines = 1,
-                softWrap = false,
-                overflow = TextOverflow.Ellipsis
-              )
-            }
+              modifier = if (fillWidth) Modifier.weight(1f) else Modifier.wrapContentWidth()
+            )
           }
         }
       }
     }
   }
+}
+
+@Composable
+private fun GlassSegmentTab(
+  index: Int,
+  option: SegOption,
+  activeVisualIndexState: State<Int>,
+  committedSelectedIndex: Int,
+  fillWidth: Boolean,
+  reducedMotion: Boolean,
+  selectedTextColor: Color,
+  unselectedTextColor: Color,
+  onSelectIndex: () -> Unit,
+  onMeasured: (left: Float, width: Float) -> Unit,
+  modifier: Modifier = Modifier
+) {
+  val isVisuallySelected by remember(index, activeVisualIndexState) {
+    derivedStateOf { activeVisualIndexState.value == index }
+  }
+  val isCommittedSelected = committedSelectedIndex == index
+  val colorAnimSpec = remember(reducedMotion) {
+    if (reducedMotion) snap<Color>() else tween<Color>(durationMillis = 170, easing = FastOutSlowInEasing)
+  }
+  val contentColor by animateColorAsState(
+    targetValue = if (isVisuallySelected) selectedTextColor else unselectedTextColor,
+    animationSpec = colorAnimSpec,
+    label = "glass_seg_color_$index"
+  )
+  val labelScaleState = animateFloatAsState(
+    targetValue = if (isVisuallySelected) 1.05f else 1.0f,
+    animationSpec = if (reducedMotion) {
+      snap()
+    } else {
+      spring(dampingRatio = 0.52f, stiffness = 360f)
+    },
+    label = "glass_seg_label_scale_$index"
+  )
+  val styledLabel = rememberSegmentStyledLabel(option.label)
+  val hasKhmer = remember(option.label) { KhmerTypography.containsKhmer(option.label) }
+
+  Box(
+    modifier = modifier
+      .defaultMinSize(minWidth = 48.dp, minHeight = 48.dp)
+      .clip(CircleShape)
+      .focusable()
+      .onPreviewKeyEvent { keyEvent ->
+        if (keyEvent.type == KeyEventType.KeyDown &&
+          (keyEvent.key == Key.Enter || keyEvent.key == Key.DirectionCenter || keyEvent.key == Key.Spacebar)
+        ) {
+          onSelectIndex()
+          true
+        } else {
+          false
+        }
+      }
+      .onGloballyPositioned { coords ->
+        onMeasured(coords.positionInParent().x, coords.size.width.toFloat())
+      }
+      .semantics {
+        role = Role.Tab
+        selected = isCommittedSelected
+        contentDescription = option.label
+        onClick(label = option.label) {
+          onSelectIndex()
+          true
+        }
+      }
+      .then(if (!option.testTag.isNullOrBlank()) Modifier.testTag(option.testTag) else Modifier)
+      .padding(horizontal = if (fillWidth) 8.dp else 12.dp, vertical = 8.dp),
+    contentAlignment = Alignment.Center
+  ) {
+    Row(
+      modifier = Modifier.graphicsLayer {
+        val s = labelScaleState.value
+        scaleX = s
+        scaleY = s
+      },
+      horizontalArrangement = Arrangement.Center,
+      verticalAlignment = Alignment.CenterVertically
+    ) {
+      if (option.icon != null) {
+        Icon(
+          imageVector = option.icon,
+          contentDescription = null,
+          tint = contentColor,
+          modifier = Modifier.size(16.dp)
+        )
+        Spacer(modifier = Modifier.width(6.dp))
+      }
+      Text(
+        text = styledLabel,
+        style = MaterialTheme.typography.labelLarge.copy(
+          fontFamily = if (hasKhmer) AurixFontFamilies.NotoSansKhmerFamily else AurixFontFamilies.AurixUiFamily,
+          fontSize = 13.sp,
+          lineHeight = 20.sp,
+          fontWeight = if (isVisuallySelected) FontWeight.Bold else FontWeight.SemiBold,
+          platformStyle = PlatformTextStyle(includeFontPadding = true)
+        ),
+        color = contentColor,
+        maxLines = 1,
+        softWrap = false,
+        overflow = TextOverflow.Ellipsis
+      )
+    }
   }
 }
 

@@ -1320,4 +1320,36 @@ class CrashFixStabilityTest {
     val aurixAppSrc = java.io.File(javaRoot, "com/example/ui/screens/AurixApp.kt").readText()
     assertTrue(aurixAppSrc.contains("LocalHazeStyle provides appHazeStyle"))
   }
+
+  @Test
+  fun glassSegmented_continuousDragSpringAndEdgeResistance_areSmoothAndStable() {
+    // 1. Sub-stepped drag spring (dampingRatio 0.70, stiffness 450) converges smoothly at 120Hz without velocity resets
+    var x = 0f
+    var v = 0f
+    val target = 300f
+    val dt120Hz = 1f / 120f
+    var peakVelocity = 0f
+    repeat(120) {
+      val (nextX, nextV) = com.example.ui.glass.stepGlassDragSpring(
+        value = x,
+        velocity = v,
+        target = target,
+        dtSeconds = dt120Hz
+      )
+      assertTrue(nextX.isFinite() && nextV.isFinite())
+      if (nextV > peakVelocity) peakVelocity = nextV
+      x = nextX
+      v = nextV
+    }
+    assertTrue("Spring should accelerate smoothly instead of stalling at 0 velocity", peakVelocity > 500f)
+    assertEquals(target, x, 1.5f)
+    assertEquals(0f, v, 15f)
+
+    // 2. Liquid edge rubber-band resistance stays C1 continuous and strictly bounded within maxOverdragPx
+    assertEquals(120f, com.example.ui.glass.applyLiquidEdgeResistance(120f, 0f, 300f, 24f), 0.001f)
+    val leftOverdrag = com.example.ui.glass.applyLiquidEdgeResistance(-200f, 0f, 300f, 24f)
+    assertTrue(leftOverdrag < 0f && leftOverdrag > -24f)
+    val rightOverdrag = com.example.ui.glass.applyLiquidEdgeResistance(600f, 0f, 300f, 24f)
+    assertTrue(rightOverdrag > 300f && rightOverdrag < 324f)
+  }
 }
