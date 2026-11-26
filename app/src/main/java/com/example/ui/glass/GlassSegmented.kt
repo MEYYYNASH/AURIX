@@ -38,6 +38,7 @@ import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.Immutable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.compositionLocalOf
@@ -63,6 +64,8 @@ import androidx.compose.ui.graphics.Path
 import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.graphics.drawscope.clipPath
 import androidx.compose.ui.graphics.graphicsLayer
+import androidx.compose.ui.graphics.isSpecified
+import androidx.compose.ui.graphics.takeOrElse
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.hapticfeedback.HapticFeedbackType
 import androidx.compose.ui.input.key.Key
@@ -96,6 +99,7 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.text.withStyle
 import androidx.compose.ui.tooling.preview.Preview
+import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.example.ui.theme.AurixFontFamilies
@@ -103,6 +107,9 @@ import com.example.ui.theme.AurixTheme
 import com.example.ui.theme.KhmerTypography
 import com.example.ui.theme.ScriptRunType
 import dev.chrisbanes.haze.HazeState
+import dev.chrisbanes.haze.HazeStyle
+import dev.chrisbanes.haze.HazeTint
+import dev.chrisbanes.haze.LocalHazeStyle
 import dev.chrisbanes.haze.haze
 import dev.chrisbanes.haze.hazeChild
 import kotlin.math.abs
@@ -111,6 +118,21 @@ import kotlinx.coroutines.launch
 
 val LocalAurixHazeState = compositionLocalOf<HazeState?> { null }
 val LocalAurixReducedMotion = compositionLocalOf { false }
+
+fun aurixGlassHazeStyle(
+  darkTheme: Boolean,
+  backgroundColor: Color
+): HazeStyle {
+  val safeBg = backgroundColor.takeOrElse {
+    if (darkTheme) Color(0xFF0A0E1A) else Color(0xFFEAF0FF)
+  }
+  return HazeStyle(
+    backgroundColor = safeBg,
+    tint = HazeTint(Color.Transparent),
+    blurRadius = 18.dp,
+    noiseFactor = 0f
+  )
+}
 
 @Immutable
 data class SegOption(
@@ -364,6 +386,17 @@ fun GlassSegmented(
     clampedSelectedIndex
   }
 
+  val currentHazeStyle = LocalHazeStyle.current
+  val themeBackground = MaterialTheme.colorScheme.background
+  val resolvedHazeStyle = remember(currentHazeStyle, darkTheme, themeBackground) {
+    if (currentHazeStyle.backgroundColor.isSpecified && currentHazeStyle.blurRadius != Dp.Unspecified) {
+      currentHazeStyle
+    } else {
+      aurixGlassHazeStyle(darkTheme = darkTheme, backgroundColor = themeBackground)
+    }
+  }
+
+  CompositionLocalProvider(LocalHazeStyle provides resolvedHazeStyle) {
   Box(
     modifier = modifier
       .then(if (fillWidth) Modifier.fillMaxWidth() else Modifier.wrapContentWidth())
@@ -711,6 +744,7 @@ fun GlassSegmented(
       }
     }
   }
+  }
 }
 
 @Preview(name = "GlassSegmented - Light", showBackground = true, backgroundColor = 0xFFEAF2FA, widthDp = 400)
@@ -742,6 +776,7 @@ private fun GlassSegmentedLightPreview() {
           .padding(16.dp),
         verticalArrangement = Arrangement.spacedBy(14.dp)
       ) {
+        val previewStyle = aurixGlassHazeStyle(darkTheme = false, backgroundColor = Color(0xFFEAF2FA))
         GlassSegmented(
           options = listOf(
             SegOption("YouTube", Icons.Rounded.PlayCircle),
@@ -751,7 +786,7 @@ private fun GlassSegmentedLightPreview() {
           onSelect = { sourceIndex = it },
           fillWidth = true,
           darkTheme = false,
-          backdrop = Modifier.hazeChild(state = hazeState)
+          backdrop = Modifier.hazeChild(state = hazeState, style = previewStyle)
         )
         GlassSegmented(
           options = listOf(
@@ -764,7 +799,7 @@ private fun GlassSegmentedLightPreview() {
           onSelect = { filterIndex = it },
           fillWidth = false,
           darkTheme = false,
-          backdrop = Modifier.hazeChild(state = hazeState)
+          backdrop = Modifier.hazeChild(state = hazeState, style = previewStyle)
         )
       }
     }
@@ -799,6 +834,7 @@ private fun GlassSegmentedDarkPreview() {
           .padding(16.dp),
         verticalArrangement = Arrangement.spacedBy(12.dp)
       ) {
+        val previewStyle = aurixGlassHazeStyle(darkTheme = true, backgroundColor = Color(0xFF0B111E))
         GlassSegmented(
           options = listOf(
             SegOption("My songs"),
@@ -810,7 +846,7 @@ private fun GlassSegmentedDarkPreview() {
           onSelect = { libraryIndex = it },
           fillWidth = true,
           darkTheme = true,
-          backdrop = Modifier.hazeChild(state = hazeState)
+          backdrop = Modifier.hazeChild(state = hazeState, style = previewStyle)
         )
       }
     }
@@ -841,6 +877,7 @@ private fun GlassSegmentedAmoledPreview() {
           .padding(16.dp),
         verticalArrangement = Arrangement.spacedBy(12.dp)
       ) {
+        val previewStyle = aurixGlassHazeStyle(darkTheme = true, backgroundColor = Color(0xFF000000))
         GlassSegmented(
           options = listOf(
             SegOption("System"),
@@ -852,7 +889,7 @@ private fun GlassSegmentedAmoledPreview() {
           onSelect = { themeIndex = it },
           fillWidth = true,
           darkTheme = true,
-          backdrop = Modifier.hazeChild(state = hazeState)
+          backdrop = Modifier.hazeChild(state = hazeState, style = previewStyle)
         )
       }
     }

@@ -68,6 +68,7 @@ import com.example.playback.EqualizerUiState
 import com.example.ui.glass.GlassSegmented
 import com.example.ui.glass.LocalAurixHazeState
 import com.example.ui.glass.SegOption
+import com.example.ui.glass.aurixGlassHazeStyle
 import com.example.ui.theme.*
 import dev.chrisbanes.haze.hazeChild
 import java.text.SimpleDateFormat
@@ -333,6 +334,10 @@ fun SettingsScreen(
                 testTag = "settings_theme_amoled"
               )
             )
+            val glassHazeStyle = aurixGlassHazeStyle(
+              darkTheme = darkTheme,
+              backgroundColor = MaterialTheme.colorScheme.background
+            )
             GlassSegmented(
               options = themeOptions,
               selectedIndex = themeKeys.indexOf(currentTheme).let { if (it >= 0) it else 0 },
@@ -344,7 +349,11 @@ fun SettingsScreen(
               },
               fillWidth = true,
               darkTheme = darkTheme,
-              backdrop = if (hazeState != null) Modifier.hazeChild(state = hazeState) else Modifier
+              backdrop = if (hazeState != null) {
+                Modifier.hazeChild(state = hazeState, style = glassHazeStyle)
+              } else {
+                Modifier
+              }
             )
           }
 

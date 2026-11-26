@@ -52,6 +52,7 @@ import com.example.recommendation.*
 import com.example.ui.glass.GlassSegmented
 import com.example.ui.glass.LocalAurixHazeState
 import com.example.ui.glass.SegOption
+import com.example.ui.glass.aurixGlassHazeStyle
 import com.example.ui.theme.HeartRed
 import com.example.viewmodel.DailyFeedCategory
 import dev.chrisbanes.haze.hazeChild
@@ -564,6 +565,10 @@ fun HomeScreen(
                   .fillMaxWidth()
                   .horizontalScroll(rememberScrollState())
               ) {
+                val glassHazeStyle = aurixGlassHazeStyle(
+                  darkTheme = darkTheme,
+                  backgroundColor = MaterialTheme.colorScheme.background
+                )
                 GlassSegmented(
                   options = filterOptions,
                   selectedIndex = NewForYouFilter.entries.indexOf(selectedNewFilter).coerceAtLeast(0),
@@ -572,7 +577,11 @@ fun HomeScreen(
                   },
                   fillWidth = false,
                   darkTheme = darkTheme,
-                  backdrop = if (hazeState != null) Modifier.hazeChild(state = hazeState) else Modifier
+                  backdrop = if (hazeState != null) {
+                    Modifier.hazeChild(state = hazeState, style = glassHazeStyle)
+                  } else {
+                    Modifier
+                  }
                 )
               }
 

@@ -1268,4 +1268,56 @@ class CrashFixStabilityTest {
     assertEquals(0f, projectedClampedLeft, 0.01f)
     assertEquals(0, com.example.ui.glass.findNearestSegmentIndex(projectedClampedLeft, lefts, widths))
   }
+
+  @Test
+  fun glassSegmented_hazeStyle_neverLeavesBackgroundColorUnspecified() {
+    val lightFallback = com.example.ui.glass.aurixGlassHazeStyle(
+      darkTheme = false,
+      backgroundColor = androidx.compose.ui.graphics.Color.Unspecified
+    )
+    assertTrue(
+      "Light HazeStyle fallback must specify backgroundColor to prevent HazeChildNode crash",
+      lightFallback.backgroundColor != androidx.compose.ui.graphics.Color.Unspecified
+    )
+    assertTrue(lightFallback.blurRadius.value > 0f)
+
+    val darkFallback = com.example.ui.glass.aurixGlassHazeStyle(
+      darkTheme = true,
+      backgroundColor = androidx.compose.ui.graphics.Color.Unspecified
+    )
+    assertTrue(
+      "Dark HazeStyle fallback must specify backgroundColor to prevent HazeChildNode crash",
+      darkFallback.backgroundColor != androidx.compose.ui.graphics.Color.Unspecified
+    )
+    assertTrue(darkFallback.blurRadius.value > 0f)
+
+    val amoledStyle = com.example.ui.glass.aurixGlassHazeStyle(
+      darkTheme = true,
+      backgroundColor = androidx.compose.ui.graphics.Color.Black
+    )
+    assertEquals(androidx.compose.ui.graphics.Color.Black, amoledStyle.backgroundColor)
+    assertTrue(amoledStyle.blurRadius.value > 0f)
+
+    // Guard against bare Modifier.hazeChild(state = ...) calls without explicit style
+    val javaRoot = java.io.File("src/main/java").let {
+      if (it.exists()) it else java.io.File("app/src/main/java")
+    }
+    val filesToCheck = listOf(
+      "com/example/ui/glass/GlassSegmented.kt",
+      "com/example/ui/screens/HomeScreen.kt",
+      "com/example/ui/screens/SettingsScreen.kt",
+      "com/example/ui/screens/LibraryScreen.kt",
+      "com/example/ui/screens/SearchScreen.kt"
+    )
+    val bareHazeChildPattern = Regex("""hazeChild\s*\(\s*state\s*=\s*[^,)]+\s*\)""")
+    filesToCheck.forEach { rel ->
+      val content = java.io.File(javaRoot, rel).readText()
+      assertTrue(
+        "Bare hazeChild(state = ...) without style found in $rel",
+        bareHazeChildPattern.find(content) == null
+      )
+    }
+    val aurixAppSrc = java.io.File(javaRoot, "com/example/ui/screens/AurixApp.kt").readText()
+    assertTrue(aurixAppSrc.contains("LocalHazeStyle provides appHazeStyle"))
+  }
 }

@@ -101,6 +101,7 @@ import androidx.compose.ui.res.stringResource
 import com.example.ui.glass.GlassSegmented
 import com.example.ui.glass.LocalAurixHazeState
 import com.example.ui.glass.SegOption
+import com.example.ui.glass.aurixGlassHazeStyle
 import dev.chrisbanes.haze.hazeChild
 import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.text.font.FontWeight
@@ -742,6 +743,10 @@ fun LibraryScreen(
     Spacer(modifier = Modifier.height(10.dp))
 
     val hazeState = LocalAurixHazeState.current
+    val glassHazeStyle = aurixGlassHazeStyle(
+      darkTheme = darkTheme,
+      backgroundColor = MaterialTheme.colorScheme.background
+    )
     GlassSegmented(
       options = listOf(
         SegOption(
@@ -769,7 +774,11 @@ fun LibraryScreen(
       },
       fillWidth = true,
       darkTheme = darkTheme,
-      backdrop = if (hazeState != null) Modifier.hazeChild(state = hazeState) else Modifier
+      backdrop = if (hazeState != null) {
+        Modifier.hazeChild(state = hazeState, style = glassHazeStyle)
+      } else {
+        Modifier
+      }
     )
 
     Spacer(modifier = Modifier.height(10.dp))

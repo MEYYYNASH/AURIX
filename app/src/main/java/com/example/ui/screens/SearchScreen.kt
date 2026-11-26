@@ -101,6 +101,7 @@ import androidx.compose.material.icons.rounded.Tune
 import com.example.ui.glass.GlassSegmented
 import com.example.ui.glass.LocalAurixHazeState
 import com.example.ui.glass.SegOption
+import com.example.ui.glass.aurixGlassHazeStyle
 import dev.chrisbanes.haze.hazeChild
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
@@ -470,6 +471,10 @@ fun SearchScreen(
 
       // Liquid Glass 2-Mode Switcher (YouTube | YT Link)
       val hazeState = LocalAurixHazeState.current
+      val glassHazeStyle = aurixGlassHazeStyle(
+        darkTheme = darkTheme,
+        backgroundColor = MaterialTheme.colorScheme.background
+      )
       GlassSegmented(
         options = listOf(
           SegOption(
@@ -496,7 +501,11 @@ fun SearchScreen(
         },
         fillWidth = true,
         darkTheme = darkTheme,
-        backdrop = if (hazeState != null) Modifier.hazeChild(state = hazeState) else Modifier
+        backdrop = if (hazeState != null) {
+          Modifier.hazeChild(state = hazeState, style = glassHazeStyle)
+        } else {
+          Modifier
+        }
       )
 
       Spacer(modifier = Modifier.height(14.dp))

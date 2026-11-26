@@ -63,9 +63,11 @@ import com.example.model.YoutubeFormatSheetState
 import com.example.recommendation.MoodCategory
 import com.example.ui.glass.LocalAurixHazeState
 import com.example.ui.glass.LocalAurixReducedMotion
+import com.example.ui.glass.aurixGlassHazeStyle
 import com.example.ui.theme.*
 import com.example.viewmodel.AurixViewModel
 import dev.chrisbanes.haze.HazeState
+import dev.chrisbanes.haze.LocalHazeStyle
 import dev.chrisbanes.haze.haze
 
 sealed class Screen(val route: String, val title: String, val icon: ImageVector) {
@@ -128,20 +130,22 @@ private fun AurixAppContent(
   val view = LocalView.current
   if (!view.isInEditMode) {
     SideEffect {
-      var ctx: Context? = view.context
-      var activity: Activity? = null
-      while (ctx is ContextWrapper) {
-        if (ctx is Activity) {
-          activity = ctx
-          break
+      runCatching {
+        var ctx: Context? = view.context
+        var activity: Activity? = null
+        while (ctx is ContextWrapper) {
+          if (ctx is Activity) {
+            activity = ctx
+            break
+          }
+          ctx = ctx.baseContext
         }
-        ctx = ctx.baseContext
-      }
-      val window = activity?.window
-      if (window != null) {
-        val controller = WindowCompat.getInsetsController(window, view)
-        controller.isAppearanceLightStatusBars = !darkTheme
-        controller.isAppearanceLightNavigationBars = !darkTheme
+        val window = activity?.window
+        if (window != null) {
+          val controller = WindowCompat.getInsetsController(window, view)
+          controller.isAppearanceLightStatusBars = !darkTheme
+          controller.isAppearanceLightNavigationBars = !darkTheme
+        }
       }
     }
   }
@@ -669,10 +673,15 @@ private fun AurixMainShell(
   }
 
   val appHazeState = remember { HazeState() }
+  val hazeBgColor = if (amoledTheme) Color.Black else MaterialTheme.colorScheme.background
+  val appHazeStyle = remember(darkTheme, hazeBgColor) {
+    aurixGlassHazeStyle(darkTheme = darkTheme, backgroundColor = hazeBgColor)
+  }
 
   CompositionLocalProvider(
     LocalDynamicBgCustomization provides dynamicBgCustomization,
     LocalAurixHazeState provides appHazeState,
+    LocalHazeStyle provides appHazeStyle,
     LocalAurixReducedMotion provides reducedMotion
   ) {
   Box(
