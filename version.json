@@ -1,12 +1,13 @@
 {
-  "versionName": "2.3.2",
-  "versionCode": 20302,
+  "versionName": "2.3.3",
+  "versionCode": 20303,
   "releaseDate": "2026-11-25",
-  "releaseTimestampMs": 1795657195000,
-  "apkUrl": "https://github.com/MEYYYNASH/AURIX/releases/download/v2.3.2/AURIX-v2.3.2.apk",
-  "sha256": "73e27c9a1509a248d405effc8dc5fa45f0221052fdce471ed11076d580c12695",
+  "releaseTimestampMs": 1795662015000,
+  "apkUrl": "https://github.com/MEYYYNASH/AURIX/releases/download/v2.3.3/AURIX-v2.3.3.apk",
+  "sha256": "175c6455191df45776729e6464ee027640a3cc64b40df6f71b80491914801aae",
   "mandatory": false,
   "notes": [
+    "Liquid Glass Segmented Tabs with Spring Physics & Real Backdrop Blur (v2.3.3): Replaced Search source switch, Home filter chips, Settings theme picker, and Library tabs with physics-driven Liquid Glass segmented controls (white glass pill thumb, specular highlight, speed-reactive shadow, immediate drag with flick inertia, cross-tab haptics, Noto Sans Khmer support, TalkBack Role.Tab semantics, and Android 12+ Haze backdrop blur with translucent fallback)",
     "Redesigned Compact Album Studio, Single-Download Fix & Material You Dynamic Theme (v2.3.2): Redesigned the Album screen and Library album cards with a compact centered cover & peeking spinning vinyl disc, cover-harmonized palette accents, breathing aurora backdrop, sticky frosted top bar, slim frameless track rows, and spring-animated controls; fixed single-song downloads so downloading 1 track saves directly to My songs without auto-creating an 'Unknown Album'; plus live Album-Art Material You theming via Palette API and cache-bypassing network JSON update checking",
     "Vinyl Widget Style, Resizable AURIX Now Playing Widget & Refreshed Settings (v2.3.1): Added the tactile 'Vinyl' style (cream paper #EFE6D6 & spinning half-visible vinyl disc) across classic widgets, introduced the resizable 'AURIX Now Playing' widget (3 sizes x 10 WCAG 4.5:1 styles with Material You Light/Paper theming), and refreshed Settings > Widgets",
     "5 Glass Widget Styles & Per-Widget Configurator (v2.3.0): Redesigned AURIX Music (4x2), AURIX Lyrics (4x2), AURIX Cover (2x2), and AURIX Mini (2x2) widgets with 5 distinct glass styles (Frost Pill, Orb, Smoked Neon, Light Frost, Poster Glass), automatic WCAG 4.5:1 cover-luminance contrast, independent per-widget style persistence by appWidgetId, instant setup & long-press Reconfigure picker with live previews and optional 'Apply to all widgets', plus real widget picker previews across Android 12\u201315+",
@@ -14,5 +15,5 @@
     "Proportional Widget Lyrics & Reliable Release Verification (v2.1.6): Calibrated Home Screen Lyrics widget text sizes and launcher column widths for balanced 1:1 proportions across Small, Wide, and Large widgets (plus live preview); fixed OTA release APK SHA-256 verification against GitHub Release checksum assets",
     "Bundled Full-Unicode Khmer Fonts & Redesigned Glass Widgets (v2.1.5): Real full-Unicode Khmer & Latin .ttf fonts (Dangrek, Kantumruy Pro, Koulen, Noto Sans Khmer, Outfit, Inter) across app & widgets, fixed Khmer line-height clipping, and redesigned AURIX cosmic glass widgets"
   ],
-  "releasePageUrl": "https://github.com/MEYYYNASH/AURIX/releases/tag/v2.3.2"
+  "releasePageUrl": "https://github.com/MEYYYNASH/AURIX/releases/tag/v2.3.3"
 }
