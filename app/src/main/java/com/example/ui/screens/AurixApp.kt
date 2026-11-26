@@ -362,7 +362,6 @@ private fun AurixMainShell(
   val recentlyPlayed by viewModel.recentlyPlayed.collectAsStateWithLifecycle()
   val currentSong by viewModel.currentSong.collectAsStateWithLifecycle()
   val isPlaying by viewModel.isPlaying.collectAsStateWithLifecycle()
-  val currentPosition by viewModel.currentPosition.collectAsStateWithLifecycle()
   val durationMs by viewModel.durationMs.collectAsStateWithLifecycle()
   val lyrics by viewModel.lyrics.collectAsStateWithLifecycle()
   val lyricOffsetMs by viewModel.lyricOffsetMs.collectAsStateWithLifecycle()
@@ -500,7 +499,6 @@ private fun AurixMainShell(
   val selectedPlaylistTrackIds by viewModel.selectedPlaylistTrackIds.collectAsStateWithLifecycle()
   val autoCleanYoutubeTitles by viewModel.autoCleanYoutubeTitles.collectAsStateWithLifecycle()
   val nowPlayingVisualizerEnabled by viewModel.nowPlayingVisualizerEnabled.collectAsStateWithLifecycle()
-  val spectrumBars by viewModel.spectrumBars.collectAsStateWithLifecycle()
   val navStyle by viewModel.navStyle.collectAsStateWithLifecycle()
   val smartRecommendations by viewModel.smartRecommendations.collectAsStateWithLifecycle()
   val moodFlowEnabled by viewModel.moodFlowEnabled.collectAsStateWithLifecycle()
@@ -536,9 +534,6 @@ private fun AurixMainShell(
     )
   }
   val effectiveOrbiMood = orbiMoodOverride ?: autoOrbiMood
-  val orbiBeatEnergy = remember(spectrumBars, isPlaying, reducedMotion) {
-    computeOrbiBeatEnergy(spectrumBars, isPlaying, reducedMotion)
-  }
   val orbiTotalPlays = remember(musicDna, recentPlayEntries, recentlyPlayed) {
     maxOf(musicDna.totalQualifiedPlays, recentPlayEntries.size, recentlyPlayed.size)
   }
@@ -647,19 +642,21 @@ private fun AurixMainShell(
     currentScreen = if (currentScreen is Screen.Album) albumReturnScreen else Screen.Home
   }
 
-  val pageScale by animateFloatAsState(
+  // Keep transition animation states un-delegated and read ONLY inside graphicsLayer
+  // so opening/closing NowPlayingSheet causes 0 root recompositions at 120Hz.
+  val pageScaleState = animateFloatAsState(
     targetValue = if (isNowPlayingOpen) 0.94f else 1.0f,
-    animationSpec = if (reducedMotion) snap() else spring(dampingRatio = 0.86f, stiffness = 340f),
+    animationSpec = if (reducedMotion) snap() else spring(dampingRatio = 0.88f, stiffness = 360f),
     label = "page_scale"
   )
-  val pageAlpha by animateFloatAsState(
+  val pageAlphaState = animateFloatAsState(
     targetValue = if (isNowPlayingOpen) 0.50f else 1.0f,
-    animationSpec = if (reducedMotion) snap() else tween(320, easing = AurixEase),
+    animationSpec = if (reducedMotion) snap() else tween(280, easing = AurixEase),
     label = "page_alpha"
   )
-  val pageCornerRadius by animateDpAsState(
+  val pageCornerRadiusState = animateDpAsState(
     targetValue = if (isNowPlayingOpen) 28.dp else 0.dp,
-    animationSpec = if (reducedMotion) snap() else spring(dampingRatio = 0.86f, stiffness = 340f),
+    animationSpec = if (reducedMotion) snap() else spring(dampingRatio = 0.88f, stiffness = 360f),
     label = "page_corner"
   )
 
@@ -693,16 +690,18 @@ private fun AurixMainShell(
       .fillMaxSize()
       .background(Color.Black)
   ) {
-      // Main App Shell (GPU graphicsLayer prevents clipping/alpha relayout flicker)
+      // Main App Shell (GPU graphicsLayer reads animated states without recomposing root at 120Hz)
       Box(
         modifier = Modifier
           .fillMaxSize()
           .graphicsLayer {
-            scaleX = pageScale
-            scaleY = pageScale
-            alpha = pageAlpha
-            if (pageCornerRadius > 0.5.dp) {
-              shape = RoundedCornerShape(pageCornerRadius)
+            val s = pageScaleState.value
+            scaleX = s
+            scaleY = s
+            alpha = pageAlphaState.value
+            val corner = pageCornerRadiusState.value
+            if (corner > 0.5.dp) {
+              shape = RoundedCornerShape(corner)
               clip = true
             }
           }
@@ -847,7 +846,7 @@ private fun AurixMainShell(
               onOpenRecentlyAdded = { currentScreen = Screen.PlaylistDetail("recently_added") },
               orbiMood = effectiveOrbiMood,
               orbiTheme = activeOrbiTheme,
-              orbiBeatEnergy = orbiBeatEnergy,
+              spectrumBarsFlow = viewModel.spectrumBars,
               onOpenOrbiCompanion = { showOrbiCompanionSheet = true },
               smartPlaylists = smartPlaylists,
               djAutoMixEnabled = crossfadeSettings.djAutoMixEnabled,
@@ -873,7 +872,7 @@ private fun AurixMainShell(
                 orbiMoodOverride = orbiMoodOverride,
                 orbiTheme = activeOrbiTheme,
                 orbiBadges = orbiMilestoneBadges,
-                orbiBeatEnergy = orbiBeatEnergy,
+                spectrumBarsFlow = viewModel.spectrumBars,
                 orbiTotalPlays = orbiTotalPlays,
                 orbiFavoritesCount = favorites.size,
                 orbiTopVibeLabel = orbiTopVibeLabel,
@@ -1471,17 +1470,21 @@ private fun AurixMainShell(
           animationSpec = if (reducedMotion) snap() else tween(280, easing = AurixEase),
           label = "dock_scrim_base"
         )
-        val dockScrimHeight by animateDpAsState(
-          targetValue = if (currentSong != null) 216.dp else 140.dp,
-          animationSpec = if (reducedMotion) snap() else tween(300, easing = AurixEase),
-          label = "dock_scrim_height"
+        val dockScrimScaleYState = animateFloatAsState(
+          targetValue = if (currentSong != null) 1f else 0.65f,
+          animationSpec = if (reducedMotion) snap() else spring(dampingRatio = 0.88f, stiffness = 380f),
+          label = "dock_scrim_scale_y"
         )
         if (!hideBottomDockForSheet) {
           Box(
             modifier = Modifier
               .align(Alignment.BottomCenter)
               .fillMaxWidth()
-              .height(dockScrimHeight)
+              .height(216.dp)
+              .graphicsLayer {
+                scaleY = dockScrimScaleYState.value
+                transformOrigin = TransformOrigin(0.5f, 1f)
+              }
               .background(
                 Brush.verticalGradient(
                   colors = listOf(
@@ -1507,8 +1510,8 @@ private fun AurixMainShell(
         AnimatedVisibility(
           visible = !hideBottomDockForSheet,
           modifier = Modifier.align(Alignment.BottomCenter),
-          enter = if (reducedMotion) fadeIn(snap()) else slideInVertically(tween(260, easing = AurixEase)) { it } + fadeIn(tween(200)),
-          exit = if (reducedMotion) fadeOut(snap()) else slideOutVertically(tween(220, easing = AurixEase)) { it } + fadeOut(tween(160))
+          enter = if (reducedMotion) fadeIn(snap()) else slideInVertically(tween(240, easing = AurixEase)) { it } + fadeIn(tween(180)),
+          exit = if (reducedMotion) fadeOut(snap()) else slideOutVertically(tween(200, easing = AurixEase)) { it } + fadeOut(tween(150))
         ) {
           Column(
             modifier = Modifier
@@ -1516,6 +1519,7 @@ private fun AurixMainShell(
               .padding(bottom = 14.dp),
             horizontalAlignment = Alignment.CenterHorizontally
           ) {
+            // Pure GPU-composited slide-up + scale-in (no expandVertically/shrinkVertically layout thrash at 120Hz)
             AnimatedVisibility(
               visible = currentSong != null,
               enter = if (reducedMotion) {
@@ -1526,34 +1530,29 @@ private fun AurixMainShell(
                     dampingRatio = MINI_PLAYER_SLIDE_UP_DAMPING,
                     stiffness = MINI_PLAYER_SLIDE_UP_STIFFNESS
                   )
-                ) { fullHeight -> (fullHeight * 1.18f).roundToInt() } +
-                  expandVertically(
-                    expandFrom = Alignment.Bottom,
-                    animationSpec = spring(dampingRatio = 0.86f, stiffness = 400f)
-                  ) +
+                ) { fullHeight -> (fullHeight * 0.95f).roundToInt() } +
                   scaleIn(
-                    initialScale = 0.95f,
+                    initialScale = 0.94f,
                     transformOrigin = TransformOrigin(0.5f, 1f),
-                    animationSpec = spring(dampingRatio = 0.84f, stiffness = 420f)
+                    animationSpec = spring(
+                      dampingRatio = MINI_PLAYER_SLIDE_UP_DAMPING,
+                      stiffness = MINI_PLAYER_SLIDE_UP_STIFFNESS
+                    )
                   ) +
-                  fadeIn(tween(240, easing = AurixEase))
+                  fadeIn(tween(200, easing = AurixEase))
               },
               exit = if (reducedMotion) {
                 fadeOut(snap())
               } else {
                 slideOutVertically(
-                  animationSpec = tween(240, easing = AurixEase)
-                ) { fullHeight -> (fullHeight * 1.1f).roundToInt() } +
-                  shrinkVertically(
-                    shrinkTowards = Alignment.Bottom,
-                    animationSpec = tween(240, easing = AurixEase)
-                  ) +
+                  animationSpec = tween(220, easing = AurixEase)
+                ) { fullHeight -> (fullHeight * 0.95f).roundToInt() } +
                   scaleOut(
-                    targetScale = 0.95f,
+                    targetScale = 0.94f,
                     transformOrigin = TransformOrigin(0.5f, 1f),
-                    animationSpec = tween(200, easing = AurixEase)
+                    animationSpec = tween(180, easing = AurixEase)
                   ) +
-                  fadeOut(tween(180))
+                  fadeOut(tween(160))
               }
             ) {
               val miniSong = currentSong ?: retainedSheetSong
@@ -1561,7 +1560,7 @@ private fun AurixMainShell(
                 MiniPlayer(
                   song = miniSong,
                   isPlaying = isPlaying,
-                  currentPositionMs = currentPosition,
+                  positionFlow = viewModel.currentPosition,
                   durationMs = durationMs,
                   darkTheme = darkTheme,
                   reducedMotion = reducedMotion,
@@ -1605,41 +1604,46 @@ private fun AurixMainShell(
         }
       }
 
-      // Now Playing Full-Screen Sheet (spring-coupled rise with subtle scale-in from the mini-player)
+      // Now Playing Full-Screen Sheet (120Hz GPU spring-coupled rise with subtle scale-in from the mini-player)
       AnimatedVisibility(
         visible = isNowPlayingOpen,
         enter = if (reducedMotion) {
           fadeIn(snap())
         } else {
           slideInVertically(
-            animationSpec = spring(dampingRatio = 0.86f, stiffness = 340f)
+            animationSpec = spring(dampingRatio = 0.88f, stiffness = 360f)
           ) { it } +
             scaleIn(
               initialScale = 0.965f,
               transformOrigin = TransformOrigin(0.5f, 0.88f),
-              animationSpec = spring(dampingRatio = 0.86f, stiffness = 360f)
+              animationSpec = spring(dampingRatio = 0.88f, stiffness = 380f)
             ) +
-            fadeIn(tween(220, easing = AurixEase))
+            fadeIn(tween(180, easing = AurixEase))
         },
         exit = if (reducedMotion) {
           fadeOut(snap())
         } else {
           slideOutVertically(
-            animationSpec = tween(300, easing = AurixEase)
+            animationSpec = tween(260, easing = AurixEase)
           ) { it } +
             scaleOut(
               targetScale = 0.965f,
               transformOrigin = TransformOrigin(0.5f, 0.88f),
-              animationSpec = tween(260, easing = AurixEase)
+              animationSpec = tween(230, easing = AurixEase)
             ) +
-            fadeOut(tween(190))
+            fadeOut(tween(160))
         }
       ) {
         retainedSheetSong?.let { song ->
+          val nowPlayingPosition by viewModel.currentPosition.collectAsStateWithLifecycle()
+          val nowPlayingSpectrum by viewModel.spectrumBars.collectAsStateWithLifecycle()
+          val nowPlayingBeatEnergy = remember(nowPlayingSpectrum, isPlaying, reducedMotion) {
+            computeOrbiBeatEnergy(nowPlayingSpectrum, isPlaying, reducedMotion)
+          }
           NowPlayingSheet(
             song = song,
             isPlaying = isPlaying,
-            currentPositionMs = currentPosition,
+            currentPositionMs = nowPlayingPosition,
             positionProvider = { viewModel.getLivePlaybackPositionMs() },
             durationMs = durationMs,
             lyricsResult = lyrics,
@@ -1719,7 +1723,7 @@ private fun AurixMainShell(
             onToggleMoodFlow = { viewModel.toggleMoodFlow() },
             visualizerEnabled = nowPlayingVisualizerEnabled,
             onToggleVisualizer = { viewModel.setNowPlayingVisualizerEnabled(it) },
-            spectrumBars = spectrumBars,
+            spectrumBars = nowPlayingSpectrum,
             initialShowLyrics = nowPlayingInitialShowLyrics,
             openViewRequestTrigger = nowPlayingOpenViewTrigger,
             lyricsAnimationStyle = appLyricsAnimStyle,
@@ -1728,7 +1732,7 @@ private fun AurixMainShell(
             onOpenStandby = { showAmbientStandby = true },
             orbiMood = effectiveOrbiMood,
             orbiTheme = activeOrbiTheme,
-            orbiBeatEnergy = orbiBeatEnergy,
+            orbiBeatEnergy = nowPlayingBeatEnergy,
             onOpenOrbiCompanion = { showOrbiCompanionSheet = true },
             widgetCustomizerConfig = widgetCustomizerConfig,
             khmerLyricsFont = khmerLyricsFont
@@ -1737,6 +1741,10 @@ private fun AurixMainShell(
       }
 
       if (showOrbiCompanionSheet) {
+        val sheetSpectrum by viewModel.spectrumBars.collectAsStateWithLifecycle()
+        val sheetBeatEnergy = remember(sheetSpectrum, isPlaying, reducedMotion) {
+          computeOrbiBeatEnergy(sheetSpectrum, isPlaying, reducedMotion)
+        }
         OrbiCompanionSheet(
           mood = effectiveOrbiMood,
           moodOverride = orbiMoodOverride,
@@ -1745,7 +1753,7 @@ private fun AurixMainShell(
           isPlaying = isPlaying,
           reducedMotion = reducedMotion,
           darkTheme = darkTheme,
-          beatEnergy = orbiBeatEnergy,
+          beatEnergy = sheetBeatEnergy,
           totalPlays = orbiTotalPlays,
           favoritesCount = favorites.size,
           topVibeLabel = orbiTopVibeLabel,
@@ -1760,6 +1768,7 @@ private fun AurixMainShell(
       }
 
       if (showAmbientStandby) {
+        val standbySpectrum by viewModel.spectrumBars.collectAsStateWithLifecycle()
         val matchedStandbyAlbum = remember(currentSong?.id, currentSong?.album, libraryAlbums) {
           val target = currentSong
           if (target == null) null
@@ -1779,7 +1788,7 @@ private fun AurixMainShell(
           customAlbumCoverUrl = matchedStandbyAlbum?.coverUrl,
           lyricsResult = lyrics,
           lyricOffsetMs = lyricOffsetMs,
-          spectrumBars = spectrumBars,
+          spectrumBars = standbySpectrum,
           vinylStyle = standbyVinylStyle,
           reducedMotion = reducedMotion,
           clockStyle = activeStandbyClockStyle,
@@ -1808,11 +1817,12 @@ private fun AurixMainShell(
       }
 
       if (showWidgetCustomizer) {
-        val previewLyricSnap = remember(lyrics, currentPosition, lyricOffsetMs) {
+        val customizerPosition by viewModel.currentPosition.collectAsStateWithLifecycle()
+        val previewLyricSnap = remember(lyrics, customizerPosition, lyricOffsetMs) {
           com.example.widget.AurixWidgetController.resolveSyncedLyricLines(
             syncedLines = lyrics?.synced,
             plainLyrics = lyrics?.plain,
-            positionMs = currentPosition,
+            positionMs = customizerPosition,
             lyricOffsetMs = lyricOffsetMs,
             noLyricsLabel = ""
           )

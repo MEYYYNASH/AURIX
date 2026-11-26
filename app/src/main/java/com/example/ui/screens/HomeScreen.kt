@@ -46,6 +46,7 @@ import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.example.R
 import com.example.model.Song
 import com.example.recommendation.*
@@ -56,6 +57,7 @@ import com.example.ui.glass.aurixGlassHazeStyle
 import com.example.ui.theme.HeartRed
 import com.example.viewmodel.DailyFeedCategory
 import dev.chrisbanes.haze.hazeChild
+import kotlinx.coroutines.flow.StateFlow
 import java.util.Calendar
 
 private enum class DailyCardState { LOADING, ERROR, LOADED }
@@ -120,6 +122,7 @@ fun HomeScreen(
   orbiMood: OrbiMood = OrbiMood.CLASSIC_IDLE,
   orbiTheme: OrbiCompanionTheme = OrbiCompanionTheme.CLASSIC,
   orbiBeatEnergy: Float = 0f,
+  spectrumBarsFlow: StateFlow<FloatArray>? = null,
   onOpenOrbiCompanion: () -> Unit = {},
   smartPlaylists: List<SmartPlaylist> = emptyList(),
   djAutoMixEnabled: Boolean = false,
@@ -202,13 +205,13 @@ fun HomeScreen(
             verticalAlignment = Alignment.CenterVertically,
             horizontalArrangement = Arrangement.spacedBy(12.dp)
           ) {
-            OrbiCompanionAvatar(
+            HomeLiveOrbiAvatar(
               mood = orbiMood,
               theme = orbiTheme,
               isPlaying = isPlaying,
               reducedMotion = reducedMotion,
-              beatEnergy = orbiBeatEnergy,
-              size = 44.dp,
+              fallbackBeatEnergy = orbiBeatEnergy,
+              spectrumBarsFlow = spectrumBarsFlow,
               onClick = onOpenOrbiCompanion,
               modifier = Modifier.testTag("home_orbi_avatar")
             )
@@ -1332,3 +1335,33 @@ private fun feedLocalizedSubtitle(category: DailyFeedCategory): String {
     DailyFeedCategory.KHMER_ASIA -> stringResource(id = R.string.home_feed_khmer_sub)
   }
 }
+
+@Composable
+private fun HomeLiveOrbiAvatar(
+  mood: OrbiMood,
+  theme: OrbiCompanionTheme,
+  isPlaying: Boolean,
+  reducedMotion: Boolean,
+  fallbackBeatEnergy: Float,
+  spectrumBarsFlow: StateFlow<FloatArray>?,
+  onClick: () -> Unit,
+  modifier: Modifier = Modifier
+) {
+  val liveBarsState = spectrumBarsFlow?.collectAsStateWithLifecycle()
+  val beatEnergy = if (liveBarsState != null) {
+    computeOrbiBeatEnergy(liveBarsState.value, isPlaying, reducedMotion)
+  } else {
+    fallbackBeatEnergy
+  }
+  OrbiCompanionAvatar(
+    mood = mood,
+    theme = theme,
+    isPlaying = isPlaying,
+    reducedMotion = reducedMotion,
+    beatEnergy = beatEnergy,
+    size = 44.dp,
+    onClick = onClick,
+    modifier = modifier
+  )
+}
+

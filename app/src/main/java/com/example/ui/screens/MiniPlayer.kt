@@ -1,6 +1,5 @@
 package com.example.ui.screens
 
-import android.os.Build
 import androidx.compose.animation.core.Animatable
 import androidx.compose.animation.core.Spring
 import androidx.compose.animation.core.animateFloatAsState
@@ -26,11 +25,8 @@ import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.draw.alpha
-import androidx.compose.ui.draw.blur
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.draw.drawBehind
-import androidx.compose.ui.draw.scale
 import androidx.compose.ui.geometry.CornerRadius
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.geometry.Size
@@ -42,34 +38,34 @@ import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.hapticfeedback.HapticFeedbackType
 import androidx.compose.ui.input.pointer.pointerInput
-import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.platform.LocalHapticFeedback
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
-import androidx.compose.ui.unit.IntOffset
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
-import coil.compose.AsyncImage
+import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.example.model.Song
 import com.example.ui.theme.HeartRed
+import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.launch
 import kotlin.math.abs
-import kotlin.math.roundToInt
 
-internal const val MINI_PLAYER_SLIDE_UP_DAMPING = 0.82f
-internal const val MINI_PLAYER_SLIDE_UP_STIFFNESS = 380f
+internal const val MINI_PLAYER_SLIDE_UP_DAMPING = 0.84f
+internal const val MINI_PLAYER_SLIDE_UP_STIFFNESS = 420f
 internal const val MINI_PLAYER_EXPAND_SCALE_DOWN = 0.92f
 internal const val MINI_PLAYER_PRESS_SCALE = 0.972f
-internal const val MINI_PLAYER_EXPAND_ALPHA = 0.45f
+internal const val MINI_PLAYER_EXPAND_ALPHA = 0.40f
 internal const val MINI_PLAYER_EXPAND_LIFT_DP = -10f
+internal const val MINI_PLAYER_HIGH_REFRESH_OPTIMIZED = true
 
 @Composable
 fun MiniPlayer(
   song: Song?,
   isPlaying: Boolean,
-  currentPositionMs: Long,
+  currentPositionMs: Long = 0L,
+  positionFlow: StateFlow<Long>? = null,
   durationMs: Long,
   darkTheme: Boolean,
   reducedMotion: Boolean = false,
@@ -91,7 +87,7 @@ fun MiniPlayer(
   val (artC1, artC2) = rememberArtworkColors(song.artworkUrl, song.title)
   val accentColor = MaterialTheme.colorScheme.primary
 
-  val glassFill = if (darkTheme) Color(0xFF172034).copy(alpha = 0.82f) else Color.White.copy(alpha = 0.88f)
+  val glassFill = if (darkTheme) Color(0xFF172034).copy(alpha = 0.84f) else Color.White.copy(alpha = 0.90f)
   val innerEdgeHighlight = Color.White.copy(alpha = if (darkTheme) 0.26f else 0.90f)
   val topBrightHighlight = Color.White.copy(alpha = if (darkTheme) 0.48f else 0.98f)
   val primaryTextColor = if (darkTheme) Color.White else Color(0xFF0F172A)
@@ -100,9 +96,10 @@ fun MiniPlayer(
   val buttonIconColor = if (darkTheme) Color(0xFF0F172A) else MaterialTheme.colorScheme.onPrimary
 
   val totalMs = durationMs.coerceAtLeast(song.durationSeconds * 1000L).coerceAtLeast(1L)
-  val progress = (currentPositionMs.toFloat() / totalMs.toFloat()).coerceIn(0f, 1f)
 
-  val heartScale by animateFloatAsState(
+  // All animation values are kept as State<Float> and read strictly inside graphicsLayer
+  // so 120Hz press/expand/heart/swipe animations incur 0 recompositions & 0 layout passes.
+  val heartScaleState = animateFloatAsState(
     targetValue = if (song.isFavorite) 1.2f else 1.0f,
     animationSpec = if (reducedMotion) snap() else spring(dampingRatio = Spring.DampingRatioMediumBouncy),
     label = "mini_heart"
@@ -122,10 +119,10 @@ fun MiniPlayer(
   val transitionSpringSpec = remember(reducedMotion) {
     if (reducedMotion) snap<Float>() else spring(
       dampingRatio = MINI_PLAYER_SLIDE_UP_DAMPING,
-      stiffness = 420f
+      stiffness = 440f
     )
   }
-  val containerScale by animateFloatAsState(
+  val containerScaleState = animateFloatAsState(
     targetValue = when {
       isExpandingToFullPlayer -> MINI_PLAYER_EXPAND_SCALE_DOWN
       isCardPressed && !reducedMotion -> MINI_PLAYER_PRESS_SCALE
@@ -134,19 +131,19 @@ fun MiniPlayer(
     animationSpec = transitionSpringSpec,
     label = "mini_player_expand_scale"
   )
-  val containerAlpha by animateFloatAsState(
+  val containerAlphaState = animateFloatAsState(
     targetValue = if (isExpandingToFullPlayer) MINI_PLAYER_EXPAND_ALPHA else 1f,
     animationSpec = transitionSpringSpec,
     label = "mini_player_expand_alpha"
   )
-  val containerLiftY by animateFloatAsState(
+  val containerLiftYState = animateFloatAsState(
     targetValue = if (isExpandingToFullPlayer && !reducedMotion) expandLiftPx else 0f,
     animationSpec = transitionSpringSpec,
     label = "mini_player_expand_lift"
   )
 
-  // Smooth micro slide-up on track info whenever a new track starts while docked
-  val trackSlideStartPx = with(density) { 14.dp.toPx() }
+  // Smooth micro slide-up on track info whenever a new track starts while docked (pure GPU layer)
+  val trackSlideStartPx = with(density) { 12.dp.toPx() }
   var lastAnimatedSongId by remember { mutableStateOf(song.id) }
   val trackStartOffsetY = remember { Animatable(0f) }
   val trackStartAlpha = remember { Animatable(1f) }
@@ -164,7 +161,7 @@ fun MiniPlayer(
             targetValue = 0f,
             animationSpec = spring(
               dampingRatio = MINI_PLAYER_SLIDE_UP_DAMPING,
-              stiffness = 460f
+              stiffness = 480f
             )
           )
         }
@@ -173,7 +170,7 @@ fun MiniPlayer(
             targetValue = 1f,
             animationSpec = spring(
               dampingRatio = Spring.DampingRatioNoBouncy,
-              stiffness = 480f
+              stiffness = 500f
             )
           )
         }
@@ -181,9 +178,32 @@ fun MiniPlayer(
     }
   }
 
-  val swipeFraction = (dragOffsetX.value / swipeThresholdPx).coerceIn(-1.2f, 1.2f)
-  val prevCueAlpha = (swipeFraction).coerceIn(0f, 1f)
-  val nextCueAlpha = (-swipeFraction).coerceIn(0f, 1f)
+  val auraBrush = remember(artC1, artC2, accentColor, darkTheme) {
+    Brush.horizontalGradient(
+      colors = listOf(
+        artC1.copy(alpha = if (darkTheme) 0.42f else 0.24f),
+        artC2.copy(alpha = if (darkTheme) 0.30f else 0.18f),
+        accentColor.copy(alpha = if (darkTheme) 0.22f else 0.12f)
+      )
+    )
+  }
+  val miniRimBrush = remember(artC1, artC2, innerEdgeHighlight, darkTheme) {
+    Brush.horizontalGradient(
+      colors = listOf(
+        artC1.copy(alpha = if (darkTheme) 0.50f else 0.44f),
+        innerEdgeHighlight,
+        artC2.copy(alpha = if (darkTheme) 0.44f else 0.36f)
+      )
+    )
+  }
+  val shadowBrush = remember(darkTheme) {
+    Brush.verticalGradient(
+      colors = listOf(
+        Color.Black.copy(alpha = if (darkTheme) 0.24f else 0.07f),
+        Color.Black.copy(alpha = if (darkTheme) 0.36f else 0.13f)
+      )
+    )
+  }
 
   Box(
     modifier = Modifier
@@ -192,59 +212,37 @@ fun MiniPlayer(
       .fillMaxWidth()
       .height(64.dp)
       .graphicsLayer {
-        scaleX = containerScale
-        scaleY = containerScale
-        alpha = containerAlpha
-        translationY = containerLiftY
+        val s = containerScaleState.value
+        scaleX = s
+        scaleY = s
+        alpha = containerAlphaState.value
+        translationY = containerLiftYState.value
         transformOrigin = TransformOrigin(0.5f, 0.5f)
       },
     contentAlignment = Alignment.Center
   ) {
-    // Directional swipe-to-skip cues revealed beneath the pill while dragging
-    if (abs(dragOffsetX.value) > 4f) {
-      Row(
-        modifier = Modifier
-          .fillMaxWidth()
-          .padding(horizontal = 18.dp),
-        horizontalArrangement = Arrangement.SpaceBetween,
-        verticalAlignment = Alignment.CenterVertically
-      ) {
-        Icon(
-          imageVector = Icons.Rounded.SkipPrevious,
-          contentDescription = null,
-          tint = accentColor,
-          modifier = Modifier
-            .size(24.dp)
-            .alpha(prevCueAlpha)
-            .scale(0.85f + 0.25f * prevCueAlpha)
-        )
-        Icon(
-          imageVector = Icons.Rounded.SkipNext,
-          contentDescription = null,
-          tint = accentColor,
-          modifier = Modifier
-            .size(24.dp)
-            .alpha(nextCueAlpha)
-            .scale(0.85f + 0.25f * nextCueAlpha)
-        )
-      }
-    }
+    // Directional swipe-to-skip cues (pure graphicsLayer — never recomposes MiniPlayer while dragging)
+    MiniPlayerSwipeCues(
+      dragOffsetXProvider = { dragOffsetX.value },
+      swipeThresholdPx = swipeThresholdPx,
+      accentColor = accentColor,
+      modifier = Modifier
+        .fillMaxWidth()
+        .padding(horizontal = 18.dp)
+    )
 
-    // Soft ambient pill shadow
+    // Soft ambient pill shadow (GPU translationX — zero layout passes during drag)
     Box(
       modifier = Modifier
         .matchParentSize()
-        .offset { IntOffset(dragOffsetX.value.roundToInt(), 0) }
+        .graphicsLayer {
+          translationX = dragOffsetX.value
+        }
         .drawBehind {
           if (size.width <= 0f || size.height <= 0f) return@drawBehind
           val r = size.height * 0.5f
           drawRoundRect(
-            brush = Brush.verticalGradient(
-              colors = listOf(
-                Color.Black.copy(alpha = if (darkTheme) 0.24f else 0.07f),
-                Color.Black.copy(alpha = if (darkTheme) 0.36f else 0.13f)
-              )
-            ),
+            brush = shadowBrush,
             topLeft = Offset(0f, 5.dp.toPx()),
             size = Size(size.width, size.height),
             cornerRadius = CornerRadius(r, r)
@@ -252,11 +250,13 @@ fun MiniPlayer(
         }
     )
 
-    // Frosted Liquid Glass Capsule Container
+    // Frosted Liquid Glass Capsule Container (GPU-only gradients — zero per-frame RenderEffect blur overhead)
     Box(
       modifier = Modifier
         .matchParentSize()
-        .offset { IntOffset(dragOffsetX.value.roundToInt(), 0) }
+        .graphicsLayer {
+          translationX = dragOffsetX.value
+        }
         .clip(CircleShape)
         .pointerInput(song.id, reducedMotion) {
           detectHorizontalDragGestures(
@@ -307,49 +307,12 @@ fun MiniPlayer(
         )
         .testTag("mini_player_card")
     ) {
-      // Dynamic blurred album artwork + track-hue aura inside glass pill
-      val miniArtModel = resolveArtworkModel(song.artworkUrl, song.source)
-      if (miniArtModel != null && Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
-        val miniArtReq = com.example.ui.image.rememberCrispArtworkRequest(model = miniArtModel)
-        AsyncImage(
-          model = miniArtReq,
-          contentDescription = null,
-          contentScale = ContentScale.Crop,
-          filterQuality = com.example.ui.image.AurixImagePipeline.ARTWORK_FILTER_QUALITY,
-          modifier = Modifier
-            .matchParentSize()
-            .scale(1.24f)
-            .alpha(if (darkTheme) 0.34f else 0.18f)
-            .blur(22.dp)
-        )
-      }
-      Box(
-        modifier = Modifier
-          .matchParentSize()
-          .then(if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) Modifier.blur(18.dp) else Modifier)
-          .background(
-            Brush.horizontalGradient(
-              colors = listOf(
-                artC1.copy(alpha = if (darkTheme) 0.28f else 0.16f),
-                artC2.copy(alpha = if (darkTheme) 0.18f else 0.12f),
-                accentColor.copy(alpha = if (darkTheme) 0.14f else 0.08f)
-              )
-            )
-          )
-      )
-
-      // Base translucent fill + art-tinted 1dp glass edge + bright 1.5dp top specular highlight
-      val miniRimBrush = Brush.horizontalGradient(
-        colors = listOf(
-          artC1.copy(alpha = if (darkTheme) 0.48f else 0.42f),
-          innerEdgeHighlight,
-          artC2.copy(alpha = if (darkTheme) 0.42f else 0.34f)
-        )
-      )
+      // Base frosted glass fill + smooth artwork-tinted aura + art-tinted 1dp rim + top specular highlight
       Box(
         modifier = Modifier
           .matchParentSize()
           .background(glassFill)
+          .background(auraBrush)
           .border(1.dp, miniRimBrush, CircleShape)
           .drawBehind {
             val stroke15 = 1.5.dp.toPx()
@@ -407,39 +370,39 @@ fun MiniPlayer(
           Spacer(modifier = Modifier.width(12.dp))
 
           Column(modifier = Modifier.weight(1f)) {
-          Row(
-            verticalAlignment = Alignment.CenterVertically,
-            horizontalArrangement = Arrangement.spacedBy(6.dp)
-          ) {
-            if (isPlaying) {
-              EqualizerBars(
-                isPlaying = true,
-                color = accentColor,
+            Row(
+              verticalAlignment = Alignment.CenterVertically,
+              horizontalArrangement = Arrangement.spacedBy(6.dp)
+            ) {
+              if (isPlaying) {
+                EqualizerBars(
+                  isPlaying = true,
+                  color = accentColor,
+                  reducedMotion = reducedMotion,
+                  barWidth = 2.5.dp,
+                  maxHeight = 11.dp
+                )
+              }
+              Text(
+                text = com.example.ui.theme.rememberKhmerTitleText(
+                  text = song.title,
+                  baseFontSize = 14.sp,
+                  isBold = true
+                ),
+                style = MaterialTheme.typography.bodyMedium.copy(fontWeight = FontWeight.Bold),
+                maxLines = 1,
+                overflow = TextOverflow.Ellipsis,
+                color = primaryTextColor,
+                modifier = Modifier.weight(1f, fill = false)
+              )
+              LyricsTag(
+                visible = hasLyrics,
+                size = LyricsTagSize.Mini,
+                darkTheme = darkTheme,
                 reducedMotion = reducedMotion,
-                barWidth = 2.5.dp,
-                maxHeight = 11.dp
+                modifier = Modifier.padding(start = 2.dp)
               )
             }
-            Text(
-              text = com.example.ui.theme.rememberKhmerTitleText(
-                text = song.title,
-                baseFontSize = 14.sp,
-                isBold = true
-              ),
-              style = MaterialTheme.typography.bodyMedium.copy(fontWeight = FontWeight.Bold),
-              maxLines = 1,
-              overflow = TextOverflow.Ellipsis,
-              color = primaryTextColor,
-              modifier = Modifier.weight(1f, fill = false)
-            )
-            LyricsTag(
-              visible = hasLyrics,
-              size = LyricsTagSize.Mini,
-              darkTheme = darkTheme,
-              reducedMotion = reducedMotion,
-              modifier = Modifier.padding(start = 2.dp)
-            )
-          }
             Text(
               text = song.artist,
               style = MaterialTheme.typography.bodySmall,
@@ -460,11 +423,17 @@ fun MiniPlayer(
             imageVector = if (song.isFavorite) Icons.Rounded.Favorite else Icons.Rounded.FavoriteBorder,
             contentDescription = "Favorite",
             tint = if (song.isFavorite) HeartRed else primaryTextColor.copy(alpha = 0.78f),
-            modifier = Modifier.size(20.dp).scale(heartScale)
+            modifier = Modifier
+              .size(20.dp)
+              .graphicsLayer {
+                val hs = heartScaleState.value
+                scaleX = hs
+                scaleY = hs
+              }
           )
         }
 
-        // Circular Play/Pause Button surrounded by live progress ring
+        // Circular Play/Pause Button surrounded by isolated live progress ring
         Box(
           modifier = Modifier
             .size(46.dp)
@@ -473,25 +442,16 @@ fun MiniPlayer(
             .testTag("mini_play_pause_button"),
           contentAlignment = Alignment.Center
         ) {
-          Canvas(modifier = Modifier.matchParentSize().padding(1.5.dp)) {
-            val strokePx = 2.5.dp.toPx()
-            drawArc(
-              color = primaryTextColor.copy(alpha = 0.14f),
-              startAngle = 0f,
-              sweepAngle = 360f,
-              useCenter = false,
-              style = Stroke(width = strokePx)
-            )
-            if (progress > 0.005f) {
-              drawArc(
-                color = accentColor,
-                startAngle = -90f,
-                sweepAngle = 360f * progress,
-                useCenter = false,
-                style = Stroke(width = strokePx, cap = StrokeCap.Round)
-              )
-            }
-          }
+          MiniPlayerProgressRing(
+            positionFlow = positionFlow,
+            fallbackPositionMs = currentPositionMs,
+            totalMs = totalMs,
+            trackColor = primaryTextColor.copy(alpha = 0.14f),
+            accentColor = accentColor,
+            modifier = Modifier
+              .matchParentSize()
+              .padding(1.5.dp)
+          )
           Box(
             modifier = Modifier
               .size(36.dp)
@@ -508,6 +468,82 @@ fun MiniPlayer(
           }
         }
       }
+    }
+  }
+}
+
+@Composable
+private fun MiniPlayerSwipeCues(
+  dragOffsetXProvider: () -> Float,
+  swipeThresholdPx: Float,
+  accentColor: Color,
+  modifier: Modifier = Modifier
+) {
+  Row(
+    modifier = modifier,
+    horizontalArrangement = Arrangement.SpaceBetween,
+    verticalAlignment = Alignment.CenterVertically
+  ) {
+    Icon(
+      imageVector = Icons.Rounded.SkipPrevious,
+      contentDescription = null,
+      tint = accentColor,
+      modifier = Modifier
+        .size(24.dp)
+        .graphicsLayer {
+          val frac = (dragOffsetXProvider() / swipeThresholdPx).coerceIn(0f, 1f)
+          alpha = if (frac > 0.04f) frac else 0f
+          val s = 0.85f + 0.25f * frac
+          scaleX = s
+          scaleY = s
+        }
+    )
+    Icon(
+      imageVector = Icons.Rounded.SkipNext,
+      contentDescription = null,
+      tint = accentColor,
+      modifier = Modifier
+        .size(24.dp)
+        .graphicsLayer {
+          val frac = (-dragOffsetXProvider() / swipeThresholdPx).coerceIn(0f, 1f)
+          alpha = if (frac > 0.04f) frac else 0f
+          val s = 0.85f + 0.25f * frac
+          scaleX = s
+          scaleY = s
+        }
+    )
+  }
+}
+
+@Composable
+private fun MiniPlayerProgressRing(
+  positionFlow: StateFlow<Long>?,
+  fallbackPositionMs: Long,
+  totalMs: Long,
+  trackColor: Color,
+  accentColor: Color,
+  modifier: Modifier = Modifier
+) {
+  val livePositionState = positionFlow?.collectAsStateWithLifecycle()
+  Canvas(modifier = modifier) {
+    val posMs = livePositionState?.value ?: fallbackPositionMs
+    val progress = (posMs.toFloat() / totalMs.toFloat()).coerceIn(0f, 1f)
+    val strokePx = 2.5.dp.toPx()
+    drawArc(
+      color = trackColor,
+      startAngle = 0f,
+      sweepAngle = 360f,
+      useCenter = false,
+      style = Stroke(width = strokePx)
+    )
+    if (progress > 0.005f) {
+      drawArc(
+        color = accentColor,
+        startAngle = -90f,
+        sweepAngle = 360f * progress,
+        useCenter = false,
+        style = Stroke(width = strokePx, cap = StrokeCap.Round)
+      )
     }
   }
 }

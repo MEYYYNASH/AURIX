@@ -49,9 +49,11 @@ import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.geometry.Size
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.graphics.luminance
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.layout.ContentScale
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
@@ -60,6 +62,7 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import coil.compose.AsyncImage
+import coil.request.ImageRequest
 import com.example.R
 import com.example.model.LyricsResult
 import com.example.model.Song
@@ -174,33 +177,6 @@ fun NowPlayingSheet(
   var dynamicControlsBlur by rememberSaveable { mutableStateOf(true) }
 
   val (c1, c2) = rememberArtworkColors(song.artworkUrl, song.title)
-  val bgAlpha by animateFloatAsState(
-    targetValue = if (dynamicBg) 1.0f else 0f,
-    animationSpec = if (reducedMotion) snap() else tween(500),
-    label = "np_bg_alpha"
-  )
-
-  val infiniteTransition = rememberInfiniteTransition(label = "np_backdrop_drift")
-  val backdropScale by infiniteTransition.animateFloat(
-    initialValue = 1.28f,
-    targetValue = 1.44f,
-    animationSpec = infiniteRepeatable(
-      animation = tween(durationMillis = 6800, easing = FastOutSlowInEasing),
-      repeatMode = RepeatMode.Reverse
-    ),
-    label = "np_drift_scale"
-  )
-  val backdropShiftX by infiniteTransition.animateFloat(
-    initialValue = -16f,
-    targetValue = 16f,
-    animationSpec = infiniteRepeatable(
-      animation = tween(durationMillis = 8200, easing = FastOutSlowInEasing),
-      repeatMode = RepeatMode.Reverse
-    ),
-    label = "np_drift_x"
-  )
-  val activeBgScale = if (reducedMotion) 1.32f else backdropScale
-  val activeBgShiftX = if (reducedMotion) 0f else backdropShiftX
 
   val heartScale by animateFloatAsState(
     targetValue = if (song.isFavorite) 1.25f else 1.0f,
@@ -217,73 +193,17 @@ fun NowPlayingSheet(
   ) {
     val maxDetailsSheetHeight = (maxHeight * 0.55f).coerceAtLeast(300.dp)
     val bgCustom = LocalDynamicBgCustomization.current
-    val npBlurDp = (bgCustom.blurRadiusDp.coerceIn(0f, 100f) * 0.80f).coerceIn(0f, 92f).dp
-    val npDimEffective = bgCustom.dimLevel.coerceIn(0f, 0.90f).coerceAtLeast(0.22f)
-    val npDimRatio = (npDimEffective / com.example.data.PreferencesManager.DEFAULT_DYNAMIC_BG_DIM)
-      .coerceIn(0.45f, 2.25f)
-    // True Dynamic Artwork Background sampled from actual album cover colors + blurred drifting art
-    if (bgAlpha > 0.01f) {
-      Box(modifier = Modifier.fillMaxSize().alpha(bgAlpha)) {
-        val bgModel = resolveArtworkModel(song.artworkUrl, song.source)
-        if (bgModel != null) {
-          val npBgReq = com.example.ui.image.rememberCrispArtworkRequest(model = bgModel)
-          AsyncImage(
-            model = npBgReq,
-            contentDescription = null,
-            contentScale = ContentScale.Crop,
-            filterQuality = com.example.ui.image.AurixImagePipeline.ARTWORK_FILTER_QUALITY,
-            modifier = Modifier
-              .fillMaxSize()
-              .offset(x = activeBgShiftX.dp)
-              .scale(activeBgScale)
-              .then(if (npBlurDp > 0.dp) Modifier.blur(npBlurDp) else Modifier)
-          )
-        }
-        Box(
-          modifier = Modifier
-            .fillMaxSize()
-            .background(
-              Brush.radialGradient(
-                colors = listOf(
-                  c1.copy(alpha = 0.62f),
-                  c2.copy(alpha = 0.34f),
-                  Color.Transparent
-                ),
-                center = Offset(320f, 380f),
-                radius = 1250f
-              )
-            )
-        )
-        Box(
-          modifier = Modifier
-            .fillMaxSize()
-            .background(
-              Brush.radialGradient(
-                colors = listOf(
-                  c2.copy(alpha = 0.44f),
-                  Color.Transparent
-                ),
-                center = Offset(780f, 1550f),
-                radius = 1000f
-              )
-            )
-        )
-        // Balanced contrast gradient so cover art colors glow vibrantly while keeping white controls crisp
-        Box(
-          modifier = Modifier
-            .fillMaxSize()
-            .background(
-              Brush.verticalGradient(
-                colors = listOf(
-                  Color(0xFF090C14).copy(alpha = (0.32f * npDimRatio).coerceIn(0.06f, 0.86f)),
-                  Color(0xFF090C14).copy(alpha = (0.42f * npDimRatio).coerceIn(0.08f, 0.90f)),
-                  Color(0xFF080A11).copy(alpha = (0.72f * npDimRatio).coerceIn(0.16f, 0.96f))
-                )
-              )
-            )
-        )
-      }
-    }
+    // Isolated 120Hz GPU backdrop (downsampled 160px art + graphicsLayer-only drift — 0 recompositions of NowPlayingSheet)
+    NowPlayingDynamicBackdrop(
+      song = song,
+      dynamicBg = dynamicBg,
+      reducedMotion = reducedMotion,
+      c1 = c1,
+      c2 = c2,
+      blurRadiusDp = bgCustom.blurRadiusDp,
+      dimLevel = bgCustom.dimLevel,
+      modifier = Modifier.fillMaxSize()
+    )
 
     Column(
       modifier = Modifier
@@ -396,12 +316,17 @@ fun NowPlayingSheet(
             horizontalAlignment = Alignment.CenterHorizontally,
             verticalArrangement = Arrangement.Center
           ) {
-            val artScale by animateFloatAsState(
+            val artScaleState = animateFloatAsState(
               targetValue = if (isPlaying) 1.0f else 0.94f,
               animationSpec = if (reducedMotion) snap() else spring(dampingRatio = Spring.DampingRatioLowBouncy),
               label = "art_scale"
             )
-            val auraPulse by infiniteTransition.animateFloat(
+            val auraTransition = if (!reducedMotion && isPlaying) {
+              rememberInfiniteTransition(label = "art_aura_transition")
+            } else {
+              null
+            }
+            val auraPulseState = auraTransition?.animateFloat(
               initialValue = 0.96f,
               targetValue = 1.08f,
               animationSpec = infiniteRepeatable(
@@ -413,18 +338,20 @@ fun NowPlayingSheet(
             val artSize = if (activeLyricLine != null) 246.dp else 274.dp
 
             Box(contentAlignment = Alignment.Center) {
-              // Ambient Artwork Aura behind the cover art while actively playing
+              // Ambient Artwork Aura behind the cover art while actively playing (GPU graphicsLayer — 0 recompositions)
               Box(
                 modifier = Modifier
                   .size(artSize + 36.dp)
-                  .scale(
-                    when {
+                  .graphicsLayer {
+                    val s = when {
                       !isPlaying -> 0.88f
                       reducedMotion -> 1.0f
-                      else -> auraPulse
+                      else -> auraPulseState?.value ?: 1.0f
                     }
-                  )
-                  .alpha(if (isPlaying) 0.72f else 0.25f)
+                    scaleX = s
+                    scaleY = s
+                    alpha = if (isPlaying) 0.72f else 0.25f
+                  }
                   .drawBehind {
                     if (size.minDimension <= 0f) return@drawBehind
                     drawCircle(
@@ -446,7 +373,11 @@ fun NowPlayingSheet(
               Surface(
                 modifier = Modifier
                   .size(artSize)
-                  .scale(artScale),
+                  .graphicsLayer {
+                    val s = artScaleState.value
+                    scaleX = s
+                    scaleY = s
+                  },
                 shape = RoundedCornerShape(28.dp),
                 shadowElevation = 24.dp,
                 color = Color.Transparent
@@ -1474,3 +1405,122 @@ private fun BeatReactiveVisualizerStrip(
     }
   }
 }
+
+/**
+ * Isolated 120Hz dynamic artwork backdrop for NowPlayingSheet.
+ * Keeps infinite drift & fade animations strictly inside graphicsLayer on a downsampled 160px
+ * blurred texture so the 1,400-line NowPlayingSheet never recomposes or relayouts during transitions.
+ */
+@Composable
+private fun NowPlayingDynamicBackdrop(
+  song: Song,
+  dynamicBg: Boolean,
+  reducedMotion: Boolean,
+  c1: Color,
+  c2: Color,
+  blurRadiusDp: Float,
+  dimLevel: Float,
+  modifier: Modifier = Modifier
+) {
+  val bgAlphaState = animateFloatAsState(
+    targetValue = if (dynamicBg) 1.0f else 0f,
+    animationSpec = if (reducedMotion) snap() else tween(420),
+    label = "np_bg_alpha"
+  )
+  if (!dynamicBg && bgAlphaState.value <= 0.01f) return
+
+  val npBlurDp = (blurRadiusDp.coerceIn(0f, 100f) * 0.36f).coerceIn(0f, 36f).dp
+  val npDimEffective = dimLevel.coerceIn(0f, 0.90f).coerceAtLeast(0.22f)
+  val npDimRatio = (npDimEffective / com.example.data.PreferencesManager.DEFAULT_DYNAMIC_BG_DIM)
+    .coerceIn(0.45f, 2.25f)
+
+  val context = LocalContext.current
+  val bgModel = resolveArtworkModel(song.artworkUrl, song.source)
+  val backdropReq = remember(context, bgModel) {
+    bgModel?.let {
+      ImageRequest.Builder(context)
+        .data(it)
+        .size(160)
+        .crossfade(true)
+        .build()
+    }
+  }
+
+  val infiniteTransition = if (reducedMotion) null else rememberInfiniteTransition(label = "np_backdrop_drift")
+  val backdropScaleState = infiniteTransition?.animateFloat(
+    initialValue = 1.28f,
+    targetValue = 1.42f,
+    animationSpec = infiniteRepeatable(
+      animation = tween(durationMillis = 6800, easing = FastOutSlowInEasing),
+      repeatMode = RepeatMode.Reverse
+    ),
+    label = "np_drift_scale"
+  )
+  val backdropShiftXState = infiniteTransition?.animateFloat(
+    initialValue = -14f,
+    targetValue = 14f,
+    animationSpec = infiniteRepeatable(
+      animation = tween(durationMillis = 8200, easing = FastOutSlowInEasing),
+      repeatMode = RepeatMode.Reverse
+    ),
+    label = "np_drift_x"
+  )
+
+  val topGlowBrush = remember(c1, c2) {
+    Brush.radialGradient(
+      colors = listOf(
+        c1.copy(alpha = 0.62f),
+        c2.copy(alpha = 0.34f),
+        Color.Transparent
+      ),
+      center = Offset(320f, 380f),
+      radius = 1250f
+    )
+  }
+  val bottomGlowBrush = remember(c2) {
+    Brush.radialGradient(
+      colors = listOf(
+        c2.copy(alpha = 0.44f),
+        Color.Transparent
+      ),
+      center = Offset(780f, 1550f),
+      radius = 1000f
+    )
+  }
+  val scrimBrush = remember(npDimRatio) {
+    Brush.verticalGradient(
+      colors = listOf(
+        Color(0xFF090C14).copy(alpha = (0.32f * npDimRatio).coerceIn(0.06f, 0.86f)),
+        Color(0xFF090C14).copy(alpha = (0.42f * npDimRatio).coerceIn(0.08f, 0.90f)),
+        Color(0xFF080A11).copy(alpha = (0.72f * npDimRatio).coerceIn(0.16f, 0.96f))
+      )
+    )
+  }
+
+  Box(
+    modifier = modifier.graphicsLayer {
+      alpha = bgAlphaState.value
+    }
+  ) {
+    if (backdropReq != null) {
+      AsyncImage(
+        model = backdropReq,
+        contentDescription = null,
+        contentScale = ContentScale.Crop,
+        modifier = Modifier
+          .fillMaxSize()
+          .graphicsLayer {
+            val s = backdropScaleState?.value ?: 1.32f
+            scaleX = s
+            scaleY = s
+            translationX = (backdropShiftXState?.value ?: 0f) * density
+          }
+          .then(if (npBlurDp > 0.dp) Modifier.blur(npBlurDp) else Modifier)
+      )
+    }
+    Box(modifier = Modifier.fillMaxSize().background(topGlowBrush))
+    Box(modifier = Modifier.fillMaxSize().background(bottomGlowBrush))
+    Box(modifier = Modifier.fillMaxSize().background(scrimBrush))
+  }
+}
+

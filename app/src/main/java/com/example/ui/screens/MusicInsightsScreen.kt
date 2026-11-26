@@ -49,11 +49,13 @@ import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import coil.compose.AsyncImage
 import com.example.R
 import com.example.model.FeaturedAlbumItem
 import com.example.model.Song
 import com.example.recommendation.*
+import kotlinx.coroutines.flow.StateFlow
 
 @Composable
 fun MusicInsightsScreen(
@@ -72,6 +74,7 @@ fun MusicInsightsScreen(
   orbiTheme: OrbiCompanionTheme = OrbiCompanionTheme.CLASSIC,
   orbiBadges: List<OrbiMilestoneBadge> = emptyList(),
   orbiBeatEnergy: Float = 0f,
+  spectrumBarsFlow: StateFlow<FloatArray>? = null,
   orbiTotalPlays: Int = 0,
   orbiFavoritesCount: Int = 0,
   orbiTopVibeLabel: String = "AURIX",
@@ -166,10 +169,10 @@ fun MusicInsightsScreen(
       )
     }
 
-    // 1b. Orbi Companion & Milestone Badges Card
+    // 1b. Orbi Companion & Milestone Badges Card (isolated spectrum collection for 120FPS scrolling)
     if (orbiBadges.isNotEmpty()) {
       item {
-        OrbiCompanionInsightsCard(
+        InsightsLiveOrbiCard(
           mood = orbiMood,
           moodOverride = orbiMoodOverride,
           selectedTheme = orbiTheme,
@@ -177,7 +180,8 @@ fun MusicInsightsScreen(
           isPlaying = isPlaying,
           darkTheme = darkTheme,
           reducedMotion = reducedMotion,
-          beatEnergy = orbiBeatEnergy,
+          fallbackBeatEnergy = orbiBeatEnergy,
+          spectrumBarsFlow = spectrumBarsFlow,
           totalPlays = orbiTotalPlays,
           favoritesCount = orbiFavoritesCount,
           topVibeLabel = orbiTopVibeLabel,
@@ -1409,3 +1413,48 @@ fun NewAlbumsDetailScreen(
     }
   }
 }
+
+@Composable
+private fun InsightsLiveOrbiCard(
+  mood: OrbiMood,
+  moodOverride: OrbiMood?,
+  selectedTheme: OrbiCompanionTheme,
+  badges: List<OrbiMilestoneBadge>,
+  isPlaying: Boolean,
+  darkTheme: Boolean,
+  reducedMotion: Boolean,
+  fallbackBeatEnergy: Float,
+  spectrumBarsFlow: StateFlow<FloatArray>?,
+  totalPlays: Int,
+  favoritesCount: Int,
+  topVibeLabel: String,
+  isExpanded: Boolean,
+  onToggleExpand: () -> Unit,
+  onSelectTheme: (OrbiCompanionTheme) -> Unit,
+  onSelectMoodOverride: (OrbiMood?) -> Unit
+) {
+  val liveBarsState = spectrumBarsFlow?.collectAsStateWithLifecycle()
+  val beatEnergy = if (liveBarsState != null) {
+    computeOrbiBeatEnergy(liveBarsState.value, isPlaying, reducedMotion)
+  } else {
+    fallbackBeatEnergy
+  }
+  OrbiCompanionInsightsCard(
+    mood = mood,
+    moodOverride = moodOverride,
+    selectedTheme = selectedTheme,
+    badges = badges,
+    isPlaying = isPlaying,
+    darkTheme = darkTheme,
+    reducedMotion = reducedMotion,
+    beatEnergy = beatEnergy,
+    totalPlays = totalPlays,
+    favoritesCount = favoritesCount,
+    topVibeLabel = topVibeLabel,
+    isExpanded = isExpanded,
+    onToggleExpand = onToggleExpand,
+    onSelectTheme = onSelectTheme,
+    onSelectMoodOverride = onSelectMoodOverride
+  )
+}
+

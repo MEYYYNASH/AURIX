@@ -16,7 +16,9 @@ class CrashFixStabilityTest {
     assertEquals("2.4.1", BuildConfig.VERSION_NAME)
     assertEquals(20401, BuildConfig.VERSION_CODE)
     assertTrue("Release 2.4.1 versionCode must exceed 2.4.0 (20400)", BuildConfig.VERSION_CODE > 20400)
+    assertTrue(com.example.ui.screens.MINI_PLAYER_HIGH_REFRESH_OPTIMIZED)
     assertTrue(com.example.ui.screens.MINI_PLAYER_SLIDE_UP_DAMPING in 0.7f..0.95f)
+    assertTrue(com.example.ui.screens.MINI_PLAYER_SLIDE_UP_STIFFNESS >= 380f)
     assertTrue(com.example.ui.screens.MINI_PLAYER_EXPAND_SCALE_DOWN in 0.88f..0.96f)
     assertTrue(com.example.ui.screens.MINI_PLAYER_PRESS_SCALE < 1.0f)
     assertTrue(com.example.ui.screens.MINI_PLAYER_PRESS_SCALE > com.example.ui.screens.MINI_PLAYER_EXPAND_SCALE_DOWN)
@@ -27,6 +29,27 @@ class CrashFixStabilityTest {
     assertEquals(5, com.example.data.OrbiAppIcon.entries.size)
     assertEquals(com.example.data.OrbiAppIcon.MIDNIGHT, com.example.data.OrbiAppIcon.fromId("midnight"))
     assertEquals(com.example.data.OrbiAppIcon.CLASSIC, com.example.data.OrbiAppIcon.fromId("unknown"))
+  }
+
+  @Test
+  fun highRefreshRate120Fps_guardsPreventRootRecompositionAndBlurStutter() {
+    val projectRoot = java.io.File(System.getProperty("user.dir") ?: ".").let { dir ->
+      if (java.io.File(dir, "src/main/java").exists()) dir else java.io.File(dir, "app")
+    }
+    val mainActivitySrc = java.io.File(projectRoot, "src/main/java/com/example/MainActivity.kt").readText()
+    val aurixAppSrc = java.io.File(projectRoot, "src/main/java/com/example/ui/screens/AurixApp.kt").readText()
+    val miniPlayerSrc = java.io.File(projectRoot, "src/main/java/com/example/ui/screens/MiniPlayer.kt").readText()
+    val nowPlayingSrc = java.io.File(projectRoot, "src/main/java/com/example/ui/screens/NowPlayingSheet.kt").readText()
+
+    assertTrue("MainActivity must request highest refresh rate mode", mainActivitySrc.contains("preferredDisplayModeId"))
+    assertFalse("MiniPlayer must not run per-frame Modifier.blur inside animating capsule", miniPlayerSrc.contains(".blur("))
+    assertTrue("MiniPlayer must isolate progress ring with StateFlow", miniPlayerSrc.contains("private fun MiniPlayerProgressRing"))
+    assertTrue("AurixApp must keep pageScale un-delegated for graphicsLayer reads", aurixAppSrc.contains("val pageScaleState = animateFloatAsState"))
+    assertFalse("AurixApp must not delegate pageScale at root", aurixAppSrc.contains("val pageScale by animateFloatAsState"))
+    assertFalse("AurixApp must not collect currentPosition at root", aurixAppSrc.contains("val currentPosition by viewModel.currentPosition.collectAsStateWithLifecycle()"))
+    assertFalse("AurixApp must not collect spectrumBars at root", aurixAppSrc.contains("val spectrumBars by viewModel.spectrumBars.collectAsStateWithLifecycle()"))
+    assertTrue("NowPlayingSheet must isolate drifting backdrop in graphicsLayer leaf", nowPlayingSrc.contains("private fun NowPlayingDynamicBackdrop"))
+    assertFalse("NowPlayingSheet must not use layout-phase .offset(x = activeBgShiftX.dp)", nowPlayingSrc.contains(".offset(x = activeBgShiftX.dp)"))
   }
 
   @Test
