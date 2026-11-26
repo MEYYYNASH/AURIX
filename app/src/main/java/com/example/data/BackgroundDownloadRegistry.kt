@@ -315,7 +315,7 @@ object BackgroundDownloadRegistry {
               durationSeconds = savedAudio.durationSeconds.takeIf { it > 0L } ?: song.durationSeconds,
               streamUrl = savedAudio.uri.toString(),
               source = "Downloaded",
-              album = song.album.ifBlank { "Unknown Album" },
+              album = song.album.trim(),
               trackNumber = song.trackNumber,
               year = song.year
             )
@@ -560,7 +560,8 @@ object BackgroundDownloadRegistry {
             artworkUrl = artwork,
             durationSeconds = finalDuration,
             streamUrl = savedAudio.uri.toString(),
-            source = "Downloaded"
+            source = "Downloaded",
+            album = ""
           )
           AurixDatabase.getInstance(appContext).aurixDao().insertLocalSong(entity)
 

@@ -90,6 +90,26 @@ data class AppErrorNotice(
   val details: String? = null
 )
 
+object AlbumGroupingPolicy {
+  fun shouldIncludeAlbumGroup(
+    albumTitle: String,
+    autoTracks: List<Song>,
+    hasCustomAlbum: Boolean,
+    hasExplicitAlbumTracks: Boolean
+  ): Boolean {
+    if (hasCustomAlbum || hasExplicitAlbumTracks) return true
+    if (autoTracks.isEmpty()) return false
+    val cleanTitle = albumTitle.trim()
+    if (cleanTitle.isBlank() || cleanTitle.equals("Unknown Album", ignoreCase = true)) {
+      return false
+    }
+    if (autoTracks.size == 1 && autoTracks.all { it.source.equals("Downloaded", ignoreCase = true) }) {
+      return false
+    }
+    return true
+  }
+}
+
 class AurixViewModel(application: Application) : AndroidViewModel(application) {
   private val prefsManager = PreferencesManager(application)
   private val database = AurixDatabase.getInstance(application)
@@ -602,7 +622,7 @@ class AurixViewModel(application: Application) : AndroidViewModel(application) {
           streamUrl = it.streamUrl,
           source = it.source,
           isFavorite = it.id in favs,
-          album = it.album.ifBlank { "Unknown Album" },
+          album = it.album.trim().takeUnless { alb -> alb.equals("Unknown Album", ignoreCase = true) }.orEmpty(),
           trackNumber = it.trackNumber,
           year = it.year
         )
@@ -1006,12 +1026,17 @@ class AurixViewModel(application: Application) : AndroidViewModel(application) {
     val autoGroups: Map<String, List<Song>> = if (local.isEmpty()) {
       emptyMap()
     } else {
-      local.groupBy { song ->
-        computeAlbumId(
-          albumName = song.album.ifBlank { "Unknown Album" },
-          artistName = song.artist.ifBlank { "Unknown Artist" }
-        )
-      }
+      local
+        .filter { song ->
+          val cleanAlbum = song.album.trim()
+          cleanAlbum.isNotEmpty() && !cleanAlbum.equals("Unknown Album", ignoreCase = true)
+        }
+        .groupBy { song ->
+          computeAlbumId(
+            albumName = song.album.trim(),
+            artistName = song.artist.ifBlank { "Unknown Artist" }
+          )
+        }
     }
 
     val orderedIds = LinkedHashSet<String>().apply {
@@ -1028,6 +1053,18 @@ class AurixViewModel(application: Application) : AndroidViewModel(application) {
       )
       val explicitTracks = customTracksByAlbumId[albumId].orEmpty()
       val mergedTracks = (autoTracks + explicitTracks).distinctBy { it.id }
+
+      val resolvedAlbumTitleForPolicy = customMeta?.title?.trim().takeUnless { it.isNullOrEmpty() }
+        ?: autoTracks.firstOrNull()?.album?.trim().orEmpty()
+      if (!AlbumGroupingPolicy.shouldIncludeAlbumGroup(
+          albumTitle = resolvedAlbumTitleForPolicy,
+          autoTracks = autoTracks,
+          hasCustomAlbum = customMeta != null,
+          hasExplicitAlbumTracks = explicitTracks.isNotEmpty()
+        )
+      ) {
+        return@mapNotNull null
+      }
 
       if (customMeta == null && mergedTracks.isEmpty()) return@mapNotNull null
 
@@ -4551,6 +4588,9 @@ class AurixViewModel(application: Application) : AndroidViewModel(application) {
               uri = uri,
               songId = uri.toString()
             )
+            val resolvedImportAlbum = targetAlbum?.title ?: meta.album.trim()
+              .takeUnless { it.equals("Unknown Album", ignoreCase = true) }
+              .orEmpty()
             val created = LocalSongEntity(
               id = uri.toString(),
               title = meta.title,
@@ -4559,16 +4599,22 @@ class AurixViewModel(application: Application) : AndroidViewModel(application) {
               durationSeconds = meta.durationSeconds,
               streamUrl = uri.toString(),
               source = "Local",
-              album = targetAlbum?.title ?: meta.album,
+              album = resolvedImportAlbum,
               trackNumber = meta.trackNumber,
               year = meta.year.ifBlank { targetAlbum?.year.orEmpty() }
             )
             dao.insertLocalSong(created)
-            dao.unmarkAlbumDeleted(computeAlbumId(created.album, created.artist))
+            if (resolvedImportAlbum.isNotBlank()) {
+              dao.unmarkAlbumDeleted(computeAlbumId(resolvedImportAlbum, created.artist))
+            }
             addedCount++
             if (firstAddedTitle == null) {
               firstAddedTitle = created.title
-              firstAlbumId = targetAlbum?.albumId ?: computeAlbumId(created.album, created.artist)
+              firstAlbumId = targetAlbum?.albumId ?: if (resolvedImportAlbum.isNotBlank()) {
+                computeAlbumId(resolvedImportAlbum, created.artist)
+              } else {
+                null
+              }
             }
             created
           }

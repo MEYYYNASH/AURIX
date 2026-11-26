@@ -604,9 +604,11 @@ private fun AurixMainShell(
     onDispose { lifecycleOwner.lifecycle.removeObserver(observer) }
   }
 
-  // System Back returns cleanly to Home from any secondary tab
+  var albumReturnScreen by remember { mutableStateOf<Screen>(Screen.Library) }
+
+  // System Back returns cleanly to Home (or previous origin screen from Album)
   BackHandler(enabled = currentScreen != Screen.Home && !isNowPlayingOpen) {
-    currentScreen = Screen.Home
+    currentScreen = if (currentScreen is Screen.Album) albumReturnScreen else Screen.Home
   }
 
   val pageScale by animateFloatAsState(
@@ -746,6 +748,7 @@ private fun AurixMainShell(
               },
               onOpenAlbum = {
                 viewModel.openAlbum(null)
+                albumReturnScreen = Screen.Home
                 currentScreen = Screen.Album
               },
               onOpenAllTiktokViral = { currentScreen = Screen.PlaylistDetail("tiktok_viral_charts") },
@@ -777,6 +780,7 @@ private fun AurixMainShell(
                 val itemSong = item.song
                 if (itemAlbum != null) {
                   viewModel.openFeaturedAlbum(itemAlbum)
+                  albumReturnScreen = Screen.Home
                   currentScreen = Screen.Album
                 } else if (itemSong != null) {
                   val queue = newForYouItems.mapNotNull { it.song }.ifEmpty { listOf(itemSong) }
@@ -1123,7 +1127,8 @@ private fun AurixMainShell(
                 )
               },
               onSaveCoverAppIcon = { viewModel.saveAlbumCoverAppIcon(activeAlbumInfo.albumId) },
-              onResetCover = { viewModel.resetAlbumCover(activeAlbumInfo.albumId) }
+              onResetCover = { viewModel.resetAlbumCover(activeAlbumInfo.albumId) },
+              onBackClick = { currentScreen = albumReturnScreen }
             )
             is Screen.Search -> SearchScreen(
               searchMode = searchMode,
@@ -1183,6 +1188,7 @@ private fun AurixMainShell(
               onSavePlaylist = { viewModel.saveLoadedPlaylist() },
               onOpenSavedPlaylistAlbum = { albumId ->
                 viewModel.openAlbum(albumId)
+                albumReturnScreen = Screen.Search
                 currentScreen = Screen.Album
               },
               onOpenPlaylistUrl = { url -> viewModel.openPlaylistFromUrl(url) },
@@ -1222,6 +1228,7 @@ private fun AurixMainShell(
               onOpenInsights = { currentScreen = Screen.Insights },
               onAlbumClick = { album ->
                 viewModel.openAlbum(album.albumId)
+                albumReturnScreen = Screen.Library
                 currentScreen = Screen.Album
               },
               onCreateAlbum = { title, artist, year ->
@@ -1357,7 +1364,11 @@ private fun AurixMainShell(
 
         // Subtle atmospheric gradient scrim so scrolling list rows fade gracefully behind the floating dock
         val targetScrimBase = if (currentScreen is Screen.Album) {
-          Color(0xFF0E1120)
+          androidx.compose.ui.graphics.lerp(
+            AlbumDesignTokens.Background,
+            MaterialTheme.colorScheme.primary,
+            0.14f
+          )
         } else {
           MaterialTheme.colorScheme.background
         }

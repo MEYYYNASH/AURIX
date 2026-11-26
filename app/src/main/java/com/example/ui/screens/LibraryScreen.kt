@@ -12,6 +12,7 @@ import androidx.compose.animation.core.Animatable
 import androidx.compose.animation.core.CubicBezierEasing
 import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.animation.core.snap
+import androidx.compose.animation.core.spring
 import androidx.compose.animation.core.tween
 import androidx.compose.animation.expandVertically
 import androidx.compose.animation.fadeIn
@@ -1726,8 +1727,8 @@ private fun LibraryAlbumGridCard(
   val interactionSource = remember { MutableInteractionSource() }
   val isPressed by interactionSource.collectIsPressedAsState()
   val pressScale by animateFloatAsState(
-    targetValue = if (isPressed && !reducedMotion) 0.96f else 1f,
-    animationSpec = if (reducedMotion) snap() else tween(durationMillis = 140),
+    targetValue = if (isPressed && !reducedMotion) 0.94f else 1f,
+    animationSpec = if (reducedMotion) snap() else spring(dampingRatio = 0.65f, stiffness = 480f),
     label = "album_card_press_scale"
   )
 
@@ -1777,94 +1778,148 @@ private fun LibraryAlbumGridCard(
       .testTag("library_album_card_${album.albumId}"),
     verticalArrangement = Arrangement.spacedBy(6.dp)
   ) {
+    // Subtle stacked album sleeve depth above the primary artwork card
     Box(
       modifier = Modifier
         .fillMaxWidth()
-        .height(82.dp)
-        .onGloballyPositioned { coords -> onCoverBoundsMeasured(coords.boundsInRoot()) }
-        .alpha(if (isHiddenForFlight) 0f else 1f)
-        .drawBehind {
-          if (pulseRing && ringProgress.value > 0.01f) {
-            val p = ringProgress.value
-            val alpha = (1f - p).coerceIn(0f, 1f)
-            val expand = p * 6.dp.toPx()
-            val corner = 16.dp.toPx() + expand * 0.4f
-            drawRoundRect(
-              brush = Brush.linearGradient(colors = listOf(primaryAccent, lightAccent)),
-              topLeft = Offset(-expand, -expand),
-              size = androidx.compose.ui.geometry.Size(
-                width = size.width + expand * 2f,
-                height = size.height + expand * 2f
-              ),
-              cornerRadius = CornerRadius(corner, corner),
-              alpha = alpha * 0.9f,
-              style = Stroke(width = (3f - p * 1.8f).coerceAtLeast(1f).dp.toPx())
+        .height(88.dp),
+      contentAlignment = Alignment.BottomCenter
+    ) {
+      Box(
+        modifier = Modifier
+          .fillMaxWidth(0.78f)
+          .height(10.dp)
+          .align(Alignment.TopCenter)
+          .clip(RoundedCornerShape(topStart = 10.dp, topEnd = 10.dp))
+          .background(
+            if (darkTheme) Color.White.copy(alpha = 0.08f)
+            else Color(0xFF64748B).copy(alpha = 0.16f)
+          )
+      )
+      Box(
+        modifier = Modifier
+          .fillMaxWidth(0.90f)
+          .height(12.dp)
+          .align(Alignment.TopCenter)
+          .padding(top = 3.dp)
+          .clip(RoundedCornerShape(topStart = 12.dp, topEnd = 12.dp))
+          .background(
+            if (darkTheme) Color.White.copy(alpha = 0.13f)
+            else Color(0xFF64748B).copy(alpha = 0.22f)
+          )
+      )
+      Box(
+        modifier = Modifier
+          .fillMaxWidth()
+          .height(82.dp)
+          .align(Alignment.BottomCenter)
+          .onGloballyPositioned { coords -> onCoverBoundsMeasured(coords.boundsInRoot()) }
+          .alpha(if (isHiddenForFlight) 0f else 1f)
+          .drawBehind {
+            if (pulseRing && ringProgress.value > 0.01f) {
+              val p = ringProgress.value
+              val alpha = (1f - p).coerceIn(0f, 1f)
+              val expand = p * 6.dp.toPx()
+              val corner = 16.dp.toPx() + expand * 0.4f
+              drawRoundRect(
+                brush = Brush.linearGradient(colors = listOf(primaryAccent, lightAccent)),
+                topLeft = Offset(-expand, -expand),
+                size = androidx.compose.ui.geometry.Size(
+                  width = size.width + expand * 2f,
+                  height = size.height + expand * 2f
+                ),
+                cornerRadius = CornerRadius(corner, corner),
+                alpha = alpha * 0.9f,
+                style = Stroke(width = (3f - p * 1.8f).coerceAtLeast(1f).dp.toPx())
+              )
+            }
+          }
+          .clip(coverShape)
+          .background(
+            Brush.linearGradient(
+              colors = if (savedPreset != null) {
+                listOf(
+                  savedPreset.resolveStartColor(primaryAccent),
+                  savedPreset.resolveEndColor(primaryAccent)
+                )
+              } else {
+                listOf(
+                  primaryAccent,
+                  androidx.compose.ui.graphics.lerp(primaryAccent, Color(0xFF090710), 0.65f)
+                )
+              }
+            )
+          )
+          .border(
+            width = if (pulseRing && ringProgress.value > 0.01f) 1.5.dp else 0.8.dp,
+            color = if (pulseRing && ringProgress.value > 0.01f) {
+              lightAccent.copy(alpha = (1f - ringProgress.value * 0.6f).coerceIn(0.2f, 1f))
+            } else {
+              Color.White.copy(alpha = if (darkTheme) 0.16f else 0.72f)
+            },
+            shape = coverShape
+          ),
+        contentAlignment = Alignment.Center
+      ) {
+        when {
+          coverUrl == APP_ICON_ARTWORK -> {
+            Image(
+              painter = painterResource(id = R.drawable.ic_launcher_foreground),
+              contentDescription = album.title,
+              contentScale = ContentScale.Fit,
+              modifier = Modifier.fillMaxSize(0.84f)
+            )
+          }
+          !coverUrl.isNullOrBlank() -> {
+            val libCoverReq = com.example.ui.image.rememberCrispArtworkRequest(model = coverUrl)
+            AsyncImage(
+              model = libCoverReq,
+              contentDescription = album.title,
+              contentScale = ContentScale.Crop,
+              filterQuality = com.example.ui.image.AurixImagePipeline.ARTWORK_FILTER_QUALITY,
+              modifier = Modifier.fillMaxSize()
+            )
+          }
+          savedPreset != null -> {
+            AlbumCoverArtBox(
+              preset = savedPreset,
+              firstLetter = album.title.trim().firstOrNull()?.uppercaseChar()?.toString().orEmpty(),
+              isTypingBoosted = false,
+              reducedMotion = true,
+              showEditBadge = false,
+              modifier = Modifier.fillMaxSize()
+            )
+          }
+          else -> {
+            Icon(
+              imageVector = Icons.Rounded.MusicNote,
+              contentDescription = album.title,
+              tint = Color.White.copy(alpha = 0.88f),
+              modifier = Modifier.size(28.dp)
             )
           }
         }
-        .clip(coverShape)
-        .background(
-          Brush.linearGradient(
-            colors = if (savedPreset != null) {
-              listOf(
-                savedPreset.resolveStartColor(primaryAccent),
-                savedPreset.resolveEndColor(primaryAccent)
-              )
-            } else {
-              listOf(
-                primaryAccent,
-                androidx.compose.ui.graphics.lerp(primaryAccent, Color(0xFF090710), 0.65f)
-              )
-            }
-          )
-        )
-        .border(
-          width = if (pulseRing && ringProgress.value > 0.01f) 1.5.dp else 0.8.dp,
-          color = if (pulseRing && ringProgress.value > 0.01f) {
-            lightAccent.copy(alpha = (1f - ringProgress.value * 0.6f).coerceIn(0.2f, 1f))
-          } else {
-            Color.White.copy(alpha = if (darkTheme) 0.15f else 0.72f)
-          },
-          shape = coverShape
-        ),
-      contentAlignment = Alignment.Center
-    ) {
-      when {
-        coverUrl == APP_ICON_ARTWORK -> {
-          Image(
-            painter = painterResource(id = R.drawable.ic_launcher_foreground),
-            contentDescription = album.title,
-            contentScale = ContentScale.Fit,
-            modifier = Modifier.fillMaxSize(0.84f)
-          )
-        }
-        !coverUrl.isNullOrBlank() -> {
-          val libCoverReq = com.example.ui.image.rememberCrispArtworkRequest(model = coverUrl)
-          AsyncImage(
-            model = libCoverReq,
-            contentDescription = album.title,
-            contentScale = ContentScale.Crop,
-            filterQuality = com.example.ui.image.AurixImagePipeline.ARTWORK_FILTER_QUALITY,
-            modifier = Modifier.fillMaxSize()
-          )
-        }
-        savedPreset != null -> {
-          AlbumCoverArtBox(
-            preset = savedPreset,
-            firstLetter = album.title.trim().firstOrNull()?.uppercaseChar()?.toString().orEmpty(),
-            isTypingBoosted = false,
-            reducedMotion = true,
-            showEditBadge = false,
-            modifier = Modifier.fillMaxSize()
-          )
-        }
-        else -> {
-          Icon(
-            imageVector = Icons.Rounded.MusicNote,
-            contentDescription = album.title,
-            tint = Color.White.copy(alpha = 0.88f),
-            modifier = Modifier.size(28.dp)
-          )
+
+        if (album.tracks.isNotEmpty()) {
+          Box(
+            modifier = Modifier
+              .align(Alignment.BottomEnd)
+              .padding(5.dp)
+              .clip(CircleShape)
+              .background(Color.Black.copy(alpha = 0.56f))
+              .border(0.6.dp, Color.White.copy(alpha = 0.22f), CircleShape)
+              .padding(horizontal = 6.dp, vertical = 1.5.dp)
+          ) {
+            Text(
+              text = album.tracks.size.toString(),
+              style = MaterialTheme.typography.labelSmall.copy(
+                fontSize = 9.5.sp,
+                fontWeight = FontWeight.Bold
+              ),
+              color = Color.White,
+              maxLines = 1
+            )
+          }
         }
       }
     }

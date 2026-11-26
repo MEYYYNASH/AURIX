@@ -4,6 +4,7 @@ import com.example.data.YoutubeExtractor
 import com.example.model.Song
 import com.example.recommendation.TrackMetadataClassifier
 import org.junit.Assert.assertEquals
+import org.junit.Assert.assertFalse
 import org.junit.Assert.assertNull
 import org.junit.Assert.assertTrue
 import org.junit.Test
@@ -1134,5 +1135,100 @@ class CrashFixStabilityTest {
     val aurixAppSrc = java.io.File(javaRoot, "com/example/ui/screens/AurixApp.kt").readText()
     assertTrue(aurixAppSrc.contains("rememberAlbumDynamicPalette"))
     assertTrue(aurixAppSrc.contains("dynamicPalette = activeDynamicPalette"))
+  }
+
+  @Test
+  fun albumRedesignAndSingleDownloadNoAutoAlbum_workCorrectly() {
+    val downloadedSingle = com.example.model.Song(
+      id = "dl_1",
+      title = "Beaches (Official Video)",
+      artist = "beabadoobee",
+      artworkUrl = "https://example.com/beaches.jpg",
+      durationSeconds = 246L,
+      streamUrl = "content://media/1",
+      source = "Downloaded",
+      album = ""
+    )
+    val downloadedSingleNamedAlbum = downloadedSingle.copy(id = "dl_2", album = "This Is How Tomorrow Moves")
+    val downloadedSingleUnknownAlbum = downloadedSingle.copy(id = "dl_3", album = "Unknown Album")
+    val localSecondTrack = downloadedSingle.copy(
+      id = "local_2",
+      source = "Local",
+      album = "This Is How Tomorrow Moves"
+    )
+
+    // Single downloaded track must NOT auto-create an album
+    assertFalse(
+      com.example.viewmodel.AlbumGroupingPolicy.shouldIncludeAlbumGroup(
+        albumTitle = "",
+        autoTracks = listOf(downloadedSingle),
+        hasCustomAlbum = false,
+        hasExplicitAlbumTracks = false
+      )
+    )
+    assertFalse(
+      com.example.viewmodel.AlbumGroupingPolicy.shouldIncludeAlbumGroup(
+        albumTitle = "Unknown Album",
+        autoTracks = listOf(downloadedSingleUnknownAlbum),
+        hasCustomAlbum = false,
+        hasExplicitAlbumTracks = false
+      )
+    )
+    assertFalse(
+      com.example.viewmodel.AlbumGroupingPolicy.shouldIncludeAlbumGroup(
+        albumTitle = "This Is How Tomorrow Moves",
+        autoTracks = listOf(downloadedSingleNamedAlbum),
+        hasCustomAlbum = false,
+        hasExplicitAlbumTracks = false
+      )
+    )
+
+    // User-created custom album or multi-track real album MUST still appear
+    assertTrue(
+      com.example.viewmodel.AlbumGroupingPolicy.shouldIncludeAlbumGroup(
+        albumTitle = "My Favorites",
+        autoTracks = emptyList(),
+        hasCustomAlbum = true,
+        hasExplicitAlbumTracks = false
+      )
+    )
+    assertTrue(
+      com.example.viewmodel.AlbumGroupingPolicy.shouldIncludeAlbumGroup(
+        albumTitle = "Unknown Album",
+        autoTracks = emptyList(),
+        hasCustomAlbum = false,
+        hasExplicitAlbumTracks = true
+      )
+    )
+    assertTrue(
+      com.example.viewmodel.AlbumGroupingPolicy.shouldIncludeAlbumGroup(
+        albumTitle = "This Is How Tomorrow Moves",
+        autoTracks = listOf(downloadedSingleNamedAlbum, localSecondTrack),
+        hasCustomAlbum = false,
+        hasExplicitAlbumTracks = false
+      )
+    )
+
+    // Redesigned Album palette contrast checks across teal, crimson, and neutral seeds
+    val testSeeds = listOf(
+      androidx.compose.ui.graphics.Color(0xFF2AA8B8),
+      androidx.compose.ui.graphics.Color(0xFF9C27B0),
+      androidx.compose.ui.graphics.Color(0xFF20222A),
+      null
+    )
+    for (seed in testSeeds) {
+      val resolved = com.example.ui.screens.resolveAlbumVisualPalette(
+        extractedSeed = seed,
+        fallbackPrimary = androidx.compose.ui.graphics.Color(0xFF7B61FF)
+      )
+      assertTrue(
+        "Accent contrast >= 4.5 against deepBackground",
+        com.example.ui.theme.AlbumPaletteThemeEngine.contrastRatio(resolved.accent, resolved.deepBackground) >= 4.5f
+      )
+      assertTrue(
+        "Play button ink contrast >= 4.5 against accent",
+        com.example.ui.theme.AlbumPaletteThemeEngine.contrastRatio(resolved.playButtonInk, resolved.accent) >= 4.5f
+      )
+    }
   }
 }

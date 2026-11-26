@@ -939,4 +939,11 @@
     <string name="settings_dynamic_album_badge_live">Album Art · %1$s</string>
     <string name="settings_dynamic_album_badge_auto">Album Art Auto</string>
     <string name="settings_dynamic_album_palette_label">Live palette</string>
+
+    <!-- Redesigned Album Experience (v2.3.2) -->
+    <string name="album_back_cd">Back from album</string>
+    <string name="album_tracks_heading">Tracks</string>
+    <string name="album_playing_badge">Now Playing</string>
+    <string name="album_total_duration_minutes">%1$d min</string>
+    <string name="album_total_duration_hours">%1$dh %2$dm</string>
 </resources>
