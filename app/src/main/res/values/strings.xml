@@ -946,4 +946,113 @@
     <string name="album_playing_badge">Now Playing</string>
     <string name="album_total_duration_minutes">%1$d min</string>
     <string name="album_total_duration_hours">%1$dh %2$dm</string>
+
+    <!-- Smart Playlists, DJ Auto-Mix & Live Queue Drawer (v2.4.0) -->
+    <string name="smart_playlists_title">Smart Playlists &amp; DJ Mix</string>
+    <string name="smart_playlists_subtitle">Auto-curated by mood, BPM &amp; favorite artists</string>
+    <string name="smart_playlists_filter_all">All</string>
+    <string name="smart_playlists_filter_mood">Mood</string>
+    <string name="smart_playlists_filter_bpm">BPM</string>
+    <string name="smart_playlists_filter_artist">Artist</string>
+    <string name="smart_playlists_dj_mix_button">DJ Mix</string>
+    <string name="smart_playlists_tracks_bpm">%1$d tracks · %2$s</string>
+    <string name="smart_playlists_dj_active_badge">DJ AUTO-MIX</string>
+    <string name="dj_mode_title">DJ Auto-Mix</string>
+    <string name="dj_mode_subtitle">BPM-matched beatfade &amp; seamless transitions</string>
+    <string name="dj_mode_beatfade_badge">%1$ds beatfade · %2$d%% BPM match</string>
+    <string name="dj_mode_gapless_badge">%1$ds gapless blend</string>
+    <string name="dj_mode_toggle_cd">Toggle DJ Auto-Mix beatfade transitions</string>
+    <string name="dj_mode_optimize_queue">BPM Sort</string>
+    <string name="dj_mode_optimize_queue_cd">Sort upcoming queue for smoothest BPM transitions</string>
+    <string name="dj_mode_sorted_toast">Queue sorted for DJ Auto-Mix (%1$d tracks)</string>
+    <string name="queue_drag_handle_cd">Drag to reorder track</string>
+    <string name="queue_swipe_remove_label">Remove</string>
+    <string name="queue_gesture_hint">Drag handle to reorder · Swipe left to remove</string>
+
+    <!-- Listening Recap Cards (Monthly / Yearly Wrapped) (v2.4.0) -->
+    <string name="recap_entry_title">Your Recap</string>
+    <string name="recap_entry_subtitle">Music DNA stories · Monthly &amp; Yearly</string>
+    <string name="recap_entry_open_cd">Open your listening recap stories</string>
+    <string name="recap_ready_banner_month">Your %1$s recap is ready</string>
+    <string name="recap_ready_banner_year">Your %1$s Year in Music is ready</string>
+    <string name="recap_ready_cta">Watch</string>
+    <string name="recap_ready_dismiss_cd">Dismiss recap ready prompt</string>
+    <string name="recap_period_monthly">Monthly</string>
+    <string name="recap_period_yearly">Yearly</string>
+    <string name="recap_brand_header">AURIX · MUSIC DNA</string>
+    <string name="recap_footer_tagline">ONE APP. ALL YOUR MUSIC.</string>
+    <string name="recap_close_cd">Close recap viewer</string>
+    <string name="recap_share_button">Share</string>
+    <string name="recap_save_button">Save image</string>
+    <string name="recap_share_all_button">All 6</string>
+    <string name="recap_share_caption">My AURIX recap</string>
+    <string name="recap_share_chooser_title">Share AURIX Recap</string>
+    <string name="recap_saved_snackbar">Saved to Photos · បានរក្សាទុក</string>
+    <string name="recap_save_failed_snackbar">Could not save recap image</string>
+    <string name="recap_share_failed_snackbar">Could not share recap image</string>
+    <string name="recap_permission_needed">Storage permission is needed to save images on this device</string>
+    <string name="recap_exporting_label">Rendering 1080×1920…</string>
+    <string name="recap_paused_badge">PAUSED</string>
+    <string name="recap_empty_hint">Play a few songs and your Music DNA recap will come alive here.</string>
+
+    <!-- Recap 6 Cards Bilingual Kickers & Labels -->
+    <string name="recap_kicker_intro">MUSIC DNA · DNA តន្ត្រី</string>
+    <string name="recap_intro_title_month">Your month in music</string>
+    <string name="recap_intro_title_year">Your year in music</string>
+    <string name="recap_intro_subtitle">Crafted from your real AURIX listening history</string>
+
+    <string name="recap_kicker_top_artist">TOP ARTIST · សិល្បករកំពូល</string>
+    <string name="recap_top_artist_plays_only">%1$d plays this period.</string>
+    <string name="recap_top_artist_top_one_percent">%1$d plays. You are in their top 1%%.</string>
+    <string name="recap_top_artists_panel_title">Top 3 Artists</string>
+    <string name="recap_plays_count">%1$d plays</string>
+
+    <string name="recap_kicker_top_track">TOP TRACK · បទចម្រៀងកំពូល</string>
+    <string name="recap_stat_best_day">Best day</string>
+    <string name="recap_stat_longest_streak">Longest streak</string>
+    <string name="recap_stat_replays">Replays</string>
+    <string name="recap_streak_days">%1$d days</string>
+
+    <string name="recap_kicker_minutes">MINUTES LISTENED · នាទីស្តាប់</string>
+    <string name="recap_minutes_unit">minutes</string>
+    <string name="recap_minutes_comparison">%1$s hours · about %2$d full albums</string>
+    <string name="recap_stat_daily_avg">Daily avg</string>
+    <string name="recap_stat_top_day">Top day</string>
+    <string name="recap_stat_new_artists">New artists</string>
+    <string name="recap_daily_avg_value">%1$d min</string>
+
+    <string name="recap_kicker_personality">PERSONALITY · បុគ្គលិកលក្ខណៈស្តាប់</string>
+    <string name="recap_kicker_orbi_mood">ORBI MOOD · អារម្មណ៍ Orbi</string>
+    <string name="recap_mood_chip_month">Mood of the month</string>
+    <string name="recap_mood_chip_year">Mood of the year</string>
+    <string name="recap_summary_artist">Top Artist</string>
+    <string name="recap_summary_track">Top Track</string>
+    <string name="recap_summary_minutes">Minutes</string>
+
+    <!-- Listening Personalities -->
+    <string name="recap_personality_night_owl_name">Night Owl</string>
+    <string name="recap_personality_night_owl_desc">Your best soundtracks come alive after 10 PM when the city goes quiet.</string>
+    <string name="recap_personality_early_bird_name">Early Bird</string>
+    <string name="recap_personality_early_bird_desc">You set the tone before noon with crisp morning rhythms and fresh energy.</string>
+    <string name="recap_personality_explorer_name">Explorer</string>
+    <string name="recap_personality_explorer_desc">Always chasing new voices, fresh genres, and hidden gems across your library.</string>
+    <string name="recap_personality_loyalist_name">Loyalist</string>
+    <string name="recap_personality_loyalist_desc">When a song hits home, you keep it on repeat and know every beat by heart.</string>
+    <string name="recap_personality_marathoner_name">Marathoner</string>
+    <string name="recap_personality_marathoner_desc">Long uninterrupted listening sessions are your signature way to stay in flow.</string>
+
+    <string name="recap_trait_night_energy">Night Energy</string>
+    <string name="recap_trait_morning_spark">Morning Spark</string>
+    <string name="recap_trait_discovery">Discovery</string>
+    <string name="recap_trait_loyalty">Loyalty</string>
+    <string name="recap_trait_endurance">Endurance</string>
+    <string name="recap_trait_tempo_drive">Tempo Drive</string>
+
+    <!-- Orbi Recap Moods -->
+    <string name="recap_mood_dreamy">Dreamy</string>
+    <string name="recap_mood_electric">Electric</string>
+    <string name="recap_mood_chill">Chill</string>
+    <string name="recap_mood_hyped">Hyped</string>
+    <string name="recap_mood_focused">Focused</string>
+    <string name="recap_mood_nostalgic">Nostalgic</string>
 </resources>

@@ -36,6 +36,10 @@ import com.example.playback.CrossfadeSettings
 import com.example.playback.EqPreset
 import com.example.playback.EqualizerUiState
 import com.example.playback.PlaybackService
+import com.example.recap.RecapData
+import com.example.recap.RecapPeriod
+import com.example.recap.RecapReadyPrompt
+import com.example.recap.RecapRepository
 import com.example.recommendation.*
 import com.example.ui.screens.UpdateLogoState
 import com.example.widget.AurixWidgetController
@@ -1289,6 +1293,31 @@ class AurixViewModel(application: Application) : AndroidViewModel(application) {
   val equalizerState: StateFlow<EqualizerUiState> = AudioEqualizerController.state
   val crossfadeSettings: StateFlow<CrossfadeSettings> = CrossfadeController.state
 
+  private val recapRepository = RecapRepository(dao = dao, prefsManager = prefsManager)
+  private val _recapPeriod = MutableStateFlow(RecapPeriod.MONTHLY)
+  val recapPeriod: StateFlow<RecapPeriod> = _recapPeriod.asStateFlow()
+  private val _recapData = MutableStateFlow<RecapData?>(null)
+  val recapData: StateFlow<RecapData?> = _recapData.asStateFlow()
+  private val _isLoadingRecap = MutableStateFlow(false)
+  val isLoadingRecap: StateFlow<Boolean> = _isLoadingRecap.asStateFlow()
+  private val _recapReadyPrompt = MutableStateFlow<RecapReadyPrompt?>(null)
+  val recapReadyPrompt: StateFlow<RecapReadyPrompt?> = _recapReadyPrompt.asStateFlow()
+  private var recapLoadJob: Job? = null
+
+  val smartPlaylists: StateFlow<List<SmartPlaylist>> = combine(
+    localSongs,
+    favorites,
+    featuredTracks,
+    recentlyPlayed,
+    dao.observePlayLogs().catch { emit(emptyList()) }
+  ) { local, favs, featured, recent, logs ->
+    val pool = (local + favs + recent + featured).distinctBy { it.id }
+    SmartPlaylistEngine.generateSmartPlaylists(songs = pool, playLogs = logs)
+  }
+    .flowOn(Dispatchers.Default)
+    .catch { emit(emptyList()) }
+    .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), emptyList())
+
   private val _isAppInitialized = MutableStateFlow(false)
   val isAppInitialized: StateFlow<Boolean> = _isAppInitialized
 
@@ -1454,12 +1483,16 @@ class AurixViewModel(application: Application) : AndroidViewModel(application) {
         }
         val crossfadeSec = runCatching { prefsManager.crossfadeSeconds.first() }.getOrDefault(0)
         val crossfadeManualSkip = runCatching { prefsManager.crossfadeManualSkip.first() }.getOrDefault(true)
+        val djAutoMix = runCatching { prefsManager.djAutoMixEnabled.first() }.getOrDefault(false)
         runCatching {
           CrossfadeController.restoreSettings(
             durationSeconds = crossfadeSec,
-            fadeOnManualSkip = crossfadeManualSkip
+            fadeOnManualSkip = crossfadeManualSkip,
+            djAutoMixEnabled = djAutoMix
           )
         }
+        val readyPrompt = runCatching { recapRepository.checkRecapReadyPrompt() }.getOrNull()
+        _recapReadyPrompt.value = readyPrompt
         val savedLang = runCatching { prefsManager.language.first() }.getOrDefault("en")
         runCatching { LocaleHelper.saveLanguageSync(application, savedLang) }
         runCatching { prefsManager.onboardingCompleted.first() }
@@ -1473,6 +1506,8 @@ class AurixViewModel(application: Application) : AndroidViewModel(application) {
         _isAppInitialized.value = true
       }
     }
+    observeDjTransitionMetrics()
+    observeRecapInvalidation()
     observeSearchRequests()
     observeDiscoverWeeklyUpdates()
     observeCatalogMetadataSync()
@@ -5304,6 +5339,141 @@ class AurixViewModel(application: Application) : AndroidViewModel(application) {
         durationSeconds = settings.durationSeconds,
         fadeOnManualSkip = settings.fadeOnManualSkip
       )
+    }
+  }
+
+  private fun observeDjTransitionMetrics() {
+    viewModelScope.launch {
+      combine(currentSong, _queue, crossfadeSettings) { cur, q, cf ->
+        Triple(cur, q, cf.djAutoMixEnabled)
+      }.collect { (cur, q, djEnabled) ->
+        if (!djEnabled || cur == null || q.size < 2) return@collect
+        val idx = q.indexOfFirst { it.id == cur.id }
+        val next = if (idx >= 0 && idx + 1 < q.size) q[idx + 1] else return@collect
+        val info = SmartPlaylistEngine.describeTransition(cur, next)
+        CrossfadeController.updateDjTransitionMetrics(info.fromBpm, info.toBpm)
+      }
+    }
+  }
+
+  private fun observeRecapInvalidation() {
+    viewModelScope.launch {
+      dao.observePlayLogs()
+        .drop(1)
+        .catch { /* ignore */ }
+        .collect {
+          recapRepository.invalidateCache()
+        }
+    }
+  }
+
+  fun setDjAutoMixEnabled(enabled: Boolean) {
+    CrossfadeController.setDjAutoMixEnabled(enabled)
+    safeLaunch(notifyUser = false) {
+      prefsManager.setDjAutoMixEnabled(enabled)
+    }
+    if (enabled) {
+      val cur = _rawCurrentSong.value
+      val q = _queue.value
+      val idx = if (cur != null) q.indexOfFirst { it.id == cur.id } else -1
+      val next = if (idx >= 0 && idx + 1 < q.size) q[idx + 1] else null
+      if (cur != null && next != null) {
+        val info = SmartPlaylistEngine.describeTransition(cur, next)
+        CrossfadeController.updateDjTransitionMetrics(info.fromBpm, info.toBpm)
+      }
+    }
+  }
+
+  fun playSmartPlaylist(playlist: SmartPlaylist, enableDjMix: Boolean = true) {
+    if (playlist.tracks.isEmpty()) return
+    if (enableDjMix) {
+      setDjAutoMixEnabled(true)
+    }
+    val ordered = if (enableDjMix) {
+      SmartPlaylistEngine.orderForDjAutoMix(playlist.tracks)
+    } else {
+      playlist.tracks
+    }
+    playPlaylist(ordered)
+  }
+
+  fun optimizeUpcomingQueueForDj() {
+    runCatching {
+      val cur = _rawCurrentSong.value ?: return
+      val q = _queue.value
+      val activeIdx = q.indexOfFirst { it.id == cur.id }
+      if (activeIdx < 0 || activeIdx + 2 >= q.size) return
+      val prefix = q.take(activeIdx + 1)
+      val upcoming = q.drop(activeIdx + 1)
+      val djOrdered = SmartPlaylistEngine.orderForDjAutoMix(
+        tracks = listOf(cur) + upcoming,
+        anchorSong = cur
+      ).drop(1)
+      val updatedQueue = prefix + djOrdered
+      _queue.value = updatedQueue
+
+      mediaController?.let { controller ->
+        val curCtrlIdx = controller.currentMediaItemIndex
+        for (i in controller.mediaItemCount - 1 downTo (curCtrlIdx + 1).coerceAtLeast(0)) {
+          controller.removeMediaItem(i)
+        }
+        djOrdered.forEach { song ->
+          if (!isUnresolvedYoutubeWatchUrl(song)) {
+            controller.addMediaItem(buildMediaItem(song))
+          }
+        }
+      }
+      val next = djOrdered.firstOrNull()
+      if (next != null) {
+        val info = SmartPlaylistEngine.describeTransition(cur, next)
+        CrossfadeController.updateDjTransitionMetrics(info.fromBpm, info.toBpm)
+      }
+      val appCtx = localizedAppContext()
+      runCatching {
+        Toast.makeText(
+          appCtx,
+          appCtx.getString(R.string.dj_mode_sorted_toast, djOrdered.size),
+          Toast.LENGTH_SHORT
+        ).show()
+      }
+    }.onFailure { reportError("DJ Sort Failed", it) }
+  }
+
+  fun openRecap(period: RecapPeriod = _recapPeriod.value) {
+    _recapPeriod.value = period
+    _recapReadyPrompt.value?.let { prompt ->
+      if (prompt.period == period) {
+        _recapReadyPrompt.value = null
+        safeLaunch(notifyUser = false) { recapRepository.markPromptSeen(prompt) }
+      }
+    }
+    loadRecapForPeriod(period, forceRefresh = false)
+  }
+
+  fun selectRecapPeriod(period: RecapPeriod) {
+    _recapPeriod.value = period
+    loadRecapForPeriod(period, forceRefresh = false)
+  }
+
+  fun dismissRecapReadyPrompt() {
+    val prompt = _recapReadyPrompt.value ?: return
+    _recapReadyPrompt.value = null
+    safeLaunch(notifyUser = false) { recapRepository.markPromptSeen(prompt) }
+  }
+
+  private fun loadRecapForPeriod(period: RecapPeriod, forceRefresh: Boolean) {
+    recapLoadJob?.cancel()
+    recapLoadJob = viewModelScope.launch {
+      _isLoadingRecap.value = true
+      try {
+        _recapData.value = recapRepository.getRecap(period = period, forceRefresh = forceRefresh)
+      } catch (ce: CancellationException) {
+        throw ce
+      } catch (_: Throwable) {
+        // Keep previous recap if load fails transiently
+      } finally {
+        _isLoadingRecap.value = false
+      }
     }
   }
 

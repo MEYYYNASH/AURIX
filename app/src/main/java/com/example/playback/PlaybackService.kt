@@ -178,7 +178,7 @@ class PlaybackService : MediaSessionService() {
           reclaimRecoveryCount = 0
           if (!isCrossfadingNow && reason == Player.MEDIA_ITEM_TRANSITION_REASON_SEEK) {
             val settings = CrossfadeController.state.value
-            if (settings.durationSeconds > 0 && settings.fadeOnManualSkip) {
+            if (settings.effectiveDurationSeconds > 0 && settings.fadeOnManualSkip) {
               runManualSkipFadeIn(player)
             } else {
               player.volume = 1f
@@ -335,10 +335,11 @@ class PlaybackService : MediaSessionService() {
         runCatching {
           val player = mainPlayer
           val settings = CrossfadeController.state.value
+          val effectiveSec = settings.effectiveDurationSeconds
           if (
             player != null &&
             !isCrossfadingNow &&
-            settings.durationSeconds > 0 &&
+            effectiveSec > 0 &&
             player.isPlaying &&
             player.playbackState == Player.STATE_READY &&
             player.repeatMode != Player.REPEAT_MODE_ONE &&
@@ -348,7 +349,7 @@ class PlaybackService : MediaSessionService() {
             val position = player.currentPosition
             if (duration > 4000L && position >= 0L) {
               val maxSafeFadeMs = (duration / 2L).coerceAtLeast(1000L)
-              val targetFadeMs = (settings.durationSeconds * 1000L).coerceAtMost(maxSafeFadeMs)
+              val targetFadeMs = (effectiveSec * 1000L).coerceAtMost(maxSafeFadeMs)
               val remaining = duration - position
               if (remaining in 180L..targetFadeMs) {
                 triggerCrossfade(player, remaining)

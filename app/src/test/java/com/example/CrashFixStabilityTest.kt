@@ -12,10 +12,10 @@ import org.junit.Test
 class CrashFixStabilityTest {
 
   @Test
-  fun release233_metadataAndVersionCodeAreConsistent() {
-    assertEquals("2.3.3", BuildConfig.VERSION_NAME)
-    assertEquals(20303, BuildConfig.VERSION_CODE)
-    assertTrue("Release 2.3.3 versionCode must exceed 2.3.2 (20302)", BuildConfig.VERSION_CODE > 20302)
+  fun release240_metadataAndVersionCodeAreConsistent() {
+    assertEquals("2.4.0", BuildConfig.VERSION_NAME)
+    assertEquals(20400, BuildConfig.VERSION_CODE)
+    assertTrue("Release 2.4.0 versionCode must exceed 2.3.3 (20303)", BuildConfig.VERSION_CODE > 20303)
     assertEquals(420, com.example.ui.screens.SELECT_BAR_OPEN_DURATION_MS)
     assertEquals(600, com.example.ui.screens.SELECT_CIRCLE_OPEN_DURATION_MS)
     assertEquals(380L, com.example.ui.screens.SELECT_CLOSE_CLEAR_DELAY_MS)
@@ -983,21 +983,22 @@ class CrashFixStabilityTest {
 
   @Test
   fun remoteJsonUpdateChecker_granularVersioningAndTimestamps_workEndToEnd() {
-    assertEquals(20303, BuildConfig.VERSION_CODE)
+    assertEquals(20400, BuildConfig.VERSION_CODE)
     assertEquals(20301L, com.example.data.GitHubUpdater.deriveVersionCodeFromTag("v2.3.1"))
     assertEquals(20301L, com.example.data.GitHubUpdater.deriveVersionCodeFromTag("v2.3.1+20301"))
     assertEquals(20312L, com.example.data.GitHubUpdater.deriveVersionCodeFromTag("v2.3.1.2"))
     assertEquals(20302L, com.example.data.GitHubUpdater.deriveVersionCodeFromTag("v2.3.2"))
     assertEquals(20303L, com.example.data.GitHubUpdater.deriveVersionCodeFromTag("v2.3.3"))
+    assertEquals(20400L, com.example.data.GitHubUpdater.deriveVersionCodeFromTag("v2.4.0"))
 
     val server = com.sun.net.httpserver.HttpServer.create(java.net.InetSocketAddress("127.0.0.1", 0), 0)
     val port = server.address.port
     server.createContext("/version.json") { exchange ->
       val body = """
         {
-          "versionName": "2.3.1.2",
-          "publishedAt": "2026-11-25T22:15:30Z",
-          "apkUrl": "http://127.0.0.1:$port/AURIX-v2.3.1.2.apk",
+          "versionName": "2.4.0.1",
+          "publishedAt": "2026-11-26T22:15:30Z",
+          "apkUrl": "http://127.0.0.1:$port/AURIX-v2.4.0.1.apk",
           "sha256": "0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef",
           "notes": ["Granular 4-segment hotfix release"]
         }
@@ -1021,8 +1022,8 @@ class CrashFixStabilityTest {
       val derivedCode = com.example.data.GitHubUpdater.deriveVersionCodeFromTag(versionName)
       val parsedTs = com.example.data.GitHubUpdater.parseIsoTimestampMs(publishedAt)
 
-      assertEquals("2.3.1.2", versionName)
-      assertEquals(20312L, derivedCode)
+      assertEquals("2.4.0.1", versionName)
+      assertEquals(20401L, derivedCode)
       assertTrue(parsedTs > 0L)
 
       val remote = com.example.data.RemoteVersionInfo(
@@ -1307,7 +1308,10 @@ class CrashFixStabilityTest {
       "com/example/ui/screens/HomeScreen.kt",
       "com/example/ui/screens/SettingsScreen.kt",
       "com/example/ui/screens/LibraryScreen.kt",
-      "com/example/ui/screens/SearchScreen.kt"
+      "com/example/ui/screens/SearchScreen.kt",
+      "com/example/ui/screens/SmartPlaylistsSection.kt",
+      "com/example/recap/RecapCards.kt",
+      "com/example/recap/RecapScreen.kt"
     )
     val bareHazeChildPattern = Regex("""hazeChild\s*\(\s*state\s*=\s*[^,)]+\s*\)""")
     filesToCheck.forEach { rel ->
@@ -1351,5 +1355,185 @@ class CrashFixStabilityTest {
     assertTrue(leftOverdrag < 0f && leftOverdrag > -24f)
     val rightOverdrag = com.example.ui.glass.applyLiquidEdgeResistance(600f, 0f, 300f, 24f)
     assertTrue(rightOverdrag > 300f && rightOverdrag < 324f)
+  }
+
+  @Test
+  fun recapClassifiersAndRepository_areDeterministicAndHonest() {
+    // 1. PersonalityClassifier deterministic rules & 0..100 trait meters
+    val nightOwl = com.example.recap.PersonalityClassifier.classify(
+      com.example.recap.PersonalitySignals(
+        totalPlays = 80,
+        lateNightRatio = 0.55f,
+        morningRatio = 0.05f,
+        uniqueArtistRatio = 0.25f,
+        newArtistsCount = 4,
+        repeatRate = 0.62f,
+        dailyAverageMinutes = 48,
+        averageBpm = 104
+      )
+    )
+    assertEquals(com.example.recap.PersonalityType.NIGHT_OWL, nightOwl.type)
+    assertEquals(3, nightOwl.traits.size)
+    nightOwl.traits.forEach { assertTrue(it.percent in 0..100) }
+
+    val explorer = com.example.recap.PersonalityClassifier.classify(
+      com.example.recap.PersonalitySignals(
+        totalPlays = 50,
+        lateNightRatio = 0.10f,
+        morningRatio = 0.15f,
+        uniqueArtistRatio = 0.62f,
+        newArtistsCount = 14,
+        repeatRate = 0.20f,
+        dailyAverageMinutes = 42,
+        averageBpm = 114
+      )
+    )
+    assertEquals(com.example.recap.PersonalityType.EXPLORER, explorer.type)
+
+    // 2. OrbiMoodClassifier deterministic rules
+    val hyped = com.example.recap.OrbiMoodClassifier.classify(
+      com.example.recap.OrbiMoodSignals(
+        averageBpm = 136,
+        peakHour = 19,
+        dominantTags = setOf("phonk", "workout"),
+        energy = 0.84f,
+        chill = 0.15f,
+        calm = 0.10f,
+        sad = 0.10f,
+        romantic = 0.12f,
+        energetic = 0.85f,
+        instrumentalRatio = 0.1f
+      )
+    )
+    assertEquals(com.example.recap.OrbiMood.HYPED, hyped)
+
+    val focused = com.example.recap.OrbiMoodClassifier.classify(
+      com.example.recap.OrbiMoodSignals(
+        averageBpm = 90,
+        peakHour = 14,
+        dominantTags = setOf("lo-fi", "focus"),
+        energy = 0.30f,
+        chill = 0.72f,
+        calm = 0.80f,
+        sad = 0.12f,
+        romantic = 0.18f,
+        energetic = 0.20f,
+        instrumentalRatio = 0.60f
+      )
+    )
+    assertEquals(com.example.recap.OrbiMood.FOCUSED, focused)
+
+    // 3. RecapRepository.computeRecapData: empty history stays safe
+    val emptyRecap = com.example.recap.RecapRepository.computeRecapData(
+      period = com.example.recap.RecapPeriod.MONTHLY,
+      allLogs = emptyList()
+    )
+    assertFalse(emptyRecap.hasRealData)
+    assertEquals(0, emptyRecap.totalMinutes)
+
+    // 4. RecapRepository.computeRecapData: honest Top 1% gating & streak calculation
+    val cal = java.util.Calendar.getInstance().apply {
+      set(2026, java.util.Calendar.NOVEMBER, 15, 23, 10, 0)
+      set(java.util.Calendar.MILLISECOND, 0)
+    }
+    val nowMs = cal.timeInMillis
+    val dayMs = 24L * 60L * 60L * 1000L
+
+    // Low count (5 plays) -> isTopOnePercent MUST be false
+    val smallLogs = (0 until 5).map { i ->
+      com.example.data.PlayLogEntity(
+        id = i.toLong() + 1L,
+        songId = "s_vann",
+        title = "Time To Rise",
+        artist = "VannDa",
+        artworkUrl = "",
+        durationSeconds = 210L,
+        streamUrl = "",
+        source = "Local",
+        genre = "Hip-Hop",
+        bpm = 128,
+        mood = "Energetic",
+        playedAt = nowMs - i * dayMs,
+        listenedDurationMs = 210_000L,
+        completed = true,
+        skipped = false,
+        replayed = i > 0
+      )
+    }
+    val smallRecap = com.example.recap.RecapRepository.computeRecapData(
+      period = com.example.recap.RecapPeriod.MONTHLY,
+      allLogs = smallLogs,
+      nowMs = nowMs
+    )
+    assertTrue(smallRecap.hasRealData)
+    assertEquals("VannDa", smallRecap.topArtists.first().name)
+    assertFalse("Must not claim Top 1% on only 5 plays", smallRecap.topArtists.first().isTopOnePercent)
+    assertEquals(5, smallRecap.topTrack.longestStreak)
+
+    // Heavy dedication (45 plays, >80% share in month) -> isTopOnePercent MUST be true
+    val heavyLogs = (0 until 45).map { i ->
+      com.example.data.PlayLogEntity(
+        id = 100L + i,
+        songId = "s_heavy",
+        title = "Solo Star",
+        artist = "VannDa",
+        artworkUrl = "",
+        durationSeconds = 180L,
+        streamUrl = "",
+        source = "Local",
+        genre = "Hip-Hop",
+        bpm = 130,
+        mood = "Energetic",
+        playedAt = nowMs - (i % 5) * dayMs,
+        listenedDurationMs = 180_000L,
+        completed = true,
+        skipped = false,
+        replayed = true
+      )
+    }
+    val heavyRecap = com.example.recap.RecapRepository.computeRecapData(
+      period = com.example.recap.RecapPeriod.MONTHLY,
+      allLogs = heavyLogs,
+      nowMs = nowMs
+    )
+    assertTrue("Heavy monthly dedication (>=40 plays & >=35% share) qualifies for Top 1%", heavyRecap.topArtists.first().isTopOnePercent)
+    assertEquals(135, heavyRecap.totalMinutes)
+  }
+
+  @Test
+  fun smartPlaylistsAndDjAutoMixBeatfade_workHarmonically() {
+    val sampleSongs = listOf(
+      com.example.model.Song("1", "Midnight Lofi", "Kofi", "", 190L, "u1", mood = "Chill", bpm = 82, chill = 0.85f, calm = 0.82f, hasMoodMetadata = true),
+      com.example.model.Song("2", "Rainy Tape", "Kofi", "", 205L, "u2", mood = "Chill", bpm = 86, chill = 0.80f, calm = 0.78f, hasMoodMetadata = true),
+      com.example.model.Song("3", "Neon Rush", "Pulse", "", 210L, "u3", mood = "Energetic", bpm = 128, energetic = 0.88f, energy = 0.86f, hasMoodMetadata = true),
+      com.example.model.Song("4", "Turbo Drift", "Pulse", "", 195L, "u4", mood = "Energetic", bpm = 132, energetic = 0.82f, energy = 0.84f, hasMoodMetadata = true)
+    )
+
+    val smartPlaylists = com.example.recommendation.SmartPlaylistEngine.generateSmartPlaylists(sampleSongs)
+    assertTrue(smartPlaylists.any { it.category == com.example.recommendation.SmartPlaylistCategory.MOOD })
+    assertTrue(smartPlaylists.any { it.category == com.example.recommendation.SmartPlaylistCategory.BPM })
+    assertTrue(smartPlaylists.any { it.category == com.example.recommendation.SmartPlaylistCategory.ARTIST })
+
+    // Harmonic BPM sequencing keeps close tempos adjacent (anchor starts at 25th percentile)
+    val unordered = listOf(sampleSongs[0], sampleSongs[2], sampleSongs[1], sampleSongs[3])
+    val ordered = com.example.recommendation.SmartPlaylistEngine.orderForDjAutoMix(unordered)
+    assertEquals(4, ordered.size)
+    assertEquals(setOf("1", "2"), ordered.take(2).map { it.id }.toSet())
+    assertEquals(setOf("3", "4"), ordered.drop(2).map { it.id }.toSet())
+    val anchored = com.example.recommendation.SmartPlaylistEngine.orderForDjAutoMix(unordered, anchorSong = sampleSongs[0])
+    assertEquals(listOf("1", "2"), anchored.take(2).map { it.id })
+
+    // CrossfadeController harmonic beatfade metrics (direct & half-time/double-time)
+    assertEquals(0f, com.example.playback.CrossfadeController.effectiveBpmDelta(128, 64), 0.01f)
+    assertEquals(6, com.example.playback.CrossfadeController.computeBeatfadeDurationSeconds(128, 130))
+    assertEquals(3, com.example.playback.CrossfadeController.computeBeatfadeDurationSeconds(80, 125))
+    assertEquals(2, com.example.playback.CrossfadeController.computeBeatfadeDurationSeconds(80, 110))
+
+    com.example.playback.CrossfadeController.restoreSettings(durationSeconds = 0, fadeOnManualSkip = true, djAutoMixEnabled = true)
+    com.example.playback.CrossfadeController.updateDjTransitionMetrics(currentBpm = 126, nextBpm = 128)
+    assertEquals(6, com.example.playback.CrossfadeController.state.value.effectiveDurationSeconds)
+
+    com.example.playback.CrossfadeController.setDjAutoMixEnabled(false)
+    assertEquals(0, com.example.playback.CrossfadeController.state.value.effectiveDurationSeconds)
   }
 }

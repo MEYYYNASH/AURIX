@@ -843,4 +843,113 @@
     <string name="album_playing_badge">កំពុងចាក់</string>
     <string name="album_total_duration_minutes">%1$d នាទី</string>
     <string name="album_total_duration_hours">%1$d ម៉ោង %2$d នាទី</string>
+
+    <!-- Smart Playlists, DJ Auto-Mix & Live Queue Drawer (v2.4.0) -->
+    <string name="smart_playlists_title">បញ្ជីចម្រៀងឆ្លាតវៃ និង DJ Mix</string>
+    <string name="smart_playlists_subtitle">បង្កើតស្វ័យប្រវត្តិតាមអារម្មណ៍ BPM និងសិល្បករ</string>
+    <string name="smart_playlists_filter_all">ទាំងអស់</string>
+    <string name="smart_playlists_filter_mood">អារម្មណ៍</string>
+    <string name="smart_playlists_filter_bpm">ចង្វាក់ BPM</string>
+    <string name="smart_playlists_filter_artist">សិល្បករ</string>
+    <string name="smart_playlists_dj_mix_button">លាយ DJ</string>
+    <string name="smart_playlists_tracks_bpm">%1$d បទ · %2$s</string>
+    <string name="smart_playlists_dj_active_badge">DJ លាយស្វ័យប្រវត្តិ</string>
+    <string name="dj_mode_title">DJ លាយស្វ័យប្រវត្តិ</string>
+    <string name="dj_mode_subtitle">ភ្ជាប់ចង្វាក់ BPM រលូនគ្មានចន្លោះ</string>
+    <string name="dj_mode_beatfade_badge">ភ្ជាប់ %1$d វិ · ស៊ីគ្នា %2$d%% BPM</string>
+    <string name="dj_mode_gapless_badge">ភ្ជាប់រលូន %1$d វិ</string>
+    <string name="dj_mode_toggle_cd">បើក ឬ បិទមុខងារ DJ លាយស្វ័យប្រវត្តិ</string>
+    <string name="dj_mode_optimize_queue">តម្រៀប BPM</string>
+    <string name="dj_mode_optimize_queue_cd">តម្រៀបបញ្ជីបន្ទាប់តាមចង្វាក់ BPM ឱ្យរលូន</string>
+    <string name="dj_mode_sorted_toast">បានតម្រៀប %1$d បទសម្រាប់ DJ Mix</string>
+    <string name="queue_drag_handle_cd">អូសដើម្បីប្ដូរលំដាប់បទចម្រៀង</string>
+    <string name="queue_swipe_remove_label">ដកចេញ</string>
+    <string name="queue_gesture_hint">អូសចំណុចកាន់ដើម្បីប្ដូរលំដាប់ · អូសឆ្វេងដើម្បីដកចេញ</string>
+
+    <!-- Listening Recap Cards (Monthly / Yearly Wrapped) (v2.4.0) -->
+    <string name="recap_entry_title">សង្ខេបតន្ត្រីរបស់អ្នក</string>
+    <string name="recap_entry_subtitle">កាត Music DNA · ប្រចាំខែ និងប្រចាំឆ្នាំ</string>
+    <string name="recap_entry_open_cd">បើកកាតសង្ខេបការស្តាប់របស់អ្នក</string>
+    <string name="recap_ready_banner_month">កាតសង្ខេបខែ %1$s រួចរាល់ហើយ</string>
+    <string name="recap_ready_banner_year">កាតសង្ខេបឆ្នាំ %1$s រួចរាល់ហើយ</string>
+    <string name="recap_ready_cta">មើល</string>
+    <string name="recap_ready_dismiss_cd">បិទការជូនដំណឹងកាតសង្ខេប</string>
+    <string name="recap_period_monthly">ប្រចាំខែ</string>
+    <string name="recap_period_yearly">ប្រចាំឆ្នាំ</string>
+    <string name="recap_brand_header">AURIX · MUSIC DNA</string>
+    <string name="recap_footer_tagline">ONE APP. ALL YOUR MUSIC.</string>
+    <string name="recap_close_cd">បិទទំព័រសង្ខេប</string>
+    <string name="recap_share_button">ចែករំលែក</string>
+    <string name="recap_save_button">រក្សាទុករូប</string>
+    <string name="recap_share_all_button">ទាំង ៦</string>
+    <string name="recap_share_caption">កាតសង្ខេប AURIX របស់ខ្ញុំ</string>
+    <string name="recap_share_chooser_title">ចែករំលែកកាតសង្ខេប AURIX</string>
+    <string name="recap_saved_snackbar">Saved to Photos · បានរក្សាទុក</string>
+    <string name="recap_save_failed_snackbar">មិនអាចរក្សាទុករូបភាពបានទេ</string>
+    <string name="recap_share_failed_snackbar">មិនអាចចែករំលែករូបភាពបានទេ</string>
+    <string name="recap_permission_needed">ត្រូវការការអនុញ្ញាតផ្ទុកទិន្នន័យដើម្បីរក្សាទុករូបភាព</string>
+    <string name="recap_exporting_label">កំពុងបង្កើតរូប 1080×1920…</string>
+    <string name="recap_paused_badge">ផ្អាក</string>
+    <string name="recap_empty_hint">សូមស្តាប់បទចម្រៀងមួយចំនួន ដើម្បីបង្កើតកាត Music DNA របស់អ្នក។</string>
+
+    <!-- Recap 6 Cards Bilingual Kickers & Labels -->
+    <string name="recap_kicker_intro">MUSIC DNA · DNA តន្ត្រី</string>
+    <string name="recap_intro_title_month">ខែនៃតន្ត្រីរបស់អ្នក</string>
+    <string name="recap_intro_title_year">ឆ្នាំនៃតន្ត្រីរបស់អ្នក</string>
+    <string name="recap_intro_subtitle">បង្កើតចេញពីប្រវត្តិស្តាប់ពិតប្រាកដរបស់អ្នកក្នុង AURIX</string>
+
+    <string name="recap_kicker_top_artist">TOP ARTIST · សិល្បករកំពូល</string>
+    <string name="recap_top_artist_plays_only">ចាក់ស្តាប់ %1$d ដងក្នុងអំឡុងពេលនេះ។</string>
+    <string name="recap_top_artist_top_one_percent">ចាក់ស្តាប់ %1$d ដង។ អ្នកស្ថិតក្នុងក្រុម 1%% កំពូល។</string>
+    <string name="recap_top_artists_panel_title">សិល្បករកំពូលទាំង ៣</string>
+    <string name="recap_plays_count">%1$d ដង</string>
+
+    <string name="recap_kicker_top_track">TOP TRACK · បទចម្រៀងកំពូល</string>
+    <string name="recap_stat_best_day">ថ្ងៃស្តាប់ច្រើន</string>
+    <string name="recap_stat_longest_streak">ជាប់គ្នាវែងបំផុត</string>
+    <string name="recap_stat_replays">ស្តាប់ឡើងវិញ</string>
+    <string name="recap_streak_days">%1$d ថ្ងៃ</string>
+
+    <string name="recap_kicker_minutes">MINUTES LISTENED · នាទីស្តាប់</string>
+    <string name="recap_minutes_unit">នាទី</string>
+    <string name="recap_minutes_comparison">%1$s ម៉ោង · ប្រហែល %2$d អាល់ប៊ុមពេញ</string>
+    <string name="recap_stat_daily_avg">មធ្យមប្រចាំថ្ងៃ</string>
+    <string name="recap_stat_top_day">ថ្ងៃកំពូល</string>
+    <string name="recap_stat_new_artists">សិល្បករថ្មី</string>
+    <string name="recap_daily_avg_value">%1$d នាទី</string>
+
+    <string name="recap_kicker_personality">PERSONALITY · បុគ្គលិកលក្ខណៈស្តាប់</string>
+    <string name="recap_kicker_orbi_mood">ORBI MOOD · អារម្មណ៍ Orbi</string>
+    <string name="recap_mood_chip_month">អារម្មណ៍ប្រចាំខែ</string>
+    <string name="recap_mood_chip_year">អារម្មណ៍ប្រចាំឆ្នាំ</string>
+    <string name="recap_summary_artist">សិល្បករកំពូល</string>
+    <string name="recap_summary_track">បទចម្រៀងកំពូល</string>
+    <string name="recap_summary_minutes">នាទី</string>
+
+    <!-- Listening Personalities -->
+    <string name="recap_personality_night_owl_name">អ្នកស្តាប់ពេលរាត្រី</string>
+    <string name="recap_personality_night_owl_desc">បទចម្រៀងល្អបំផុតរបស់អ្នកចាប់ផ្តើមបន្លឺឡើងក្រោយម៉ោង ១០ យប់។</string>
+    <string name="recap_personality_early_bird_name">អ្នកស្តាប់ពេលព្រឹក</string>
+    <string name="recap_personality_early_bird_desc">អ្នកចាប់ផ្តើមថ្ងៃថ្មីដោយថាមពលស្រស់ស្រាយ និងចង្វាក់តន្ត្រីពេលព្រឹក។</string>
+    <string name="recap_personality_explorer_name">អ្នករុករកតន្ត្រី</string>
+    <string name="recap_personality_explorer_desc">អ្នកតែងតែស្វែងរកសិល្បករថ្មីៗ និងចង្វាក់ចម្រៀងប្លែកៗជានិច្ច។</string>
+    <string name="recap_personality_loyalist_name">អ្នកស្មោះត្រង់នឹងបទសំណព្វ</string>
+    <string name="recap_personality_loyalist_desc">ពេលបទណាត្រូវចិត្ត អ្នកចាក់ស្តាប់ឡើងវិញមិនចេះណាយឡើយ។</string>
+    <string name="recap_personality_marathoner_name">អ្នកស្តាប់វែងឆ្ងាយ</string>
+    <string name="recap_personality_marathoner_desc">ការស្តាប់តន្ត្រីបន្តបន្ទាប់យ៉ាងយូរគឺជាស្ទីលផ្ទាល់ខ្លួនរបស់អ្នក។</string>
+
+    <string name="recap_trait_night_energy">ថាមពលរាត្រី</string>
+    <string name="recap_trait_morning_spark">ភាពស្រស់ស្រាយព្រឹក</string>
+    <string name="recap_trait_discovery">ការរុករកថ្មី</string>
+    <string name="recap_trait_loyalty">ភាពស្មោះត្រង់</string>
+    <string name="recap_trait_endurance">ភាពធន់ស្តាប់</string>
+    <string name="recap_trait_tempo_drive">ល្បឿនចង្វាក់</string>
+
+    <!-- Orbi Recap Moods -->
+    <string name="recap_mood_dreamy">ស្រមើស្រមៃ</string>
+    <string name="recap_mood_electric">រស់រវើកអគ្គិសនី</string>
+    <string name="recap_mood_chill">ស្រាលស្រទន់</string>
+    <string name="recap_mood_hyped">ពុះកញ្ជ្រោល</string>
+    <string name="recap_mood_focused">ផ្តោតអារម្មណ៍</string>
+    <string name="recap_mood_nostalgic">នឹករលឹក</string>
 </resources>

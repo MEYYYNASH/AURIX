@@ -150,6 +150,14 @@ object AurixFontFamilies {
     Font(R.font.inter_bold, FontWeight.ExtraBold)
   )
 
+  val WorkSansDisplayFamily = FontFamily(
+    Font(R.font.work_sans, FontWeight.Normal),
+    Font(R.font.work_sans, FontWeight.Medium),
+    Font(R.font.work_sans, FontWeight.SemiBold),
+    Font(R.font.work_sans, FontWeight.Bold),
+    Font(R.font.work_sans, FontWeight.ExtraBold)
+  )
+
   /**
    * Default bilingual UI FontFamily supporting both modern Khmer (Kantumruy Pro)
    * and geometric Latin across all app screens.

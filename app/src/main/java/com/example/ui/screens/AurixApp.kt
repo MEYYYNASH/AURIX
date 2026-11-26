@@ -60,6 +60,8 @@ import com.example.LocaleHelper
 import com.example.R
 import com.example.data.UpdateStage
 import com.example.model.YoutubeFormatSheetState
+import com.example.recap.RecapPeriod
+import com.example.recap.RecapScreen
 import com.example.recommendation.MoodCategory
 import com.example.ui.glass.LocalAurixHazeState
 import com.example.ui.glass.LocalAurixReducedMotion
@@ -392,6 +394,12 @@ private fun AurixMainShell(
   var showWidgetCustomizer by remember { mutableStateOf(false) }
   var showOrbiCompanionSheet by remember { mutableStateOf(false) }
   var showAmbientStandby by remember { mutableStateOf(false) }
+  var showRecapViewer by remember { mutableStateOf(false) }
+  val recapPeriod by viewModel.recapPeriod.collectAsStateWithLifecycle()
+  val recapData by viewModel.recapData.collectAsStateWithLifecycle()
+  val isLoadingRecap by viewModel.isLoadingRecap.collectAsStateWithLifecycle()
+  val recapReadyPrompt by viewModel.recapReadyPrompt.collectAsStateWithLifecycle()
+  val smartPlaylists by viewModel.smartPlaylists.collectAsStateWithLifecycle()
   var orbiMoodOverride by remember { mutableStateOf<OrbiMood?>(null) }
   var isLibraryCreateAlbumOpen by remember { mutableStateOf(false) }
   val developerModeUnlocked by viewModel.developerModeUnlocked.collectAsStateWithLifecycle()
@@ -845,6 +853,18 @@ private fun AurixMainShell(
               orbiTheme = activeOrbiTheme,
               orbiBeatEnergy = orbiBeatEnergy,
               onOpenOrbiCompanion = { showOrbiCompanionSheet = true },
+              recapPeriodLabel = recapData?.label,
+              recapReadyPrompt = recapReadyPrompt,
+              smartPlaylists = smartPlaylists,
+              djAutoMixEnabled = crossfadeSettings.djAutoMixEnabled,
+              onOpenRecap = { period ->
+                viewModel.openRecap(period)
+                showRecapViewer = true
+              },
+              onDismissRecapPrompt = { viewModel.dismissRecapReadyPrompt() },
+              onToggleDjAutoMix = { enabled -> viewModel.setDjAutoMixEnabled(enabled) },
+              onOpenSmartPlaylist = { sp -> currentScreen = Screen.PlaylistDetail(sp.id) },
+              onStartDjMix = { sp -> viewModel.playSmartPlaylist(sp, enableDjMix = true) },
               onSongClick = { song, queue -> viewModel.playSong(song, queue) },
               onFavoriteClick = { viewModel.toggleFavorite(it) }
             )
@@ -870,6 +890,11 @@ private fun AurixMainShell(
                 orbiTopVibeLabel = orbiTopVibeLabel,
                 onSelectOrbiTheme = { theme -> viewModel.setOrbiCompanionTheme(theme.id) },
                 onSelectOrbiMoodOverride = { overrideMood -> orbiMoodOverride = overrideMood },
+                recapPeriodLabel = recapData?.label,
+                onOpenRecap = {
+                  viewModel.openRecap(RecapPeriod.MONTHLY)
+                  showRecapViewer = true
+                },
                 onBack = { currentScreen = Screen.Home },
                 onSelectMostPlayedFilter = { viewModel.setMostPlayedFilter(it) },
                 onCheckLyrics = { viewModel.ensureLyricsVerified(it) },
@@ -973,6 +998,41 @@ private fun AurixMainShell(
                     } else null,
                     onShareMix = if (mixTracks.isNotEmpty()) {
                       { viewModel.shareMix(context, "$mixTitle Mix", mixSub, mixTracks) }
+                    } else null
+                  )
+                }
+                screen.key.startsWith("smart_") -> {
+                  val matchedSmart = smartPlaylists.firstOrNull { it.id == screen.key }
+                  val spTracks = matchedSmart?.tracks.orEmpty()
+                  val spTitle = matchedSmart?.title ?: stringResource(id = R.string.smart_playlists_title)
+                  val spSub = matchedSmart?.let { "${it.subtitle} · ${it.bpmRangeLabel}" }
+                    ?: stringResource(id = R.string.smart_playlists_subtitle)
+                  PlaylistDetailScreen(
+                    title = spTitle,
+                    subtitle = spSub,
+                    badgeLabel = matchedSmart?.badgeLabel ?: "SMART DJ",
+                    tracks = spTracks,
+                    emptyMessage = stringResource(id = R.string.mix_empty_loading),
+                    showRefreshButton = false,
+                    currentSong = currentSong,
+                    isPlaying = isPlaying,
+                    darkTheme = darkTheme,
+                    reducedMotion = reducedMotion,
+                    verifiedLyricsIds = verifiedLyricsIds,
+                    onBack = { currentScreen = Screen.Home },
+                    onPlayAll = {
+                      if (matchedSmart != null) viewModel.playSmartPlaylist(matchedSmart, enableDjMix = true)
+                      else viewModel.playPlaylist(spTracks)
+                    },
+                    onShuffleAll = { viewModel.shuffleAlbum(spTracks) },
+                    onCheckLyrics = { viewModel.ensureLyricsVerified(it) },
+                    onSongClick = { song, q -> viewModel.playSong(song, q) },
+                    onFavoriteClick = { viewModel.toggleFavorite(it) },
+                    onSaveMix = if (spTracks.isNotEmpty()) {
+                      { viewModel.saveMixAsPlaylist(spTitle, spTracks) }
+                    } else null,
+                    onShareMix = if (spTracks.isNotEmpty()) {
+                      { viewModel.shareMix(context, spTitle, spSub, spTracks) }
                     } else null
                   )
                 }
@@ -1575,6 +1635,11 @@ private fun AurixMainShell(
             onEqVirtualizerChanged = { viewModel.setVirtualizerStrength(it) },
             onResetEq = { viewModel.resetEqualizer() },
             queue = queue,
+            djAutoMixEnabled = crossfadeSettings.djAutoMixEnabled,
+            beatfadeSeconds = crossfadeSettings.effectiveDurationSeconds.coerceAtLeast(4),
+            bpmMatchPercent = crossfadeSettings.activeBpmMatchPercent.takeIf { it > 0 } ?: 92,
+            onToggleDjAutoMix = { enabled -> viewModel.setDjAutoMixEnabled(enabled) },
+            onOptimizeQueueForDj = { viewModel.optimizeUpcomingQueueForDj() },
             onJumpToQueueIndex = { viewModel.jumpToQueueIndex(it) },
             onMoveQueueItem = { from, to -> viewModel.moveQueueItem(from, to) },
             onRemoveQueueItem = { viewModel.removeQueueItem(it) },
@@ -1694,6 +1759,17 @@ private fun AurixMainShell(
             autoStandbyDismissedForSession = true
             showAmbientStandby = false
           }
+        )
+      }
+
+      if (showRecapViewer) {
+        RecapScreen(
+          recapData = recapData,
+          selectedPeriod = recapPeriod,
+          isLoading = isLoadingRecap,
+          reducedMotion = reducedMotion,
+          onSelectPeriod = { period -> viewModel.selectRecapPeriod(period) },
+          onClose = { showRecapViewer = false }
         )
       }
 

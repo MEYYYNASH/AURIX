@@ -117,6 +117,11 @@ fun NowPlayingSheet(
   onEqVirtualizerChanged: (Int) -> Unit = {},
   onResetEq: () -> Unit = {},
   queue: List<Song> = emptyList(),
+  djAutoMixEnabled: Boolean = false,
+  beatfadeSeconds: Int = 4,
+  bpmMatchPercent: Int = 92,
+  onToggleDjAutoMix: (Boolean) -> Unit = {},
+  onOptimizeQueueForDj: () -> Unit = {},
   onJumpToQueueIndex: (Int) -> Unit = {},
   onMoveQueueItem: (Int, Int) -> Unit = { _, _ -> },
   onRemoveQueueItem: (Int) -> Unit = {},
@@ -1013,6 +1018,11 @@ fun NowPlayingSheet(
         queue = queue,
         isPlaying = isPlaying,
         reducedMotion = reducedMotion,
+        djAutoMixEnabled = djAutoMixEnabled,
+        beatfadeSeconds = beatfadeSeconds,
+        bpmMatchPercent = bpmMatchPercent,
+        onToggleDjAutoMix = onToggleDjAutoMix,
+        onOptimizeQueueForDj = onOptimizeQueueForDj,
         onJumpToIndex = { idx ->
           onJumpToQueueIndex(idx)
         },

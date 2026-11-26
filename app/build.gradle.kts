@@ -17,9 +17,9 @@ android {
     applicationId = "com.aurix.music"
     minSdk = 24
     targetSdk = 36
-    versionCode = 20303
-    versionName = "2.3.3"
-    buildConfigField("String", "RELEASE_DATE", "\"2026-11-25\"")
+    versionCode = 20400
+    versionName = "2.4.0"
+    buildConfigField("String", "RELEASE_DATE", "\"2026-11-26\"")
     val buildTimestampMs = System.getenv("AURIX_BUILD_TIMESTAMP_MS")?.toLongOrNull() ?: 0L
     buildConfigField("long", "BUILD_TIMESTAMP_MS", "${buildTimestampMs}L")
 

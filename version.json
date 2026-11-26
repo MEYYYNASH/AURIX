@@ -1,12 +1,13 @@
 {
-  "versionName": "2.3.3",
-  "versionCode": 20303,
-  "releaseDate": "2026-11-25",
-  "releaseTimestampMs": 1795668714000,
-  "apkUrl": "https://github.com/MEYYYNASH/AURIX/releases/download/v2.3.3/AURIX-v2.3.3.apk",
-  "sha256": "0072a979fcc84fb8cefc44d141c1d7fc25f05cea1d5493ecec2096dd3951c2e0",
+  "versionName": "2.4.0",
+  "versionCode": 20400,
+  "releaseDate": "2026-11-26",
+  "releaseTimestampMs": 1795750765000,
+  "apkUrl": "https://github.com/MEYYYNASH/AURIX/releases/download/v2.4.0/AURIX-v2.4.0.apk",
+  "sha256": "3e56ee90d3213e7b4c93d0c2b457e6458bab2c93d7875a00b52b83b95e66716b",
   "mandatory": false,
   "notes": [
+    "Smart Playlists, DJ Auto-Mix & Liquid Glass Listening Recap Cards (v2.4.0): Added deterministic auto-generated Smart Playlists by Mood, BPM, and Top Artist with harmonic BPM-matched DJ Auto-Mix beatfade transitions (2\u20136s equal-power crossfades) and a redesigned live Up Next Queue drawer featuring smooth drag-to-reorder handles, swipe-to-remove gestures, BPM badges, and one-tap BPM Sort; plus Monthly & Yearly Listening Recap story cards (6 proportional 9:16 Liquid Glass cards with Work Sans & Noto Sans Khmer typography, deterministic Listening Personality & Orbi Mood badge, Home & Statistics entry cards, start-of-month/year recap prompts, and non-blocking 1080\u00d71920 PNG Save to Photos, Share, and All-6 export)",
     "Liquid Glass Segmented Tabs with Smooth 120Hz Spring Physics & Crash Fix (v2.3.3): Replaced Search source switch, Home filter chips, Settings theme picker, and Library tabs with physics-driven Liquid Glass segmented controls (white glass pill thumb, specular highlight, speed-reactive shadow, flick inertia, cross-tab haptics, Noto Sans Khmer support, TalkBack Role.Tab semantics, and Android 12+ Haze backdrop blur); fixed Android 12+ startup crash with explicit Haze backdrop styling and rebuilt drag tracking on a continuous frame-locked spring loop with a hardware-isolated thumb layer, soft edge rubber-banding, and zero frame stutter",
     "Redesigned Compact Album Studio, Single-Download Fix & Material You Dynamic Theme (v2.3.2): Redesigned the Album screen and Library album cards with a compact centered cover & peeking spinning vinyl disc, cover-harmonized palette accents, breathing aurora backdrop, sticky frosted top bar, slim frameless track rows, and spring-animated controls; fixed single-song downloads so downloading 1 track saves directly to My songs without auto-creating an 'Unknown Album'; plus live Album-Art Material You theming via Palette API and cache-bypassing network JSON update checking",
     "Vinyl Widget Style, Resizable AURIX Now Playing Widget & Refreshed Settings (v2.3.1): Added the tactile 'Vinyl' style (cream paper #EFE6D6 & spinning half-visible vinyl disc) across classic widgets, introduced the resizable 'AURIX Now Playing' widget (3 sizes x 10 WCAG 4.5:1 styles with Material You Light/Paper theming), and refreshed Settings > Widgets",
@@ -15,5 +16,5 @@
     "Proportional Widget Lyrics & Reliable Release Verification (v2.1.6): Calibrated Home Screen Lyrics widget text sizes and launcher column widths for balanced 1:1 proportions across Small, Wide, and Large widgets (plus live preview); fixed OTA release APK SHA-256 verification against GitHub Release checksum assets",
     "Bundled Full-Unicode Khmer Fonts & Redesigned Glass Widgets (v2.1.5): Real full-Unicode Khmer & Latin .ttf fonts (Dangrek, Kantumruy Pro, Koulen, Noto Sans Khmer, Outfit, Inter) across app & widgets, fixed Khmer line-height clipping, and redesigned AURIX cosmic glass widgets"
   ],
-  "releasePageUrl": "https://github.com/MEYYYNASH/AURIX/releases/tag/v2.3.3"
+  "releasePageUrl": "https://github.com/MEYYYNASH/AURIX/releases/tag/v2.4.0"
 }
