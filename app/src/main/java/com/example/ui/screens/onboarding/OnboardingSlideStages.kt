@@ -1216,14 +1216,14 @@ fun OnboardingSlide4Stage(
         )
       }
 
-      // 130x130 Orbi mascot with animated rotating Saturn-style ring
+      // 146x146 3D sculpted official AURIX Logo Orb with rotating Saturn-style ring
       OnboardingOrbiMascot(
         isActive = isActive,
         reducedMotion = reducedMotion,
         replaySeed = replaySeed,
         accentColor = accentColor,
         modifier = Modifier
-          .size(130.dp)
+          .size(146.dp)
           .testTag("onboarding_s4_orbi")
       )
 

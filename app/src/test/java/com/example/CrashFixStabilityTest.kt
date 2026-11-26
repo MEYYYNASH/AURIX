@@ -1572,6 +1572,8 @@ class CrashFixStabilityTest {
     val sharedSrc = java.io.File(javaRoot, "com/example/ui/screens/onboarding/OnboardingSharedComponents.kt").readText()
     assertTrue(sharedSrc.contains("orbi_saturn_orbit"))
     assertTrue(sharedSrc.contains("orbi_saturn_tilt"))
+    assertTrue(sharedSrc.contains("orbi_3d_rot_y"))
+    assertTrue(sharedSrc.contains("cameraDistance = 12f * density"))
     assertTrue(sharedSrc.contains("rotatingRingBrush"))
     val stagesSrc = java.io.File(javaRoot, "com/example/ui/screens/onboarding/OnboardingSlideStages.kt").readText()
     assertTrue(stagesSrc.contains("OnboardingOrbiMascot"))

@@ -259,15 +259,19 @@ fun OnboardingEqualizer(
 }
 
 /**
- * Pixel-faithful animated Orbi Mascot (viewBox 120x120) with a rotating Saturn-style ring:
- * - Light sphere (60, 62) r=30 radial gradient #FFFFFF -> #CFD8EA
- * - Two dark eyes #0B1220 ellipses rx=3.4 ry=4.6 at (50, 56) & (68, 56) with crisp highlights,
- *   blinking every 4s (scaleY 0.1 at 97%)
- * - Animated rotating Saturn-style ring (-15 deg tilt with gentle ±3.5 deg 3D precession):
- *   back half + back orbital highlight/satellite drawn behind the sphere; front half + luminous
- *   accent/violet sweep + glowing orbiting satellite drawn in front of the sphere (4.8s continuous orbit)
- * - Headphones: accent-tinted cyan arc r=31 from (29, 62) to (91, 62) stroke 5 + two ear cups (9x17, r=4)
- * - Entrance: scale 0.4 + rotate -25deg -> normal (1000ms SpringEasing), then floats ±7dp (3600ms loop).
+ * 3D Sculpted Official AURIX Logo Orb (based 1:1 on R.drawable.ic_launcher_foreground geometry):
+ * - Exact official AURIX logo silhouette: tilted (-12 deg) white glossy planet sphere, two tall
+ *   dark oval eyes (#0B0C10) positioned slightly above center, wrapped by the signature Saturn ring
+ *   (back half behind the sphere, front half cleanly in front).
+ * - True 3D studio render & perspective motion:
+ *   - Real 3D camera parallax sway (rotationX/rotationY + cameraDistance) + ±7dp float (3.6s loop)
+ *   - Multi-layered 3D porcelain/ceramic sphere shading: top-left studio key light, glossy specular
+ *     highlight dome, ambient bottom-right accent/violet bounce light, inner rim sheen, and a soft
+ *     cast shadow thrown by the front Saturn ring directly onto the lower surface of the sphere
+ *   - 3D beveled rotating Saturn ring (-12 deg with ±3.5 deg precession): metallic slate body
+ *     (#3A3B42 -> #636B80), animated luminous accent/white/violet specular sweep (4.8s continuous
+ *     orbit), and 3D depth-scaled orbiting light moonlets passing behind & in front of the sphere
+ *   - Glossy eyes with dual specular catchlights, subtle 3D glance, and natural 4s blink cycle.
  */
 @Composable
 fun OnboardingOrbiMascot(
@@ -317,6 +321,25 @@ fun OnboardingOrbiMascot(
     ),
     label = "orbi_float_y"
   )
+  // Smooth 3D perspective sway (rotationY & rotationX) so the official AURIX logo orb feels sculptural
+  val tilt3DYState = loopTransition?.animateFloat(
+    initialValue = -11f,
+    targetValue = 11f,
+    animationSpec = infiniteRepeatable(
+      animation = tween(durationMillis = 3200, easing = FastOutSlowInEasing),
+      repeatMode = RepeatMode.Reverse
+    ),
+    label = "orbi_3d_rot_y"
+  )
+  val tilt3DXState = loopTransition?.animateFloat(
+    initialValue = 6f,
+    targetValue = -6f,
+    animationSpec = infiniteRepeatable(
+      animation = tween(durationMillis = 2700, easing = FastOutSlowInEasing),
+      repeatMode = RepeatMode.Reverse
+    ),
+    label = "orbi_3d_rot_x"
+  )
   val eyeBlinkScaleYState = loopTransition?.animateFloat(
     initialValue = 1f,
     targetValue = 1f,
@@ -333,7 +356,7 @@ fun OnboardingOrbiMascot(
     ),
     label = "orbi_blink"
   )
-  // Continuous 360-degree orbital phase driving the rotating Saturn-style ring shimmer & orbiting sparks
+  // Continuous 360-degree orbital phase driving the rotating 3D Saturn ring shimmer & orbiting moonlets
   val saturnOrbitAngleState = loopTransition?.animateFloat(
     initialValue = 0f,
     targetValue = 360f,
@@ -343,10 +366,10 @@ fun OnboardingOrbiMascot(
     ),
     label = "orbi_saturn_orbit"
   )
-  // Subtle 3D tilt precession (-18.5deg <-> -11.5deg) around the classic -15deg Saturn inclination
+  // Subtle 3D tilt precession (-15.5deg <-> -8.5deg) centered on official ic_launcher_foreground -12deg tilt
   val saturnTiltState = loopTransition?.animateFloat(
-    initialValue = -18.5f,
-    targetValue = -11.5f,
+    initialValue = -15.5f,
+    targetValue = -8.5f,
     animationSpec = infiniteRepeatable(
       animation = tween(durationMillis = 2600, easing = FastOutSlowInEasing),
       repeatMode = RepeatMode.Reverse
@@ -360,67 +383,89 @@ fun OnboardingOrbiMascot(
       scaleX = s
       scaleY = s
       rotationZ = enterRotate.value
+      rotationY = tilt3DYState?.value ?: -6f
+      rotationX = tilt3DXState?.value ?: 3f
+      cameraDistance = 12f * density
       translationY = (floatOffsetState?.value ?: 0f) * density
     }
   ) {
-    val sx = size.width / 120f
-    val sy = size.height / 120f
-    val u = minOf(sx, sy)
-    val ox = (size.width - 120f * u) * 0.5f
-    val oy = (size.height - 120f * u) * 0.5f
+    // Official AURIX ic_launcher_foreground coordinate system (108x108 scaled cleanly to fill canvas)
+    val u = minOf(size.width, size.height) / 92f
+    val cx = size.width * 0.5f
+    val cy = size.height * 0.5f
+    val center = Offset(cx, cy)
 
-    fun px(x: Float) = ox + x * u
-    fun py(y: Float) = oy + y * u
-
-    val center = Offset(px(60f), py(62f))
-    val ringRx = 47f * u
-    val ringRy = 13f * u
+    // Proportional to ic_launcher_foreground: sphere r=20.5, ring rx=29.5 ry=7.8, eyes at (-4.5, -5.5) & (+4.5, -5.5)
+    val sphereRadius = 24.8f * u
+    val ringRx = 37.8f * u
+    val ringRy = 10.6f * u
     val ringRect = Rect(
-      left = center.x - ringRx,
-      top = center.y - ringRy,
-      right = center.x + ringRx,
-      bottom = center.y + ringRy
+      left = cx - ringRx,
+      top = cy - ringRy,
+      right = cx + ringRx,
+      bottom = cy + ringRy
     )
-    val ringStroke = Stroke(width = 5f * u, cap = StrokeCap.Round)
-    val ringHighlightStroke = Stroke(width = 2.6f * u, cap = StrokeCap.Round)
-    val ringBaseColor = Color(0xFF3B475C)
-    val tiltDeg = saturnTiltState?.value ?: -15f
-    val orbitDeg = saturnOrbitAngleState?.value ?: 38f
+
+    val tiltDeg = saturnTiltState?.value ?: -12f
+    val orbitDeg = saturnOrbitAngleState?.value ?: 42f
     val orbitRad = orbitDeg * (PI / 180.0)
     val secondOrbitRad = ((orbitDeg + 180f) % 360f) * (PI / 180.0)
+    val floatNorm = ((floatOffsetState?.value ?: 0f) + 7f) / 14f // 0 at top, 1 at bottom
 
-    // Helper: point along the unrotated ring ellipse in canvas coordinates (drawn inside rotate(tiltDeg))
     fun ellipsePoint(rad: Double): Offset = Offset(
-      x = center.x + (cos(rad) * ringRx).toFloat(),
-      y = center.y + (sin(rad) * ringRy).toFloat()
+      x = cx + (cos(rad) * ringRx).toFloat(),
+      y = cy + (sin(rad) * ringRy).toFloat()
     )
 
-    // Animated ring shimmer brush sweeping around the ellipse as orbitDeg advances
-    val sweepStart = ellipsePoint(orbitRad - 0.85)
-    val sweepEnd = ellipsePoint(orbitRad + 0.85)
+    val ringDarkMetallic = Color(0xFF2B2E38)
+    val ringOfficialSlate = Color(0xFF3A3B42)
+    val ringLightMetallic = Color(0xFF6B7285)
+
+    // Animated 3D specular highlight sweeping around the rotating Saturn ring
+    val sweepStart = ellipsePoint(orbitRad - 0.90)
+    val sweepEnd = ellipsePoint(orbitRad + 0.90)
     val rotatingRingBrush = Brush.linearGradient(
       colors = listOf(
-        ringBaseColor,
-        accentColor.copy(alpha = 0.88f),
-        Color.White.copy(alpha = 0.92f),
-        AurixDesignTokens.AccentB.copy(alpha = 0.82f),
-        ringBaseColor
+        ringOfficialSlate,
+        accentColor.copy(alpha = 0.90f),
+        Color.White.copy(alpha = 0.96f),
+        AurixDesignTokens.AccentB.copy(alpha = 0.85f),
+        ringOfficialSlate
       ),
       start = sweepStart,
       end = sweepEnd
     )
 
-    // 1) BACK HALF of rotating tilted Saturn ring (180..360 deg = top/back arc behind sphere)
+    // 0) Soft 3D ambient floor shadow floating beneath the orb (reacts to vertical bob)
+    val shadowScale = 0.88f + 0.16f * floatNorm
+    val shadowY = cy + sphereRadius + 9.5f * u
+    drawOval(
+      brush = Brush.radialGradient(
+        colors = listOf(
+          Color.Black.copy(alpha = 0.42f * shadowScale),
+          accentColor.copy(alpha = 0.14f * shadowScale),
+          Color.Transparent
+        ),
+        center = Offset(cx, shadowY),
+        radius = sphereRadius * 1.15f * shadowScale
+      ),
+      topLeft = Offset(cx - sphereRadius * 1.1f * shadowScale, shadowY - 5.2f * u),
+      size = Size(sphereRadius * 2.2f * shadowScale, 10.4f * u)
+    )
+
+    // 1) BACK HALF of 3D rotating tilted Saturn ring (180..360 deg = upper arc behind planet)
     rotate(degrees = tiltDeg, pivot = center) {
+      // Back ring metallic dark bevel
       drawArc(
-        color = ringBaseColor.copy(alpha = 0.78f),
+        color = ringDarkMetallic.copy(alpha = 0.88f),
         startAngle = 180f,
         sweepAngle = 180f,
         useCenter = false,
         topLeft = ringRect.topLeft,
         size = ringRect.size,
-        style = ringStroke
+        style = Stroke(width = 6.2f * u, cap = StrokeCap.Round)
       )
+      // Back ring inner metallic sheen
       drawArc(
         brush = rotatingRingBrush,
         startAngle = 180f,
@@ -428,64 +473,144 @@ fun OnboardingOrbiMascot(
         useCenter = false,
         topLeft = ringRect.topLeft,
         size = ringRect.size,
-        style = ringHighlightStroke,
-        alpha = 0.65f
+        style = Stroke(width = 2.8f * u, cap = StrokeCap.Round),
+        alpha = 0.58f
       )
-      // Orbiting satellite beads when passing behind Orbi (sin < 0)
+      // Orbiting 3D moonlets passing behind the planet (smaller & softer for depth)
       if (sin(orbitRad) < 0.0) {
+        val depth = (1.0 + 0.25 * sin(orbitRad)).toFloat()
         val pt = ellipsePoint(orbitRad)
-        drawCircle(color = accentColor.copy(alpha = 0.32f), radius = 6.2f * u, center = pt)
-        drawCircle(color = Color.White.copy(alpha = 0.72f), radius = 2.6f * u, center = pt)
+        drawCircle(color = accentColor.copy(alpha = 0.28f), radius = 6.0f * u * depth, center = pt)
+        drawCircle(color = Color.White.copy(alpha = 0.78f), radius = 2.6f * u * depth, center = pt)
       }
       if (sin(secondOrbitRad) < 0.0) {
+        val depth = (1.0 + 0.25 * sin(secondOrbitRad)).toFloat()
         val pt2 = ellipsePoint(secondOrbitRad)
-        drawCircle(color = AurixDesignTokens.AccentB.copy(alpha = 0.28f), radius = 4.6f * u, center = pt2)
-        drawCircle(color = AurixDesignTokens.AccentB.copy(alpha = 0.85f), radius = 2.0f * u, center = pt2)
+        drawCircle(color = AurixDesignTokens.AccentB.copy(alpha = 0.26f), radius = 4.8f * u * depth, center = pt2)
+        drawCircle(color = AurixDesignTokens.AccentB.copy(alpha = 0.85f), radius = 2.0f * u * depth, center = pt2)
       }
     }
 
-    // 2) Light sphere: center (60, 62), r=30, radial gradient #FFFFFF -> #CFD8EA
+    // 2) 3D SCULPTED OFFICIAL WHITE SPHERE (studio key-light + core shadow + colored bounce rim light)
+    // 2a) Base 3D sphere gradient (bright porcelain top-left -> cool slate shadow bottom-right)
     drawCircle(
       brush = Brush.radialGradient(
-        colors = listOf(Color(0xFFFFFFFF), Color(0xFFE7EEF9), Color(0xFFCFD8EA)),
-        center = Offset(px(51f), py(49f)),
-        radius = 40f * u
+        colorStops = arrayOf(
+          0.00f to Color(0xFFFFFFFF),
+          0.42f to Color(0xFFF4F7FF),
+          0.74f to Color(0xFFD2DCEE),
+          0.92f to Color(0xFF9EAAC2),
+          1.00f to Color(0xFF7D8AA6)
+        ),
+        center = Offset(cx - sphereRadius * 0.34f, cy - sphereRadius * 0.36f),
+        radius = sphereRadius * 1.48f
       ),
-      radius = 30f * u,
+      radius = sphereRadius,
       center = center
     )
 
-    // 3) Eyes #0B1220: ellipses rx=3.4 ry=4.6 at (50, 56) & (68, 56) + specular highlight, blinking every 4s
-    val blinkY = eyeBlinkScaleYState?.value ?: 1f
-    val eyeColor = Color(0xFF0B1220)
-    val eyeRx = 3.4f * u
-    val eyeRy = (4.6f * blinkY).coerceAtLeast(0.45f) * u
-    drawOval(
-      color = eyeColor,
-      topLeft = Offset(px(50f) - eyeRx, py(56f) - eyeRy),
-      size = Size(eyeRx * 2f, eyeRy * 2f)
+    // 2b) Colored ambient bounce reflection on bottom-right limb from AURIX neon backdrop
+    drawCircle(
+      brush = Brush.radialGradient(
+        colors = listOf(
+          accentColor.copy(alpha = 0.34f),
+          AurixDesignTokens.AccentB.copy(alpha = 0.16f),
+          Color.Transparent
+        ),
+        center = Offset(cx + sphereRadius * 0.56f, cy + sphereRadius * 0.54f),
+        radius = sphereRadius * 0.92f
+      ),
+      radius = sphereRadius,
+      center = center
     )
-    drawOval(
-      color = eyeColor,
-      topLeft = Offset(px(68f) - eyeRx, py(56f) - eyeRy),
-      size = Size(eyeRx * 2f, eyeRy * 2f)
-    )
-    if (blinkY > 0.45f) {
-      drawCircle(
-        color = Color.White.copy(alpha = 0.92f),
-        radius = 1.15f * u,
-        center = Offset(px(48.9f), py(54.2f))
-      )
-      drawCircle(
-        color = Color.White.copy(alpha = 0.92f),
-        radius = 1.15f * u,
-        center = Offset(px(66.9f), py(54.2f))
+
+    // 2c) Top-left glossy 3D specular highlight dome
+    rotate(degrees = -28f, pivot = Offset(cx - sphereRadius * 0.34f, cy - sphereRadius * 0.42f)) {
+      drawOval(
+        brush = Brush.radialGradient(
+          colors = listOf(
+            Color.White.copy(alpha = 0.95f),
+            Color.White.copy(alpha = 0.40f),
+            Color.Transparent
+          ),
+          center = Offset(cx - sphereRadius * 0.34f, cy - sphereRadius * 0.42f),
+          radius = sphereRadius * 0.42f
+        ),
+        topLeft = Offset(cx - sphereRadius * 0.66f, cy - sphereRadius * 0.62f),
+        size = Size(sphereRadius * 0.64f, sphereRadius * 0.38f)
       )
     }
 
-    // 4) FRONT HALF of rotating tilted Saturn ring (0..180 deg = bottom/front arc in front of sphere)
+    // 2d) Subtle Fresnel glass rim around the 3D sphere edge
+    drawCircle(
+      brush = Brush.linearGradient(
+        colors = listOf(
+          Color.White.copy(alpha = 0.72f),
+          Color.Transparent,
+          accentColor.copy(alpha = 0.45f)
+        ),
+        start = Offset(cx - sphereRadius, cy - sphereRadius),
+        end = Offset(cx + sphereRadius, cy + sphereRadius)
+      ),
+      radius = sphereRadius - 0.8f * u,
+      center = center,
+      style = Stroke(width = 1.4f * u)
+    )
+
+    // 2e) Soft 3D cast ring shadow falling across the lower front curve of the white sphere
     rotate(degrees = tiltDeg, pivot = center) {
-      // Soft glow under front ring arc
+      drawArc(
+        color = Color(0xFF151C2E).copy(alpha = 0.22f),
+        startAngle = 24f,
+        sweepAngle = 132f,
+        useCenter = false,
+        topLeft = Offset(ringRect.left, ringRect.top + 3.2f * u),
+        size = ringRect.size,
+        style = Stroke(width = 5.4f * u, cap = StrokeCap.Round)
+      )
+    }
+
+    // 3) OFFICIAL AURIX LOGO TALL OVAL EYES (tilted -12 deg like ic_launcher_foreground, glossy 3D catchlights)
+    val blinkY = eyeBlinkScaleYState?.value ?: 1f
+    val glanceX = ((tilt3DYState?.value ?: 0f) / 11f) * 1.15f * u
+    val eyeRx = 3.05f * u
+    val eyeRy = (5.25f * blinkY).coerceAtLeast(0.55f) * u
+    val eyeY = cy - 4.4f * u
+    val leftEyeCenter = Offset(cx - 5.6f * u + glanceX, eyeY)
+    val rightEyeCenter = Offset(cx + 5.6f * u + glanceX, eyeY)
+
+    rotate(degrees = tiltDeg, pivot = center) {
+      listOf(leftEyeCenter, rightEyeCenter).forEach { eyePos ->
+        // Subtle 3D glossy dark eye gradient (#1E2436 top -> #0B0C10 deep obsidian)
+        drawOval(
+          brush = Brush.verticalGradient(
+            colors = listOf(Color(0xFF23293A), Color(0xFF0B0C10)),
+            startY = eyePos.y - eyeRy,
+            endY = eyePos.y + eyeRy
+          ),
+          topLeft = Offset(eyePos.x - eyeRx, eyePos.y - eyeRy),
+          size = Size(eyeRx * 2f, eyeRy * 2f)
+        )
+        if (blinkY > 0.45f) {
+          // Primary studio specular catchlight dot
+          drawCircle(
+            color = Color.White.copy(alpha = 0.94f),
+            radius = 1.18f * u,
+            center = Offset(eyePos.x - 0.95f * u, eyePos.y - 1.85f * u)
+          )
+          // Tiny secondary accent bounce catchlight
+          drawCircle(
+            color = accentColor.copy(alpha = 0.72f),
+            radius = 0.58f * u,
+            center = Offset(eyePos.x + 0.9f * u, eyePos.y + 1.65f * u)
+          )
+        }
+      }
+    }
+
+    // 4) FRONT HALF of 3D rotating tilted Saturn ring (0..180 deg = front arc cleanly across lower sphere)
+    rotate(degrees = tiltDeg, pivot = center) {
+      // Soft neon atmospheric glow behind front ring
       drawArc(
         brush = rotatingRingBrush,
         startAngle = 0f,
@@ -493,72 +618,66 @@ fun OnboardingOrbiMascot(
         useCenter = false,
         topLeft = ringRect.topLeft,
         size = ringRect.size,
-        style = Stroke(width = 7.2f * u, cap = StrokeCap.Round),
+        style = Stroke(width = 9.0f * u, cap = StrokeCap.Round),
         alpha = 0.24f
       )
+      // Thick 3D sculpted ring lower bevel (official #3A3B42 metallic slate)
       drawArc(
-        color = ringBaseColor,
+        brush = Brush.verticalGradient(
+          colors = listOf(ringLightMetallic, ringOfficialSlate, ringDarkMetallic),
+          startY = ringRect.top,
+          endY = ringRect.bottom
+        ),
         startAngle = 0f,
         sweepAngle = 180f,
         useCenter = false,
         topLeft = ringRect.topLeft,
         size = ringRect.size,
-        style = ringStroke
+        style = Stroke(width = 6.2f * u, cap = StrokeCap.Round)
       )
+      // Rotating luminous 3D specular highlight band gliding smoothly along the front ring
       drawArc(
         brush = rotatingRingBrush,
         startAngle = 0f,
         sweepAngle = 180f,
         useCenter = false,
-        topLeft = ringRect.topLeft,
+        topLeft = Offset(ringRect.left, ringRect.top - 0.75f * u),
         size = ringRect.size,
-        style = ringHighlightStroke
+        style = Stroke(width = 2.6f * u, cap = StrokeCap.Round)
       )
-      // Glowing orbital beads + mini comet tail passing in front of Orbi (sin >= 0)
+
+      // 3D depth-scaled glowing moonlets + comet tail gliding in front of the sphere (sin >= 0)
       if (sin(orbitRad) >= 0.0) {
-        val tailPt = ellipsePoint(orbitRad - 0.16)
+        val depth = (1.0 + 0.28 * sin(orbitRad)).toFloat()
+        val tailPt = ellipsePoint(orbitRad - 0.18)
         val pt = ellipsePoint(orbitRad)
-        drawCircle(color = accentColor.copy(alpha = 0.26f), radius = 4.2f * u, center = tailPt)
-        drawCircle(color = accentColor.copy(alpha = 0.42f), radius = 7.6f * u, center = pt)
-        drawCircle(color = Color.White, radius = 3.2f * u, center = pt)
+        drawCircle(color = accentColor.copy(alpha = 0.28f), radius = 4.2f * u * depth, center = tailPt)
+        drawCircle(color = accentColor.copy(alpha = 0.44f), radius = 7.4f * u * depth, center = pt)
+        drawCircle(
+          brush = Brush.radialGradient(
+            colors = listOf(Color.White, accentColor),
+            center = Offset(pt.x - 0.8f * u, pt.y - 0.8f * u),
+            radius = 3.8f * u * depth
+          ),
+          radius = 3.4f * u * depth,
+          center = pt
+        )
       }
       if (sin(secondOrbitRad) >= 0.0) {
+        val depth = (1.0 + 0.25 * sin(secondOrbitRad)).toFloat()
         val pt2 = ellipsePoint(secondOrbitRad)
-        drawCircle(color = AurixDesignTokens.AccentB.copy(alpha = 0.36f), radius = 5.8f * u, center = pt2)
-        drawCircle(color = Color.White.copy(alpha = 0.92f), radius = 2.3f * u, center = pt2)
+        drawCircle(color = AurixDesignTokens.AccentB.copy(alpha = 0.36f), radius = 5.6f * u * depth, center = pt2)
+        drawCircle(
+          brush = Brush.radialGradient(
+            colors = listOf(Color.White, AurixDesignTokens.AccentB),
+            center = Offset(pt2.x - 0.6f * u, pt2.y - 0.6f * u),
+            radius = 2.8f * u * depth
+          ),
+          radius = 2.4f * u * depth,
+          center = pt2
+        )
       }
     }
-
-    // 5) Headphones: accent-tinted arc r=31 from (29, 62) to (91, 62), stroke 5 + 2 ear cups (9x17 r=4 at x=23 & x=88, y=56)
-    val bandRect = Rect(
-      left = px(60f - 31f),
-      top = py(62f - 31f),
-      right = px(60f + 31f),
-      bottom = py(62f + 31f)
-    )
-    drawArc(
-      color = accentColor,
-      startAngle = 180f,
-      sweepAngle = 180f,
-      useCenter = false,
-      topLeft = bandRect.topLeft,
-      size = bandRect.size,
-      style = Stroke(width = 5f * u, cap = StrokeCap.Round)
-    )
-    val cupRadius = CornerRadius(4f * u, 4f * u)
-    val cupSize = Size(9f * u, 17f * u)
-    drawRoundRect(
-      color = accentColor,
-      topLeft = Offset(px(23f), py(56f)),
-      size = cupSize,
-      cornerRadius = cupRadius
-    )
-    drawRoundRect(
-      color = accentColor,
-      topLeft = Offset(px(88f), py(56f)),
-      size = cupSize,
-      cornerRadius = cupRadius
-    )
   }
 }
 
