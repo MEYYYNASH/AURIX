@@ -17,8 +17,8 @@ android {
     applicationId = "com.aurix.music"
     minSdk = 24
     targetSdk = 36
-    versionCode = 20302
-    versionName = "2.3.2"
+    versionCode = 20303
+    versionName = "2.3.3"
     buildConfigField("String", "RELEASE_DATE", "\"2026-11-25\"")
     val buildTimestampMs = System.getenv("AURIX_BUILD_TIMESTAMP_MS")?.toLongOrNull() ?: 0L
     buildConfigField("long", "BUILD_TIMESTAMP_MS", "${buildTimestampMs}L")
@@ -116,6 +116,7 @@ dependencies {
   implementation(libs.androidx.room.ktx)
   implementation(libs.androidx.room.runtime)
   implementation(libs.coil.compose)
+  implementation(libs.haze)
   implementation(libs.media3.exoplayer)
   implementation(libs.media3.session)
   implementation(libs.media3.ui)

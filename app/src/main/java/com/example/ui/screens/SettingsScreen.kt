@@ -65,7 +65,11 @@ import kotlinx.coroutines.delay
 import com.example.playback.CrossfadeSettings
 import com.example.playback.EqPreset
 import com.example.playback.EqualizerUiState
+import com.example.ui.glass.GlassSegmented
+import com.example.ui.glass.LocalAurixHazeState
+import com.example.ui.glass.SegOption
 import com.example.ui.theme.*
+import dev.chrisbanes.haze.hazeChild
 import java.text.SimpleDateFormat
 import java.util.Locale
 import kotlin.math.roundToInt
@@ -309,40 +313,39 @@ fun SettingsScreen(
               style = MaterialTheme.typography.titleMedium.copy(fontWeight = FontWeight.Bold, lineHeight = 24.sp),
               color = MaterialTheme.colorScheme.onSurface
             )
-            Surface(
-              shape = RoundedCornerShape(999.dp),
-              color = if (darkTheme) Color(0xFF0E1320).copy(alpha = 0.72f) else Color(0xFFE1E8F6),
-              modifier = Modifier.fillMaxWidth()
-            ) {
-              val themeOptions = listOf(
-                "system" to stringResource(id = R.string.settings_theme_system),
-                "light" to stringResource(id = R.string.settings_theme_light),
-                "dark" to stringResource(id = R.string.settings_theme_dark),
-                "amoled" to stringResource(id = R.string.settings_theme_amoled)
+            val hazeState = LocalAurixHazeState.current
+            val themeKeys = listOf("system", "light", "dark", "amoled")
+            val themeOptions = listOf(
+              SegOption(
+                label = stringResource(id = R.string.settings_theme_system),
+                testTag = "settings_theme_system"
+              ),
+              SegOption(
+                label = stringResource(id = R.string.settings_theme_light),
+                testTag = "settings_theme_light"
+              ),
+              SegOption(
+                label = stringResource(id = R.string.settings_theme_dark),
+                testTag = "settings_theme_dark"
+              ),
+              SegOption(
+                label = stringResource(id = R.string.settings_theme_amoled),
+                testTag = "settings_theme_amoled"
               )
-              Row(modifier = Modifier.padding(4.dp)) {
-                themeOptions.forEach { (key, label) ->
-                  val selected = currentTheme == key
-                  Box(
-                    modifier = Modifier
-                      .weight(1f)
-                      .clip(RoundedCornerShape(999.dp))
-                      .background(if (selected) (if (darkTheme) Color(0xFF28334A) else Color.White) else Color.Transparent)
-                      .clickable { onThemeChanged(key) }
-                      .padding(vertical = 10.dp, horizontal = 4.dp),
-                    contentAlignment = Alignment.Center
-                  ) {
-                    Text(
-                      text = label,
-                      style = MaterialTheme.typography.bodySmall.copy(fontWeight = FontWeight.SemiBold, lineHeight = 18.sp),
-                      color = if (selected) MaterialTheme.colorScheme.onSurface else MaterialTheme.colorScheme.onSurfaceVariant,
-                      maxLines = 1,
-                      overflow = TextOverflow.Ellipsis
-                    )
-                  }
+            )
+            GlassSegmented(
+              options = themeOptions,
+              selectedIndex = themeKeys.indexOf(currentTheme).let { if (it >= 0) it else 0 },
+              onSelect = { idx ->
+                val selectedKey = themeKeys.getOrElse(idx) { "system" }
+                if (selectedKey != currentTheme) {
+                  onThemeChanged(selectedKey)
                 }
-              }
-            }
+              },
+              fillWidth = true,
+              darkTheme = darkTheme,
+              backdrop = if (hazeState != null) Modifier.hazeChild(state = hazeState) else Modifier
+            )
           }
 
           Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {

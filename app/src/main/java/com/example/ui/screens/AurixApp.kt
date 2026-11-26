@@ -1,9 +1,11 @@
 package com.example.ui.screens
 
 import android.Manifest
+import android.app.Activity
 import android.content.ClipData
 import android.content.ClipboardManager
 import android.content.Context
+import android.content.ContextWrapper
 import android.content.pm.PackageManager
 import android.os.Build
 import android.widget.Toast
@@ -41,6 +43,7 @@ import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.platform.LocalConfiguration
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.platform.LocalView
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontFamily
@@ -48,6 +51,7 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.compose.ui.window.DialogProperties
 import androidx.core.content.ContextCompat
+import androidx.core.view.WindowCompat
 import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.LifecycleEventObserver
 import androidx.lifecycle.compose.LocalLifecycleOwner
@@ -57,8 +61,12 @@ import com.example.R
 import com.example.data.UpdateStage
 import com.example.model.YoutubeFormatSheetState
 import com.example.recommendation.MoodCategory
+import com.example.ui.glass.LocalAurixHazeState
+import com.example.ui.glass.LocalAurixReducedMotion
 import com.example.ui.theme.*
 import com.example.viewmodel.AurixViewModel
+import dev.chrisbanes.haze.HazeState
+import dev.chrisbanes.haze.haze
 
 sealed class Screen(val route: String, val title: String, val icon: ImageVector) {
   object Home : Screen("home", "Home", Icons.Outlined.Home)
@@ -116,6 +124,26 @@ private fun AurixAppContent(
     "light" -> false
     "dark", "amoled" -> true
     else -> systemDark
+  }
+  val view = LocalView.current
+  if (!view.isInEditMode) {
+    SideEffect {
+      var ctx: Context? = view.context
+      var activity: Activity? = null
+      while (ctx is ContextWrapper) {
+        if (ctx is Activity) {
+          activity = ctx
+          break
+        }
+        ctx = ctx.baseContext
+      }
+      val window = activity?.window
+      if (window != null) {
+        val controller = WindowCompat.getInsetsController(window, view)
+        controller.isAppearanceLightStatusBars = !darkTheme
+        controller.isAppearanceLightNavigationBars = !darkTheme
+      }
+    }
   }
   val accentColor = parseHexColor(accentHex, darkTheme)
   val albumDynamicPalette = rememberAlbumDynamicPalette(
@@ -640,7 +668,13 @@ private fun AurixMainShell(
     )
   }
 
-  CompositionLocalProvider(LocalDynamicBgCustomization provides dynamicBgCustomization) {
+  val appHazeState = remember { HazeState() }
+
+  CompositionLocalProvider(
+    LocalDynamicBgCustomization provides dynamicBgCustomization,
+    LocalAurixHazeState provides appHazeState,
+    LocalAurixReducedMotion provides reducedMotion
+  ) {
   Box(
     modifier = Modifier
       .fillMaxSize()
@@ -661,12 +695,19 @@ private fun AurixMainShell(
           }
           .background(MaterialTheme.colorScheme.background)
       ) {
-        DynamicArtworkBackdrop(
-          song = currentSong,
-          enabled = dynamicBg && !amoledTheme,
-          darkTheme = darkTheme,
-          reducedMotion = reducedMotion
-        )
+        Box(
+          modifier = Modifier
+            .matchParentSize()
+            .haze(state = appHazeState)
+            .background(MaterialTheme.colorScheme.background)
+        ) {
+          DynamicArtworkBackdrop(
+            song = currentSong,
+            enabled = dynamicBg && !amoledTheme,
+            darkTheme = darkTheme,
+            reducedMotion = reducedMotion
+          )
+        }
 
         val topTabs = remember { listOf(Screen.Home, Screen.Search, Screen.Library, Screen.Settings) }
         AnimatedContent(

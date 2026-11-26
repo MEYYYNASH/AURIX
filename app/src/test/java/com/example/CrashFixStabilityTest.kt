@@ -12,10 +12,10 @@ import org.junit.Test
 class CrashFixStabilityTest {
 
   @Test
-  fun release232_metadataAndVersionCodeAreConsistent() {
-    assertEquals("2.3.2", BuildConfig.VERSION_NAME)
-    assertEquals(20302, BuildConfig.VERSION_CODE)
-    assertTrue("Release 2.3.2 versionCode must exceed 2.3.1 (20301)", BuildConfig.VERSION_CODE > 20301)
+  fun release233_metadataAndVersionCodeAreConsistent() {
+    assertEquals("2.3.3", BuildConfig.VERSION_NAME)
+    assertEquals(20303, BuildConfig.VERSION_CODE)
+    assertTrue("Release 2.3.3 versionCode must exceed 2.3.2 (20302)", BuildConfig.VERSION_CODE > 20302)
     assertEquals(420, com.example.ui.screens.SELECT_BAR_OPEN_DURATION_MS)
     assertEquals(600, com.example.ui.screens.SELECT_CIRCLE_OPEN_DURATION_MS)
     assertEquals(380L, com.example.ui.screens.SELECT_CLOSE_CLEAR_DELAY_MS)
@@ -983,11 +983,12 @@ class CrashFixStabilityTest {
 
   @Test
   fun remoteJsonUpdateChecker_granularVersioningAndTimestamps_workEndToEnd() {
-    assertEquals(20302, BuildConfig.VERSION_CODE)
+    assertEquals(20303, BuildConfig.VERSION_CODE)
     assertEquals(20301L, com.example.data.GitHubUpdater.deriveVersionCodeFromTag("v2.3.1"))
     assertEquals(20301L, com.example.data.GitHubUpdater.deriveVersionCodeFromTag("v2.3.1+20301"))
     assertEquals(20312L, com.example.data.GitHubUpdater.deriveVersionCodeFromTag("v2.3.1.2"))
     assertEquals(20302L, com.example.data.GitHubUpdater.deriveVersionCodeFromTag("v2.3.2"))
+    assertEquals(20303L, com.example.data.GitHubUpdater.deriveVersionCodeFromTag("v2.3.3"))
 
     val server = com.sun.net.httpserver.HttpServer.create(java.net.InetSocketAddress("127.0.0.1", 0), 0)
     val port = server.address.port
@@ -1230,5 +1231,41 @@ class CrashFixStabilityTest {
         com.example.ui.theme.AlbumPaletteThemeEngine.contrastRatio(resolved.playButtonInk, resolved.accent) >= 4.5f
       )
     }
+  }
+
+  @Test
+  fun glassSegmented_physicsAndHitTestingHelpers_workAccurately() {
+    val lefts = floatArrayOf(0f, 100f, 220f, 340f)
+    val widths = floatArrayOf(100f, 120f, 120f, 100f)
+
+    assertEquals(0, com.example.ui.glass.findSegmentIndexAtX(25f, lefts, widths))
+    assertEquals(1, com.example.ui.glass.findSegmentIndexAtX(150f, lefts, widths))
+    assertEquals(3, com.example.ui.glass.findSegmentIndexAtX(420f, lefts, widths))
+
+    // Speed normalization clamps to [0f, 1f]
+    assertEquals(0f, com.example.ui.glass.computeGlassVelocitySpeed(0f, 1100f), 0.001f)
+    assertEquals(0.5f, com.example.ui.glass.computeGlassVelocitySpeed(-550f, 1100f), 0.001f)
+    assertEquals(1.0f, com.example.ui.glass.computeGlassVelocitySpeed(2500f, 1100f), 0.001f)
+
+    // Flick inertia projects 0.2s ahead and clamps within track bounds
+    val projectedCenterRight = com.example.ui.glass.projectFlickCenter(
+      thumbLeftPx = 0f,
+      thumbWidthPx = 100f,
+      releaseVelocityPxPerSec = 1000f,
+      trackTotalWidthPx = 440f,
+      projectionSeconds = 0.20f
+    )
+    assertEquals(250f, projectedCenterRight, 0.01f)
+    assertEquals(2, com.example.ui.glass.findNearestSegmentIndex(projectedCenterRight, lefts, widths))
+
+    val projectedClampedLeft = com.example.ui.glass.projectFlickCenter(
+      thumbLeftPx = 100f,
+      thumbWidthPx = 120f,
+      releaseVelocityPxPerSec = -3000f,
+      trackTotalWidthPx = 440f,
+      projectionSeconds = 0.20f
+    )
+    assertEquals(0f, projectedClampedLeft, 0.01f)
+    assertEquals(0, com.example.ui.glass.findNearestSegmentIndex(projectedClampedLeft, lefts, widths))
   }
 }

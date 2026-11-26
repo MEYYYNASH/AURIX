@@ -49,8 +49,12 @@ import androidx.compose.ui.unit.sp
 import com.example.R
 import com.example.model.Song
 import com.example.recommendation.*
+import com.example.ui.glass.GlassSegmented
+import com.example.ui.glass.LocalAurixHazeState
+import com.example.ui.glass.SegOption
 import com.example.ui.theme.HeartRed
 import com.example.viewmodel.DailyFeedCategory
+import dev.chrisbanes.haze.hazeChild
 import java.util.Calendar
 
 private enum class DailyCardState { LOADING, ERROR, LOADED }
@@ -536,52 +540,40 @@ fun HomeScreen(
             exit = sectionExit
           ) {
             Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
+              val hazeState = LocalAurixHazeState.current
+              val filterOptions = listOf(
+                SegOption(
+                  label = stringResource(id = R.string.nfy_filter_all),
+                  testTag = "nfy_filter_chip_${NewForYouFilter.ALL.name.lowercase()}"
+                ),
+                SegOption(
+                  label = stringResource(id = R.string.nfy_filter_songs),
+                  testTag = "nfy_filter_chip_${NewForYouFilter.SONGS.name.lowercase()}"
+                ),
+                SegOption(
+                  label = stringResource(id = R.string.nfy_filter_albums),
+                  testTag = "nfy_filter_chip_${NewForYouFilter.ALBUMS.name.lowercase()}"
+                ),
+                SegOption(
+                  label = stringResource(id = R.string.nfy_filter_artists),
+                  testTag = "nfy_filter_chip_${NewForYouFilter.ARTIST_RELEASES.name.lowercase()}"
+                )
+              )
               Row(
                 modifier = Modifier
                   .fillMaxWidth()
-                  .horizontalScroll(rememberScrollState()),
-                horizontalArrangement = Arrangement.spacedBy(8.dp)
+                  .horizontalScroll(rememberScrollState())
               ) {
-                NewForYouFilter.entries.forEach { filter ->
-                  val selected = filter == selectedNewFilter
-                  val labelRes = when (filter) {
-                    NewForYouFilter.ALL -> R.string.nfy_filter_all
-                    NewForYouFilter.SONGS -> R.string.nfy_filter_songs
-                    NewForYouFilter.ALBUMS -> R.string.nfy_filter_albums
-                    NewForYouFilter.ARTIST_RELEASES -> R.string.nfy_filter_artists
-                  }
-                  val chipBg by animateColorAsState(
-                    targetValue = when {
-                      selected -> AurixTealAccent
-                      darkTheme -> Color(0xFF151F30)
-                      else -> Color.White.copy(alpha = 0.85f)
-                    },
-                    animationSpec = if (reducedMotion) snap() else tween(180),
-                    label = "nfy_chip_${filter.name}"
-                  )
-                  Surface(
-                    shape = CircleShape,
-                    color = chipBg,
-                    border = androidx.compose.foundation.BorderStroke(
-                      1.dp,
-                      if (selected) AurixTealAccent else if (darkTheme) Color(0xFF273348) else Color.White
-                    ),
-                    modifier = Modifier
-                      .heightIn(min = 38.dp)
-                      .clip(CircleShape)
-                      .clickable { selectedNewFilter = filter }
-                      .testTag("nfy_filter_chip_${filter.name.lowercase()}")
-                  ) {
-                    Text(
-                      text = stringResource(id = labelRes),
-                      style = MaterialTheme.typography.labelLarge.copy(
-                        fontWeight = if (selected) FontWeight.Bold else FontWeight.SemiBold
-                      ),
-                      color = if (selected) Color(0xFF06201C) else MaterialTheme.colorScheme.onSurface,
-                      modifier = Modifier.padding(horizontal = 14.dp, vertical = 8.dp)
-                    )
-                  }
-                }
+                GlassSegmented(
+                  options = filterOptions,
+                  selectedIndex = NewForYouFilter.entries.indexOf(selectedNewFilter).coerceAtLeast(0),
+                  onSelect = { idx ->
+                    NewForYouFilter.entries.getOrNull(idx)?.let { selectedNewFilter = it }
+                  },
+                  fillWidth = false,
+                  darkTheme = darkTheme,
+                  backdrop = if (hazeState != null) Modifier.hazeChild(state = hazeState) else Modifier
+                )
               }
 
               if (filteredNewItems.isEmpty()) {

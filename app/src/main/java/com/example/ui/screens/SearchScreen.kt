@@ -98,6 +98,10 @@ import androidx.compose.material.icons.rounded.Search
 import androidx.compose.material.icons.rounded.Shuffle
 import androidx.compose.material.icons.rounded.StopCircle
 import androidx.compose.material.icons.rounded.Tune
+import com.example.ui.glass.GlassSegmented
+import com.example.ui.glass.LocalAurixHazeState
+import com.example.ui.glass.SegOption
+import dev.chrisbanes.haze.hazeChild
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.CircularProgressIndicator
@@ -464,17 +468,25 @@ fun SearchScreen(
 
       Spacer(modifier = Modifier.height(14.dp))
 
-      // Liquid Glass 2-Mode Switcher (YouTube Search | YT Link)
-      GlassSegmentedBar(
+      // Liquid Glass 2-Mode Switcher (YouTube | YT Link)
+      val hazeState = LocalAurixHazeState.current
+      GlassSegmented(
         options = listOf(
-          stringResource(id = R.string.search_mode_yt_search) to Icons.Rounded.PlayCircle,
-          stringResource(id = R.string.search_mode_youtube) to Icons.Rounded.Link
+          SegOption(
+            label = stringResource(id = R.string.search_mode_yt_search),
+            icon = Icons.Rounded.PlayCircle,
+            testTag = "mode_youtube_search_button"
+          ),
+          SegOption(
+            label = stringResource(id = R.string.search_mode_youtube),
+            icon = Icons.Rounded.Link,
+            testTag = "mode_youtube_button"
+          )
         ),
         selectedIndex = when (searchMode) {
           "youtube" -> 1
           else -> 0
         },
-        darkTheme = darkTheme,
         onSelect = { idx ->
           val next = when (idx) {
             1 -> "youtube"
@@ -482,8 +494,9 @@ fun SearchScreen(
           }
           onSearchModeChanged(next)
         },
-        testTags = listOf("mode_youtube_search_button", "mode_youtube_button"),
-        reducedMotion = reducedMotion
+        fillWidth = true,
+        darkTheme = darkTheme,
+        backdrop = if (hazeState != null) Modifier.hazeChild(state = hazeState) else Modifier
       )
 
       Spacer(modifier = Modifier.height(14.dp))

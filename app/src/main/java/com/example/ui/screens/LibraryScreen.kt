@@ -98,6 +98,10 @@ import androidx.compose.ui.platform.LocalInspectionMode
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.res.stringResource
+import com.example.ui.glass.GlassSegmented
+import com.example.ui.glass.LocalAurixHazeState
+import com.example.ui.glass.SegOption
+import dev.chrisbanes.haze.hazeChild
 import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
@@ -737,27 +741,35 @@ fun LibraryScreen(
 
     Spacer(modifier = Modifier.height(10.dp))
 
-    GlassSegmentedBar(
+    val hazeState = LocalAurixHazeState.current
+    GlassSegmented(
       options = listOf(
-        stringResource(id = R.string.library_tab_my_songs) to null,
-        stringResource(id = R.string.library_tab_favorites) to null,
-        stringResource(id = R.string.library_tab_recent) to null,
-        stringResource(id = R.string.library_tab_albums) to null
+        SegOption(
+          label = stringResource(id = R.string.library_tab_my_songs),
+          testTag = "library_tab_songs"
+        ),
+        SegOption(
+          label = stringResource(id = R.string.library_tab_favorites),
+          testTag = "library_tab_favorites"
+        ),
+        SegOption(
+          label = stringResource(id = R.string.library_tab_recent),
+          testTag = "library_tab_recent"
+        ),
+        SegOption(
+          label = stringResource(id = R.string.library_tab_albums),
+          testTag = "library_tab_albums"
+        )
       ),
       selectedIndex = selectedTab,
-      darkTheme = darkTheme,
       onSelect = { newTab ->
         if (newTab != selectedTab) {
           onTabSelected(newTab)
         }
       },
-      testTags = listOf(
-        "library_tab_songs",
-        "library_tab_favorites",
-        "library_tab_recent",
-        "library_tab_albums"
-      ),
-      reducedMotion = reducedMotion
+      fillWidth = true,
+      darkTheme = darkTheme,
+      backdrop = if (hazeState != null) Modifier.hazeChild(state = hazeState) else Modifier
     )
 
     Spacer(modifier = Modifier.height(10.dp))
