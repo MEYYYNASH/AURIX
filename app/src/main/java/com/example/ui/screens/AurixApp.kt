@@ -172,10 +172,40 @@ private fun AurixAppContent(
         .fillMaxSize()
         .background(MaterialTheme.colorScheme.background)
     ) {
+      var onboardingSessionActive by remember { mutableStateOf(false) }
+      LaunchedEffect(isAppInitialized, onboardingCompleted) {
+        if (isAppInitialized && !onboardingCompleted) {
+          onboardingSessionActive = true
+        }
+      }
+
       if (!isAppInitialized) {
         Box(modifier = Modifier.fillMaxSize())
-      } else if (!onboardingCompleted) {
-        OnboardingScreen(onFinished = { viewModel.setOnboardingCompleted(true) })
+      } else if (!onboardingCompleted || onboardingSessionActive) {
+        val onboardingDim by viewModel.dynamicBgDim.collectAsStateWithLifecycle()
+        val onboardingLocalSongs by viewModel.localSongs.collectAsStateWithLifecycle()
+        val onboardingLyrics by viewModel.lyrics.collectAsStateWithLifecycle()
+        OnboardingScreen(
+          currentLanguage = currentLanguage,
+          initialAccentHex = accentHex,
+          initialDynamicBg = dynamicBg,
+          initialDynamicBgDim = onboardingDim,
+          localSongs = onboardingLocalSongs,
+          liveLyricsResult = onboardingLyrics,
+          reducedMotion = reducedMotion,
+          onLanguageChanged = { viewModel.setLanguage(it) },
+          onAccentColorChanged = { viewModel.setAccentColor(it) },
+          onBackdropChanged = { preset ->
+            viewModel.setDynamicBg(preset.dynamicBgEnabled)
+            viewModel.setDynamicBgBlur(preset.blurDp)
+            viewModel.setDynamicBgDim(preset.dimLevel)
+          },
+          onSkipped = { viewModel.setOnboardingCompleted(true) },
+          onFinished = {
+            viewModel.setOnboardingCompleted(true)
+            onboardingSessionActive = false
+          }
+        )
       } else {
         AurixMainShell(
           viewModel = viewModel,

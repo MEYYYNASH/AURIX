@@ -12,10 +12,11 @@ import org.junit.Test
 class CrashFixStabilityTest {
 
   @Test
-  fun release241_metadataAndVersionCodeAreConsistent() {
-    assertEquals("2.4.1", BuildConfig.VERSION_NAME)
-    assertEquals(20401, BuildConfig.VERSION_CODE)
-    assertTrue("Release 2.4.1 versionCode must exceed 2.4.0 (20400)", BuildConfig.VERSION_CODE > 20400)
+  fun release242_metadataAndVersionCodeAreConsistent() {
+    assertEquals("2.4.2", BuildConfig.VERSION_NAME)
+    assertEquals(20402, BuildConfig.VERSION_CODE)
+    assertTrue("Release 2.4.2 versionCode must exceed 2.4.1 (20401)", BuildConfig.VERSION_CODE > 20401)
+    assertEquals(4, com.example.ui.screens.ONBOARDING_SLIDE_COUNT)
     assertTrue(com.example.ui.screens.MINI_PLAYER_HIGH_REFRESH_OPTIMIZED)
     assertTrue(com.example.ui.screens.MINI_PLAYER_SLIDE_UP_DAMPING in 0.7f..0.95f)
     assertTrue(com.example.ui.screens.MINI_PLAYER_SLIDE_UP_STIFFNESS >= 380f)
@@ -29,6 +30,62 @@ class CrashFixStabilityTest {
     assertEquals(5, com.example.data.OrbiAppIcon.entries.size)
     assertEquals(com.example.data.OrbiAppIcon.MIDNIGHT, com.example.data.OrbiAppIcon.fromId("midnight"))
     assertEquals(com.example.data.OrbiAppIcon.CLASSIC, com.example.data.OrbiAppIcon.fromId("unknown"))
+  }
+
+  @Test
+  fun onboarding242_tokensLocalizationKaraokeAndAudioEngineArePixelFaithful() {
+    val tokens = com.example.ui.theme.AurixDesignTokens
+    assertEquals(4, tokens.AccentPresets.size)
+    assertEquals(listOf("#43C7F4", "#A855F7", "#EF4444", "#22C55E"), tokens.AccentPresets.map { it.hex })
+    assertEquals(1.2f, tokens.TitleLineHeightEn, 0.0001f)
+    assertEquals(1.55f, tokens.BodyLineHeightEn, 0.0001f)
+    assertEquals(1.45f, tokens.TitleLineHeightKm, 0.0001f)
+    assertEquals(1.8f, tokens.BodyLineHeightKm, 0.0001f)
+
+    // Swipe physics: 30% edge resistance, 18% advance threshold
+    val physics = com.example.ui.screens.onboarding.OnboardingSwipePhysics
+    assertEquals(30f, physics.applyEdgeResistance(100f, currentIndex = 0, pageCount = 4), 0.001f)
+    assertEquals(-30f, physics.applyEdgeResistance(-100f, currentIndex = 3, pageCount = 4), 0.001f)
+    assertEquals(-100f, physics.applyEdgeResistance(-100f, currentIndex = 0, pageCount = 4), 0.001f)
+    assertEquals(1, physics.resolveTargetIndex(rawDragPx = -75f, viewportWidthPx = 400f, currentIndex = 0, pageCount = 4))
+    assertEquals(0, physics.resolveTargetIndex(rawDragPx = -60f, viewportWidthPx = 400f, currentIndex = 0, pageCount = 4))
+
+    // Karaoke fill math & 8 lyric lines across 19.2s loop
+    val lines = com.example.ui.screens.onboarding.OnboardingDemoAudioEngine.DEFAULT_LYRICS
+    assertEquals(8, lines.size)
+    assertEquals(19.2f, com.example.ui.screens.onboarding.OnboardingDemoAudioEngine.LOOP_DURATION_SECONDS, 0.001f)
+    assertEquals(0f, com.example.ui.screens.onboarding.OnboardingDemoAudioEngine.computeKaraokeFill(0f, 0, lines), 0.001f)
+    assertEquals(1f, com.example.ui.screens.onboarding.OnboardingDemoAudioEngine.computeKaraokeFill(3.0f, 0, lines), 0.001f)
+    assertEquals(0f, com.example.ui.screens.onboarding.OnboardingDemoAudioEngine.computeKaraokeFill(3.0f, 2, lines), 0.001f)
+    val midFill = com.example.ui.screens.onboarding.OnboardingDemoAudioEngine.computeKaraokeFill(1.025f, 0, lines)
+    assertEquals(0.5f, midFill, 0.02f)
+
+    // Procedural synth generates exact 19.2s non-silent loop
+    val pcm = com.example.ui.screens.onboarding.OnboardingDemoAudioEngine.renderProceduralLoopPcm16(sampleRate = 4000)
+    assertEquals((19.2f * 4000).toInt(), pcm.size)
+    assertTrue("Procedural synth buffer should produce audible waveform", pcm.any { kotlin.math.abs(it.toInt()) > 500 })
+
+    // Local audio format badge extraction
+    val flacSong = Song("s1", "Track", "Artist", "", 180L, "file:///music/hong_kong.flac")
+    assertEquals("FLAC", com.example.ui.screens.onboarding.extractLocalAudioFormatBadge(flacSong))
+    assertEquals("MP3", com.example.ui.screens.onboarding.extractLocalAudioFormatBadge(null))
+
+    // Exact EN & KM localization strings present in XML resources
+    val projectRoot = java.io.File(System.getProperty("user.dir") ?: ".").let { dir ->
+      if (java.io.File(dir, "src/main/res").exists()) dir else java.io.File(dir, "app")
+    }
+    val enStrings = java.io.File(projectRoot, "src/main/res/values/strings.xml").readText()
+    val kmStrings = java.io.File(projectRoot, "src/main/res/values-km/strings.xml").readText()
+    assertTrue(enStrings.contains("All your music. One place."))
+    assertTrue(enStrings.contains("Lyrics that move with you."))
+    assertTrue(enStrings.contains("Make it yours."))
+    assertTrue(enStrings.contains("Ready to listen?"))
+    assertTrue(enStrings.contains("Tap the speaker to hear it"))
+    assertTrue(kmStrings.contains("ចម្រៀងទាំងអស់ នៅកន្លែងតែមួយ"))
+    assertTrue(kmStrings.contains("អត្ថបទចម្រៀងដែលរំកិលតាមចង្វាក់"))
+    assertTrue(kmStrings.contains("ធ្វើឱ្យវាជារបស់អ្នក"))
+    assertTrue(kmStrings.contains("ត្រៀមខ្លួនស្តាប់ហើយឬនៅ?"))
+    assertTrue(kmStrings.contains("ចុចឧបករណ៍បំពង្រីកសំឡេង ដើម្បីស្តាប់"))
   }
 
   @Test
@@ -1010,7 +1067,7 @@ class CrashFixStabilityTest {
 
   @Test
   fun remoteJsonUpdateChecker_granularVersioningAndTimestamps_workEndToEnd() {
-    assertEquals(20401, BuildConfig.VERSION_CODE)
+    assertEquals(20402, BuildConfig.VERSION_CODE)
     assertEquals(20301L, com.example.data.GitHubUpdater.deriveVersionCodeFromTag("v2.3.1"))
     assertEquals(20301L, com.example.data.GitHubUpdater.deriveVersionCodeFromTag("v2.3.1+20301"))
     assertEquals(20312L, com.example.data.GitHubUpdater.deriveVersionCodeFromTag("v2.3.1.2"))
@@ -1018,15 +1075,16 @@ class CrashFixStabilityTest {
     assertEquals(20303L, com.example.data.GitHubUpdater.deriveVersionCodeFromTag("v2.3.3"))
     assertEquals(20400L, com.example.data.GitHubUpdater.deriveVersionCodeFromTag("v2.4.0"))
     assertEquals(20401L, com.example.data.GitHubUpdater.deriveVersionCodeFromTag("v2.4.1"))
+    assertEquals(20402L, com.example.data.GitHubUpdater.deriveVersionCodeFromTag("v2.4.2"))
 
     val server = com.sun.net.httpserver.HttpServer.create(java.net.InetSocketAddress("127.0.0.1", 0), 0)
     val port = server.address.port
     server.createContext("/version.json") { exchange ->
       val body = """
         {
-          "versionName": "2.4.1.1",
+          "versionName": "2.4.2.1",
           "publishedAt": "2026-11-26T22:15:30Z",
-          "apkUrl": "http://127.0.0.1:$port/AURIX-v2.4.1.1.apk",
+          "apkUrl": "http://127.0.0.1:$port/AURIX-v2.4.2.1.apk",
           "sha256": "0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef",
           "notes": ["Granular 4-segment hotfix release"]
         }
@@ -1050,8 +1108,8 @@ class CrashFixStabilityTest {
       val derivedCode = com.example.data.GitHubUpdater.deriveVersionCodeFromTag(versionName)
       val parsedTs = com.example.data.GitHubUpdater.parseIsoTimestampMs(publishedAt)
 
-      assertEquals("2.4.1.1", versionName)
-      assertEquals(20411L, derivedCode)
+      assertEquals("2.4.2.1", versionName)
+      assertEquals(20421L, derivedCode)
       assertTrue(parsedTs > 0L)
 
       val remote = com.example.data.RemoteVersionInfo(
@@ -1418,5 +1476,48 @@ class CrashFixStabilityTest {
 
     com.example.playback.CrossfadeController.setDjAutoMixEnabled(false)
     assertEquals(0, com.example.playback.CrossfadeController.state.value.effectiveDurationSeconds)
+  }
+
+  @Test
+  fun safeCubicBezierEasing_neverThrowsAtBoundaryOr099999994() {
+    val curves = listOf(
+      com.example.ui.theme.AurixDesignTokens.MainEasing,
+      com.example.ui.theme.AurixDesignTokens.SpringEasing,
+      com.example.ui.theme.AurixDesignTokens.FinishRevealEasing,
+      com.example.ui.theme.SafeCubicBezierEasing(0.34f, 1.42f, 0.64f, 1.0f),
+      com.example.ui.theme.SafeCubicBezierEasing(0.22f, 1.0f, 0.36f, 1.0f)
+    )
+    val edgeInputs = floatArrayOf(
+      -0.1f, 0f, Float.MIN_VALUE, 1e-7f, 0.5f, 0.999999f, 0.9999999f,
+      0.99999994f, Math.nextDown(1.0f), 1.0f, 1.0001f, Float.NaN
+    )
+    for (curve in curves) {
+      assertEquals(0f, curve.transform(0f), 0.0001f)
+      assertEquals(1f, curve.transform(1f), 0.0001f)
+      for (x in edgeInputs) {
+        val y = curve.transform(x)
+        assertTrue("Non-finite output $y for input $x", y.isFinite())
+      }
+      for (i in 0..10_000) {
+        val y = curve.transform(i / 10_000f)
+        assertTrue("Non-finite output $y at step $i", y.isFinite())
+      }
+    }
+    // Verify SpringEasing genuinely overshoots (> 1.0) in the mid-late range and settles cleanly near 1.0
+    assertTrue(com.example.ui.theme.AurixDesignTokens.SpringEasing.transform(0.65f) > 1.05f)
+    assertEquals(1.0f, com.example.ui.theme.AurixDesignTokens.SpringEasing.transform(0.99999994f), 0.001f)
+
+    // Guard against reintroducing stock CubicBezierEasing(0.34f, ...) anywhere in src/main/java
+    val javaRoot = java.io.File("src/main/java").let {
+      if (it.exists()) it else java.io.File("app/src/main/java")
+    }
+    val unsafePattern = Regex("""\bCubicBezierEasing\s*\(\s*0\.34f""")
+    javaRoot.walkTopDown().filter { it.isFile && it.extension == "kt" }.forEach { file ->
+      val text = file.readText()
+      assertTrue(
+        "Unsafe stock CubicBezierEasing(0.34f, ...) found in ${file.name}; use SafeCubicBezierEasing",
+        unsafePattern.find(text) == null
+      )
+    }
   }
 }

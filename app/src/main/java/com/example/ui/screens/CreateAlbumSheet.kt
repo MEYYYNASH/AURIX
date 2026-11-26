@@ -124,8 +124,8 @@ import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 import kotlin.math.roundToInt
 
-private val AurixEaseOut = CubicBezierEasing(0.22f, 1f, 0.36f, 1f)
-private val AurixSpringOut = CubicBezierEasing(0.34f, 1.56f, 0.64f, 1f)
+private val AurixEaseOut = com.example.ui.theme.SafeCubicBezierEasing(0.22f, 1f, 0.36f, 1f)
+private val AurixSpringOut = com.example.ui.theme.SafeCubicBezierEasing(0.34f, 1.56f, 0.64f, 1f)
 
 private val DarkGlassBg = Color(0xFF0A0810)
 private val DarkGlassSurface = Color(0xFF130F1F)

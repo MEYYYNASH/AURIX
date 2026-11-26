@@ -226,7 +226,7 @@ fun GlassPopupMenuContainer(
     } else {
       scaleAnim.snapTo(0.90f)
       alphaAnim.snapTo(0f)
-      val overshootEasing = CubicBezierEasing(0.34f, 1.42f, 0.64f, 1f)
+      val overshootEasing = com.example.ui.theme.SafeCubicBezierEasing(0.34f, 1.42f, 0.64f, 1f)
       launch {
         scaleAnim.animateTo(
           targetValue = 1f,

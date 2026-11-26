@@ -10,9 +10,9 @@ on:
   workflow_dispatch:
     inputs:
       tag:
-        description: 'Release tag (e.g. v2.4.1)'
+        description: 'Release tag (e.g. v2.4.2)'
         required: false
-        default: 'v2.4.1'
+        default: 'v2.4.2'
 
 permissions:
   contents: write
@@ -62,8 +62,8 @@ jobs:
           code_m = re.search(r'versionCode\s*=\s*(\d+)', gradle_text)
           date_m = re.search(r'buildConfigField\(\s*"String"\s*,\s*"RELEASE_DATE"\s*,\s*"\\"([^\\"]+)\\""\s*\)', gradle_text)
 
-          version = (ver_m.group(1) if ver_m else "2.4.1").strip()
-          vcode = code_m.group(1) if code_m else "20401"
+          version = (ver_m.group(1) if ver_m else "2.4.2").strip()
+          vcode = code_m.group(1) if code_m else "20402"
           rdate = date_m.group(1) if date_m else time.strftime("%Y-%m-%d", time.gmtime())
 
           event_name = os.environ.get("GITHUB_EVENT_NAME", "")
@@ -129,7 +129,8 @@ jobs:
             "sha256": os.environ["APK_SHA256"],
             "mandatory": False,
             "notes": [
-              f"Locked 120FPS Motion & Fluid Mini-Player Continuity ({tag}): Enabled native 120Hz/highest display refresh rate mode, eliminated root recomposition storms & layout-phase frame drops during playback and transitions, moved Mini-Player slide-up & full-screen scale-down handoff strictly to GPU graphicsLayer (zero per-frame pill blur or layout thrash), isolated live progress ring & Orbi beat spectrum into tiny leaf composables, and downsampled ambient cover-art backdrop blur for silky-smooth 120FPS performance",
+              f"Interactive Liquid Glass Onboarding, Procedural Demo Audio & Bilingual EN/KM Experience ({tag}): Rebuilt the first-launch onboarding into a 4-slide, swipeable 120Hz dark liquid-glass intro with Sora & Noto Sans Khmer typography, live YouTube + local phone search preview, karaoke-filled synced lyrics with an opt-in procedural synth/audio engine, live Accent Color & Backdrop personalizer wired directly to app settings, animated Orbi mascot orb, and a circular gradient AURIX finish reveal",
+              "Locked 120FPS Motion & Fluid Mini-Player Continuity (v2.4.1): Enabled native 120Hz/highest display refresh rate mode, eliminated root recomposition storms & layout-phase frame drops during playback and transitions, moved Mini-Player slide-up & full-screen scale-down handoff strictly to GPU graphicsLayer (zero per-frame pill blur or layout thrash), isolated live progress ring & Orbi beat spectrum into tiny leaf composables, and downsampled ambient cover-art backdrop blur for silky-smooth 120FPS performance",
               "Smart Playlists, DJ Auto-Mix & Live Up Next Queue (v2.4.0): Added auto-generated Smart Playlists by Mood, BPM, and Top Artist with harmonic BPM-matched DJ Auto-Mix beatfade transitions (2–6s equal-power crossfades) and a redesigned live Up Next Queue drawer featuring smooth drag-to-reorder handles, swipe-to-remove gestures, per-transition BPM match badges, and one-tap BPM Sort",
               "Liquid Glass Segmented Tabs with Smooth 120Hz Spring Physics & Crash Fix (v2.3.3): Replaced Search source switch, Home filter chips, Settings theme picker, and Library tabs with physics-driven Liquid Glass segmented controls (white glass pill thumb, specular highlight, speed-reactive shadow, flick inertia, cross-tab haptics, Noto Sans Khmer support, TalkBack Role.Tab semantics, and Android 12+ Haze backdrop blur); fixed Android 12+ startup crash with explicit Haze backdrop styling and rebuilt drag tracking on a continuous frame-locked spring loop with a hardware-isolated thumb layer, soft edge rubber-banding, and zero frame stutter",
               "Redesigned Compact Album Studio, Single-Download Fix & Material You Dynamic Theme (v2.3.2): Redesigned the Album screen and Library album cards with a compact centered cover & peeking spinning vinyl disc, cover-harmonized palette accents, breathing aurora backdrop, sticky frosted top bar, slim frameless track rows, and spring-animated controls; fixed single-song downloads so downloading 1 track saves directly to My songs without auto-creating an 'Unknown Album'; plus live Album-Art Material You theming via Palette API and cache-bypassing network JSON update checking",
@@ -180,7 +181,8 @@ jobs:
           mandatory: false
 
           What's New in AURIX ${RELEASE_TAG}:
-          - Locked 120FPS Motion & Fluid Mini-Player Continuity: Native 120Hz display refresh-rate opt-in, zero root recompositions or layout passes during Mini-Player slide-up & full-screen Now Playing scale-down handoff, GPU-only graphicsLayer transitions, isolated progress ring & Orbi spectrum leaves, and fast 160px downsampled ambient cover blur
+          - Interactive Liquid Glass Onboarding & Bilingual EN/KM Experience: Rebuilt 4-slide swipeable dark liquid-glass onboarding with Sora & Noto Sans Khmer typography, animated YouTube + local search preview, karaoke synced lyrics with opt-in procedural audio synthesis, live Accent Color & Backdrop picker wired to app settings, animated Orbi mascot orb, and circular AURIX finish transition
+          - Locked 120FPS Motion & Fluid Mini-Player Continuity (v2.4.1): Native 120Hz display refresh-rate opt-in, zero root recompositions or layout passes during Mini-Player slide-up & full-screen Now Playing scale-down handoff, GPU-only graphicsLayer transitions, isolated progress ring & Orbi spectrum leaves, and fast 160px downsampled ambient cover blur
           - Smart Playlists & DJ Auto-Mix (v2.4.0): Auto-generated Mood, BPM, and Top Artist smart playlists with harmonic BPM-matched DJ Auto-Mix (2–6s equal-power beatfade/gapless transitions), one-tap BPM Sort, and a live Up Next Queue drawer with drag-to-reorder and swipe-to-remove
           - Liquid Glass Segmented Tabs & Smooth 120Hz Physics (v2.3.3): Physics-driven Liquid Glass tabs across Search, Home, Settings, and Library with Haze backdrop blur and frame-locked spring tracking
           EOF
