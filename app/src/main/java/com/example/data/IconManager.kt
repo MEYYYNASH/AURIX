@@ -32,15 +32,15 @@ enum class OrbiAppIcon(
   CLASSIC(
     id = "classic",
     displayName = "Classic",
-    subtitle = "Soft gray gradient, white planet & dark ring",
+    subtitle = "Obsidian aurora, 3D porcelain Orbi & cyan-violet ring",
     aliasClassName = "com.example.MainActivityAliasClassic",
     previewResId = R.drawable.ic_orbi_preview_classic,
-    bgTopColor = Color(0xFFD3D6E4),
-    bgBottomColor = Color(0xFF6E7084),
+    bgTopColor = Color(0xFF0E1728),
+    bgBottomColor = Color(0xFF080C14),
     planetTopColor = Color(0xFFFFFFFF),
-    planetBottomColor = Color(0xFFFFFFFF),
+    planetBottomColor = Color(0xFFD2DCEE),
     eyeColor = Color(0xFF0B0C10),
-    ringColors = listOf(Color(0xFF3A3B42), Color(0xFF3A3B42))
+    ringColors = listOf(Color(0xFF43C7F4), Color(0xFFFFFFFF), Color(0xFF7965FF))
   ),
   MIDNIGHT(
     id = "midnight",

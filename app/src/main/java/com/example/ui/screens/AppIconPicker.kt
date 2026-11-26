@@ -157,9 +157,25 @@ fun OrbiLauncherIconTile(
     sin(anim * 2.0 * PI).toFloat()
   }
 
+  val orbitPhase = if (!animationsEnabled) {
+    0.72f
+  } else {
+    val anim by infiniteTransition.animateFloat(
+      initialValue = 0f,
+      targetValue = (2.0 * PI).toFloat(),
+      animationSpec = infiniteRepeatable(
+        animation = tween(durationMillis = 4800, easing = LinearEasing),
+        repeatMode = RepeatMode.Restart
+      ),
+      label = "tile_orbit"
+    )
+    anim
+  }
+
   val tileBorderColor = when (icon) {
     OrbiAppIcon.AMOLED -> Color.White.copy(alpha = 0.24f)
     OrbiAppIcon.PEARL -> Color(0xFFA78BFA).copy(alpha = 0.45f)
+    OrbiAppIcon.CLASSIC -> Color(0xFF43C7F4).copy(alpha = 0.34f)
     else -> Color.White.copy(alpha = 0.22f)
   }
 
@@ -187,25 +203,62 @@ fun OrbiLauncherIconTile(
         }
     ) {
       if (this.size.minDimension <= 0f) return@Canvas
-      val s = this.size.minDimension / 108f
+      val s = this.size.minDimension / 96f
       val cx = this.size.width / 2f
       val cy = this.size.height / 2f
 
+      val primaryGlow = icon.ringColors.firstOrNull() ?: Color(0xFF43C7F4)
+      val secondaryGlow = icon.ringColors.lastOrNull() ?: Color(0xFF7965FF)
+
+      // Subtle onboarding aurora corner blooms inside tile background (except pure AMOLED)
+      if (icon != OrbiAppIcon.AMOLED) {
+        drawCircle(
+          brush = Brush.radialGradient(
+            colors = listOf(primaryGlow.copy(alpha = 0.30f), Color.Transparent),
+            center = Offset(this.size.width * 0.22f, this.size.height * 0.22f),
+            radius = this.size.minDimension * 0.68f
+          ),
+          radius = this.size.minDimension * 0.68f,
+          center = Offset(this.size.width * 0.22f, this.size.height * 0.22f)
+        )
+        drawCircle(
+          brush = Brush.radialGradient(
+            colors = listOf(secondaryGlow.copy(alpha = 0.28f), Color.Transparent),
+            center = Offset(this.size.width * 0.82f, this.size.height * 0.80f),
+            radius = this.size.minDimension * 0.65f
+          ),
+          radius = this.size.minDimension * 0.65f,
+          center = Offset(this.size.width * 0.82f, this.size.height * 0.80f)
+        )
+      }
+
       val planetR = 20.5f * s
-      val ringRx = 29.5f * s
-      val ringRy = 7.8f * s
-      val ringStroke = (if (icon.isThinRing) 2.4f else 3.8f) * s
+      val ringRx = 29.8f * s
+      val ringRy = 8.0f * s
+      val ringStroke = (if (icon.isThinRing) 2.5f else 4.4f) * s
 
       val ringBrush = Brush.linearGradient(
-        colors = icon.ringColors,
+        colors = if (icon.ringColors.size >= 2) icon.ringColors else listOf(primaryGlow, Color.White, secondaryGlow),
         start = Offset(cx - ringRx, cy - ringRy),
         end = Offset(cx + ringRx, cy + ringRy)
       )
+      val ringBodyColor = when (icon) {
+        OrbiAppIcon.CLASSIC -> Color(0xFF3A3B42)
+        OrbiAppIcon.AMOLED -> Color.White
+        else -> primaryGlow
+      }
+
+      val moonAngle = orbitPhase.toDouble()
+      val moonPt = Offset(
+        x = cx + (kotlin.math.cos(moonAngle) * ringRx).toFloat(),
+        y = cy + (sin(moonAngle) * ringRy).toFloat()
+      )
+      val moonBehind = sin(moonAngle) < 0.0
 
       rotate(degrees = -12f, pivot = Offset(cx, cy)) {
-        // 1. Back half of orbit ring (180..360)
+        // 1. Back half of 3D beveled Saturn ring (180..360)
         drawArc(
-          brush = ringBrush,
+          color = ringBodyColor.copy(alpha = if (icon.isThinRing) 0.82f else 0.86f),
           startAngle = 180f,
           sweepAngle = 180f,
           useCenter = false,
@@ -213,47 +266,123 @@ fun OrbiLauncherIconTile(
           size = Size(ringRx * 2f, ringRy * 2f),
           style = Stroke(width = ringStroke, cap = StrokeCap.Round)
         )
-
-        // 2. Soft drop shadow + Planet sphere
-        if (icon != OrbiAppIcon.AMOLED) {
-          drawCircle(
-            color = Color.Black.copy(alpha = 0.16f),
-            radius = planetR * 1.04f,
-            center = Offset(cx, cy + 1.5f * s)
+        if (!icon.isThinRing) {
+          drawArc(
+            brush = ringBrush,
+            startAngle = 180f,
+            sweepAngle = 180f,
+            useCenter = false,
+            topLeft = Offset(cx - ringRx, cy - ringRy),
+            size = Size(ringRx * 2f, ringRy * 2f),
+            style = Stroke(width = ringStroke * 0.45f, cap = StrokeCap.Round),
+            alpha = 0.60f
           )
         }
+        if (moonBehind) {
+          drawCircle(color = primaryGlow.copy(alpha = 0.28f), radius = 4.5f * s, center = moonPt)
+          drawCircle(color = Color.White.copy(alpha = 0.85f), radius = 2.0f * s, center = moonPt)
+        }
+
+        // 2. 3D Sculpted Porcelain Planet Sphere
+        if (icon != OrbiAppIcon.AMOLED) {
+          drawCircle(
+            color = Color.Black.copy(alpha = 0.22f),
+            radius = planetR * 1.05f,
+            center = Offset(cx, cy + 1.8f * s)
+          )
+        }
+        val sphereEdgeShadow = when (icon) {
+          OrbiAppIcon.PEARL -> Color(0xFFA78BFA)
+          OrbiAppIcon.EMBER -> Color(0xFFB8929B)
+          OrbiAppIcon.AMOLED -> Color(0xFFA8ACB8)
+          else -> Color(0xFF8391AE)
+        }
         drawCircle(
-          brush = Brush.verticalGradient(
-            colors = listOf(icon.planetTopColor, icon.planetBottomColor),
-            startY = cy - planetR,
-            endY = cy + planetR
+          brush = Brush.radialGradient(
+            colorStops = arrayOf(
+              0.00f to icon.planetTopColor,
+              0.45f to Color(0xFFF4F7FF),
+              0.78f to icon.planetBottomColor,
+              1.00f to sphereEdgeShadow
+            ),
+            center = Offset(cx - planetR * 0.34f, cy - planetR * 0.36f),
+            radius = planetR * 1.48f
           ),
           radius = planetR,
           center = Offset(cx, cy)
         )
 
-        // 3. Two tall oval eyes
-        val gDx = glancePhase * 1.6f * s
-        val eyeRx = 2.5f * s
-        val eyeRy = 4.3f * s * blinkScaleY.coerceAtLeast(0.08f)
-        val leftEyeCx = cx - 4.5f * s + gDx
-        val rightEyeCx = cx + 4.5f * s + gDx
-        val eyeCy = cy - 9.8f * s
+        // Colored ambient bounce light on bottom-right limb
+        if (icon != OrbiAppIcon.AMOLED) {
+          drawCircle(
+            brush = Brush.radialGradient(
+              colors = listOf(primaryGlow.copy(alpha = 0.34f), Color.Transparent),
+              center = Offset(cx + planetR * 0.54f, cy + planetR * 0.54f),
+              radius = planetR * 0.90f
+            ),
+            radius = planetR,
+            center = Offset(cx, cy)
+          )
+        }
 
-        drawRoundRect(
-          color = icon.eyeColor,
-          topLeft = Offset(leftEyeCx - eyeRx, eyeCy - eyeRy),
-          size = Size(eyeRx * 2f, eyeRy * 2f),
-          cornerRadius = CornerRadius(eyeRx, eyeRx)
-        )
-        drawRoundRect(
-          color = icon.eyeColor,
-          topLeft = Offset(rightEyeCx - eyeRx, eyeCy - eyeRy),
-          size = Size(eyeRx * 2f, eyeRy * 2f),
-          cornerRadius = CornerRadius(eyeRx, eyeRx)
-        )
+        // Top-left glossy specular highlight dome
+        rotate(degrees = -24f, pivot = Offset(cx - planetR * 0.34f, cy - planetR * 0.40f)) {
+          drawOval(
+            brush = Brush.radialGradient(
+              colors = listOf(Color.White.copy(alpha = 0.90f), Color.Transparent),
+              center = Offset(cx - planetR * 0.34f, cy - planetR * 0.40f),
+              radius = planetR * 0.38f
+            ),
+            topLeft = Offset(cx - planetR * 0.64f, cy - planetR * 0.58f),
+            size = Size(planetR * 0.60f, planetR * 0.34f)
+          )
+        }
 
-        // 4. Front half of orbit ring (0..180)
+        // Cast ring shadow across lower front curve
+        if (!icon.isThinRing) {
+          drawArc(
+            color = Color(0xFF151C2E).copy(alpha = 0.22f),
+            startAngle = 24f,
+            sweepAngle = 132f,
+            useCenter = false,
+            topLeft = Offset(cx - ringRx, cy - ringRy + 2.4f * s),
+            size = Size(ringRx * 2f, ringRy * 2f),
+            style = Stroke(width = 3.8f * s, cap = StrokeCap.Round)
+          )
+        }
+
+        // 3. Glossy 3D oval eyes with dual specular catchlights
+        val gDx = glancePhase * 1.4f * s
+        val eyeRx = 2.55f * s
+        val eyeRy = 4.35f * s * blinkScaleY.coerceAtLeast(0.08f)
+        val leftEyeCx = cx - 4.7f * s + gDx
+        val rightEyeCx = cx + 4.7f * s + gDx
+        val eyeCy = cy - 4.3f * s
+
+        listOf(leftEyeCx, rightEyeCx).forEach { ex ->
+          drawRoundRect(
+            color = icon.eyeColor,
+            topLeft = Offset(ex - eyeRx, eyeCy - eyeRy),
+            size = Size(eyeRx * 2f, eyeRy * 2f),
+            cornerRadius = CornerRadius(eyeRx, eyeRx)
+          )
+          if (blinkScaleY > 0.45f) {
+            drawCircle(
+              color = Color.White.copy(alpha = 0.94f),
+              radius = 0.96f * s,
+              center = Offset(ex - 0.82f * s, eyeCy - 1.55f * s)
+            )
+            if (icon != OrbiAppIcon.AMOLED) {
+              drawCircle(
+                color = primaryGlow.copy(alpha = 0.78f),
+                radius = 0.48f * s,
+                center = Offset(ex + 0.72f * s, eyeCy + 1.40f * s)
+              )
+            }
+          }
+        }
+
+        // 4. Front half of 3D beveled Saturn ring (0..180)
         if (icon == OrbiAppIcon.AMOLED) {
           drawArc(
             color = Color.Black,
@@ -264,9 +393,20 @@ fun OrbiLauncherIconTile(
             size = Size(ringRx * 2f, ringRy * 2f),
             style = Stroke(width = ringStroke * 2.15f, cap = StrokeCap.Round)
           )
+        } else {
+          drawArc(
+            brush = ringBrush,
+            startAngle = 0f,
+            sweepAngle = 180f,
+            useCenter = false,
+            topLeft = Offset(cx - ringRx, cy - ringRy),
+            size = Size(ringRx * 2f, ringRy * 2f),
+            style = Stroke(width = ringStroke * 1.55f, cap = StrokeCap.Round),
+            alpha = 0.24f
+          )
         }
         drawArc(
-          brush = ringBrush,
+          color = ringBodyColor,
           startAngle = 0f,
           sweepAngle = 180f,
           useCenter = false,
@@ -274,6 +414,29 @@ fun OrbiLauncherIconTile(
           size = Size(ringRx * 2f, ringRy * 2f),
           style = Stroke(width = ringStroke, cap = StrokeCap.Round)
         )
+        drawArc(
+          brush = ringBrush,
+          startAngle = 0f,
+          sweepAngle = 180f,
+          useCenter = false,
+          topLeft = Offset(cx - ringRx, cy - ringRy - 0.5f * s),
+          size = Size(ringRx * 2f, ringRy * 2f),
+          style = Stroke(width = if (icon.isThinRing) ringStroke else ringStroke * 0.48f, cap = StrokeCap.Round)
+        )
+
+        // 5. Glowing 3D orbiting moonlet bead in front of sphere
+        if (!moonBehind) {
+          drawCircle(color = primaryGlow.copy(alpha = 0.40f), radius = 5.6f * s, center = moonPt)
+          drawCircle(
+            brush = Brush.radialGradient(
+              colors = listOf(Color.White, primaryGlow),
+              center = Offset(moonPt.x - 0.6f * s, moonPt.y - 0.6f * s),
+              radius = 3.0f * s
+            ),
+            radius = if (icon.isThinRing) 2.2f * s else 2.7f * s,
+            center = moonPt
+          )
+        }
       }
     }
   }

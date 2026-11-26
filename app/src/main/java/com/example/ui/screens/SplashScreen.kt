@@ -65,9 +65,11 @@ import kotlin.math.roundToInt
 import kotlin.math.sin
 
 private val SplashLightBg = Color(0xFFECEDF2)
-private val SplashDarkBg = Color(0xFF17181D)
+private val SplashDarkBg = Color(0xFF080C14)
+private val SplashAccentCyan = Color(0xFF43C7F4)
+private val SplashAccentViolet = Color(0xFF7965FF)
 private val OrbitRingLight = Color(0xFF3A3B42)
-private val OrbitRingDark = Color(0xFF565864)
+private val OrbitRingDark = Color(0xFF484E64)
 private val PlanetEyeDark = Color(0xFF0B0C10)
 
 @Composable
@@ -302,18 +304,18 @@ fun AurixLaunchOverlay(
           val ringRy = size.minDimension * 0.102f
           val ringStroke = size.minDimension * 0.044f
 
-          // 1. Soft pulsing glow behind planet
-          val glowRadius = (planetRadius * (1.75f + 0.16f * glowPulse)).coerceAtLeast(1f)
+          // 1. Soft pulsing neon aurora glow behind 3D onboarding orb
+          val glowRadius = (planetRadius * (1.85f + 0.16f * glowPulse)).coerceAtLeast(1f)
           val glowAlpha = if (darkTheme) {
-            0.14f + 0.08f * glowPulse
+            0.24f + 0.10f * glowPulse
           } else {
-            0.38f + 0.16f * glowPulse
+            0.34f + 0.14f * glowPulse
           }
-          val glowCoreColor = if (darkTheme) Color(0xFF9EA6C4) else Color.White
           drawCircle(
             brush = Brush.radialGradient(
               colors = listOf(
-                glowCoreColor.copy(alpha = glowAlpha),
+                SplashAccentCyan.copy(alpha = glowAlpha),
+                SplashAccentViolet.copy(alpha = glowAlpha * 0.45f),
                 Color.Transparent
               ),
               center = Offset(cx, cy),
@@ -325,7 +327,7 @@ fun AurixLaunchOverlay(
 
           // 2. Twinkling sparkles around the planet
           if (!skipMotion) {
-            val sparkleColor = if (darkTheme) Color(0xFFD3D6E4) else Color(0xFF7D8197)
+            val sparkleColor = if (darkTheme) SplashAccentCyan else Color(0xFF7965FF)
             val sparkles = listOf(
               Triple(-0.37f, -0.28f, 0.0f),
               Triple(0.39f, -0.23f, 1.4f),
@@ -350,8 +352,8 @@ fun AurixLaunchOverlay(
           val dotFadeIn = ((ringDrawProgress.value - 0.35f) / 0.35f).coerceIn(0f, 1f)
           val trailSteps = 14
 
-          rotate(degrees = -16f, pivot = Offset(cx, cy)) {
-            // PASS 1 (BEHIND PLANET): Back half of self-drawing orbit ring (sin < 0)
+          rotate(degrees = -12f, pivot = Offset(cx, cy)) {
+            // PASS 1 (BEHIND PLANET): Back half of self-drawing 3D Saturn ring
             drawEllipticalArcSegments(
               cx = cx,
               cy = cy,
@@ -380,73 +382,101 @@ fun AurixLaunchOverlay(
             }
           }
 
-          // PASS 2 (PLANET): White-lavender vertical gradient (white to #9F9EF4) + -12 deg tilted oval eyes with highlights
+          // PASS 2 (3D SCULPTED ONBOARDING PORCELAIN SPHERE)
           drawCircle(
-            color = Color.Black.copy(alpha = if (darkTheme) 0.36f else 0.12f),
-            radius = planetRadius * 1.03f,
-            center = Offset(cx, cy + planetRadius * 0.08f)
+            color = Color.Black.copy(alpha = if (darkTheme) 0.42f else 0.12f),
+            radius = planetRadius * 1.04f,
+            center = Offset(cx, cy + planetRadius * 0.09f)
           )
           drawCircle(
-            brush = Brush.verticalGradient(
-              colors = listOf(
-                Color.White,
-                Color(0xFFE7E7FD),
-                Color(0xFF9F9EF4)
+            brush = Brush.radialGradient(
+              colorStops = arrayOf(
+                0.00f to Color.White,
+                0.42f to Color(0xFFF4F7FF),
+                0.74f to Color(0xFFD2DCEE),
+                0.92f to Color(0xFF9EAAC2),
+                1.00f to Color(0xFF7D8AA6)
               ),
-              startY = cy - planetRadius,
-              endY = cy + planetRadius
+              center = Offset(cx - planetRadius * 0.34f, cy - planetRadius * 0.36f),
+              radius = planetRadius * 1.48f
             ),
             radius = planetRadius,
             center = Offset(cx, cy)
           )
+          // Bottom-right neon cyan/violet bounce reflection
           drawCircle(
-            color = Color.White.copy(alpha = 0.55f),
+            brush = Brush.radialGradient(
+              colors = listOf(
+                SplashAccentCyan.copy(alpha = 0.32f),
+                SplashAccentViolet.copy(alpha = 0.16f),
+                Color.Transparent
+              ),
+              center = Offset(cx + planetRadius * 0.56f, cy + planetRadius * 0.54f),
+              radius = planetRadius * 0.92f
+            ),
             radius = planetRadius,
+            center = Offset(cx, cy)
+          )
+          // Top-left glossy specular highlight dome
+          rotate(degrees = -26f, pivot = Offset(cx - planetRadius * 0.34f, cy - planetRadius * 0.42f)) {
+            drawOval(
+              brush = Brush.radialGradient(
+                colors = listOf(Color.White.copy(alpha = 0.92f), Color.Transparent),
+                center = Offset(cx - planetRadius * 0.34f, cy - planetRadius * 0.42f),
+                radius = planetRadius * 0.40f
+              ),
+              topLeft = Offset(cx - planetRadius * 0.64f, cy - planetRadius * 0.60f),
+              size = Size(planetRadius * 0.62f, planetRadius * 0.36f)
+            )
+          }
+          drawCircle(
+            brush = Brush.linearGradient(
+              colors = listOf(Color.White.copy(alpha = 0.68f), Color.Transparent, SplashAccentCyan.copy(alpha = 0.42f)),
+              start = Offset(cx - planetRadius, cy - planetRadius),
+              end = Offset(cx + planetRadius, cy + planetRadius)
+            ),
+            radius = planetRadius - 0.8.dp.toPx(),
             center = Offset(cx, cy),
-            style = androidx.compose.ui.graphics.drawscope.Stroke(width = 1.dp.toPx())
+            style = androidx.compose.ui.graphics.drawscope.Stroke(width = 1.2.dp.toPx())
           )
 
           rotate(degrees = -12f, pivot = Offset(cx, cy)) {
-            val eyeOffsetX = planetRadius * 0.26f
-            val eyeCenterY = cy - planetRadius * 0.15f
-            val glanceShiftPx = eyeGlanceX.value * (planetRadius * 0.14f)
-            val eyeWidth = planetRadius * 0.25f
-            val eyeHeight = (planetRadius * 0.46f) * eyeBlinkScale.value.coerceAtLeast(0.06f)
+            val eyeOffsetX = planetRadius * 0.24f
+            val eyeCenterY = cy - planetRadius * 0.17f
+            val glanceShiftPx = eyeGlanceX.value * (planetRadius * 0.12f)
+            val eyeWidth = planetRadius * 0.24f
+            val eyeHeight = (planetRadius * 0.42f) * eyeBlinkScale.value.coerceAtLeast(0.06f)
             val cornerR = eyeWidth * 0.5f
 
             val leftCx = cx - eyeOffsetX + glanceShiftPx
             val rightCx = cx + eyeOffsetX + glanceShiftPx
 
-            drawRoundRect(
-              color = PlanetEyeDark,
-              topLeft = Offset(leftCx - eyeWidth / 2f, eyeCenterY - eyeHeight / 2f),
-              size = Size(eyeWidth, eyeHeight),
-              cornerRadius = CornerRadius(cornerR, cornerR)
-            )
-            drawRoundRect(
-              color = PlanetEyeDark,
-              topLeft = Offset(rightCx - eyeWidth / 2f, eyeCenterY - eyeHeight / 2f),
-              size = Size(eyeWidth, eyeHeight),
-              cornerRadius = CornerRadius(cornerR, cornerR)
-            )
-
-            if (eyeBlinkScale.value > 0.45f) {
-              val hlRadius = eyeWidth * 0.19f
-              drawCircle(
-                color = Color.White.copy(alpha = 0.94f),
-                radius = hlRadius,
-                center = Offset(leftCx - eyeWidth * 0.14f, eyeCenterY - eyeHeight * 0.20f)
+            listOf(leftCx, rightCx).forEach { ex ->
+              drawRoundRect(
+                brush = Brush.verticalGradient(
+                  colors = listOf(Color(0xFF23293A), PlanetEyeDark),
+                  startY = eyeCenterY - eyeHeight / 2f,
+                  endY = eyeCenterY + eyeHeight / 2f
+                ),
+                topLeft = Offset(ex - eyeWidth / 2f, eyeCenterY - eyeHeight / 2f),
+                size = Size(eyeWidth, eyeHeight),
+                cornerRadius = CornerRadius(cornerR, cornerR)
               )
-              drawCircle(
-                color = Color.White.copy(alpha = 0.94f),
-                radius = hlRadius,
-                center = Offset(rightCx - eyeWidth * 0.14f, eyeCenterY - eyeHeight * 0.20f)
-              )
+              if (eyeBlinkScale.value > 0.45f) {
+                drawCircle(
+                  color = Color.White.copy(alpha = 0.94f),
+                  radius = eyeWidth * 0.19f,
+                  center = Offset(ex - eyeWidth * 0.15f, eyeCenterY - eyeHeight * 0.19f)
+                )
+                drawCircle(
+                  color = SplashAccentCyan.copy(alpha = 0.72f),
+                  radius = eyeWidth * 0.10f,
+                  center = Offset(ex + eyeWidth * 0.14f, eyeCenterY + eyeHeight * 0.17f)
+                )
+              }
             }
-          }
 
-          rotate(degrees = -16f, pivot = Offset(cx, cy)) {
-            // PASS 3 (IN FRONT OF PLANET): Front half of self-drawing orbit ring (sin >= 0)
+            // PASS 3 (IN FRONT OF PLANET): Front half of 3D beveled Saturn ring + luminous cyan-violet sheen
             drawEllipticalArcSegments(
               cx = cx,
               cy = cy,
@@ -457,8 +487,18 @@ fun AurixLaunchOverlay(
               color = ringColor,
               strokeWidth = ringStroke
             )
+            drawEllipticalArcSegments(
+              cx = cx,
+              cy = cy - ringStroke * 0.14f,
+              rx = ringRx,
+              ry = ringRy,
+              progress = ringDrawProgress.value,
+              drawBackHalf = false,
+              color = SplashAccentCyan.copy(alpha = 0.85f),
+              strokeWidth = ringStroke * 0.42f
+            )
 
-            // Front half of orbiting trail + dot (sin >= 0 -> passes cleanly over sphere)
+            // Front half of orbiting glowing moonlet + trail
             if (!skipMotion && dotFadeIn > 0.01f) {
               drawOrbitDotAndTrail(
                 cx = cx,
@@ -469,7 +509,7 @@ fun AurixLaunchOverlay(
                 trailSteps = trailSteps,
                 drawBackHalf = false,
                 alphaScale = dotFadeIn,
-                baseRadius = ringStroke * 0.62f,
+                baseRadius = ringStroke * 0.66f,
                 darkTheme = darkTheme
               )
             }

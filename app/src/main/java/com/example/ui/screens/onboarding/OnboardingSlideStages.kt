@@ -145,39 +145,94 @@ fun OnboardingSlide1Stage(
     isCompactHeight -> 2
     else -> 3
   }
-  val rowGap = if (isCompactHeight || isKeyboardOpen) 7.dp else 10.dp
-  val searchShape = RoundedCornerShape(18.dp)
+  val rowGap = if (isCompactHeight || isKeyboardOpen) 8.dp else 12.dp
+  val searchShape = RoundedCornerShape(99.dp)
+  val showIdleHero = searchQuery.isBlank() && !hasUserPickedSong && !isKeyboardOpen
+
+  val pulseTransition = if (isActive && showIdleHero && !reducedMotion) {
+    rememberInfiniteTransition(label = "s1_idle_pulse")
+  } else {
+    null
+  }
+  val pulseDotAlpha = pulseTransition?.animateFloat(
+    initialValue = 0.40f,
+    targetValue = 1.0f,
+    animationSpec = infiniteRepeatable(
+      animation = tween(durationMillis = 1200, easing = FastOutSlowInEasing),
+      repeatMode = RepeatMode.Reverse
+    ),
+    label = "s1_dot_alpha"
+  )
 
   Column(
     modifier = modifier.fillMaxWidth(),
     verticalArrangement = Arrangement.spacedBy(rowGap, Alignment.CenterVertically),
     horizontalAlignment = Alignment.CenterHorizontally
   ) {
-    // Real interactive Liquid Glass search box
+    // Airy floating 3D Orbi emblem above the search pill when idle (ZERO heavy box border)
+    androidx.compose.animation.AnimatedVisibility(
+      visible = showIdleHero,
+      enter = androidx.compose.animation.fadeIn(tween(260)) + androidx.compose.animation.expandVertically(),
+      exit = androidx.compose.animation.fadeOut(tween(180)) + androidx.compose.animation.shrinkVertically()
+    ) {
+      val orbHeroSize = if (isCompactHeight) 82.dp else 104.dp
+      Box(
+        modifier = Modifier
+          .padding(bottom = 4.dp)
+          .size(orbHeroSize + 36.dp),
+        contentAlignment = Alignment.Center
+      ) {
+        Canvas(modifier = Modifier.fillMaxSize()) {
+          val r = size.minDimension * 0.5f
+          drawCircle(
+            brush = Brush.radialGradient(
+              colorStops = arrayOf(
+                0.00f to accentColor.copy(alpha = 0.24f),
+                0.55f to AurixDesignTokens.AccentB.copy(alpha = 0.12f),
+                1.00f to Color.Transparent
+              ),
+              center = center,
+              radius = r
+            ),
+            radius = r,
+            center = center
+          )
+        }
+        OnboardingOrbiMascot(
+          isActive = isActive && showIdleHero,
+          reducedMotion = reducedMotion,
+          replaySeed = 1,
+          accentColor = accentColor,
+          modifier = Modifier.size(orbHeroSize)
+        )
+      }
+    }
+
+    // Sleek pill-shaped Liquid Glass search input
     Row(
       modifier = Modifier
         .fillMaxWidth()
-        .heightIn(min = 50.dp)
+        .heightIn(min = 52.dp)
         .shadow(
-          elevation = 14.dp,
+          elevation = if (searchQuery.isNotBlank() || hasUserPickedSong) 16.dp else 10.dp,
           shape = searchShape,
-          ambientColor = accentColor.copy(alpha = 0.42f),
-          spotColor = accentColor.copy(alpha = 0.42f)
+          ambientColor = accentColor.copy(alpha = 0.36f),
+          spotColor = accentColor.copy(alpha = 0.36f)
         )
         .onboardingGlass(
           shape = searchShape,
           hazeState = hazeState,
-          fillColor = Color.White.copy(alpha = 0.09f),
+          fillColor = Color.White.copy(alpha = 0.085f),
           borderColor = if (searchQuery.isNotBlank() || hasUserPickedSong) {
-            accentColor.copy(alpha = 0.78f)
+            accentColor.copy(alpha = 0.80f)
           } else {
-            AurixDesignTokens.GlassBorder
+            Color.White.copy(alpha = 0.18f)
           }
         )
-        .padding(horizontal = 14.dp, vertical = 12.dp)
+        .padding(horizontal = 18.dp, vertical = 13.dp)
         .testTag("onboarding_s1_search_bar"),
       verticalAlignment = Alignment.CenterVertically,
-      horizontalArrangement = Arrangement.spacedBy(10.dp)
+      horizontalArrangement = Arrangement.spacedBy(11.dp)
     ) {
       OnboardingMagnifierIcon(
         color = if (searchQuery.isNotBlank()) accentColor else AurixDesignTokens.TextMuted,
@@ -190,7 +245,7 @@ fun OnboardingSlide1Stage(
         if (searchQuery.isEmpty()) {
           Text(
             text = searchHint,
-            color = AurixDesignTokens.TextMuted.copy(alpha = 0.80f),
+            color = AurixDesignTokens.TextMuted.copy(alpha = 0.78f),
             fontFamily = fontFamily,
             fontSize = 14.sp,
             maxLines = 1,
@@ -226,7 +281,7 @@ fun OnboardingSlide1Stage(
           modifier = Modifier
             .size(26.dp)
             .clip(CircleShape)
-            .background(Color.White.copy(alpha = 0.12f))
+            .background(Color.White.copy(alpha = 0.13f))
             .semantics { contentDescription = clearCd }
             .clickable(role = Role.Button) { onSearchQueryChange("") }
             .testTag("onboarding_s1_clear_search"),
@@ -242,57 +297,49 @@ fun OnboardingSlide1Stage(
       }
     }
 
-    // Search results OR clean empty search invitation (NO random songs shown on Slide 1)
+    // Minimalist airy guidance pill when empty (ZERO random songs, ZERO clunky empty box)
     if (searchQuery.isBlank() && !hasUserPickedSong) {
       Column(
         modifier = Modifier
           .fillMaxWidth()
-          .onboardingGlass(
-            shape = RoundedCornerShape(22.dp),
-            hazeState = hazeState,
-            fillColor = Color.White.copy(alpha = 0.06f)
-          )
-          .padding(horizontal = 20.dp, vertical = if (isCompactHeight) 18.dp else 24.dp)
+          .padding(top = 4.dp)
           .testTag("onboarding_s1_empty_prompt"),
         horizontalAlignment = Alignment.CenterHorizontally,
-        verticalArrangement = Arrangement.spacedBy(10.dp)
+        verticalArrangement = Arrangement.spacedBy(8.dp)
       ) {
-        Box(
+        Row(
           modifier = Modifier
-            .size(54.dp)
-            .clip(CircleShape)
-            .background(
-              Brush.radialGradient(
-                colors = listOf(
-                  accentColor.copy(alpha = 0.28f),
-                  AurixDesignTokens.AccentB.copy(alpha = 0.14f),
-                  Color.Transparent
-                )
-              )
-            )
-            .border(1.dp, accentColor.copy(alpha = 0.35f), CircleShape),
-          contentAlignment = Alignment.Center
+            .clip(RoundedCornerShape(99.dp))
+            .background(Color.White.copy(alpha = 0.055f))
+            .border(0.8.dp, Color.White.copy(alpha = 0.10f), RoundedCornerShape(99.dp))
+            .padding(horizontal = 14.dp, vertical = 7.dp),
+          verticalAlignment = Alignment.CenterVertically,
+          horizontalArrangement = Arrangement.spacedBy(8.dp)
         ) {
-          OnboardingMusicNoteIcon(
-            color = accentColor,
-            modifier = Modifier.size(28.dp),
-            strokeDp = 1.9.dp
+          Box(
+            modifier = Modifier
+              .size(6.dp)
+              .graphicsLayer { alpha = pulseDotAlpha?.value ?: 0.85f }
+              .clip(CircleShape)
+              .background(accentColor)
+          )
+          Text(
+            text = pickToContinueText,
+            color = AurixDesignTokens.TextPrimary.copy(alpha = 0.84f),
+            fontFamily = fontFamily,
+            fontSize = 11.5.sp,
+            fontWeight = FontWeight.SemiBold,
+            maxLines = 1,
+            overflow = TextOverflow.Ellipsis
           )
         }
         Text(
           text = typeToSearchText,
-          color = AurixDesignTokens.TextPrimary.copy(alpha = 0.92f),
+          color = AurixDesignTokens.TextMuted.copy(alpha = 0.72f),
           fontFamily = fontFamily,
-          fontSize = 13.5.sp,
-          fontWeight = FontWeight.SemiBold,
-          textAlign = TextAlign.Center
-        )
-        Text(
-          text = pickToContinueText,
-          color = AurixDesignTokens.TextMuted.copy(alpha = 0.80f),
-          fontFamily = fontFamily,
-          fontSize = 11.5.sp,
-          textAlign = TextAlign.Center
+          fontSize = 12.sp,
+          textAlign = TextAlign.Center,
+          modifier = Modifier.padding(horizontal = 12.dp)
         )
       }
     } else if (searchQuery.isNotBlank() && displayedRows.isEmpty() && !isSearchingSongs) {
@@ -300,7 +347,7 @@ fun OnboardingSlide1Stage(
         modifier = Modifier
           .fillMaxWidth()
           .onboardingGlass(shape = RoundedCornerShape(18.dp), hazeState = hazeState)
-          .padding(horizontal = 16.dp, vertical = 18.dp),
+          .padding(horizontal = 16.dp, vertical = 16.dp),
         contentAlignment = Alignment.Center
       ) {
         Text(
@@ -324,7 +371,7 @@ fun OnboardingSlide1Stage(
           label = "s1_row_scale_$idx"
         )
         val borderColor by animateColorAsState(
-          targetValue = if (isPicked) accentColor else AurixDesignTokens.GlassBorder,
+          targetValue = if (isPicked) accentColor.copy(alpha = 0.88f) else Color.White.copy(alpha = 0.11f),
           animationSpec = if (reducedMotion) snap() else tween(260),
           label = "s1_row_border_$idx"
         )
@@ -340,7 +387,7 @@ fun OnboardingSlide1Stage(
             .then(
               if (isPicked) {
                 Modifier.shadow(
-                  elevation = 12.dp,
+                  elevation = 14.dp,
                   shape = rowShape,
                   ambientColor = accentColor.copy(alpha = 0.45f),
                   spotColor = accentColor.copy(alpha = 0.45f)
@@ -352,24 +399,24 @@ fun OnboardingSlide1Stage(
             .onboardingGlass(
               shape = rowShape,
               hazeState = hazeState,
-              fillColor = if (isPicked) AurixDesignTokens.GlassPickedFill else AurixDesignTokens.GlassFill,
+              fillColor = if (isPicked) AurixDesignTokens.GlassPickedFill else Color.White.copy(alpha = 0.065f),
               borderColor = borderColor
             )
             .clickable(role = Role.Button) {
               focusManager.clearFocus()
               onSelectSong(rowSong)
             }
-            .padding(horizontal = 11.dp, vertical = 9.dp)
+            .padding(horizontal = 12.dp, vertical = 9.dp)
             .testTag("onboarding_s1_song_row_$idx"),
           verticalAlignment = Alignment.CenterVertically,
-          horizontalArrangement = Arrangement.spacedBy(10.dp)
+          horizontalArrangement = Arrangement.spacedBy(11.dp)
         ) {
           OnboardingArtworkBox(
             artworkUrl = row.artworkUrl,
             baseHue = row.baseHue,
             contentDescription = row.title,
             modifier = Modifier
-              .size(44.dp)
+              .size(46.dp)
               .clip(RoundedCornerShape(12.dp))
           )
           Column(modifier = Modifier.weight(1f)) {
@@ -398,7 +445,8 @@ fun OnboardingSlide1Stage(
               Box(
                 modifier = Modifier
                   .clip(RoundedCornerShape(99.dp))
-                  .border(0.8.dp, AurixDesignTokens.BadgeBorder, RoundedCornerShape(99.dp))
+                  .background(Color.White.copy(alpha = 0.06f))
+                  .border(0.7.dp, AurixDesignTokens.BadgeBorder, RoundedCornerShape(99.dp))
                   .padding(horizontal = 6.dp, vertical = 1.dp)
               ) {
                 Text(
@@ -423,19 +471,25 @@ fun OnboardingSlide1Stage(
       }
     }
 
-    // Selected song ambient preview mini-player — shown ONLY after the user picks their favourite song
+    // Selected song floating ambient mini-player — shown ONLY after user selects their favourite song
     if (hasUserPickedSong && !isKeyboardOpen) {
       val activeSong = showcase.song
       val activeIsLoved = activeSong.id in favoriteIds
-      val miniShape = RoundedCornerShape(20.dp)
+      val miniShape = RoundedCornerShape(22.dp)
       Row(
         modifier = Modifier
           .fillMaxWidth()
+          .shadow(
+            elevation = 16.dp,
+            shape = miniShape,
+            ambientColor = accentColor.copy(alpha = 0.36f),
+            spotColor = accentColor.copy(alpha = 0.36f)
+          )
           .onboardingGlass(
             shape = miniShape,
             hazeState = hazeState,
             fillColor = Color.White.copy(alpha = 0.09f),
-            borderColor = accentColor.copy(alpha = 0.60f)
+            borderColor = accentColor.copy(alpha = 0.65f)
           )
           .padding(horizontal = 12.dp, vertical = 10.dp)
           .testTag("onboarding_s1_mini_player"),
@@ -447,8 +501,8 @@ fun OnboardingSlide1Stage(
           baseHue = showcase.accentBaseHue,
           contentDescription = activeSong.title,
           modifier = Modifier
-            .size(38.dp)
-            .clip(RoundedCornerShape(10.dp))
+            .size(40.dp)
+            .clip(RoundedCornerShape(11.dp))
         )
         Column(modifier = Modifier.weight(1f)) {
           Text(
@@ -462,7 +516,7 @@ fun OnboardingSlide1Stage(
           )
           Text(
             text = if (activeIsLoved) lovedStatus else activeSong.artist,
-            color = if (activeIsLoved) accentColor.copy(alpha = 0.92f) else AurixDesignTokens.TextMuted,
+            color = if (activeIsLoved) accentColor.copy(alpha = 0.94f) else AurixDesignTokens.TextMuted,
             fontFamily = fontFamily,
             fontSize = 10.5.sp,
             maxLines = 1,
@@ -513,7 +567,7 @@ fun OnboardingSlide1Stage(
     } else if (searchQuery.isNotBlank() && displayedRows.isNotEmpty() && !hasUserPickedSong && !isKeyboardOpen) {
       Text(
         text = pickHint,
-        color = AurixDesignTokens.TextMuted.copy(alpha = 0.80f),
+        color = AurixDesignTokens.TextMuted.copy(alpha = 0.78f),
         fontFamily = fontFamily,
         fontSize = 11.sp,
         textAlign = TextAlign.Center

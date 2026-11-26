@@ -1,34 +1,91 @@
 <?xml version="1.0" encoding="utf-8"?>
 <vector xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:aapt="http://schemas.android.com/aapt"
     android:width="32dp"
     android:height="32dp"
     android:viewportWidth="48"
     android:viewportHeight="48">
-    <!-- Orbi outer ring back arc -->
-    <path
-        android:strokeColor="#7965FF"
-        android:strokeWidth="3.2"
-        android:strokeLineCap="round"
-        android:pathData="M7,27 C4,22 12,15 24,13 C36,11 44,15 41,21" />
-    <!-- Orbi planet sphere -->
-    <path
-        android:fillColor="#F7F9FF"
-        android:pathData="M24,11 A13,13 0 1,1 23.99,11 Z" />
-    <!-- Orbi eyes -->
-    <path
-        android:fillColor="#151F30"
-        android:pathData="M20.2,20.2 A1.8,2.8 0 1,1 20.19,20.2 Z" />
-    <path
-        android:fillColor="#151F30"
-        android:pathData="M26.5,20.2 A1.8,2.8 0 1,1 26.49,20.2 Z" />
-    <!-- Orbi outer ring front arc -->
-    <path
-        android:strokeColor="#43C7F4"
-        android:strokeWidth="3.4"
-        android:strokeLineCap="round"
-        android:pathData="M41,21 C44,26 36,33 24,35 C12,37 4,33 7,27" />
-    <!-- Orbiting accent dot -->
-    <path
-        android:fillColor="#A855F7"
-        android:pathData="M39,23 A2.6,2.6 0 1,1 38.99,23 Z" />
+
+    <group
+        android:pivotX="24"
+        android:pivotY="24"
+        android:rotation="-12">
+
+        <!-- Back half of 3D beveled Saturn ring -->
+        <path
+            android:fillColor="#00000000"
+            android:strokeColor="#CC3A3B42"
+            android:strokeWidth="3.2"
+            android:strokeLineCap="round"
+            android:pathData="M5.5,24 A18.5,5.0 0 0,1 42.5,24" />
+        <path
+            android:fillColor="#00000000"
+            android:strokeWidth="1.4"
+            android:strokeLineCap="round"
+            android:pathData="M5.5,24 A18.5,5.0 0 0,1 42.5,24">
+            <aapt:attr name="android:strokeColor">
+                <gradient
+                    android:type="linear"
+                    android:startX="5.5"
+                    android:startY="19"
+                    android:endX="42.5"
+                    android:endY="24">
+                    <item android:offset="0.0" android:color="#AA43C7F4" />
+                    <item android:offset="1.0" android:color="#AA7965FF" />
+                </gradient>
+            </aapt:attr>
+        </path>
+
+        <!-- 3D Porcelain sphere -->
+        <path android:pathData="M24,11 A13,13 0 1,1 23.99,11 Z">
+            <aapt:attr name="android:fillColor">
+                <gradient
+                    android:type="radial"
+                    android:centerX="19.5"
+                    android:centerY="19.2"
+                    android:gradientRadius="19.2">
+                    <item android:offset="0.0" android:color="#FFFFFFFF" />
+                    <item android:offset="0.48" android:color="#FFF4F7FF" />
+                    <item android:offset="0.82" android:color="#FFC6D3E8" />
+                    <item android:offset="1.0" android:color="#FF8C9AB8" />
+                </gradient>
+            </aapt:attr>
+        </path>
+
+        <!-- Glossy dark eyes with catchlights -->
+        <path android:fillColor="#FF0B0C10" android:pathData="M21.1,18.3 A1.65,2.8 0 1,1 21.09,18.3 Z" />
+        <path android:fillColor="#F0FFFFFF" android:pathData="M20.6,19.4 A0.62,0.62 0 1,1 20.59,19.4 Z" />
+        <path android:fillColor="#FF0B0C10" android:pathData="M26.9,18.3 A1.65,2.8 0 1,1 26.89,18.3 Z" />
+        <path android:fillColor="#F0FFFFFF" android:pathData="M26.4,19.4 A0.62,0.62 0 1,1 26.39,19.4 Z" />
+
+        <!-- Front half of 3D beveled glowing Saturn ring -->
+        <path
+            android:fillColor="#00000000"
+            android:strokeColor="#FF3A3B42"
+            android:strokeWidth="3.2"
+            android:strokeLineCap="round"
+            android:pathData="M42.5,24 A18.5,5.0 0 0,1 5.5,24" />
+        <path
+            android:fillColor="#00000000"
+            android:strokeWidth="1.6"
+            android:strokeLineCap="round"
+            android:pathData="M42.5,23.6 A18.5,5.0 0 0,1 5.5,23.6">
+            <aapt:attr name="android:strokeColor">
+                <gradient
+                    android:type="linear"
+                    android:startX="5.5"
+                    android:startY="23.6"
+                    android:endX="42.5"
+                    android:endY="28.6">
+                    <item android:offset="0.0" android:color="#FF43C7F4" />
+                    <item android:offset="0.48" android:color="#F5FFFFFF" />
+                    <item android:offset="1.0" android:color="#FF7965FF" />
+                </gradient>
+            </aapt:attr>
+        </path>
+
+        <!-- Glowing moonlet -->
+        <path android:fillColor="#FF43C7F4" android:pathData="M36.4,25.2 A2.1,2.1 0 1,1 36.39,25.2 Z" />
+        <path android:fillColor="#FFFFFFFF" android:pathData="M36.1,26.0 A1.0,1.0 0 1,1 36.09,26.0 Z" />
+    </group>
 </vector>

@@ -1591,7 +1591,20 @@ class CrashFixStabilityTest {
     assertTrue(onboardingSrc.contains("AMBIENT_VOLUME"))
     assertTrue(onboardingSrc.contains("onRevealAppUnderneath"))
     assertTrue(onboardingSrc.contains("canAdvanceFromCurrentSlide"))
+    assertTrue(onboardingSrc.contains("finishEmblemProgress"))
+    assertTrue(onboardingSrc.contains("finishVeilZoomScale"))
+    assertTrue(onboardingSrc.contains("OnboardingOrbiMascot"))
+    assertFalse("Onboarding Skip button must be removed", onboardingSrc.contains("onboarding_skip_button"))
     assertEquals(0.24f, com.example.ui.screens.onboarding.OnboardingDemoAudioEngine.AMBIENT_VOLUME, 0.001f)
+
+    // Verify 3D onboarding Orbi adaptive launcher icon foreground & un-delegated Home reveal states
+    val resRoot = java.io.File(javaRoot.parentFile, "res")
+    val launcherFg = java.io.File(resRoot, "drawable/ic_launcher_foreground.xml").readText()
+    assertTrue("ic_launcher_foreground.xml must use 3D radial shading", launcherFg.contains("android:type=\"radial\""))
+    val aurixAppSrc = java.io.File(javaRoot, "com/example/ui/screens/AurixApp.kt").readText()
+    assertTrue(aurixAppSrc.contains("homeRevealScaleState"))
+    assertTrue(aurixAppSrc.contains("homeRevealAlphaState"))
+    assertTrue(aurixAppSrc.contains("homeRevealOffsetYState"))
 
     // Verify onboarding shows ONLY on first open (sync SharedPreferences mirror + resolved before isAppInitialized)
     val prefsSrc = java.io.File(javaRoot, "com/example/data/PreferencesManager.kt").readText()

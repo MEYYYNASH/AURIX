@@ -98,6 +98,7 @@ import com.example.model.Song
 import com.example.ui.screens.onboarding.OnboardingArrowLeftIcon
 import com.example.ui.screens.onboarding.OnboardingArrowRightIcon
 import com.example.ui.screens.onboarding.OnboardingDemoAudioEngine
+import com.example.ui.screens.onboarding.OnboardingOrbiMascot
 import com.example.ui.screens.onboarding.OnboardingSearchRowData
 import com.example.ui.screens.onboarding.OnboardingShowcaseRepository
 import com.example.ui.screens.onboarding.OnboardingSlide1Stage
@@ -137,7 +138,6 @@ fun OnboardingScreen(
   onSetFavorite: (Song, Boolean) -> Unit = { _, _ -> },
   onToggleFavorite: (Song) -> Unit = {},
   onRevealAppUnderneath: () -> Unit = {},
-  onSkipped: () -> Unit = {},
   onFinished: () -> Unit
 ) {
   val scope = rememberCoroutineScope()
@@ -400,13 +400,15 @@ fun OnboardingScreen(
     }
   }
 
-  // Full-screen Start transition state (iris expansion + AURIX wordmark + seamless dissolve into Home)
+  // Clean dark-glass Start transition state (slides settle -> 3D Orbi emblem bloom -> seamless cross-depth reveal into Home)
   var isFinishing by remember { mutableStateOf(false) }
   var isRevealingApp by remember { mutableStateOf(false) }
   var buttonCenterInRoot by remember { mutableStateOf(Offset.Zero) }
-  val finishRadiusFraction = remember { Animatable(0f) }
-  val finishWordmarkProgress = remember { Animatable(0f) }
+  val finishSlidesExitProgress = remember { Animatable(0f) }
+  val finishRingProgress = remember { Animatable(0f) }
+  val finishEmblemProgress = remember { Animatable(0f) }
   val finishDissolveAlpha = remember { Animatable(1f) }
+  val finishVeilZoomScale = remember { Animatable(1f) }
 
   fun triggerFinish() {
     if (isFinishing) return
@@ -421,33 +423,50 @@ fun OnboardingScreen(
     onBackdropChanged(selectedBackdrop)
     scope.launch {
       if (reducedMotion) {
-        finishRadiusFraction.snapTo(1.5f)
-        finishWordmarkProgress.snapTo(1f)
+        finishSlidesExitProgress.snapTo(1f)
+        finishEmblemProgress.snapTo(1f)
         onRevealAppUnderneath()
         isRevealingApp = true
-        delay(180L)
+        delay(160L)
         finishDissolveAlpha.snapTo(0f)
         onFinished()
       } else {
+        // Phase 1: Gracefully settle slides away while dark aurora backdrop stays continuous (zero flash!)
         launch {
-          finishRadiusFraction.animateTo(
-            targetValue = 1.55f,
-            animationSpec = tween(durationMillis = 720, easing = AurixDesignTokens.FinishRevealEasing)
+          finishSlidesExitProgress.animateTo(
+            targetValue = 1f,
+            animationSpec = tween(durationMillis = 320, easing = AurixDesignTokens.MainEasing)
           )
         }
+        // Subtle expanding luminous hairline aura ring
         launch {
-          delay(340L)
-          finishWordmarkProgress.animateTo(
+          delay(60L)
+          finishRingProgress.animateTo(
             targetValue = 1f,
-            animationSpec = tween(durationMillis = 480, easing = AurixDesignTokens.MainEasing)
+            animationSpec = tween(durationMillis = 680, easing = AurixDesignTokens.MainEasing)
           )
-          // Mount Home underneath while full-screen gradient covers viewport, then smoothly dissolve out
+        }
+        // Phase 2: 3D Orbi emblem + clean AURIX wordmark glide to center-stage
+        launch {
+          delay(120L)
+          finishEmblemProgress.animateTo(
+            targetValue = 1f,
+            animationSpec = tween(durationMillis = 420, easing = AurixDesignTokens.MainEasing)
+          )
+          // Mount Home silently underneath while dark obsidian veil covers viewport (100% GPU pre-warmed)
           onRevealAppUnderneath()
+          delay(220L)
           isRevealingApp = true
-          delay(180L)
+          // Phase 3: Cross-depth zoom-dissolve into the music app
+          launch {
+            finishVeilZoomScale.animateTo(
+              targetValue = 1.07f,
+              animationSpec = tween(durationMillis = 460, easing = AurixDesignTokens.MainEasing)
+            )
+          }
           finishDissolveAlpha.animateTo(
             targetValue = 0f,
-            animationSpec = tween(durationMillis = 420, easing = AurixDesignTokens.MainEasing)
+            animationSpec = tween(durationMillis = 440, easing = AurixDesignTokens.MainEasing)
           )
           onFinished()
         }
@@ -463,6 +482,9 @@ fun OnboardingScreen(
       .fillMaxSize()
       .graphicsLayer {
         alpha = if (isRevealingApp) finishDissolveAlpha.value else 1f
+        val z = if (isRevealingApp) finishVeilZoomScale.value else 1f
+        scaleX = z
+        scaleY = z
       }
       .background(if (isRevealingApp) Color.Transparent else AurixDesignTokens.Background)
       .focusable()
@@ -494,30 +516,36 @@ fun OnboardingScreen(
     val rootHeightPx = with(density) { rootMaxHeightDp.toPx() }
     val isCompactHeight = rootMaxHeightDp <= 700.dp
 
-    // Hide underlying onboarding slides once the full-screen iris completely covers the viewport
-    if (!isRevealingApp) {
-      // Seamless full-bleed GPU radial aurora glows (ZERO rectangular blur clipping or corner seams!)
-      Box(
-        modifier = Modifier
-          .fillMaxSize()
-          .haze(state = hazeState)
-          .background(AurixDesignTokens.Background)
-      ) {
-        OnboardingBackgroundGlows(
-          currentSlide = currentSlide,
-          accentA = animatedAccentA,
-          backdropPreset = selectedBackdrop,
-          reducedMotion = reducedMotion
-        )
-      }
+    // Continuous dark obsidian aurora backdrop (stays clean through handoff, dissolves with veil into Home)
+    Box(
+      modifier = Modifier
+        .fillMaxSize()
+        .haze(state = hazeState)
+        .background(AurixDesignTokens.Background)
+    ) {
+      OnboardingBackgroundGlows(
+        currentSlide = currentSlide,
+        accentA = animatedAccentA,
+        backdropPreset = selectedBackdrop,
+        reducedMotion = reducedMotion
+      )
+    }
 
-      // Centered max-width 460dp column with safe-area + IME insets
+    // Onboarding slides column — scales down & fades smoothly when transitioning to app
+    if (finishSlidesExitProgress.value < 0.995f) {
       Column(
         modifier = Modifier
           .align(Alignment.Center)
           .fillMaxHeight()
           .widthIn(max = 460.dp)
           .fillMaxWidth()
+          .graphicsLayer {
+            val exitT = finishSlidesExitProgress.value
+            alpha = 1f - exitT
+            val s = 1f - 0.06f * exitT
+            scaleX = s
+            scaleY = s
+          }
           .statusBarsPadding()
           .navigationBarsPadding()
           .imePadding(),
@@ -558,40 +586,14 @@ fun OnboardingScreen(
           }
         }
 
-        // Top bar: Skip glass pill + EN / ខ្មែរ toggle
+        // Top bar: EN / ខ្មែរ language toggle
         Row(
           modifier = Modifier
             .fillMaxWidth()
             .padding(start = 20.dp, end = 20.dp, top = 12.dp),
-          horizontalArrangement = Arrangement.SpaceBetween,
+          horizontalArrangement = Arrangement.End,
           verticalAlignment = Alignment.CenterVertically
         ) {
-          if (currentSlide < ONBOARDING_SLIDE_COUNT - 1) {
-            val skipShape = RoundedCornerShape(99.dp)
-            Box(
-              modifier = Modifier
-                .onboardingFocusRing(skipShape)
-                .onboardingGlass(shape = skipShape, hazeState = hazeState)
-                .clickable(role = Role.Button) {
-                  focusManager.clearFocus()
-                  onSkipped()
-                  navigateToSlide(ONBOARDING_SLIDE_COUNT - 1)
-                }
-                .padding(horizontal = 16.dp, vertical = 9.dp)
-                .testTag("onboarding_skip_button")
-            ) {
-              Text(
-                text = stringResource(id = R.string.onboarding_skip),
-                color = AurixDesignTokens.TextPrimary,
-                fontFamily = fontFamily,
-                fontSize = 13.sp,
-                fontWeight = FontWeight.SemiBold
-              )
-            }
-          } else {
-            Spacer(modifier = Modifier.width(1.dp))
-          }
-
           val langPillShape = RoundedCornerShape(99.dp)
           Row(
             modifier = Modifier
@@ -901,49 +903,81 @@ fun OnboardingScreen(
       }
     }
 
-    // Full-screen Start transition overlay: circular gradient reveal -> AURIX wordmark -> smooth dissolve to Home
+    // Clean dark-glass 3D Orbi handoff overlay -> glides seamlessly into AurixMainShell
     if (isFinishing) {
-      val maxRadius = hypot(rootWidthPx, rootHeightPx)
-      val origin = if (buttonCenterInRoot == Offset.Zero) {
-        Offset(rootWidthPx * 0.5f, rootHeightPx * 0.88f)
-      } else {
-        buttonCenterInRoot
-      }
+      val ringT = finishRingProgress.value
+      val emT = finishEmblemProgress.value
       Box(
         modifier = Modifier
           .fillMaxSize()
           .testTag("onboarding_finish_overlay"),
         contentAlignment = Alignment.Center
       ) {
+        // Subtle expanding luminous hairline aura ring (clean, zero solid wall flash)
         Canvas(modifier = Modifier.fillMaxSize()) {
-          val r = (maxRadius * finishRadiusFraction.value).coerceAtLeast(0f)
-          if (r > 0f) {
+          val maxR = hypot(size.width, size.height) * 0.48f
+          val ringR = (38.dp.toPx() + maxR * ringT).coerceAtLeast(1f)
+          val ringAlpha = ((1f - ringT) * 0.42f).coerceIn(0f, 1f)
+          if (ringAlpha > 0.01f) {
             drawCircle(
-              brush = Brush.linearGradient(
-                colors = listOf(animatedAccentA, AurixDesignTokens.AccentB),
-                start = Offset.Zero,
-                end = Offset(size.width, size.height)
+              brush = Brush.sweepGradient(
+                colors = listOf(
+                  animatedAccentA.copy(alpha = ringAlpha),
+                  AurixDesignTokens.AccentB.copy(alpha = ringAlpha),
+                  Color.White.copy(alpha = ringAlpha * 0.7f),
+                  animatedAccentA.copy(alpha = ringAlpha)
+                ),
+                center = center
               ),
-              radius = r,
-              center = origin
+              radius = ringR,
+              center = center,
+              style = androidx.compose.ui.graphics.drawscope.Stroke(width = (1.6.dp.toPx() * (1f - ringT * 0.5f)))
             )
           }
+          // Soft centered radial aura behind the 3D emblem
+          val glowR = 136.dp.toPx() * (0.7f + 0.3f * emT)
+          drawCircle(
+            brush = Brush.radialGradient(
+              colors = listOf(
+                animatedAccentA.copy(alpha = 0.24f * emT),
+                AurixDesignTokens.AccentB.copy(alpha = 0.14f * emT),
+                Color.Transparent
+              ),
+              center = center,
+              radius = glowR
+            ),
+            radius = glowR,
+            center = center
+          )
         }
-        val wm = finishWordmarkProgress.value
-        Text(
-          text = "AURIX",
-          color = AurixDesignTokens.DarkInk,
-          fontFamily = AurixDesignTokens.SoraFontFamily,
-          fontSize = 40.sp,
-          fontWeight = FontWeight.ExtraBold,
-          letterSpacing = 8.sp,
+
+        Column(
+          horizontalAlignment = Alignment.CenterHorizontally,
+          verticalArrangement = Arrangement.spacedBy(18.dp),
           modifier = Modifier.graphicsLayer {
-            alpha = wm
-            val s = 0.86f + 0.14f * wm
+            alpha = emT
+            val s = 0.84f + 0.16f * emT
             scaleX = s
             scaleY = s
+            translationY = (1f - emT) * 18.dp.toPx()
           }
-        )
+        ) {
+          OnboardingOrbiMascot(
+            isActive = true,
+            reducedMotion = reducedMotion,
+            replaySeed = 99,
+            accentColor = animatedAccentA,
+            modifier = Modifier.size(118.dp)
+          )
+          Text(
+            text = "AURIX",
+            color = AurixDesignTokens.TextPrimary,
+            fontFamily = AurixDesignTokens.SoraFontFamily,
+            fontSize = 24.sp,
+            fontWeight = FontWeight.ExtraBold,
+            letterSpacing = (11f - 4f * emT).sp
+          )
+        }
       }
     }
   }

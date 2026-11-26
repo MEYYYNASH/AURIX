@@ -6,56 +6,179 @@
     android:viewportWidth="108"
     android:viewportHeight="108">
 
-    <path
-        android:fillColor="#165B21B6"
-        android:pathData="M54,33.7 A21.9,21.9 0 1,1 53.99,33.7 Z" />
+    <!-- Soft violet halo -->
+    <path android:pathData="M54,24 A30,30 0 1,1 53.99,24 Z">
+        <aapt:attr name="android:fillColor">
+            <gradient
+                android:type="radial"
+                android:centerX="54"
+                android:centerY="54"
+                android:gradientRadius="30">
+                <item android:offset="0.0" android:color="#307C3AED" />
+                <item android:offset="1.0" android:color="#007C3AED" />
+            </gradient>
+        </aapt:attr>
+    </path>
 
     <group
         android:pivotX="54"
         android:pivotY="54"
         android:rotation="-12">
 
-        <!-- Back half of violet orbit ring -->
+        <!-- Back half of beveled violet ring -->
         <path
             android:fillColor="#00000000"
-            android:strokeColor="#FF7C3AED"
-            android:strokeWidth="3.8"
+            android:strokeColor="#CC5B21B6"
+            android:strokeWidth="4.6"
+            android:strokeLineCap="round"
+            android:pathData="M24.5,54 A29.5,7.8 0 0,1 83.5,54" />
+        <path
+            android:fillColor="#00000000"
+            android:strokeColor="#CCA78BFA"
+            android:strokeWidth="1.9"
             android:strokeLineCap="round"
             android:pathData="M24.5,54 A29.5,7.8 0 0,1 83.5,54" />
 
-        <!-- Lavender planet -->
-        <path
-            android:pathData="M54,33.5 A20.5,20.5 0 1,1 53.99,33.5 Z">
+        <!-- 3D Pearlescent Lavender Sphere -->
+        <path android:pathData="M54,33.5 A20.5,20.5 0 1,1 53.99,33.5 Z">
             <aapt:attr name="android:fillColor">
                 <gradient
-                    android:type="linear"
-                    android:startX="54"
-                    android:startY="33.5"
-                    android:endX="54"
-                    android:endY="74.5">
-                    <item android:offset="0.0" android:color="#FFFFFFFF" />
-                    <item android:offset="0.45" android:color="#FFE6E4FF" />
-                    <item android:offset="1.0" android:color="#FFA78BFA" />
+                    android:type="radial"
+                    android:centerX="47.0"
+                    android:centerY="46.6"
+                    android:gradientRadius="30.5">
+                    <item android:offset="0.00" android:color="#FFFFFFFF" />
+                    <item android:offset="0.44" android:color="#FFF3F0FF" />
+                    <item android:offset="0.76" android:color="#FFD6CCFF" />
+                    <item android:offset="1.00" android:color="#FFA78BFA" />
                 </gradient>
             </aapt:attr>
         </path>
 
-        <!-- Left black oval eye -->
-        <path
-            android:fillColor="#FF141522"
-            android:pathData="M49.5,44.2 A2.5,4.3 0 1,1 49.49,44.2 Z" />
+        <!-- Specular highlight dome -->
+        <group
+            android:pivotX="47"
+            android:pivotY="45.2"
+            android:rotation="-24">
+            <path android:pathData="M47,41.4 A6.6,3.8 0 1,1 46.99,41.4 Z">
+                <aapt:attr name="android:fillColor">
+                    <gradient
+                        android:type="radial"
+                        android:centerX="47"
+                        android:centerY="45.2"
+                        android:gradientRadius="7.2">
+                        <item android:offset="0.0" android:color="#F4FFFFFF" />
+                        <item android:offset="0.55" android:color="#66FFFFFF" />
+                        <item android:offset="1.0" android:color="#00FFFFFF" />
+                    </gradient>
+                </aapt:attr>
+            </path>
+        </group>
 
-        <!-- Right black oval eye -->
-        <path
-            android:fillColor="#FF141522"
-            android:pathData="M58.5,44.2 A2.5,4.3 0 1,1 58.49,44.2 Z" />
-
-        <!-- Front half of violet orbit ring -->
+        <!-- Cast ring shadow -->
         <path
             android:fillColor="#00000000"
-            android:strokeColor="#FF7C3AED"
-            android:strokeWidth="3.8"
+            android:strokeColor="#2C4C1D95"
+            android:strokeWidth="4.0"
             android:strokeLineCap="round"
-            android:pathData="M83.5,54 A29.5,7.8 0 0,1 24.5,54" />
+            android:pathData="M72.6,58.8 A29.5,7.8 0 0,1 35.4,58.8" />
+
+        <!-- Glossy dark violet eyes with catchlights -->
+        <path android:pathData="M49.4,45.1 A2.55,4.35 0 1,1 49.39,45.1 Z">
+            <aapt:attr name="android:fillColor">
+                <gradient
+                    android:type="linear"
+                    android:startX="49.4"
+                    android:startY="45.1"
+                    android:endX="49.4"
+                    android:endY="53.8">
+                    <item android:offset="0.0" android:color="#FF2E224A" />
+                    <item android:offset="1.0" android:color="#FF141522" />
+                </gradient>
+            </aapt:attr>
+        </path>
+        <path android:fillColor="#F0FFFFFF" android:pathData="M48.6,46.9 A0.98,0.98 0 1,1 48.59,46.9 Z" />
+        <path android:fillColor="#B8C4B5FD" android:pathData="M50.1,50.5 A0.48,0.48 0 1,1 50.09,50.5 Z" />
+
+        <path android:pathData="M58.6,45.1 A2.55,4.35 0 1,1 58.59,45.1 Z">
+            <aapt:attr name="android:fillColor">
+                <gradient
+                    android:type="linear"
+                    android:startX="58.6"
+                    android:startY="45.1"
+                    android:endX="58.6"
+                    android:endY="53.8">
+                    <item android:offset="0.0" android:color="#FF2E224A" />
+                    <item android:offset="1.0" android:color="#FF141522" />
+                </gradient>
+            </aapt:attr>
+        </path>
+        <path android:fillColor="#F0FFFFFF" android:pathData="M57.8,46.9 A0.98,0.98 0 1,1 57.79,46.9 Z" />
+        <path android:fillColor="#B8C4B5FD" android:pathData="M59.3,50.5 A0.48,0.48 0 1,1 59.29,50.5 Z" />
+
+        <!-- Front half of beveled violet Saturn ring -->
+        <path
+            android:fillColor="#00000000"
+            android:strokeWidth="4.4"
+            android:strokeLineCap="round"
+            android:pathData="M83.5,54 A29.5,7.8 0 0,1 24.5,54">
+            <aapt:attr name="android:strokeColor">
+                <gradient
+                    android:type="linear"
+                    android:startX="24.5"
+                    android:startY="54"
+                    android:endX="83.5"
+                    android:endY="61.8">
+                    <item android:offset="0.0" android:color="#FF6D28D9" />
+                    <item android:offset="0.5" android:color="#FF7C3AED" />
+                    <item android:offset="1.0" android:color="#FFA855F7" />
+                </gradient>
+            </aapt:attr>
+        </path>
+        <path
+            android:fillColor="#00000000"
+            android:strokeWidth="1.6"
+            android:strokeLineCap="round"
+            android:pathData="M83.5,53.4 A29.5,7.8 0 0,1 24.5,53.4">
+            <aapt:attr name="android:strokeColor">
+                <gradient
+                    android:type="linear"
+                    android:startX="24.5"
+                    android:startY="53.4"
+                    android:endX="83.5"
+                    android:endY="60.5">
+                    <item android:offset="0.0" android:color="#88DDD6FE" />
+                    <item android:offset="0.48" android:color="#F0FFFFFF" />
+                    <item android:offset="1.0" android:color="#88C4B5FD" />
+                </gradient>
+            </aapt:attr>
+        </path>
+
+        <!-- Glowing Pearl-Violet moonlet -->
+        <path android:pathData="M73.8,54.2 A5.4,5.4 0 1,1 73.79,54.2 Z">
+            <aapt:attr name="android:fillColor">
+                <gradient
+                    android:type="radial"
+                    android:centerX="73.8"
+                    android:centerY="59.6"
+                    android:gradientRadius="5.4">
+                    <item android:offset="0.0" android:color="#777C3AED" />
+                    <item android:offset="1.0" android:color="#007C3AED" />
+                </gradient>
+            </aapt:attr>
+        </path>
+        <path android:pathData="M73.8,56.8 A2.8,2.8 0 1,1 73.79,56.8 Z">
+            <aapt:attr name="android:fillColor">
+                <gradient
+                    android:type="radial"
+                    android:centerX="73.1"
+                    android:centerY="58.9"
+                    android:gradientRadius="3.2">
+                    <item android:offset="0.0" android:color="#FFFFFFFF" />
+                    <item android:offset="0.65" android:color="#FFC4B5FD" />
+                    <item android:offset="1.0" android:color="#FF7C3AED" />
+                </gradient>
+            </aapt:attr>
+        </path>
     </group>
 </vector>

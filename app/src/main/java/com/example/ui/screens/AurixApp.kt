@@ -186,10 +186,21 @@ private fun AurixAppContent(
 
       val showOnboardingOverlay = isAppInitialized && (onboardingSessionActive || !onboardingCompleted)
       val showMainShell = isAppInitialized && (!showOnboardingOverlay || onboardingRevealingHome)
-      val homeRevealScale by animateFloatAsState(
-        targetValue = if (!showOnboardingOverlay || onboardingRevealingHome) 1f else 0.94f,
+      val homeRevealVisible = !showOnboardingOverlay || onboardingRevealingHome
+      val homeRevealScaleState = animateFloatAsState(
+        targetValue = if (homeRevealVisible) 1f else 0.965f,
         animationSpec = if (reducedMotion) snap() else tween(durationMillis = 480, easing = AurixEase),
         label = "home_reveal_scale"
+      )
+      val homeRevealAlphaState = animateFloatAsState(
+        targetValue = if (homeRevealVisible) 1f else 0f,
+        animationSpec = if (reducedMotion) snap() else tween(durationMillis = 440, easing = AurixEase),
+        label = "home_reveal_alpha"
+      )
+      val homeRevealOffsetYState = animateFloatAsState(
+        targetValue = if (homeRevealVisible) 0f else 18f,
+        animationSpec = if (reducedMotion) snap() else tween(durationMillis = 480, easing = AurixEase),
+        label = "home_reveal_offset_y"
       )
 
       if (!isAppInitialized) {
@@ -200,8 +211,11 @@ private fun AurixAppContent(
             modifier = Modifier
               .fillMaxSize()
               .graphicsLayer {
-                scaleX = homeRevealScale
-                scaleY = homeRevealScale
+                val s = homeRevealScaleState.value
+                scaleX = s
+                scaleY = s
+                alpha = homeRevealAlphaState.value
+                translationY = homeRevealOffsetYState.value * density
               }
           ) {
             AurixMainShell(
@@ -243,7 +257,6 @@ private fun AurixAppContent(
             onSetFavorite = { song, loved -> viewModel.setFavorite(song, loved) },
             onToggleFavorite = { song -> viewModel.toggleFavorite(song) },
             onRevealAppUnderneath = { onboardingRevealingHome = true },
-            onSkipped = { viewModel.setOnboardingCompleted(true) },
             onFinished = {
               viewModel.setOnboardingCompleted(true)
               onboardingSessionActive = false
