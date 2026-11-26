@@ -12,10 +12,14 @@ import org.junit.Test
 class CrashFixStabilityTest {
 
   @Test
-  fun release240_metadataAndVersionCodeAreConsistent() {
-    assertEquals("2.4.0", BuildConfig.VERSION_NAME)
-    assertEquals(20400, BuildConfig.VERSION_CODE)
-    assertTrue("Release 2.4.0 versionCode must exceed 2.3.3 (20303)", BuildConfig.VERSION_CODE > 20303)
+  fun release241_metadataAndVersionCodeAreConsistent() {
+    assertEquals("2.4.1", BuildConfig.VERSION_NAME)
+    assertEquals(20401, BuildConfig.VERSION_CODE)
+    assertTrue("Release 2.4.1 versionCode must exceed 2.4.0 (20400)", BuildConfig.VERSION_CODE > 20400)
+    assertTrue(com.example.ui.screens.MINI_PLAYER_SLIDE_UP_DAMPING in 0.7f..0.95f)
+    assertTrue(com.example.ui.screens.MINI_PLAYER_EXPAND_SCALE_DOWN in 0.88f..0.96f)
+    assertTrue(com.example.ui.screens.MINI_PLAYER_PRESS_SCALE < 1.0f)
+    assertTrue(com.example.ui.screens.MINI_PLAYER_PRESS_SCALE > com.example.ui.screens.MINI_PLAYER_EXPAND_SCALE_DOWN)
     assertEquals(420, com.example.ui.screens.SELECT_BAR_OPEN_DURATION_MS)
     assertEquals(600, com.example.ui.screens.SELECT_CIRCLE_OPEN_DURATION_MS)
     assertEquals(380L, com.example.ui.screens.SELECT_CLOSE_CLEAR_DELAY_MS)
@@ -983,22 +987,23 @@ class CrashFixStabilityTest {
 
   @Test
   fun remoteJsonUpdateChecker_granularVersioningAndTimestamps_workEndToEnd() {
-    assertEquals(20400, BuildConfig.VERSION_CODE)
+    assertEquals(20401, BuildConfig.VERSION_CODE)
     assertEquals(20301L, com.example.data.GitHubUpdater.deriveVersionCodeFromTag("v2.3.1"))
     assertEquals(20301L, com.example.data.GitHubUpdater.deriveVersionCodeFromTag("v2.3.1+20301"))
     assertEquals(20312L, com.example.data.GitHubUpdater.deriveVersionCodeFromTag("v2.3.1.2"))
     assertEquals(20302L, com.example.data.GitHubUpdater.deriveVersionCodeFromTag("v2.3.2"))
     assertEquals(20303L, com.example.data.GitHubUpdater.deriveVersionCodeFromTag("v2.3.3"))
     assertEquals(20400L, com.example.data.GitHubUpdater.deriveVersionCodeFromTag("v2.4.0"))
+    assertEquals(20401L, com.example.data.GitHubUpdater.deriveVersionCodeFromTag("v2.4.1"))
 
     val server = com.sun.net.httpserver.HttpServer.create(java.net.InetSocketAddress("127.0.0.1", 0), 0)
     val port = server.address.port
     server.createContext("/version.json") { exchange ->
       val body = """
         {
-          "versionName": "2.4.0.1",
+          "versionName": "2.4.1.1",
           "publishedAt": "2026-11-26T22:15:30Z",
-          "apkUrl": "http://127.0.0.1:$port/AURIX-v2.4.0.1.apk",
+          "apkUrl": "http://127.0.0.1:$port/AURIX-v2.4.1.1.apk",
           "sha256": "0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef",
           "notes": ["Granular 4-segment hotfix release"]
         }
@@ -1022,8 +1027,8 @@ class CrashFixStabilityTest {
       val derivedCode = com.example.data.GitHubUpdater.deriveVersionCodeFromTag(versionName)
       val parsedTs = com.example.data.GitHubUpdater.parseIsoTimestampMs(publishedAt)
 
-      assertEquals("2.4.0.1", versionName)
-      assertEquals(20401L, derivedCode)
+      assertEquals("2.4.1.1", versionName)
+      assertEquals(20411L, derivedCode)
       assertTrue(parsedTs > 0L)
 
       val remote = com.example.data.RemoteVersionInfo(

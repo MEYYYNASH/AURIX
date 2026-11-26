@@ -18,6 +18,7 @@ import androidx.compose.animation.core.CubicBezierEasing
 import androidx.compose.animation.core.animateDpAsState
 import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.animation.core.snap
+import androidx.compose.animation.core.spring
 import androidx.compose.animation.core.tween
 import androidx.compose.foundation.background
 import androidx.compose.foundation.isSystemInDarkTheme
@@ -39,6 +40,7 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.TransformOrigin
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.platform.LocalConfiguration
@@ -68,6 +70,7 @@ import com.example.ui.theme.*
 import com.example.viewmodel.AurixViewModel
 import dev.chrisbanes.haze.HazeState
 import dev.chrisbanes.haze.LocalHazeStyle
+import kotlin.math.roundToInt
 import dev.chrisbanes.haze.haze
 
 sealed class Screen(val route: String, val title: String, val icon: ImageVector) {
@@ -646,17 +649,17 @@ private fun AurixMainShell(
 
   val pageScale by animateFloatAsState(
     targetValue = if (isNowPlayingOpen) 0.94f else 1.0f,
-    animationSpec = if (reducedMotion) snap() else tween(380, easing = AurixEase),
+    animationSpec = if (reducedMotion) snap() else spring(dampingRatio = 0.86f, stiffness = 340f),
     label = "page_scale"
   )
   val pageAlpha by animateFloatAsState(
     targetValue = if (isNowPlayingOpen) 0.50f else 1.0f,
-    animationSpec = if (reducedMotion) snap() else tween(380, easing = AurixEase),
+    animationSpec = if (reducedMotion) snap() else tween(320, easing = AurixEase),
     label = "page_alpha"
   )
   val pageCornerRadius by animateDpAsState(
     targetValue = if (isNowPlayingOpen) 28.dp else 0.dp,
-    animationSpec = if (reducedMotion) snap() else tween(380, easing = AurixEase),
+    animationSpec = if (reducedMotion) snap() else spring(dampingRatio = 0.86f, stiffness = 340f),
     label = "page_corner"
   )
 
@@ -1515,21 +1518,58 @@ private fun AurixMainShell(
           ) {
             AnimatedVisibility(
               visible = currentSong != null,
-              enter = if (reducedMotion) fadeIn(snap()) else slideInVertically(tween(340, easing = AurixEase)) { it / 2 } + fadeIn(tween(240)),
-              exit = if (reducedMotion) fadeOut(snap()) else slideOutVertically(tween(260, easing = AurixEase)) { it / 2 } + fadeOut(tween(180))
+              enter = if (reducedMotion) {
+                fadeIn(snap())
+              } else {
+                slideInVertically(
+                  animationSpec = spring(
+                    dampingRatio = MINI_PLAYER_SLIDE_UP_DAMPING,
+                    stiffness = MINI_PLAYER_SLIDE_UP_STIFFNESS
+                  )
+                ) { fullHeight -> (fullHeight * 1.18f).roundToInt() } +
+                  expandVertically(
+                    expandFrom = Alignment.Bottom,
+                    animationSpec = spring(dampingRatio = 0.86f, stiffness = 400f)
+                  ) +
+                  scaleIn(
+                    initialScale = 0.95f,
+                    transformOrigin = TransformOrigin(0.5f, 1f),
+                    animationSpec = spring(dampingRatio = 0.84f, stiffness = 420f)
+                  ) +
+                  fadeIn(tween(240, easing = AurixEase))
+              },
+              exit = if (reducedMotion) {
+                fadeOut(snap())
+              } else {
+                slideOutVertically(
+                  animationSpec = tween(240, easing = AurixEase)
+                ) { fullHeight -> (fullHeight * 1.1f).roundToInt() } +
+                  shrinkVertically(
+                    shrinkTowards = Alignment.Bottom,
+                    animationSpec = tween(240, easing = AurixEase)
+                  ) +
+                  scaleOut(
+                    targetScale = 0.95f,
+                    transformOrigin = TransformOrigin(0.5f, 1f),
+                    animationSpec = tween(200, easing = AurixEase)
+                  ) +
+                  fadeOut(tween(180))
+              }
             ) {
+              val miniSong = currentSong ?: retainedSheetSong
               Column(horizontalAlignment = Alignment.CenterHorizontally) {
                 MiniPlayer(
-                  song = currentSong,
+                  song = miniSong,
                   isPlaying = isPlaying,
                   currentPositionMs = currentPosition,
                   durationMs = durationMs,
                   darkTheme = darkTheme,
                   reducedMotion = reducedMotion,
-                  hasLyrics = currentSong?.id?.let { it in verifiedLyricsIds } == true,
+                  isExpandingToFullPlayer = isNowPlayingOpen,
+                  hasLyrics = miniSong?.id?.let { it in verifiedLyricsIds } == true,
                   onCheckLyrics = { viewModel.ensureLyricsVerified(it) },
                   onPlayPauseClick = { viewModel.togglePlayPause() },
-                  onFavoriteClick = { currentSong?.let { viewModel.toggleFavorite(it) } },
+                  onFavoriteClick = { miniSong?.let { viewModel.toggleFavorite(it) } },
                   onSwipeNext = { viewModel.nextTrack() },
                   onSwipePrevious = { viewModel.previousTrack() },
                   onClick = { showNowPlaying = true }
@@ -1565,11 +1605,35 @@ private fun AurixMainShell(
         }
       }
 
-      // Now Playing Full-Screen Sheet
+      // Now Playing Full-Screen Sheet (spring-coupled rise with subtle scale-in from the mini-player)
       AnimatedVisibility(
         visible = isNowPlayingOpen,
-        enter = if (reducedMotion) fadeIn(snap()) else slideInVertically(tween(380, easing = AurixEase)) { it } + fadeIn(tween(220)),
-        exit = if (reducedMotion) fadeOut(snap()) else slideOutVertically(tween(340, easing = AurixEase)) { it } + fadeOut(tween(200))
+        enter = if (reducedMotion) {
+          fadeIn(snap())
+        } else {
+          slideInVertically(
+            animationSpec = spring(dampingRatio = 0.86f, stiffness = 340f)
+          ) { it } +
+            scaleIn(
+              initialScale = 0.965f,
+              transformOrigin = TransformOrigin(0.5f, 0.88f),
+              animationSpec = spring(dampingRatio = 0.86f, stiffness = 360f)
+            ) +
+            fadeIn(tween(220, easing = AurixEase))
+        },
+        exit = if (reducedMotion) {
+          fadeOut(snap())
+        } else {
+          slideOutVertically(
+            animationSpec = tween(300, easing = AurixEase)
+          ) { it } +
+            scaleOut(
+              targetScale = 0.965f,
+              transformOrigin = TransformOrigin(0.5f, 0.88f),
+              animationSpec = tween(260, easing = AurixEase)
+            ) +
+            fadeOut(tween(190))
+        }
       ) {
         retainedSheetSong?.let { song ->
           NowPlayingSheet(

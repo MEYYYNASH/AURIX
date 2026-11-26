@@ -11,6 +11,8 @@ import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.gestures.detectHorizontalDragGestures
+import androidx.compose.foundation.interaction.MutableInteractionSource
+import androidx.compose.foundation.interaction.collectIsPressedAsState
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.material.icons.Icons
@@ -35,7 +37,9 @@ import androidx.compose.ui.geometry.Size
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.StrokeCap
+import androidx.compose.ui.graphics.TransformOrigin
 import androidx.compose.ui.graphics.drawscope.Stroke
+import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.hapticfeedback.HapticFeedbackType
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.layout.ContentScale
@@ -54,6 +58,13 @@ import kotlinx.coroutines.launch
 import kotlin.math.abs
 import kotlin.math.roundToInt
 
+internal const val MINI_PLAYER_SLIDE_UP_DAMPING = 0.82f
+internal const val MINI_PLAYER_SLIDE_UP_STIFFNESS = 380f
+internal const val MINI_PLAYER_EXPAND_SCALE_DOWN = 0.92f
+internal const val MINI_PLAYER_PRESS_SCALE = 0.972f
+internal const val MINI_PLAYER_EXPAND_ALPHA = 0.45f
+internal const val MINI_PLAYER_EXPAND_LIFT_DP = -10f
+
 @Composable
 fun MiniPlayer(
   song: Song?,
@@ -62,6 +73,7 @@ fun MiniPlayer(
   durationMs: Long,
   darkTheme: Boolean,
   reducedMotion: Boolean = false,
+  isExpandingToFullPlayer: Boolean = false,
   hasLyrics: Boolean = false,
   onCheckLyrics: ((Song) -> Unit)? = null,
   onPlayPauseClick: () -> Unit,
@@ -97,10 +109,77 @@ fun MiniPlayer(
   )
 
   val scope = rememberCoroutineScope()
+  val density = LocalDensity.current
   val dragOffsetX = remember { Animatable(0f) }
-  val swipeThresholdPx = with(LocalDensity.current) { 72.dp.toPx() }
+  val swipeThresholdPx = with(density) { 72.dp.toPx() }
   val haptic = LocalHapticFeedback.current
   var thresholdCrossed by remember { mutableStateOf(false) }
+
+  // Tactile press-in + smooth slight scale-down continuity when expanding into the full-screen player
+  val cardInteractionSource = remember { MutableInteractionSource() }
+  val isCardPressed by cardInteractionSource.collectIsPressedAsState()
+  val expandLiftPx = with(density) { MINI_PLAYER_EXPAND_LIFT_DP.dp.toPx() }
+  val transitionSpringSpec = remember(reducedMotion) {
+    if (reducedMotion) snap<Float>() else spring(
+      dampingRatio = MINI_PLAYER_SLIDE_UP_DAMPING,
+      stiffness = 420f
+    )
+  }
+  val containerScale by animateFloatAsState(
+    targetValue = when {
+      isExpandingToFullPlayer -> MINI_PLAYER_EXPAND_SCALE_DOWN
+      isCardPressed && !reducedMotion -> MINI_PLAYER_PRESS_SCALE
+      else -> 1f
+    },
+    animationSpec = transitionSpringSpec,
+    label = "mini_player_expand_scale"
+  )
+  val containerAlpha by animateFloatAsState(
+    targetValue = if (isExpandingToFullPlayer) MINI_PLAYER_EXPAND_ALPHA else 1f,
+    animationSpec = transitionSpringSpec,
+    label = "mini_player_expand_alpha"
+  )
+  val containerLiftY by animateFloatAsState(
+    targetValue = if (isExpandingToFullPlayer && !reducedMotion) expandLiftPx else 0f,
+    animationSpec = transitionSpringSpec,
+    label = "mini_player_expand_lift"
+  )
+
+  // Smooth micro slide-up on track info whenever a new track starts while docked
+  val trackSlideStartPx = with(density) { 14.dp.toPx() }
+  var lastAnimatedSongId by remember { mutableStateOf(song.id) }
+  val trackStartOffsetY = remember { Animatable(0f) }
+  val trackStartAlpha = remember { Animatable(1f) }
+  LaunchedEffect(song.id, reducedMotion) {
+    if (song.id != lastAnimatedSongId) {
+      lastAnimatedSongId = song.id
+      if (reducedMotion) {
+        trackStartOffsetY.snapTo(0f)
+        trackStartAlpha.snapTo(1f)
+      } else {
+        trackStartOffsetY.snapTo(trackSlideStartPx)
+        trackStartAlpha.snapTo(0.45f)
+        launch {
+          trackStartOffsetY.animateTo(
+            targetValue = 0f,
+            animationSpec = spring(
+              dampingRatio = MINI_PLAYER_SLIDE_UP_DAMPING,
+              stiffness = 460f
+            )
+          )
+        }
+        launch {
+          trackStartAlpha.animateTo(
+            targetValue = 1f,
+            animationSpec = spring(
+              dampingRatio = Spring.DampingRatioNoBouncy,
+              stiffness = 480f
+            )
+          )
+        }
+      }
+    }
+  }
 
   val swipeFraction = (dragOffsetX.value / swipeThresholdPx).coerceIn(-1.2f, 1.2f)
   val prevCueAlpha = (swipeFraction).coerceIn(0f, 1f)
@@ -111,7 +190,14 @@ fun MiniPlayer(
       .padding(horizontal = 22.dp)
       .widthIn(max = 390.dp)
       .fillMaxWidth()
-      .height(64.dp),
+      .height(64.dp)
+      .graphicsLayer {
+        scaleX = containerScale
+        scaleY = containerScale
+        alpha = containerAlpha
+        translationY = containerLiftY
+        transformOrigin = TransformOrigin(0.5f, 0.5f)
+      },
     contentAlignment = Alignment.Center
   ) {
     // Directional swipe-to-skip cues revealed beneath the pill while dragging
@@ -214,7 +300,11 @@ fun MiniPlayer(
             }
           )
         }
-        .clickable { onClick() }
+        .clickable(
+          interactionSource = cardInteractionSource,
+          indication = ripple(bounded = true),
+          onClick = onClick
+        )
         .testTag("mini_player_card")
     ) {
       // Dynamic blurred album artwork + track-hue aura inside glass pill
@@ -291,23 +381,32 @@ fun MiniPlayer(
           .padding(horizontal = 9.dp),
         verticalAlignment = Alignment.CenterVertically
       ) {
-        Box(
+        Row(
           modifier = Modifier
-            .size(46.dp)
-            .clip(CircleShape)
-            .border(1.dp, Color.White.copy(alpha = if (darkTheme) 0.30f else 0.85f), CircleShape)
+            .weight(1f)
+            .graphicsLayer {
+              translationY = trackStartOffsetY.value
+              alpha = trackStartAlpha.value
+            },
+          verticalAlignment = Alignment.CenterVertically
         ) {
-          SongArtwork(
-            song = song,
-            modifier = Modifier.fillMaxSize(),
-            cornerRadius = 23.dp,
-            iconSize = 20.dp
-          )
-        }
+          Box(
+            modifier = Modifier
+              .size(46.dp)
+              .clip(CircleShape)
+              .border(1.dp, Color.White.copy(alpha = if (darkTheme) 0.30f else 0.85f), CircleShape)
+          ) {
+            SongArtwork(
+              song = song,
+              modifier = Modifier.fillMaxSize(),
+              cornerRadius = 23.dp,
+              iconSize = 20.dp
+            )
+          }
 
-        Spacer(modifier = Modifier.width(12.dp))
+          Spacer(modifier = Modifier.width(12.dp))
 
-        Column(modifier = Modifier.weight(1f)) {
+          Column(modifier = Modifier.weight(1f)) {
           Row(
             verticalAlignment = Alignment.CenterVertically,
             horizontalArrangement = Arrangement.spacedBy(6.dp)
@@ -341,13 +440,14 @@ fun MiniPlayer(
               modifier = Modifier.padding(start = 2.dp)
             )
           }
-          Text(
-            text = song.artist,
-            style = MaterialTheme.typography.bodySmall,
-            maxLines = 1,
-            overflow = TextOverflow.Ellipsis,
-            color = secondaryTextColor
-          )
+            Text(
+              text = song.artist,
+              style = MaterialTheme.typography.bodySmall,
+              maxLines = 1,
+              overflow = TextOverflow.Ellipsis,
+              color = secondaryTextColor
+            )
+          }
         }
 
         IconButton(

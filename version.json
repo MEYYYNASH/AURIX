@@ -1,13 +1,14 @@
 {
-  "versionName": "2.4.0",
-  "versionCode": 20400,
+  "versionName": "2.4.1",
+  "versionCode": 20401,
   "releaseDate": "2026-11-26",
-  "releaseTimestampMs": 1795689492000,
-  "apkUrl": "https://github.com/MEYYYNASH/AURIX/releases/download/v2.4.0/AURIX-v2.4.0.apk",
-  "sha256": "831fa75b2542a3de8cea4a678e071a5491be7ca666c14766256128ff67a4baf0",
+  "releaseTimestampMs": 1795753700000,
+  "apkUrl": "https://github.com/MEYYYNASH/AURIX/releases/download/v2.4.1/AURIX-v2.4.1.apk",
+  "sha256": "3e56ee90d3213e7b4c93d0c2b457e6458bab2c93d7875a00b52b83b95e66716b",
   "mandatory": false,
   "notes": [
-    "Smart Playlists, DJ Auto-Mix & Live Up Next Queue (v2.4.0): Added auto-generated Smart Playlists by Mood, BPM, and Top Artist with harmonic BPM-matched DJ Auto-Mix beatfade transitions (2\u20136s equal-power crossfades) and a redesigned live Up Next Queue drawer featuring smooth drag-to-reorder handles, swipe-to-remove gestures, per-transition BPM match badges, and one-tap BPM Sort",
+    "Fluid Mini-Player Motion & Full-Screen Continuity (v2.4.1): Added a spring-driven slide-up entrance for the floating Mini-Player whenever a track starts (plus subtle per-track reveal glide) and a GPU-accelerated slight scale-down & lift handoff when transitioning into the full-screen Now Playing sheet for seamless visual continuity",
+    "Smart Playlists, DJ Auto-Mix & Live Up Next Queue (v2.4.0): Added deterministic auto-generated Smart Playlists by Mood, BPM, and Top Artist with harmonic BPM-matched DJ Auto-Mix beatfade transitions (2\u20136s equal-power crossfades) and a redesigned live Up Next Queue drawer featuring smooth drag-to-reorder handles, swipe-to-remove gestures, per-transition BPM match badges, and one-tap BPM Sort",
     "Liquid Glass Segmented Tabs with Smooth 120Hz Spring Physics & Crash Fix (v2.3.3): Replaced Search source switch, Home filter chips, Settings theme picker, and Library tabs with physics-driven Liquid Glass segmented controls (white glass pill thumb, specular highlight, speed-reactive shadow, flick inertia, cross-tab haptics, Noto Sans Khmer support, TalkBack Role.Tab semantics, and Android 12+ Haze backdrop blur); fixed Android 12+ startup crash with explicit Haze backdrop styling and rebuilt drag tracking on a continuous frame-locked spring loop with a hardware-isolated thumb layer, soft edge rubber-banding, and zero frame stutter",
     "Redesigned Compact Album Studio, Single-Download Fix & Material You Dynamic Theme (v2.3.2): Redesigned the Album screen and Library album cards with a compact centered cover & peeking spinning vinyl disc, cover-harmonized palette accents, breathing aurora backdrop, sticky frosted top bar, slim frameless track rows, and spring-animated controls; fixed single-song downloads so downloading 1 track saves directly to My songs without auto-creating an 'Unknown Album'; plus live Album-Art Material You theming via Palette API and cache-bypassing network JSON update checking",
     "Vinyl Widget Style, Resizable AURIX Now Playing Widget & Refreshed Settings (v2.3.1): Added the tactile 'Vinyl' style (cream paper #EFE6D6 & spinning half-visible vinyl disc) across classic widgets, introduced the resizable 'AURIX Now Playing' widget (3 sizes x 10 WCAG 4.5:1 styles with Material You Light/Paper theming), and refreshed Settings > Widgets",
@@ -16,5 +17,5 @@
     "Proportional Widget Lyrics & Reliable Release Verification (v2.1.6): Calibrated Home Screen Lyrics widget text sizes and launcher column widths for balanced 1:1 proportions across Small, Wide, and Large widgets (plus live preview); fixed OTA release APK SHA-256 verification against GitHub Release checksum assets",
     "Bundled Full-Unicode Khmer Fonts & Redesigned Glass Widgets (v2.1.5): Real full-Unicode Khmer & Latin .ttf fonts (Dangrek, Kantumruy Pro, Koulen, Noto Sans Khmer, Outfit, Inter) across app & widgets, fixed Khmer line-height clipping, and redesigned AURIX cosmic glass widgets"
   ],
-  "releasePageUrl": "https://github.com/MEYYYNASH/AURIX/releases/tag/v2.4.0"
+  "releasePageUrl": "https://github.com/MEYYYNASH/AURIX/releases/tag/v2.4.1"
 }
