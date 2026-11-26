@@ -64,6 +64,7 @@ import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.rounded.ArrowBack
+import androidx.compose.material.icons.automirrored.rounded.PlaylistAdd
 import androidx.compose.material.icons.rounded.Album
 import androidx.compose.material.icons.rounded.Download
 import androidx.compose.material.icons.rounded.DownloadDone
@@ -73,7 +74,6 @@ import androidx.compose.material.icons.rounded.MoreHoriz
 import androidx.compose.material.icons.rounded.MoreVert
 import androidx.compose.material.icons.rounded.MusicNote
 import androidx.compose.material.icons.rounded.PlayArrow
-import androidx.compose.material.icons.rounded.PlaylistAdd
 import androidx.compose.material.icons.rounded.Shuffle
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
@@ -352,7 +352,7 @@ fun AlbumTrackListSection(
   val playButtonInk by animateColorAsState(targetPalette.playButtonInk, colorAnimSpec, label = "album_play_ink")
 
   val listState = rememberLazyListState()
-  val bannerHeightDp = 390.dp + statusTop
+  val bannerHeightDp = 310.dp + statusTop
   val density = LocalDensity.current
   val bannerHeightPx = with(density) { bannerHeightDp.toPx() }
   val scrollOffsetPx by remember(bannerHeightPx) {
@@ -418,7 +418,7 @@ fun AlbumTrackListSection(
         .padding(horizontal = AlbumDesignTokens.SidePadding),
       horizontalAlignment = Alignment.CenterHorizontally,
       contentPadding = PaddingValues(
-        top = statusTop + if (onBackClick != null) 54.dp else 18.dp,
+        top = statusTop + if (onBackClick != null) 44.dp else 14.dp,
         bottom = dockClearanceBottom
       )
     ) {
@@ -478,7 +478,7 @@ fun AlbumTrackListSection(
           },
           modifier = Modifier.widthIn(max = 760.dp)
         )
-        Spacer(modifier = Modifier.height(18.dp))
+        Spacer(modifier = Modifier.height(12.dp))
       }
 
       item(key = "album_play_shuffle") {
@@ -494,7 +494,7 @@ fun AlbumTrackListSection(
           onShuffleClick = onShuffleClick,
           modifier = Modifier.widthIn(max = 760.dp)
         )
-        Spacer(modifier = Modifier.height(20.dp))
+        Spacer(modifier = Modifier.height(14.dp))
       }
 
       if (tracks.isEmpty()) {
@@ -558,7 +558,7 @@ fun AlbumTrackListSection(
                   .defaultMinSize(minHeight = 48.dp)
                   .testTag("empty_album_add_songs_button")
               ) {
-                Icon(Icons.Rounded.PlaylistAdd, contentDescription = null, modifier = Modifier.size(18.dp))
+                Icon(Icons.AutoMirrored.Rounded.PlaylistAdd, contentDescription = null, modifier = Modifier.size(18.dp))
                 Spacer(modifier = Modifier.width(6.dp))
                 Text(
                   text = stringResource(id = R.string.album_add_songs),
@@ -590,7 +590,7 @@ fun AlbumTrackListSection(
             accentColor = dominantAccent,
             modifier = Modifier
               .widthIn(max = 760.dp)
-              .padding(bottom = 10.dp)
+              .padding(bottom = 6.dp)
           )
         }
 
@@ -625,7 +625,7 @@ fun AlbumTrackListSection(
               )
           )
           if (index < tracks.lastIndex) {
-            Spacer(modifier = Modifier.height(5.dp))
+            Spacer(modifier = Modifier.height(2.dp))
           }
         }
       }
@@ -710,7 +710,7 @@ private fun AlbumStickyTopBar(
           )
         )
       )
-      .padding(top = statusTop + 6.dp, bottom = 8.dp, start = 14.dp, end = 14.dp)
+      .padding(top = statusTop + 4.dp, bottom = 6.dp, start = 14.dp, end = 14.dp)
   ) {
     Row(
       modifier = Modifier
@@ -731,13 +731,10 @@ private fun AlbumStickyTopBar(
         Box(
           modifier = Modifier
             .sizeIn(minWidth = 48.dp, minHeight = 48.dp)
-            .scale(backScale)
             .clip(CircleShape)
-            .background(glassColor.copy(alpha = 0.78f))
-            .border(1.dp, AlbumDesignTokens.Border, CircleShape)
             .clickable(
               interactionSource = backInteraction,
-              indication = ripple(bounded = false, radius = 24.dp, color = AlbumDesignTokens.Text),
+              indication = ripple(bounded = false, radius = 22.dp, color = AlbumDesignTokens.Text),
               role = Role.Button,
               onClickLabel = backCd,
               onClick = onBackClick
@@ -746,12 +743,22 @@ private fun AlbumStickyTopBar(
             .testTag("album_back_button"),
           contentAlignment = Alignment.Center
         ) {
-          Icon(
-            imageVector = Icons.AutoMirrored.Rounded.ArrowBack,
-            contentDescription = null,
-            tint = AlbumDesignTokens.Text,
-            modifier = Modifier.size(20.dp)
-          )
+          Box(
+            modifier = Modifier
+              .size(38.dp)
+              .scale(backScale)
+              .clip(CircleShape)
+              .background(glassColor.copy(alpha = 0.78f))
+              .border(1.dp, AlbumDesignTokens.Border, CircleShape),
+            contentAlignment = Alignment.Center
+          ) {
+            Icon(
+              imageVector = Icons.AutoMirrored.Rounded.ArrowBack,
+              contentDescription = null,
+              tint = AlbumDesignTokens.Text,
+              modifier = Modifier.size(18.dp)
+            )
+          }
         }
       }
 
@@ -1016,13 +1023,13 @@ fun AlbumHeader(
 
   BoxWithConstraints(modifier = modifier.fillMaxWidth()) {
     val wide = maxWidth >= 560.dp
-    val coverSize = if (wide) 168.dp else 148.dp
+    val coverSize = if (wide) 138.dp else 116.dp
 
     if (wide) {
       Row(
         modifier = Modifier.fillMaxWidth(),
         verticalAlignment = Alignment.CenterVertically,
-        horizontalArrangement = Arrangement.spacedBy(24.dp)
+        horizontalArrangement = Arrangement.spacedBy(20.dp)
       ) {
         AlbumCoverVinylShowcase(
           albumTitle = albumTitle,
@@ -1035,7 +1042,7 @@ fun AlbumHeader(
         )
         Column(
           modifier = Modifier.weight(1f),
-          verticalArrangement = Arrangement.spacedBy(6.dp)
+          verticalArrangement = Arrangement.spacedBy(5.dp)
         ) {
           AlbumHeroMetaPill(
             metaText = metaText,
@@ -1048,8 +1055,8 @@ fun AlbumHeader(
             text = albumTitle.ifBlank { stringResource(id = R.string.album_unknown_title) },
             style = MaterialTheme.typography.displayLarge.copy(
               fontFamily = AurixFontFamilies.AurixUiFamily,
-              fontSize = 30.sp,
-              lineHeight = 36.sp,
+              fontSize = 26.sp,
+              lineHeight = 32.sp,
               fontWeight = FontWeight.Bold
             ),
             color = AlbumDesignTokens.Text,
@@ -1060,15 +1067,15 @@ fun AlbumHeader(
             text = artistName.ifBlank { stringResource(id = R.string.album_unknown_artist) },
             style = MaterialTheme.typography.bodyLarge.copy(
               fontFamily = AurixFontFamilies.AurixUiFamily,
-              fontSize = 16.sp,
-              lineHeight = 22.sp,
+              fontSize = 14.5.sp,
+              lineHeight = 20.sp,
               fontWeight = FontWeight.SemiBold
             ),
             color = accentColor,
             maxLines = 1,
             overflow = TextOverflow.Ellipsis
           )
-          Spacer(modifier = Modifier.height(6.dp))
+          Spacer(modifier = Modifier.height(4.dp))
           ActionButtons(
             isAddedToLibrary = isAddedToLibrary,
             isAlbumDownloaded = isAlbumDownloaded,
@@ -1116,7 +1123,7 @@ fun AlbumHeader(
           secondaryAccentColor = secondaryAccentColor,
           reducedMotion = reducedMotion
         )
-        Spacer(modifier = Modifier.height(14.dp))
+        Spacer(modifier = Modifier.height(10.dp))
         AlbumHeroMetaPill(
           metaText = metaText,
           durationText = durationChipText,
@@ -1124,13 +1131,13 @@ fun AlbumHeader(
           accentColor = accentColor,
           glassColor = glassColor
         )
-        Spacer(modifier = Modifier.height(8.dp))
+        Spacer(modifier = Modifier.height(6.dp))
         Text(
           text = albumTitle.ifBlank { stringResource(id = R.string.album_unknown_title) },
           style = MaterialTheme.typography.displayLarge.copy(
             fontFamily = AurixFontFamilies.AurixUiFamily,
-            fontSize = 26.sp,
-            lineHeight = 32.sp,
+            fontSize = 22.sp,
+            lineHeight = 27.sp,
             fontWeight = FontWeight.Bold
           ),
           color = AlbumDesignTokens.Text,
@@ -1138,13 +1145,13 @@ fun AlbumHeader(
           maxLines = 2,
           overflow = TextOverflow.Ellipsis
         )
-        Spacer(modifier = Modifier.height(3.dp))
+        Spacer(modifier = Modifier.height(2.dp))
         Text(
           text = artistName.ifBlank { stringResource(id = R.string.album_unknown_artist) },
           style = MaterialTheme.typography.bodyLarge.copy(
             fontFamily = AurixFontFamilies.AurixUiFamily,
-            fontSize = 15.sp,
-            lineHeight = 20.sp,
+            fontSize = 13.5.sp,
+            lineHeight = 18.sp,
             fontWeight = FontWeight.SemiBold
           ),
           color = accentColor,
@@ -1152,7 +1159,7 @@ fun AlbumHeader(
           maxLines = 1,
           overflow = TextOverflow.Ellipsis
         )
-        Spacer(modifier = Modifier.height(14.dp))
+        Spacer(modifier = Modifier.height(10.dp))
         ActionButtons(
           isAddedToLibrary = isAddedToLibrary,
           isAlbumDownloaded = isAlbumDownloaded,
@@ -1200,12 +1207,12 @@ private fun AlbumCoverVinylShowcase(
   secondaryAccentColor: Color,
   reducedMotion: Boolean
 ) {
-  val coverShape = RoundedCornerShape(26.dp)
+  val coverShape = RoundedCornerShape(22.dp)
   var imageFailed by remember(coverUrl) { mutableStateOf(false) }
 
   // Smooth spring slide-out when playing
   val vinylPeekOffset by animateDpAsState(
-    targetValue = if (isAlbumPlaying) 36.dp else 22.dp,
+    targetValue = if (isAlbumPlaying) 24.dp else 15.dp,
     animationSpec = if (reducedMotion) snap() else spring(
       dampingRatio = 0.72f,
       stiffness = Spring.StiffnessMediumLow
@@ -1238,18 +1245,17 @@ private fun AlbumCoverVinylShowcase(
 
   Box(
     modifier = Modifier
-      .width(coverSize + 40.dp)
+      .width(coverSize + 36.dp)
       .height(coverSize),
-    contentAlignment = Alignment.CenterStart
+    contentAlignment = Alignment.Center
   ) {
-    // Peeking grooved vinyl disc behind the album sleeve
+    // Peeking grooved vinyl disc behind the album sleeve (optically balanced left/right around center)
     Canvas(
       modifier = Modifier
-        .padding(start = 10.dp)
-        .offset(x = vinylPeekOffset)
-        .size(coverSize * 0.88f)
+        .offset(x = vinylPeekOffset * 0.68f)
+        .size(coverSize * 0.86f)
         .shadow(
-          elevation = 16.dp,
+          elevation = 14.dp,
           shape = CircleShape,
           ambientColor = Color.Black.copy(alpha = 0.60f),
           spotColor = accentColor.copy(alpha = 0.35f)
@@ -1322,13 +1328,14 @@ private fun AlbumCoverVinylShowcase(
     // Crisp elevated Album Cover sleeve in front
     Box(
       modifier = Modifier
+        .offset(x = -vinylPeekOffset * 0.34f)
         .size(coverSize)
         .scale(coverScale)
         .shadow(
-          elevation = 24.dp,
+          elevation = 20.dp,
           shape = coverShape,
           ambientColor = Color.Black.copy(alpha = 0.75f),
-          spotColor = accentColor.copy(alpha = 0.55f)
+          spotColor = accentColor.copy(alpha = 0.50f)
         )
         .clip(coverShape)
         .background(
@@ -1339,7 +1346,7 @@ private fun AlbumCoverVinylShowcase(
         .border(1.dp, Color.White.copy(alpha = 0.22f), coverShape)
         .drawBehind {
           val stroke = 1.2.dp.toPx()
-          val corner = 26.dp.toPx()
+          val corner = 22.dp.toPx()
           drawRoundRect(
             brush = Brush.verticalGradient(
               colors = listOf(Color.White.copy(alpha = 0.32f), Color.Transparent),
@@ -1413,9 +1420,9 @@ private fun AlbumHeroMetaPill(
       .clip(CircleShape)
       .background(glassColor)
       .border(1.dp, accentColor.copy(alpha = if (isAlbumPlaying) 0.42f else 0.20f), CircleShape)
-      .padding(horizontal = 12.dp, vertical = 5.dp),
+      .padding(horizontal = 10.dp, vertical = 3.5.dp),
     verticalAlignment = Alignment.CenterVertically,
-    horizontalArrangement = Arrangement.spacedBy(6.dp)
+    horizontalArrangement = Arrangement.spacedBy(5.dp)
   ) {
     AnimatedVisibility(visible = isAlbumPlaying) {
       Row(
@@ -1424,7 +1431,7 @@ private fun AlbumHeroMetaPill(
       ) {
         Box(
           modifier = Modifier
-            .size(7.dp)
+            .size(6.dp)
             .clip(CircleShape)
             .background(accentColor)
         )
@@ -1433,7 +1440,7 @@ private fun AlbumHeroMetaPill(
           style = MaterialTheme.typography.labelSmall.copy(
             fontFamily = AurixFontFamilies.AurixUiFamily,
             fontWeight = FontWeight.Bold,
-            fontSize = 11.sp
+            fontSize = 10.5.sp
           ),
           color = accentColor,
           maxLines = 1
@@ -1449,7 +1456,7 @@ private fun AlbumHeroMetaPill(
       text = fullLabel,
       style = MaterialTheme.typography.bodySmall.copy(
         fontFamily = AurixFontFamilies.AurixUiFamily,
-        fontSize = 12.sp,
+        fontSize = 11.sp,
         fontWeight = FontWeight.Medium
       ),
       color = AlbumDesignTokens.DimText,
@@ -1487,7 +1494,7 @@ fun ActionButtons(
 
   Row(
     modifier = modifier.fillMaxWidth(),
-    horizontalArrangement = if (centered) Arrangement.spacedBy(12.dp, Alignment.CenterHorizontally) else Arrangement.spacedBy(10.dp),
+    horizontalArrangement = if (centered) Arrangement.spacedBy(4.dp, Alignment.CenterHorizontally) else Arrangement.spacedBy(4.dp),
     verticalAlignment = Alignment.CenterVertically
   ) {
     AlbumHeaderIconButton(
@@ -1517,7 +1524,7 @@ fun ActionButtons(
       testTag = "album_download_button"
     )
     AlbumHeaderIconButton(
-      icon = Icons.Rounded.PlaylistAdd,
+      icon = Icons.AutoMirrored.Rounded.PlaylistAdd,
       contentDescription = stringResource(id = R.string.album_add_songs),
       tint = accentColor,
       active = false,
@@ -1575,34 +1582,10 @@ private fun AlbumHeaderIconButton(
   Box(
     modifier = Modifier
       .sizeIn(minWidth = 48.dp, minHeight = 48.dp)
-      .scale(scale)
       .clip(CircleShape)
-      .background(bg)
-      .border(
-        width = if (isFocused) 2.dp else 1.dp,
-        color = borderColor,
-        shape = CircleShape
-      )
-      .drawBehind {
-        val stroke = 1.dp.toPx()
-        if (size.width <= stroke || size.height <= stroke) return@drawBehind
-        val inset = stroke * 0.5f
-        val r = ((size.minDimension - stroke) * 0.5f).coerceAtLeast(0f)
-        drawRoundRect(
-          brush = Brush.verticalGradient(
-            colors = listOf(AlbumDesignTokens.TopHighlight, Color.Transparent),
-            startY = 0f,
-            endY = size.height * 0.5f
-          ),
-          topLeft = Offset(inset, inset),
-          size = Size(size.width - stroke, size.height - stroke),
-          cornerRadius = CornerRadius(r, r),
-          style = Stroke(width = stroke)
-        )
-      }
       .clickable(
         interactionSource = interactionSource,
-        indication = ripple(bounded = false, radius = 24.dp, color = AlbumDesignTokens.Text),
+        indication = ripple(bounded = false, radius = 22.dp, color = AlbumDesignTokens.Text),
         role = Role.Button,
         onClickLabel = contentDescription,
         onClick = onClick
@@ -1611,12 +1594,43 @@ private fun AlbumHeaderIconButton(
       .testTag(testTag),
     contentAlignment = Alignment.Center
   ) {
-    Icon(
-      imageVector = icon,
-      contentDescription = null,
-      tint = tint,
-      modifier = Modifier.size(21.dp)
-    )
+    Box(
+      modifier = Modifier
+        .size(38.dp)
+        .scale(scale)
+        .clip(CircleShape)
+        .background(bg)
+        .border(
+          width = if (isFocused) 2.dp else 1.dp,
+          color = borderColor,
+          shape = CircleShape
+        )
+        .drawBehind {
+          val stroke = 1.dp.toPx()
+          if (size.width <= stroke || size.height <= stroke) return@drawBehind
+          val inset = stroke * 0.5f
+          val r = ((size.minDimension - stroke) * 0.5f).coerceAtLeast(0f)
+          drawRoundRect(
+            brush = Brush.verticalGradient(
+              colors = listOf(AlbumDesignTokens.TopHighlight, Color.Transparent),
+              startY = 0f,
+              endY = size.height * 0.5f
+            ),
+            topLeft = Offset(inset, inset),
+            size = Size(size.width - stroke, size.height - stroke),
+            cornerRadius = CornerRadius(r, r),
+            style = Stroke(width = stroke)
+          )
+        },
+      contentAlignment = Alignment.Center
+    ) {
+      Icon(
+        imageVector = icon,
+        contentDescription = null,
+        tint = tint,
+        modifier = Modifier.size(18.dp)
+      )
+    }
   }
 }
 
@@ -1658,34 +1672,14 @@ fun PlayShuffleRow(
 
   Row(
     modifier = modifier.fillMaxWidth(),
-    horizontalArrangement = Arrangement.spacedBy(12.dp)
+    horizontalArrangement = Arrangement.spacedBy(10.dp),
+    verticalAlignment = Alignment.CenterVertically
   ) {
     Box(
       modifier = Modifier
         .weight(1f)
-        .height(54.dp)
         .defaultMinSize(minHeight = 48.dp)
-        .scale(playScale)
-        .shadow(
-          elevation = if (enabled) 16.dp else 0.dp,
-          shape = buttonShape,
-          ambientColor = accentColor.copy(alpha = 0.30f),
-          spotColor = accentColor.copy(alpha = 0.50f)
-        )
         .clip(buttonShape)
-        .background(
-          brush = Brush.horizontalGradient(
-            colors = if (enabled) {
-              listOf(accentColor, playEndColor)
-            } else {
-              listOf(accentColor.copy(alpha = 0.42f), playEndColor.copy(alpha = 0.42f))
-            }
-          )
-        )
-        .then(
-          if (playFocused) Modifier.border(2.dp, Color.White, buttonShape)
-          else Modifier.border(1.dp, Color.White.copy(alpha = 0.28f), buttonShape)
-        )
         .clickable(
           enabled = enabled,
           interactionSource = playInteraction,
@@ -1697,29 +1691,57 @@ fun PlayShuffleRow(
         .testTag("album_play_button"),
       contentAlignment = Alignment.Center
     ) {
-      Row(
-        modifier = Modifier.fillMaxSize(),
-        horizontalArrangement = Arrangement.Center,
-        verticalAlignment = Alignment.CenterVertically
-      ) {
-        Icon(
-          imageVector = Icons.Rounded.PlayArrow,
-          contentDescription = null,
-          tint = playContentInk,
-          modifier = Modifier.size(22.dp)
-        )
-        Spacer(modifier = Modifier.width(6.dp))
-        Text(
-          text = playLabel,
-          style = MaterialTheme.typography.bodyLarge.copy(
-            fontFamily = AurixFontFamilies.AurixUiFamily,
-            fontSize = 15.sp,
-            fontWeight = FontWeight.Bold
+      Box(
+        modifier = Modifier
+          .fillMaxWidth()
+          .height(44.dp)
+          .scale(playScale)
+          .shadow(
+            elevation = if (enabled) 12.dp else 0.dp,
+            shape = buttonShape,
+            ambientColor = accentColor.copy(alpha = 0.28f),
+            spotColor = accentColor.copy(alpha = 0.45f)
+          )
+          .clip(buttonShape)
+          .background(
+            brush = Brush.horizontalGradient(
+              colors = if (enabled) {
+                listOf(accentColor, playEndColor)
+              } else {
+                listOf(accentColor.copy(alpha = 0.42f), playEndColor.copy(alpha = 0.42f))
+              }
+            )
+          )
+          .then(
+            if (playFocused) Modifier.border(2.dp, Color.White, buttonShape)
+            else Modifier.border(1.dp, Color.White.copy(alpha = 0.26f), buttonShape)
           ),
-          color = playContentInk,
-          maxLines = 1,
-          overflow = TextOverflow.Ellipsis
-        )
+        contentAlignment = Alignment.Center
+      ) {
+        Row(
+          modifier = Modifier.fillMaxSize(),
+          horizontalArrangement = Arrangement.Center,
+          verticalAlignment = Alignment.CenterVertically
+        ) {
+          Icon(
+            imageVector = Icons.Rounded.PlayArrow,
+            contentDescription = null,
+            tint = playContentInk,
+            modifier = Modifier.size(19.dp)
+          )
+          Spacer(modifier = Modifier.width(5.dp))
+          Text(
+            text = playLabel,
+            style = MaterialTheme.typography.bodyLarge.copy(
+              fontFamily = AurixFontFamilies.AurixUiFamily,
+              fontSize = 13.5.sp,
+              fontWeight = FontWeight.Bold
+            ),
+            color = playContentInk,
+            maxLines = 1,
+            overflow = TextOverflow.Ellipsis
+          )
+        }
       }
     }
 
@@ -1739,33 +1761,11 @@ fun PlayShuffleRow(
       AlbumDesignTokens.Text
     }
 
-    Surface(
-      shape = buttonShape,
-      color = shuffleContainer,
-      border = BorderStroke(if (shuffleFocused) 2.dp else 1.dp, shuffleBorderColor),
+    Box(
       modifier = Modifier
         .weight(1f)
-        .height(54.dp)
         .defaultMinSize(minHeight = 48.dp)
-        .scale(shuffleScale)
         .clip(buttonShape)
-        .drawBehind {
-          val stroke = 1.dp.toPx()
-          if (size.width <= stroke || size.height <= stroke) return@drawBehind
-          val inset = stroke * 0.5f
-          val r = ((size.height - stroke) * 0.5f).coerceAtLeast(0f)
-          drawRoundRect(
-            brush = Brush.verticalGradient(
-              colors = listOf(AlbumDesignTokens.TopHighlight, Color.Transparent),
-              startY = 0f,
-              endY = size.height * 0.45f
-            ),
-            topLeft = Offset(inset, inset),
-            size = Size(size.width - stroke, size.height - stroke),
-            cornerRadius = CornerRadius(r, r),
-            style = Stroke(width = stroke)
-          )
-        }
         .clickable(
           enabled = enabled,
           interactionSource = shuffleInteraction,
@@ -1774,31 +1774,60 @@ fun PlayShuffleRow(
           onClickLabel = shuffleLabel,
           onClick = onShuffleClick
         )
-        .testTag("album_shuffle_button")
+        .testTag("album_shuffle_button"),
+      contentAlignment = Alignment.Center
     ) {
-      Row(
-        modifier = Modifier.fillMaxSize(),
-        horizontalArrangement = Arrangement.Center,
-        verticalAlignment = Alignment.CenterVertically
+      Surface(
+        shape = buttonShape,
+        color = shuffleContainer,
+        border = BorderStroke(if (shuffleFocused) 2.dp else 1.dp, shuffleBorderColor),
+        modifier = Modifier
+          .fillMaxWidth()
+          .height(44.dp)
+          .scale(shuffleScale)
+          .clip(buttonShape)
+          .drawBehind {
+            val stroke = 1.dp.toPx()
+            if (size.width <= stroke || size.height <= stroke) return@drawBehind
+            val inset = stroke * 0.5f
+            val r = ((size.height - stroke) * 0.5f).coerceAtLeast(0f)
+            drawRoundRect(
+              brush = Brush.verticalGradient(
+                colors = listOf(AlbumDesignTokens.TopHighlight, Color.Transparent),
+                startY = 0f,
+                endY = size.height * 0.45f
+              ),
+              topLeft = Offset(inset, inset),
+              size = Size(size.width - stroke, size.height - stroke),
+              cornerRadius = CornerRadius(r, r),
+              style = Stroke(width = stroke)
+            )
+          }
       ) {
-        Icon(
-          imageVector = Icons.Rounded.Shuffle,
-          contentDescription = null,
-          tint = shuffleContentColor,
-          modifier = Modifier.size(20.dp)
-        )
-        Spacer(modifier = Modifier.width(6.dp))
-        Text(
-          text = shuffleLabel,
-          style = MaterialTheme.typography.bodyLarge.copy(
-            fontFamily = AurixFontFamilies.AurixUiFamily,
-            fontSize = 15.sp,
-            fontWeight = FontWeight.SemiBold
-          ),
-          color = shuffleContentColor,
-          maxLines = 1,
-          overflow = TextOverflow.Ellipsis
-        )
+        Row(
+          modifier = Modifier.fillMaxSize(),
+          horizontalArrangement = Arrangement.Center,
+          verticalAlignment = Alignment.CenterVertically
+        ) {
+          Icon(
+            imageVector = Icons.Rounded.Shuffle,
+            contentDescription = null,
+            tint = shuffleContentColor,
+            modifier = Modifier.size(18.dp)
+          )
+          Spacer(modifier = Modifier.width(5.dp))
+          Text(
+            text = shuffleLabel,
+            style = MaterialTheme.typography.bodyLarge.copy(
+              fontFamily = AurixFontFamilies.AurixUiFamily,
+              fontSize = 13.5.sp,
+              fontWeight = FontWeight.SemiBold
+            ),
+            color = shuffleContentColor,
+            maxLines = 1,
+            overflow = TextOverflow.Ellipsis
+          )
+        }
       }
     }
   }
@@ -1814,7 +1843,7 @@ private fun AlbumTracksSectionHeader(
   val durationText = formatAlbumTotalDuration(totalDurationSeconds)
   Column(
     modifier = modifier.fillMaxWidth(),
-    verticalArrangement = Arrangement.spacedBy(8.dp)
+    verticalArrangement = Arrangement.spacedBy(6.dp)
   ) {
     Row(
       modifier = Modifier.fillMaxWidth(),
@@ -1823,13 +1852,13 @@ private fun AlbumTracksSectionHeader(
     ) {
       Row(
         verticalAlignment = Alignment.CenterVertically,
-        horizontalArrangement = Arrangement.spacedBy(8.dp)
+        horizontalArrangement = Arrangement.spacedBy(7.dp)
       ) {
         Text(
           text = stringResource(id = R.string.album_tracks_heading),
           style = MaterialTheme.typography.titleMedium.copy(
             fontFamily = AurixFontFamilies.AurixUiFamily,
-            fontSize = 16.sp,
+            fontSize = 14.sp,
             fontWeight = FontWeight.Bold
           ),
           color = AlbumDesignTokens.Text
@@ -1838,14 +1867,14 @@ private fun AlbumTracksSectionHeader(
           modifier = Modifier
             .clip(CircleShape)
             .background(accentColor.copy(alpha = 0.16f))
-            .padding(horizontal = 8.dp, vertical = 2.dp)
+            .padding(horizontal = 7.dp, vertical = 1.5.dp)
         ) {
           Text(
             text = trackCount.toString(),
             style = MaterialTheme.typography.labelSmall.copy(
               fontFamily = AlbumDesignTokens.OutfitFontFamily,
               fontWeight = FontWeight.SemiBold,
-              fontSize = 11.5.sp
+              fontSize = 10.5.sp
             ),
             color = accentColor
           )
@@ -1856,7 +1885,7 @@ private fun AlbumTracksSectionHeader(
           text = durationText,
           style = MaterialTheme.typography.bodySmall.copy(
             fontFamily = AurixFontFamilies.AurixUiFamily,
-            fontSize = 12.sp,
+            fontSize = 11.5.sp,
             fontWeight = FontWeight.Medium
           ),
           color = AlbumDesignTokens.DimText
@@ -1866,11 +1895,11 @@ private fun AlbumTracksSectionHeader(
     Box(
       modifier = Modifier
         .fillMaxWidth()
-        .height(1.dp)
+        .height(0.8.dp)
         .background(
           Brush.horizontalGradient(
             colors = listOf(
-              accentColor.copy(alpha = 0.38f),
+              accentColor.copy(alpha = 0.36f),
               AlbumDesignTokens.Border,
               Color.Transparent
             )
@@ -1896,7 +1925,7 @@ fun TrackRow(
   modifier: Modifier = Modifier,
   glassColor: Color = AlbumDesignTokens.GlassFill
 ) {
-  val rowShape = RoundedCornerShape(20.dp)
+  val rowShape = RoundedCornerShape(15.dp)
   val rowInteraction = remember { MutableInteractionSource() }
   val rowFocused by rowInteraction.collectIsFocusedAsState()
   val rowPressed by rowInteraction.collectIsPressedAsState()
@@ -1911,13 +1940,17 @@ fun TrackRow(
     label = "track_row_scale_${track.id}"
   )
   val rowBg by animateColorAsState(
-    targetValue = if (isCurrentTrack) accentColor.copy(alpha = 0.16f) else glassColor.copy(alpha = 0.28f),
-    animationSpec = if (reducedMotion) snap() else tween(durationMillis = 240, easing = FastOutSlowInEasing),
+    targetValue = when {
+      isCurrentTrack -> accentColor.copy(alpha = 0.15f)
+      rowPressed -> glassColor.copy(alpha = 0.34f)
+      else -> Color.Transparent
+    },
+    animationSpec = if (reducedMotion) snap() else tween(durationMillis = 220, easing = FastOutSlowInEasing),
     label = "track_row_bg_${track.id}"
   )
   val titleColor by animateColorAsState(
     targetValue = if (isCurrentTrack) accentColor else AlbumDesignTokens.Text,
-    animationSpec = if (reducedMotion) snap() else tween(durationMillis = 240, easing = FastOutSlowInEasing),
+    animationSpec = if (reducedMotion) snap() else tween(durationMillis = 220, easing = FastOutSlowInEasing),
     label = "track_title_color_${track.id}"
   )
   val formattedNumber = remember(trackNumber) {
@@ -1930,21 +1963,21 @@ fun TrackRow(
     modifier = modifier
       .fillMaxWidth()
       .scale(pressScale)
-      .defaultMinSize(minHeight = 70.dp)
+      .defaultMinSize(minHeight = 52.dp)
       .clip(rowShape)
       .background(rowBg)
       .then(
         when {
           rowFocused -> Modifier.border(2.dp, accentColor, rowShape)
           isCurrentTrack -> Modifier
-            .border(1.dp, accentColor.copy(alpha = 0.36f), rowShape)
+            .border(0.8.dp, accentColor.copy(alpha = 0.36f), rowShape)
             .drawBehind {
-              val stroke = 1.dp.toPx()
+              val stroke = 0.8.dp.toPx()
               if (size.width <= stroke || size.height <= stroke) return@drawBehind
-              val r = 20.dp.toPx()
+              val r = 15.dp.toPx()
               drawRoundRect(
                 brush = Brush.verticalGradient(
-                  colors = listOf(Color.White.copy(alpha = 0.22f), Color.Transparent),
+                  colors = listOf(Color.White.copy(alpha = 0.20f), Color.Transparent),
                   startY = 0f,
                   endY = size.height * 0.45f
                 ),
@@ -1954,7 +1987,15 @@ fun TrackRow(
                 style = Stroke(width = stroke)
               )
             }
-          else -> Modifier.border(0.6.dp, Color.White.copy(alpha = 0.06f), rowShape)
+          else -> Modifier.drawBehind {
+            val dividerHeight = 0.5.dp.toPx()
+            drawLine(
+              color = Color.White.copy(alpha = 0.06f),
+              start = Offset(38.dp.toPx(), size.height - dividerHeight * 0.5f),
+              end = Offset(size.width - 12.dp.toPx(), size.height - dividerHeight * 0.5f),
+              strokeWidth = dividerHeight
+            )
+          }
         }
       )
       .clickable(
@@ -1964,12 +2005,12 @@ fun TrackRow(
         onClickLabel = track.title,
         onClick = onClick
       )
-      .padding(start = 14.dp, end = 6.dp, top = 10.dp, bottom = 10.dp)
+      .padding(start = 10.dp, end = 2.dp, top = 5.dp, bottom = 5.dp)
       .testTag("album_track_row_${track.id}"),
     verticalAlignment = Alignment.CenterVertically
   ) {
     Box(
-      modifier = Modifier.width(34.dp),
+      modifier = Modifier.width(26.dp),
       contentAlignment = Alignment.Center
     ) {
       AnimatedContent(
@@ -1995,10 +2036,10 @@ fun TrackRow(
             text = formattedNumber,
             style = MaterialTheme.typography.bodyMedium.copy(
               fontFamily = AlbumDesignTokens.OutfitFontFamily,
-              fontSize = 14.sp,
+              fontSize = 12.5.sp,
               fontWeight = FontWeight.Medium
             ),
-            color = AlbumDesignTokens.DimText,
+            color = AlbumDesignTokens.DimText.copy(alpha = 0.82f),
             textAlign = TextAlign.Center,
             maxLines = 1
           )
@@ -2006,19 +2047,19 @@ fun TrackRow(
       }
     }
 
-    Spacer(modifier = Modifier.width(12.dp))
+    Spacer(modifier = Modifier.width(10.dp))
 
     Column(
       modifier = Modifier.weight(1f),
-      verticalArrangement = Arrangement.spacedBy(2.dp)
+      verticalArrangement = Arrangement.spacedBy(1.dp)
     ) {
       Text(
         text = track.title,
         style = MaterialTheme.typography.bodyLarge.copy(
           fontFamily = AurixFontFamilies.AurixUiFamily,
-          fontSize = 16.5.sp,
+          fontSize = 14.5.sp,
           fontWeight = if (isCurrentTrack) FontWeight.Bold else FontWeight.Medium,
-          lineHeight = 22.sp
+          lineHeight = 19.sp
         ),
         color = titleColor,
         maxLines = 1,
@@ -2032,8 +2073,8 @@ fun TrackRow(
           text = artistText,
           style = MaterialTheme.typography.bodySmall.copy(
             fontFamily = AurixFontFamilies.AurixUiFamily,
-            fontSize = 13.sp,
-            lineHeight = 18.sp
+            fontSize = 12.sp,
+            lineHeight = 16.sp
           ),
           color = AlbumDesignTokens.DimText,
           maxLines = 1,
@@ -2044,8 +2085,8 @@ fun TrackRow(
           text = " · ",
           style = MaterialTheme.typography.bodySmall.copy(
             fontFamily = AlbumDesignTokens.OutfitFontFamily,
-            fontSize = 13.sp,
-            lineHeight = 18.sp
+            fontSize = 12.sp,
+            lineHeight = 16.sp
           ),
           color = AlbumDesignTokens.DimText,
           maxLines = 1
@@ -2054,8 +2095,8 @@ fun TrackRow(
           text = durationText,
           style = MaterialTheme.typography.bodySmall.copy(
             fontFamily = AlbumDesignTokens.OutfitFontFamily,
-            fontSize = 13.sp,
-            lineHeight = 18.sp
+            fontSize = 12.sp,
+            lineHeight = 16.sp
           ),
           color = AlbumDesignTokens.DimText,
           maxLines = 1
@@ -2063,7 +2104,7 @@ fun TrackRow(
       }
     }
 
-    Spacer(modifier = Modifier.width(6.dp))
+    Spacer(modifier = Modifier.width(4.dp))
 
     Box {
       val menuCd = stringResource(id = R.string.album_track_more_cd, track.title)
@@ -2078,7 +2119,7 @@ fun TrackRow(
           )
           .clickable(
             interactionSource = menuInteraction,
-            indication = ripple(bounded = false, radius = 24.dp, color = AlbumDesignTokens.Text),
+            indication = ripple(bounded = false, radius = 22.dp, color = AlbumDesignTokens.Text),
             role = Role.Button,
             onClickLabel = menuCd,
             onClick = { menuExpanded = true }
@@ -2091,7 +2132,7 @@ fun TrackRow(
           imageVector = Icons.Rounded.MoreVert,
           contentDescription = null,
           tint = AlbumDesignTokens.DimText,
-          modifier = Modifier.size(20.dp)
+          modifier = Modifier.size(18.dp)
         )
       }
 
@@ -2155,14 +2196,14 @@ fun AlbumEqualizerBars(
   }
 
   Row(
-    modifier = modifier.height(15.dp),
-    horizontalArrangement = Arrangement.spacedBy(2.5.dp),
+    modifier = modifier.height(13.dp),
+    horizontalArrangement = Arrangement.spacedBy(2.dp),
     verticalAlignment = Alignment.Bottom
   ) {
     heights.forEach { fraction ->
       Box(
         modifier = Modifier
-          .width(3.dp)
+          .width(2.5.dp)
           .fillMaxHeight(fraction.coerceIn(0.2f, 1f))
           .clip(RoundedCornerShape(1.5.dp))
           .background(color)
