@@ -36,10 +36,6 @@ import com.example.playback.CrossfadeSettings
 import com.example.playback.EqPreset
 import com.example.playback.EqualizerUiState
 import com.example.playback.PlaybackService
-import com.example.recap.RecapData
-import com.example.recap.RecapPeriod
-import com.example.recap.RecapReadyPrompt
-import com.example.recap.RecapRepository
 import com.example.recommendation.*
 import com.example.ui.screens.UpdateLogoState
 import com.example.widget.AurixWidgetController
@@ -1293,17 +1289,6 @@ class AurixViewModel(application: Application) : AndroidViewModel(application) {
   val equalizerState: StateFlow<EqualizerUiState> = AudioEqualizerController.state
   val crossfadeSettings: StateFlow<CrossfadeSettings> = CrossfadeController.state
 
-  private val recapRepository = RecapRepository(dao = dao, prefsManager = prefsManager)
-  private val _recapPeriod = MutableStateFlow(RecapPeriod.MONTHLY)
-  val recapPeriod: StateFlow<RecapPeriod> = _recapPeriod.asStateFlow()
-  private val _recapData = MutableStateFlow<RecapData?>(null)
-  val recapData: StateFlow<RecapData?> = _recapData.asStateFlow()
-  private val _isLoadingRecap = MutableStateFlow(false)
-  val isLoadingRecap: StateFlow<Boolean> = _isLoadingRecap.asStateFlow()
-  private val _recapReadyPrompt = MutableStateFlow<RecapReadyPrompt?>(null)
-  val recapReadyPrompt: StateFlow<RecapReadyPrompt?> = _recapReadyPrompt.asStateFlow()
-  private var recapLoadJob: Job? = null
-
   val smartPlaylists: StateFlow<List<SmartPlaylist>> = combine(
     localSongs,
     favorites,
@@ -1491,8 +1476,6 @@ class AurixViewModel(application: Application) : AndroidViewModel(application) {
             djAutoMixEnabled = djAutoMix
           )
         }
-        val readyPrompt = runCatching { recapRepository.checkRecapReadyPrompt() }.getOrNull()
-        _recapReadyPrompt.value = readyPrompt
         val savedLang = runCatching { prefsManager.language.first() }.getOrDefault("en")
         runCatching { LocaleHelper.saveLanguageSync(application, savedLang) }
         runCatching { prefsManager.onboardingCompleted.first() }
@@ -1507,7 +1490,6 @@ class AurixViewModel(application: Application) : AndroidViewModel(application) {
       }
     }
     observeDjTransitionMetrics()
-    observeRecapInvalidation()
     observeSearchRequests()
     observeDiscoverWeeklyUpdates()
     observeCatalogMetadataSync()
@@ -5356,17 +5338,6 @@ class AurixViewModel(application: Application) : AndroidViewModel(application) {
     }
   }
 
-  private fun observeRecapInvalidation() {
-    viewModelScope.launch {
-      dao.observePlayLogs()
-        .drop(1)
-        .catch { /* ignore */ }
-        .collect {
-          recapRepository.invalidateCache()
-        }
-    }
-  }
-
   fun setDjAutoMixEnabled(enabled: Boolean) {
     CrossfadeController.setDjAutoMixEnabled(enabled)
     safeLaunch(notifyUser = false) {
@@ -5437,44 +5408,6 @@ class AurixViewModel(application: Application) : AndroidViewModel(application) {
         ).show()
       }
     }.onFailure { reportError("DJ Sort Failed", it) }
-  }
-
-  fun openRecap(period: RecapPeriod = _recapPeriod.value) {
-    _recapPeriod.value = period
-    _recapReadyPrompt.value?.let { prompt ->
-      if (prompt.period == period) {
-        _recapReadyPrompt.value = null
-        safeLaunch(notifyUser = false) { recapRepository.markPromptSeen(prompt) }
-      }
-    }
-    loadRecapForPeriod(period, forceRefresh = false)
-  }
-
-  fun selectRecapPeriod(period: RecapPeriod) {
-    _recapPeriod.value = period
-    loadRecapForPeriod(period, forceRefresh = false)
-  }
-
-  fun dismissRecapReadyPrompt() {
-    val prompt = _recapReadyPrompt.value ?: return
-    _recapReadyPrompt.value = null
-    safeLaunch(notifyUser = false) { recapRepository.markPromptSeen(prompt) }
-  }
-
-  private fun loadRecapForPeriod(period: RecapPeriod, forceRefresh: Boolean) {
-    recapLoadJob?.cancel()
-    recapLoadJob = viewModelScope.launch {
-      _isLoadingRecap.value = true
-      try {
-        _recapData.value = recapRepository.getRecap(period = period, forceRefresh = forceRefresh)
-      } catch (ce: CancellationException) {
-        throw ce
-      } catch (_: Throwable) {
-        // Keep previous recap if load fails transiently
-      } finally {
-        _isLoadingRecap.value = false
-      }
-    }
   }
 
   fun setThemeMode(mode: String) {

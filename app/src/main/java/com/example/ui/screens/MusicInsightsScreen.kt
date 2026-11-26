@@ -53,7 +53,6 @@ import coil.compose.AsyncImage
 import com.example.R
 import com.example.model.FeaturedAlbumItem
 import com.example.model.Song
-import com.example.recap.RecapEntryCard
 import com.example.recommendation.*
 
 @Composable
@@ -78,8 +77,6 @@ fun MusicInsightsScreen(
   orbiTopVibeLabel: String = "AURIX",
   onSelectOrbiTheme: (OrbiCompanionTheme) -> Unit = {},
   onSelectOrbiMoodOverride: (OrbiMood?) -> Unit = {},
-  recapPeriodLabel: String? = null,
-  onOpenRecap: () -> Unit = {},
   onBack: () -> Unit,
   onSelectMostPlayedFilter: (MostPlayedFilter) -> Unit,
   onCheckLyrics: (Song) -> Unit,
@@ -156,16 +153,6 @@ fun MusicInsightsScreen(
           )
         }
       }
-    }
-
-    // 0. Your Recap Entry Card at top of Statistics
-    item {
-      RecapEntryCard(
-        periodLabel = recapPeriodLabel,
-        darkTheme = darkTheme,
-        onClick = onOpenRecap,
-        modifier = Modifier.testTag("insights_your_recap_card")
-      )
     }
 
     // 1. Music DNA Card

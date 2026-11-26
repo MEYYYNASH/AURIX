@@ -48,10 +48,6 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.example.R
 import com.example.model.Song
-import com.example.recap.RecapEntryCard
-import com.example.recap.RecapPeriod
-import com.example.recap.RecapReadyPrompt
-import com.example.recap.RecapReadyPromptBanner
 import com.example.recommendation.*
 import com.example.ui.glass.GlassSegmented
 import com.example.ui.glass.LocalAurixHazeState
@@ -125,12 +121,8 @@ fun HomeScreen(
   orbiTheme: OrbiCompanionTheme = OrbiCompanionTheme.CLASSIC,
   orbiBeatEnergy: Float = 0f,
   onOpenOrbiCompanion: () -> Unit = {},
-  recapPeriodLabel: String? = null,
-  recapReadyPrompt: RecapReadyPrompt? = null,
   smartPlaylists: List<SmartPlaylist> = emptyList(),
   djAutoMixEnabled: Boolean = false,
-  onOpenRecap: (RecapPeriod) -> Unit = {},
-  onDismissRecapPrompt: () -> Unit = {},
   onToggleDjAutoMix: (Boolean) -> Unit = {},
   onOpenSmartPlaylist: (SmartPlaylist) -> Unit = {},
   onStartDjMix: (SmartPlaylist) -> Unit = {},
@@ -322,26 +314,6 @@ fun HomeScreen(
             }
           }
         }
-      }
-
-      // Start-of-month / start-of-year "Your recap is ready" prompt
-      if (recapReadyPrompt != null) {
-        item {
-          RecapReadyPromptBanner(
-            prompt = recapReadyPrompt,
-            onOpen = { onOpenRecap(recapReadyPrompt.period) },
-            onDismiss = onDismissRecapPrompt
-          )
-        }
-      }
-
-      // Your Recap Entry Card (Monthly / Yearly Wrapped)
-      item {
-        RecapEntryCard(
-          periodLabel = recapPeriodLabel,
-          darkTheme = darkTheme,
-          onClick = { onOpenRecap(RecapPeriod.MONTHLY) }
-        )
       }
 
       // Continue Listening Instant Resume Banner (shown whenever listening history exists)

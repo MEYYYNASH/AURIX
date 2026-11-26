@@ -432,12 +432,6 @@ interface AurixDao {
   @Query("SELECT * FROM play_logs ORDER BY playedAt DESC")
   fun observePlayLogs(): Flow<List<PlayLogEntity>>
 
-  @Query("SELECT * FROM play_logs ORDER BY playedAt DESC")
-  suspend fun getAllPlayLogsOnce(): List<PlayLogEntity>
-
-  @Query("SELECT * FROM play_history ORDER BY playedAt DESC")
-  suspend fun getPlayHistoryOnce(): List<PlayHistoryEntity>
-
   @Insert(onConflict = OnConflictStrategy.REPLACE)
   suspend fun insertPlayLog(entry: PlayLogEntity): Long
 

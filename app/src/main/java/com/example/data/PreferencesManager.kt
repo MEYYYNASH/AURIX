@@ -104,8 +104,6 @@ class PreferencesManager(private val context: Context) {
     val STANDBY_AUTO_LAUNCH = booleanPreferencesKey("standby_auto_launch")
     val KHMER_LYRICS_FONT = stringPreferencesKey("khmer_lyrics_font")
     val DJ_AUTO_MIX_ENABLED = booleanPreferencesKey("dj_auto_mix_enabled")
-    val LAST_SEEN_RECAP_MONTH = stringPreferencesKey("last_seen_recap_month")
-    val LAST_SEEN_RECAP_YEAR = stringPreferencesKey("last_seen_recap_year")
 
     fun decodeRecentSearches(raw: String?): List<String> {
       if (raw.isNullOrBlank()) return emptyList()
@@ -232,12 +230,6 @@ class PreferencesManager(private val context: Context) {
   }
   val djAutoMixEnabled: Flow<Boolean> = safeDataFlow.map { prefs ->
     prefs[DJ_AUTO_MIX_ENABLED] ?: false
-  }
-  val lastSeenRecapMonth: Flow<String> = safeDataFlow.map { prefs ->
-    prefs[LAST_SEEN_RECAP_MONTH] ?: ""
-  }
-  val lastSeenRecapYear: Flow<String> = safeDataFlow.map { prefs ->
-    prefs[LAST_SEEN_RECAP_YEAR] ?: ""
   }
 
   val widgetCustomizerConfig: Flow<com.example.widget.WidgetCustomizerConfig> = safeDataFlow.map { prefs ->
@@ -554,17 +546,6 @@ class PreferencesManager(private val context: Context) {
   suspend fun setDjAutoMixEnabled(enabled: Boolean) {
     context.dataStore.edit { prefs ->
       prefs[DJ_AUTO_MIX_ENABLED] = enabled
-    }
-  }
-
-  suspend fun markRecapPeriodSeen(isYearly: Boolean, periodKey: String) {
-    if (periodKey.isBlank()) return
-    context.dataStore.edit { prefs ->
-      if (isYearly) {
-        prefs[LAST_SEEN_RECAP_YEAR] = periodKey
-      } else {
-        prefs[LAST_SEEN_RECAP_MONTH] = periodKey
-      }
     }
   }
 }

@@ -60,8 +60,6 @@ import com.example.LocaleHelper
 import com.example.R
 import com.example.data.UpdateStage
 import com.example.model.YoutubeFormatSheetState
-import com.example.recap.RecapPeriod
-import com.example.recap.RecapScreen
 import com.example.recommendation.MoodCategory
 import com.example.ui.glass.LocalAurixHazeState
 import com.example.ui.glass.LocalAurixReducedMotion
@@ -394,11 +392,6 @@ private fun AurixMainShell(
   var showWidgetCustomizer by remember { mutableStateOf(false) }
   var showOrbiCompanionSheet by remember { mutableStateOf(false) }
   var showAmbientStandby by remember { mutableStateOf(false) }
-  var showRecapViewer by remember { mutableStateOf(false) }
-  val recapPeriod by viewModel.recapPeriod.collectAsStateWithLifecycle()
-  val recapData by viewModel.recapData.collectAsStateWithLifecycle()
-  val isLoadingRecap by viewModel.isLoadingRecap.collectAsStateWithLifecycle()
-  val recapReadyPrompt by viewModel.recapReadyPrompt.collectAsStateWithLifecycle()
   val smartPlaylists by viewModel.smartPlaylists.collectAsStateWithLifecycle()
   var orbiMoodOverride by remember { mutableStateOf<OrbiMood?>(null) }
   var isLibraryCreateAlbumOpen by remember { mutableStateOf(false) }
@@ -853,15 +846,8 @@ private fun AurixMainShell(
               orbiTheme = activeOrbiTheme,
               orbiBeatEnergy = orbiBeatEnergy,
               onOpenOrbiCompanion = { showOrbiCompanionSheet = true },
-              recapPeriodLabel = recapData?.label,
-              recapReadyPrompt = recapReadyPrompt,
               smartPlaylists = smartPlaylists,
               djAutoMixEnabled = crossfadeSettings.djAutoMixEnabled,
-              onOpenRecap = { period ->
-                viewModel.openRecap(period)
-                showRecapViewer = true
-              },
-              onDismissRecapPrompt = { viewModel.dismissRecapReadyPrompt() },
               onToggleDjAutoMix = { enabled -> viewModel.setDjAutoMixEnabled(enabled) },
               onOpenSmartPlaylist = { sp -> currentScreen = Screen.PlaylistDetail(sp.id) },
               onStartDjMix = { sp -> viewModel.playSmartPlaylist(sp, enableDjMix = true) },
@@ -890,11 +876,6 @@ private fun AurixMainShell(
                 orbiTopVibeLabel = orbiTopVibeLabel,
                 onSelectOrbiTheme = { theme -> viewModel.setOrbiCompanionTheme(theme.id) },
                 onSelectOrbiMoodOverride = { overrideMood -> orbiMoodOverride = overrideMood },
-                recapPeriodLabel = recapData?.label,
-                onOpenRecap = {
-                  viewModel.openRecap(RecapPeriod.MONTHLY)
-                  showRecapViewer = true
-                },
                 onBack = { currentScreen = Screen.Home },
                 onSelectMostPlayedFilter = { viewModel.setMostPlayedFilter(it) },
                 onCheckLyrics = { viewModel.ensureLyricsVerified(it) },
@@ -1759,17 +1740,6 @@ private fun AurixMainShell(
             autoStandbyDismissedForSession = true
             showAmbientStandby = false
           }
-        )
-      }
-
-      if (showRecapViewer) {
-        RecapScreen(
-          recapData = recapData,
-          selectedPeriod = recapPeriod,
-          isLoading = isLoadingRecap,
-          reducedMotion = reducedMotion,
-          onSelectPeriod = { period -> viewModel.selectRecapPeriod(period) },
-          onClose = { showRecapViewer = false }
         )
       }
 
