@@ -27,6 +27,19 @@ val Context.dataStore by preferencesDataStore(
 )
 
 class PreferencesManager(private val context: Context) {
+  private val onboardingSyncPrefs by lazy {
+    context.getSharedPreferences("aurix_onboarding_sync", Context.MODE_PRIVATE)
+  }
+
+  fun isOnboardingCompletedSync(): Boolean =
+    runCatching { onboardingSyncPrefs.getBoolean("onboarding_completed", false) }.getOrDefault(false)
+
+  fun setOnboardingCompletedSync(completed: Boolean) {
+    runCatching {
+      onboardingSyncPrefs.edit().putBoolean("onboarding_completed", completed).apply()
+    }
+  }
+
   companion object {
     const val DEFAULT_DYNAMIC_BG_DIM = 0.40f
     const val DEFAULT_DYNAMIC_BG_GLASS = 0.50f
@@ -297,7 +310,10 @@ class PreferencesManager(private val context: Context) {
     }
   }
   suspend fun setReducedMotion(enabled: Boolean) { context.dataStore.edit { it[REDUCED_MOTION] = enabled } }
-  suspend fun setOnboardingCompleted(completed: Boolean) { context.dataStore.edit { it[ONBOARDING_COMPLETED] = completed } }
+  suspend fun setOnboardingCompleted(completed: Boolean) {
+    setOnboardingCompletedSync(completed)
+    context.dataStore.edit { it[ONBOARDING_COMPLETED] = completed }
+  }
   suspend fun setGithubOwner(owner: String) { context.dataStore.edit { it[GITHUB_OWNER] = owner } }
   suspend fun setGithubRepo(repo: String) { context.dataStore.edit { it[GITHUB_REPO] = repo } }
   suspend fun setNavStyle(style: String) { context.dataStore.edit { it[NAV_STYLE] = style } }

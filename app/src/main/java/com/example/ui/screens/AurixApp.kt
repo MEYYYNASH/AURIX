@@ -173,15 +173,19 @@ private fun AurixAppContent(
         .background(MaterialTheme.colorScheme.background)
     ) {
       var onboardingSessionActive by remember { mutableStateOf(false) }
-      LaunchedEffect(isAppInitialized, onboardingCompleted) {
-        if (isAppInitialized && !onboardingCompleted) {
-          onboardingSessionActive = true
+      var onboardingGateEvaluated by remember { mutableStateOf(false) }
+      LaunchedEffect(isAppInitialized) {
+        if (isAppInitialized && !onboardingGateEvaluated) {
+          onboardingGateEvaluated = true
+          if (!onboardingCompleted) {
+            onboardingSessionActive = true
+          }
         }
       }
 
       if (!isAppInitialized) {
         Box(modifier = Modifier.fillMaxSize())
-      } else if (!onboardingCompleted || onboardingSessionActive) {
+      } else if (onboardingSessionActive || !onboardingCompleted) {
         val onboardingDim by viewModel.dynamicBgDim.collectAsStateWithLifecycle()
         val onboardingLocalSongs by viewModel.localSongs.collectAsStateWithLifecycle()
         val onboardingLyrics by viewModel.lyrics.collectAsStateWithLifecycle()

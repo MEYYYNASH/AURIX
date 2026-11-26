@@ -236,6 +236,8 @@
     <string name="onboarding_backdrop_aurora">Aurora</string>
     <string name="onboarding_backdrop_midnight">Midnight</string>
     <string name="onboarding_backdrop_minimal">Minimal</string>
+    <string name="onboarding_another_song">Another song</string>
+    <string name="onboarding_syncing_lyrics">Syncing real lyrics…</string>
     <string name="onboarding_lang_en">EN</string>
     <string name="onboarding_lang_km">ខ្មែរ</string>
     <string name="album_nav_label">Album</string>

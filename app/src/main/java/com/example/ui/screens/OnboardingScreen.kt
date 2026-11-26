@@ -69,6 +69,7 @@ import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.input.pointer.positionChange
 import androidx.compose.ui.layout.onGloballyPositioned
 import androidx.compose.ui.layout.positionInRoot
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.res.stringResource
@@ -88,12 +89,12 @@ import com.example.model.Song
 import com.example.ui.screens.onboarding.OnboardingArrowLeftIcon
 import com.example.ui.screens.onboarding.OnboardingArrowRightIcon
 import com.example.ui.screens.onboarding.OnboardingDemoAudioEngine
+import com.example.ui.screens.onboarding.OnboardingShowcaseRepository
 import com.example.ui.screens.onboarding.OnboardingSlide1Stage
 import com.example.ui.screens.onboarding.OnboardingSlide2Stage
 import com.example.ui.screens.onboarding.OnboardingSlide3Stage
 import com.example.ui.screens.onboarding.OnboardingSlide4Stage
 import com.example.ui.screens.onboarding.OnboardingSwipePhysics
-import com.example.ui.screens.onboarding.extractLocalAudioFormatBadge
 import com.example.ui.screens.onboarding.onboardingFocusRing
 import com.example.ui.screens.onboarding.onboardingGlass
 import com.example.ui.theme.AurixDesignTokens
@@ -161,19 +162,69 @@ fun OnboardingScreen(
     slideReplaySeeds = nextSeeds
   }
 
+  val context = LocalContext.current
+  val onPhoneLabel = stringResource(id = R.string.onboarding_location)
+
+  // Live random real-song showcase (real song + matching YouTube/phone search + real synced LRCLIB lyrics)
+  var showcaseTrack by remember {
+    mutableStateOf(
+      OnboardingShowcaseRepository.buildInitialRandomShowcase(
+        localSongs = localSongs,
+        onPhoneLabel = onPhoneLabel
+      )
+    )
+  }
+  var isLoadingShowcase by remember { mutableStateOf(true) }
+  var shuffleRequestCount by remember { mutableIntStateOf(0) }
+
+  LaunchedEffect(shuffleRequestCount) {
+    isLoadingShowcase = true
+    val excludeKey = if (shuffleRequestCount > 0) showcaseTrack.seedKey else null
+    val initialPick = if (shuffleRequestCount > 0) {
+      OnboardingShowcaseRepository.buildInitialRandomShowcase(
+        localSongs = localSongs,
+        onPhoneLabel = onPhoneLabel,
+        excludeSeedKey = excludeKey
+      ).also { showcaseTrack = it }
+    } else {
+      showcaseTrack
+    }
+    val liveTrack = OnboardingShowcaseRepository.loadLiveRandomShowcase(
+      context = context,
+      localSongs = localSongs,
+      onPhoneLabel = onPhoneLabel,
+      excludeSeedKey = excludeKey,
+      preferredInitial = initialPick
+    )
+    showcaseTrack = liveTrack
+    isLoadingShowcase = false
+  }
+
+  // Keep local row subtitle updated immediately when user toggles EN / Khmer
+  LaunchedEffect(onPhoneLabel) {
+    val updatedRows = showcaseTrack.searchRows.map { row ->
+      if (row.isLocal) {
+        val artistPrefix = row.subtitle.substringBefore(" · ")
+        row.copy(subtitle = "$artistPrefix · $onPhoneLabel")
+      } else {
+        row
+      }
+    }
+    if (updatedRows != showcaseTrack.searchRows) {
+      showcaseTrack = showcaseTrack.copy(searchRows = updatedRows)
+    }
+  }
+
   // Shared Audio + Lyric Sync engine for Slide 2 (released cleanly on exit)
   val audioEngine = remember(audioSrc) { OnboardingDemoAudioEngine(audioSrc = audioSrc) }
   DisposableEffect(audioEngine) {
     onDispose { audioEngine.release() }
   }
-  val demoLyrics = remember(liveLyricsResult) {
-    if (liveLyricsResult?.synced?.isNotEmpty() == true) {
-      OnboardingDemoAudioEngine.fromRealLyrics(liveLyricsResult)
-    } else {
-      OnboardingDemoAudioEngine.DEFAULT_LYRICS
-    }
+
+  fun shuffleShowcaseSong() {
+    audioEngine.stop()
+    shuffleRequestCount++
   }
-  val localBadge = remember(localSongs) { extractLocalAudioFormatBadge(localSongs.firstOrNull()) }
 
   // Pager state: smooth 0.6s main easing when settling, instant finger follow when dragging
   val animatedPageOffset = remember { Animatable(0f) }
@@ -520,26 +571,31 @@ fun OnboardingScreen(
                 0 -> OnboardingSlide1Stage(
                   isActive = isCurrent && !isFinishing,
                   replaySeed = slideReplaySeeds[0],
+                  showcase = showcaseTrack,
+                  isLoadingShowcase = isLoadingShowcase,
                   accentColor = animatedAccentA,
                   fontFamily = fontFamily,
                   hazeState = hazeState,
                   isCompactHeight = isCompactHeight,
                   isTallScreen = isTallScreen,
                   reducedMotion = reducedMotion,
-                  localFormatBadge = localBadge
+                  onShuffleSong = { shuffleShowcaseSong() }
                 )
                 1 -> OnboardingSlide2Stage(
                   isActive = isCurrent && !isFinishing,
                   replaySeed = slideReplaySeeds[1],
+                  showcase = showcaseTrack,
+                  isLoadingShowcase = isLoadingShowcase,
                   accentColor = animatedAccentA,
                   fontFamily = fontFamily,
                   hazeState = hazeState,
                   reducedMotion = reducedMotion,
-                  lyrics = demoLyrics,
-                  audioEngine = audioEngine
+                  audioEngine = audioEngine,
+                  onShuffleSong = { shuffleShowcaseSong() }
                 )
                 2 -> OnboardingSlide3Stage(
                   isActive = isCurrent && !isFinishing,
+                  showcase = showcaseTrack,
                   accentColor = animatedAccentA,
                   selectedPreset = selectedAccentPreset,
                   selectedBackdrop = selectedBackdrop,
@@ -565,6 +621,7 @@ fun OnboardingScreen(
                 3 -> OnboardingSlide4Stage(
                   isActive = isCurrent && !isFinishing,
                   replaySeed = slideReplaySeeds[3],
+                  showcase = showcaseTrack,
                   accentColor = animatedAccentA,
                   fontFamily = fontFamily,
                   hazeState = hazeState,

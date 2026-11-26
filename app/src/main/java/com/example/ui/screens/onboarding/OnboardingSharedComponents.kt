@@ -49,16 +49,24 @@ import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.graphics.drawscope.rotate
 import androidx.compose.ui.graphics.drawscope.withTransform
 import androidx.compose.ui.graphics.graphicsLayer
+import androidx.compose.foundation.layout.BoxScope
+import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
+import coil.compose.AsyncImage
 import com.example.model.Song
+import com.example.ui.image.AurixImagePipeline
+import com.example.ui.image.rememberCrispArtworkRequest
 import com.example.ui.theme.AurixDesignTokens
 import dev.chrisbanes.haze.HazeState
 import dev.chrisbanes.haze.HazeStyle
 import dev.chrisbanes.haze.HazeTint
 import dev.chrisbanes.haze.hazeChild
 import kotlinx.coroutines.launch
+import kotlin.math.PI
 import kotlin.math.abs
+import kotlin.math.cos
+import kotlin.math.sin
 
 /**
  * Pure swipe physics helpers matching Section 5:
@@ -89,6 +97,38 @@ object OnboardingSwipePhysics {
       rawDragPx <= -threshold && currentIndex < pageCount - 1 -> currentIndex + 1
       rawDragPx >= threshold && currentIndex > 0 -> currentIndex - 1
       else -> currentIndex
+    }
+  }
+}
+
+/**
+ * Renders real album artwork via Coil over a smooth HSL gradient fallback so covers stay vivid
+ * immediately on frame 1 and upgrade seamlessly as real thumbnails load.
+ */
+@Composable
+fun OnboardingArtworkBox(
+  artworkUrl: String?,
+  baseHue: Float,
+  contentDescription: String?,
+  modifier: Modifier = Modifier,
+  fallbackContent: @Composable BoxScope.() -> Unit = {}
+) {
+  Box(
+    modifier = modifier.background(AurixDesignTokens.coverGradientBrush(baseHue)),
+    contentAlignment = Alignment.Center
+  ) {
+    fallbackContent()
+    val url = artworkUrl?.trim().orEmpty()
+    if (url.isNotEmpty()) {
+      val request = rememberCrispArtworkRequest(model = url, crossfade = true)
+      AsyncImage(
+        model = request,
+        contentDescription = contentDescription,
+        contentScale = ContentScale.Crop,
+        alignment = Alignment.Center,
+        filterQuality = AurixImagePipeline.ARTWORK_FILTER_QUALITY,
+        modifier = Modifier.fillMaxSize()
+      )
     }
   }
 }
@@ -219,18 +259,22 @@ fun OnboardingEqualizer(
 }
 
 /**
- * Pixel-faithful Orbi Mascot (viewBox 120x120) matching Section 4 Slide 4:
+ * Pixel-faithful animated Orbi Mascot (viewBox 120x120) with a rotating Saturn-style ring:
  * - Light sphere (60, 62) r=30 radial gradient #FFFFFF -> #CFD8EA
- * - Two dark eyes #0B1220 ellipses rx=3.4 ry=4.6 at (50, 56) & (68, 56) blinking every 4s (scaleY 0.1 at 97%)
- * - Tilted (-15 deg) Saturn ring (46x12 ellipse, stroke #3B475C, width 5, round caps): back half behind, front half in front
- * - Headphones: cyan #43C7F4 arc r=31 from (29, 62) to (91, 62) stroke 5 + two ear cups (9x17, r=4 at x=23 & x=88, y=56)
- * - Entrance: scale 0.4 + rotate -25deg -> normal (1000ms SpringEasing), then floats up/down 7dp (3600ms loop).
+ * - Two dark eyes #0B1220 ellipses rx=3.4 ry=4.6 at (50, 56) & (68, 56) with crisp highlights,
+ *   blinking every 4s (scaleY 0.1 at 97%)
+ * - Animated rotating Saturn-style ring (-15 deg tilt with gentle ±3.5 deg 3D precession):
+ *   back half + back orbital highlight/satellite drawn behind the sphere; front half + luminous
+ *   accent/violet sweep + glowing orbiting satellite drawn in front of the sphere (4.8s continuous orbit)
+ * - Headphones: accent-tinted cyan arc r=31 from (29, 62) to (91, 62) stroke 5 + two ear cups (9x17, r=4)
+ * - Entrance: scale 0.4 + rotate -25deg -> normal (1000ms SpringEasing), then floats ±7dp (3600ms loop).
  */
 @Composable
 fun OnboardingOrbiMascot(
   isActive: Boolean,
   reducedMotion: Boolean,
   replaySeed: Int,
+  accentColor: Color = AurixDesignTokens.AccentADefault,
   modifier: Modifier = Modifier
 ) {
   val enterScale = remember { Animatable(if (reducedMotion) 1f else 0.4f) }
@@ -289,6 +333,26 @@ fun OnboardingOrbiMascot(
     ),
     label = "orbi_blink"
   )
+  // Continuous 360-degree orbital phase driving the rotating Saturn-style ring shimmer & orbiting sparks
+  val saturnOrbitAngleState = loopTransition?.animateFloat(
+    initialValue = 0f,
+    targetValue = 360f,
+    animationSpec = infiniteRepeatable(
+      animation = tween(durationMillis = 4800, easing = LinearEasing),
+      repeatMode = RepeatMode.Restart
+    ),
+    label = "orbi_saturn_orbit"
+  )
+  // Subtle 3D tilt precession (-18.5deg <-> -11.5deg) around the classic -15deg Saturn inclination
+  val saturnTiltState = loopTransition?.animateFloat(
+    initialValue = -18.5f,
+    targetValue = -11.5f,
+    animationSpec = infiniteRepeatable(
+      animation = tween(durationMillis = 2600, easing = FastOutSlowInEasing),
+      repeatMode = RepeatMode.Reverse
+    ),
+    label = "orbi_saturn_tilt"
+  )
 
   Canvas(
     modifier = modifier.graphicsLayer {
@@ -308,19 +372,48 @@ fun OnboardingOrbiMascot(
     fun px(x: Float) = ox + x * u
     fun py(y: Float) = oy + y * u
 
+    val center = Offset(px(60f), py(62f))
+    val ringRx = 47f * u
+    val ringRy = 13f * u
     val ringRect = Rect(
-      left = px(60f - 46f),
-      top = py(62f - 12f),
-      right = px(60f + 46f),
-      bottom = py(62f + 12f)
+      left = center.x - ringRx,
+      top = center.y - ringRy,
+      right = center.x + ringRx,
+      bottom = center.y + ringRy
     )
     val ringStroke = Stroke(width = 5f * u, cap = StrokeCap.Round)
-    val ringColor = Color(0xFF3B475C)
+    val ringHighlightStroke = Stroke(width = 2.6f * u, cap = StrokeCap.Round)
+    val ringBaseColor = Color(0xFF3B475C)
+    val tiltDeg = saturnTiltState?.value ?: -15f
+    val orbitDeg = saturnOrbitAngleState?.value ?: 38f
+    val orbitRad = orbitDeg * (PI / 180.0)
+    val secondOrbitRad = ((orbitDeg + 180f) % 360f) * (PI / 180.0)
 
-    // 1) Back half of tilted (-15deg) Saturn ring (180..360 deg = top/back arc)
-    rotate(degrees = -15f, pivot = Offset(px(60f), py(62f))) {
+    // Helper: point along the unrotated ring ellipse in canvas coordinates (drawn inside rotate(tiltDeg))
+    fun ellipsePoint(rad: Double): Offset = Offset(
+      x = center.x + (cos(rad) * ringRx).toFloat(),
+      y = center.y + (sin(rad) * ringRy).toFloat()
+    )
+
+    // Animated ring shimmer brush sweeping around the ellipse as orbitDeg advances
+    val sweepStart = ellipsePoint(orbitRad - 0.85)
+    val sweepEnd = ellipsePoint(orbitRad + 0.85)
+    val rotatingRingBrush = Brush.linearGradient(
+      colors = listOf(
+        ringBaseColor,
+        accentColor.copy(alpha = 0.88f),
+        Color.White.copy(alpha = 0.92f),
+        AurixDesignTokens.AccentB.copy(alpha = 0.82f),
+        ringBaseColor
+      ),
+      start = sweepStart,
+      end = sweepEnd
+    )
+
+    // 1) BACK HALF of rotating tilted Saturn ring (180..360 deg = top/back arc behind sphere)
+    rotate(degrees = tiltDeg, pivot = center) {
       drawArc(
-        color = ringColor,
+        color = ringBaseColor.copy(alpha = 0.78f),
         startAngle = 180f,
         sweepAngle = 180f,
         useCenter = false,
@@ -328,20 +421,41 @@ fun OnboardingOrbiMascot(
         size = ringRect.size,
         style = ringStroke
       )
+      drawArc(
+        brush = rotatingRingBrush,
+        startAngle = 180f,
+        sweepAngle = 180f,
+        useCenter = false,
+        topLeft = ringRect.topLeft,
+        size = ringRect.size,
+        style = ringHighlightStroke,
+        alpha = 0.65f
+      )
+      // Orbiting satellite beads when passing behind Orbi (sin < 0)
+      if (sin(orbitRad) < 0.0) {
+        val pt = ellipsePoint(orbitRad)
+        drawCircle(color = accentColor.copy(alpha = 0.32f), radius = 6.2f * u, center = pt)
+        drawCircle(color = Color.White.copy(alpha = 0.72f), radius = 2.6f * u, center = pt)
+      }
+      if (sin(secondOrbitRad) < 0.0) {
+        val pt2 = ellipsePoint(secondOrbitRad)
+        drawCircle(color = AurixDesignTokens.AccentB.copy(alpha = 0.28f), radius = 4.6f * u, center = pt2)
+        drawCircle(color = AurixDesignTokens.AccentB.copy(alpha = 0.85f), radius = 2.0f * u, center = pt2)
+      }
     }
 
     // 2) Light sphere: center (60, 62), r=30, radial gradient #FFFFFF -> #CFD8EA
     drawCircle(
       brush = Brush.radialGradient(
-        colors = listOf(Color(0xFFFFFFFF), Color(0xFFCFD8EA)),
-        center = Offset(px(52f), py(50f)),
+        colors = listOf(Color(0xFFFFFFFF), Color(0xFFE7EEF9), Color(0xFFCFD8EA)),
+        center = Offset(px(51f), py(49f)),
         radius = 40f * u
       ),
       radius = 30f * u,
-      center = Offset(px(60f), py(62f))
+      center = center
     )
 
-    // 3) Eyes #0B1220: ellipses rx=3.4 ry=4.6 at (50, 56) & (68, 56), blinking every 4s
+    // 3) Eyes #0B1220: ellipses rx=3.4 ry=4.6 at (50, 56) & (68, 56) + specular highlight, blinking every 4s
     val blinkY = eyeBlinkScaleYState?.value ?: 1f
     val eyeColor = Color(0xFF0B1220)
     val eyeRx = 3.4f * u
@@ -356,11 +470,34 @@ fun OnboardingOrbiMascot(
       topLeft = Offset(px(68f) - eyeRx, py(56f) - eyeRy),
       size = Size(eyeRx * 2f, eyeRy * 2f)
     )
+    if (blinkY > 0.45f) {
+      drawCircle(
+        color = Color.White.copy(alpha = 0.92f),
+        radius = 1.15f * u,
+        center = Offset(px(48.9f), py(54.2f))
+      )
+      drawCircle(
+        color = Color.White.copy(alpha = 0.92f),
+        radius = 1.15f * u,
+        center = Offset(px(66.9f), py(54.2f))
+      )
+    }
 
-    // 4) Front half of tilted (-15deg) Saturn ring (0..180 deg = bottom/front arc)
-    rotate(degrees = -15f, pivot = Offset(px(60f), py(62f))) {
+    // 4) FRONT HALF of rotating tilted Saturn ring (0..180 deg = bottom/front arc in front of sphere)
+    rotate(degrees = tiltDeg, pivot = center) {
+      // Soft glow under front ring arc
       drawArc(
-        color = ringColor,
+        brush = rotatingRingBrush,
+        startAngle = 0f,
+        sweepAngle = 180f,
+        useCenter = false,
+        topLeft = ringRect.topLeft,
+        size = ringRect.size,
+        style = Stroke(width = 7.2f * u, cap = StrokeCap.Round),
+        alpha = 0.24f
+      )
+      drawArc(
+        color = ringBaseColor,
         startAngle = 0f,
         sweepAngle = 180f,
         useCenter = false,
@@ -368,10 +505,31 @@ fun OnboardingOrbiMascot(
         size = ringRect.size,
         style = ringStroke
       )
+      drawArc(
+        brush = rotatingRingBrush,
+        startAngle = 0f,
+        sweepAngle = 180f,
+        useCenter = false,
+        topLeft = ringRect.topLeft,
+        size = ringRect.size,
+        style = ringHighlightStroke
+      )
+      // Glowing orbital beads + mini comet tail passing in front of Orbi (sin >= 0)
+      if (sin(orbitRad) >= 0.0) {
+        val tailPt = ellipsePoint(orbitRad - 0.16)
+        val pt = ellipsePoint(orbitRad)
+        drawCircle(color = accentColor.copy(alpha = 0.26f), radius = 4.2f * u, center = tailPt)
+        drawCircle(color = accentColor.copy(alpha = 0.42f), radius = 7.6f * u, center = pt)
+        drawCircle(color = Color.White, radius = 3.2f * u, center = pt)
+      }
+      if (sin(secondOrbitRad) >= 0.0) {
+        val pt2 = ellipsePoint(secondOrbitRad)
+        drawCircle(color = AurixDesignTokens.AccentB.copy(alpha = 0.36f), radius = 5.8f * u, center = pt2)
+        drawCircle(color = Color.White.copy(alpha = 0.92f), radius = 2.3f * u, center = pt2)
+      }
     }
 
-    // 5) Headphones: cyan #43C7F4 band arc r=31 from (29, 62) to (91, 62), stroke 5 + 2 ear cups (9x17 r=4 at x=23 & x=88, y=56)
-    val headphoneColor = Color(0xFF43C7F4)
+    // 5) Headphones: accent-tinted arc r=31 from (29, 62) to (91, 62), stroke 5 + 2 ear cups (9x17 r=4 at x=23 & x=88, y=56)
     val bandRect = Rect(
       left = px(60f - 31f),
       top = py(62f - 31f),
@@ -379,7 +537,7 @@ fun OnboardingOrbiMascot(
       bottom = py(62f + 31f)
     )
     drawArc(
-      color = headphoneColor,
+      color = accentColor,
       startAngle = 180f,
       sweepAngle = 180f,
       useCenter = false,
@@ -390,13 +548,13 @@ fun OnboardingOrbiMascot(
     val cupRadius = CornerRadius(4f * u, 4f * u)
     val cupSize = Size(9f * u, 17f * u)
     drawRoundRect(
-      color = headphoneColor,
+      color = accentColor,
       topLeft = Offset(px(23f), py(56f)),
       size = cupSize,
       cornerRadius = cupRadius
     )
     drawRoundRect(
-      color = headphoneColor,
+      color = accentColor,
       topLeft = Offset(px(88f), py(56f)),
       size = cupSize,
       cornerRadius = cupRadius

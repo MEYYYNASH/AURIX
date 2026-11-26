@@ -323,13 +323,19 @@ class OnboardingDemoAudioEngine(
     private set
 
   /**
-   * Starts audio playback (opt-in only). Returns true if started, false if unavailable/failed.
+   * Starts audio playback (opt-in only). Plays [overrideAudioSrc] or [audioSrc] via [MediaPlayer]
+   * when available (supporting local files, content:// URIs, and extracted YouTube audio streams
+   * with User-Agent headers), falling back seamlessly to the procedural synth loop if offline/unavailable.
    */
-  fun start(initialTimeSec: Float = 0f): Boolean {
+  fun start(
+    initialTimeSec: Float = 0f,
+    overrideAudioSrc: String? = null,
+    context: android.content.Context? = null
+  ): Boolean {
     stop()
-    val customSrc = audioSrc?.trim().orEmpty()
+    val customSrc = (overrideAudioSrc ?: audioSrc)?.trim().orEmpty()
     if (customSrc.isNotEmpty()) {
-      return runCatching {
+      val startedReal = runCatching {
         val mp = MediaPlayer().apply {
           setAudioAttributes(
             AudioAttributes.Builder()
@@ -337,7 +343,18 @@ class OnboardingDemoAudioEngine(
               .setContentType(AudioAttributes.CONTENT_TYPE_MUSIC)
               .build()
           )
-          setDataSource(customSrc)
+          if (customSrc.startsWith("content://") && context != null) {
+            setDataSource(context, android.net.Uri.parse(customSrc))
+          } else if (customSrc.startsWith("http") && context != null) {
+            val ua = com.example.data.StreamHeaderRegistry.resolveUserAgent(customSrc)
+            if (!ua.isNullOrBlank()) {
+              setDataSource(context, android.net.Uri.parse(customSrc), mapOf("User-Agent" to ua))
+            } else {
+              setDataSource(customSrc)
+            }
+          } else {
+            setDataSource(customSrc)
+          }
           isLooping = true
           prepare()
           val durSec = (duration / 1000f).coerceAtLeast(1f)
@@ -353,6 +370,7 @@ class OnboardingDemoAudioEngine(
         stop()
         false
       }
+      if (startedReal) return true
     }
 
     return runCatching {

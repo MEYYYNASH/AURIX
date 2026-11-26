@@ -5,6 +5,7 @@ import androidx.compose.animation.core.Animatable
 import androidx.compose.animation.core.FastOutSlowInEasing
 import androidx.compose.animation.core.LinearEasing
 import androidx.compose.animation.core.RepeatMode
+import androidx.compose.animation.core.StartOffset
 import androidx.compose.animation.core.animateFloat
 import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.animation.core.infiniteRepeatable
@@ -33,8 +34,10 @@ import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.rounded.PlayArrow
+import androidx.compose.material.icons.rounded.Shuffle
 import androidx.compose.material.icons.rounded.SkipNext
 import androidx.compose.material.icons.rounded.SkipPrevious
+import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.Icon
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
@@ -45,6 +48,7 @@ import androidx.compose.runtime.mutableFloatStateOf
 import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.runtime.withFrameNanos
 import androidx.compose.ui.Alignment
@@ -53,7 +57,6 @@ import androidx.compose.ui.draw.blur
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.draw.drawWithContent
 import androidx.compose.ui.draw.shadow
-import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.BlendMode
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
@@ -62,6 +65,7 @@ import androidx.compose.ui.graphics.PathEffect
 import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.graphics.drawscope.clipRect
 import androidx.compose.ui.graphics.graphicsLayer
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.semantics.Role
@@ -78,49 +82,50 @@ import androidx.compose.ui.unit.sp
 import com.example.R
 import com.example.ui.theme.AurixDesignTokens
 import dev.chrisbanes.haze.HazeState
+import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
-
-private data class Slide1DemoRow(
-  val title: String,
-  val subtitle: String,
-  val badge: String,
-  val baseHue: Float
-)
+import kotlinx.coroutines.withContext
+import kotlin.math.PI
+import kotlin.math.sin
 
 /**
  * SLIDE 1 — "All your music. One place."
- * Animated YouTube + local phone library search demo with exact timings:
- * - Types "Hong" starting at 500ms, 190ms/char + blinking 2dp accent caret
- * - 3 rows fade/slide in (translateY 16 -> 0, scale 0.97 -> 1, 550ms) at 1.4s, 1.6s, 1.8s
+ * Real song YouTube + phone search demo matching [showcase]:
+ * - Types [showcase.searchQuery] starting at 500ms, 190ms/char + blinking 2dp accent caret
+ * - 3 matching rows fade/slide in (translateY 16 -> 0, scale 0.97 -> 1, 550ms) at 1.4s, 1.6s, 1.8s
  * - Row 1 picked at 2.5s (fill .10, accent border, scale 1.02, glow; others opacity .4, blur 2.5dp)
- * - Mini-player rises at 3.1s with 34dp cover & 4-bar equalizer
+ * - Mini-player rises at 3.1s with the exact same real song cover & 4-bar equalizer
  */
 @Composable
 fun OnboardingSlide1Stage(
   isActive: Boolean,
   replaySeed: Int,
+  showcase: OnboardingShowcaseTrack,
+  isLoadingShowcase: Boolean,
   accentColor: Color,
   fontFamily: FontFamily,
   hazeState: HazeState?,
   isCompactHeight: Boolean,
   isTallScreen: Boolean,
   reducedMotion: Boolean,
-  localFormatBadge: String,
+  onShuffleSong: () -> Unit,
   modifier: Modifier = Modifier
 ) {
-  val targetQuery = "Hong"
-  val onPhoneLabel = stringResource(id = R.string.onboarding_location)
+  val targetQuery = showcase.searchQuery.ifBlank { "Music" }
   val demoCaption = stringResource(id = R.string.onboarding_demo)
+  val shuffleLabel = stringResource(id = R.string.onboarding_another_song)
 
-  var typedCount by remember { mutableIntStateOf(if (reducedMotion) targetQuery.length else 0) }
-  var row1Visible by remember { mutableStateOf(reducedMotion) }
-  var row2Visible by remember { mutableStateOf(reducedMotion) }
-  var row3Visible by remember { mutableStateOf(reducedMotion) }
-  var row1Picked by remember { mutableStateOf(reducedMotion) }
-  var miniPlayerVisible by remember { mutableStateOf(reducedMotion) }
+  var typedCount by remember(showcase.seedKey) {
+    mutableIntStateOf(if (reducedMotion) targetQuery.length else 0)
+  }
+  var row1Visible by remember(showcase.seedKey) { mutableStateOf(reducedMotion) }
+  var row2Visible by remember(showcase.seedKey) { mutableStateOf(reducedMotion) }
+  var row3Visible by remember(showcase.seedKey) { mutableStateOf(reducedMotion) }
+  var row1Picked by remember(showcase.seedKey) { mutableStateOf(reducedMotion) }
+  var miniPlayerVisible by remember(showcase.seedKey) { mutableStateOf(reducedMotion) }
 
-  LaunchedEffect(isActive, replaySeed, reducedMotion) {
+  LaunchedEffect(isActive, replaySeed, showcase.seedKey, reducedMotion) {
     if (!isActive) return@LaunchedEffect
     if (reducedMotion) {
       typedCount = targetQuery.length
@@ -138,12 +143,12 @@ fun OnboardingSlide1Stage(
     row1Picked = false
     miniPlayerVisible = false
 
-    // Timeline anchored cleanly from 0ms when slide becomes active
+    val charDelayMs = if (targetQuery.length > 7) 135L else 190L
     launch {
       delay(500L)
       for (i in 1..targetQuery.length) {
         typedCount = i
-        if (i < targetQuery.length) delay(190L)
+        if (i < targetQuery.length) delay(charDelayMs)
       }
     }
     launch { delay(1400L); row1Visible = true }
@@ -168,13 +173,7 @@ fun OnboardingSlide1Stage(
     label = "slide1_caret_alpha"
   )
 
-  val rows = remember(onPhoneLabel, localFormatBadge) {
-    listOf(
-      Slide1DemoRow("Hong Kong", "The Weeknd · YouTube", "HD", 160f),
-      Slide1DemoRow("Hong Kong Nights", "Kora Vale · YouTube", "HD", 20f),
-      Slide1DemoRow("Hong Kong", "The Weeknd · $onPhoneLabel", localFormatBadge, 290f)
-    )
-  }
+  val rows = showcase.searchRows
   val visibleFlags = listOf(row1Visible, row2Visible, row3Visible)
   val rowGap = if (isTallScreen) 10.dp else 7.dp
 
@@ -202,14 +201,18 @@ fun OnboardingSlide1Stage(
       horizontalArrangement = Arrangement.spacedBy(10.dp)
     ) {
       OnboardingMagnifierIcon(color = AurixDesignTokens.TextMuted, modifier = Modifier.size(18.dp))
-      Row(verticalAlignment = Alignment.CenterVertically) {
+      Row(
+        modifier = Modifier.weight(1f),
+        verticalAlignment = Alignment.CenterVertically
+      ) {
         Text(
-          text = targetQuery.take(typedCount),
+          text = targetQuery.take(typedCount.coerceAtMost(targetQuery.length)),
           color = AurixDesignTokens.TextPrimary,
           fontFamily = fontFamily,
           fontSize = 15.sp,
           fontWeight = FontWeight.SemiBold,
-          maxLines = 1
+          maxLines = 1,
+          overflow = TextOverflow.Ellipsis
         )
         Spacer(modifier = Modifier.width(2.dp))
         Box(
@@ -220,13 +223,20 @@ fun OnboardingSlide1Stage(
             .background(accentColor, RoundedCornerShape(1.dp))
         )
       }
+      if (isLoadingShowcase) {
+        CircularProgressIndicator(
+          modifier = Modifier.size(14.dp),
+          strokeWidth = 1.6.dp,
+          color = accentColor.copy(alpha = 0.8f)
+        )
+      }
     }
 
-    // 3 result rows (hide 3rd row on compact height <= 700dp)
-    val rowCount = if (isCompactHeight) 2 else 3
+    // 3 real matching result rows (hide 3rd row on compact height <= 700dp)
+    val rowCount = minOf(rows.size, if (isCompactHeight) 2 else 3)
     for (idx in 0 until rowCount) {
       val row = rows[idx]
-      val shown = visibleFlags[idx]
+      val shown = visibleFlags.getOrElse(idx) { true }
       val isPicked = idx == 0 && row1Picked
       val isDimmed = idx != 0 && row1Picked
 
@@ -289,11 +299,13 @@ fun OnboardingSlide1Stage(
         verticalAlignment = Alignment.CenterVertically,
         horizontalArrangement = Arrangement.spacedBy(12.dp)
       ) {
-        Box(
+        OnboardingArtworkBox(
+          artworkUrl = row.artworkUrl,
+          baseHue = row.baseHue,
+          contentDescription = row.title,
           modifier = Modifier
             .size(44.dp)
             .clip(RoundedCornerShape(12.dp))
-            .background(AurixDesignTokens.coverGradientBrush(row.baseHue))
         )
         Column(modifier = Modifier.weight(1f)) {
           Text(
@@ -331,7 +343,7 @@ fun OnboardingSlide1Stage(
       }
     }
 
-    // Mini-player rising at 3.1s (radius 20, padding 10x14, 34dp cover hsl 160->210, 4-bar equalizer)
+    // Mini-player rising at 3.1s for the exact featured song
     val miniAlphaState = animateFloatAsState(
       targetValue = if (miniPlayerVisible) 1f else 0f,
       animationSpec = if (reducedMotion) snap() else tween(550, easing = AurixDesignTokens.MainEasing),
@@ -356,15 +368,17 @@ fun OnboardingSlide1Stage(
       verticalAlignment = Alignment.CenterVertically,
       horizontalArrangement = Arrangement.spacedBy(10.dp)
     ) {
-      Box(
+      OnboardingArtworkBox(
+        artworkUrl = showcase.song.artworkUrl,
+        baseHue = showcase.accentBaseHue,
+        contentDescription = showcase.song.title,
         modifier = Modifier
           .size(34.dp)
           .clip(RoundedCornerShape(10.dp))
-          .background(AurixDesignTokens.coverGradientBrush(160f))
       )
       Column(modifier = Modifier.weight(1f)) {
         Text(
-          text = "Hong Kong",
+          text = showcase.song.title,
           color = AurixDesignTokens.TextPrimary,
           fontFamily = fontFamily,
           fontSize = 13.sp,
@@ -373,7 +387,7 @@ fun OnboardingSlide1Stage(
           overflow = TextOverflow.Ellipsis
         )
         Text(
-          text = "The Weeknd",
+          text = showcase.song.artist,
           color = AurixDesignTokens.TextMuted,
           fontFamily = fontFamily,
           fontSize = 11.sp,
@@ -389,46 +403,81 @@ fun OnboardingSlide1Stage(
       )
     }
 
-    Text(
-      text = demoCaption,
-      color = AurixDesignTokens.TextMuted.copy(alpha = 0.7f),
-      fontFamily = fontFamily,
-      fontSize = 10.sp
-    )
+    Row(
+      verticalAlignment = Alignment.CenterVertically,
+      horizontalArrangement = Arrangement.spacedBy(8.dp)
+    ) {
+      Text(
+        text = demoCaption,
+        color = AurixDesignTokens.TextMuted.copy(alpha = 0.7f),
+        fontFamily = fontFamily,
+        fontSize = 10.sp
+      )
+      OnboardingShuffleChip(
+        label = shuffleLabel,
+        accentColor = accentColor,
+        fontFamily = fontFamily,
+        hazeState = hazeState,
+        enabled = !isLoadingShowcase,
+        onClick = onShuffleSong,
+        testTag = "onboarding_s1_shuffle_button"
+      )
+    }
   }
 }
 
 /**
  * SLIDE 2 — "Lyrics that move with you."
- * Real karaoke-filled synced lyrics window (176dp, 44dp rows, top/bottom alpha mask, active scale 1.08,
- * inactive opacity .45 & blur 3.5dp, scroll translateY = 66 - activeIndex*44) + opt-in audio engine.
+ * Real karaoke-filled synced lyrics window matched directly to [showcase.song] + opt-in real audio
+ * preview (playing the real local file or resolved YouTube audio stream synced to LRCLIB lyrics,
+ * with seamless procedural synth fallback when offline).
  */
 @Composable
 fun OnboardingSlide2Stage(
   isActive: Boolean,
   replaySeed: Int,
+  showcase: OnboardingShowcaseTrack,
+  isLoadingShowcase: Boolean,
   accentColor: Color,
   fontFamily: FontFamily,
   hazeState: HazeState?,
   reducedMotion: Boolean,
-  lyrics: List<OnboardingLyricLine>,
   audioEngine: OnboardingDemoAudioEngine,
+  onShuffleSong: () -> Unit,
   modifier: Modifier = Modifier
 ) {
+  val context = LocalContext.current
+  val scope = rememberCoroutineScope()
   val captionText = stringResource(id = R.string.onboarding_tap2)
   val speakerCd = stringResource(id = R.string.onboarding_play_demo_cd)
+  val syncingLabel = stringResource(id = R.string.onboarding_syncing_lyrics)
+  val shuffleLabel = stringResource(id = R.string.onboarding_another_song)
 
-  var soundOn by remember { mutableStateOf(false) }
-  var clockSec by remember { mutableFloatStateOf(0f) }
-  val totalSec = remember(soundOn, audioEngine.totalDurationSeconds) {
-    if (soundOn) audioEngine.totalDurationSeconds else OnboardingDemoAudioEngine.LOOP_DURATION_SECONDS
+  val activeLyrics = remember(showcase.seedKey, showcase.lyrics) {
+    if (showcase.lyrics.isNotEmpty()) showcase.lyrics else OnboardingDemoAudioEngine.DEFAULT_LYRICS
+  }
+  val windowStartSec = remember(showcase.seedKey, showcase.lyricWindowStartSec, showcase.lyrics) {
+    if (showcase.lyrics.isNotEmpty()) showcase.lyricWindowStartSec else 0f
+  }
+  val totalSec = remember(showcase.seedKey, showcase.durationSeconds, showcase.lyrics) {
+    if (showcase.lyrics.isNotEmpty()) {
+      showcase.durationSeconds.coerceAtLeast(windowStartSec + 12f)
+    } else {
+      OnboardingDemoAudioEngine.LOOP_DURATION_SECONDS
+    }
   }
 
-  // Turn off demo sound whenever leaving Slide 2 or disposing
-  LaunchedEffect(isActive) {
-    if (!isActive && soundOn) {
+  var soundOn by remember { mutableStateOf(false) }
+  var isResolvingAudio by remember { mutableStateOf(false) }
+  var resolvedStreamUrl by remember(showcase.song.id) { mutableStateOf<String?>(null) }
+  var clockSec by remember(showcase.seedKey, windowStartSec) { mutableFloatStateOf(windowStartSec) }
+
+  // Stop audio if song changes or user leaves Slide 2
+  LaunchedEffect(isActive, showcase.seedKey) {
+    if ((!isActive || soundOn) && soundOn) {
       audioEngine.stop()
       soundOn = false
+      isResolvingAudio = false
     }
   }
   DisposableEffect(Unit) {
@@ -437,25 +486,40 @@ fun OnboardingSlide2Stage(
     }
   }
 
-  // Reset clock when re-entering slide while muted
-  LaunchedEffect(isActive, replaySeed) {
+  // Reset clock to the first vocal lyric line when entering Slide 2 or shuffling song while muted
+  LaunchedEffect(isActive, replaySeed, showcase.seedKey, windowStartSec) {
     if (isActive && !soundOn) {
-      clockSec = 0f
+      clockSec = windowStartSec
     }
   }
 
-  // Frame-synced clock (follows audio currentTime when sound is on; timer loop when muted)
-  LaunchedEffect(isActive, soundOn, totalSec) {
+  // Frame-synced clock (follows live real audio currentTime when playing; loops cleanly over lyric span when muted)
+  LaunchedEffect(isActive, soundOn, totalSec, windowStartSec) {
     if (!isActive) return@LaunchedEffect
     var lastNanos = 0L
+    val loopEnd = if (showcase.lyrics.isNotEmpty()) {
+      minOf(totalSec, (activeLyrics.lastOrNull()?.seconds ?: totalSec) + 4f)
+    } else {
+      totalSec
+    }
     while (true) {
       withFrameNanos { frameNanos ->
         if (soundOn && audioEngine.isPlaying) {
-          clockSec = audioEngine.currentTimeSeconds()
+          val audioNow = audioEngine.currentTimeSeconds()
+          clockSec = if (audioEngine.totalDurationSeconds <= OnboardingDemoAudioEngine.LOOP_DURATION_SECONDS + 0.5f &&
+            showcase.lyrics.isNotEmpty() && windowStartSec > 0f
+          ) {
+            // Procedural fallback running alongside real lyrics: map 19.2s synth cycle onto the real vocal window
+            val span = (loopEnd - windowStartSec).coerceAtLeast(12f)
+            windowStartSec + (audioNow % span)
+          } else {
+            audioNow
+          }
         } else {
           if (lastNanos != 0L) {
             val dt = ((frameNanos - lastNanos) / 1_000_000_000f).coerceIn(0f, 0.1f)
-            clockSec = (clockSec + dt) % totalSec
+            val next = clockSec + dt
+            clockSec = if (next >= loopEnd) windowStartSec else next
           }
           lastNanos = frameNanos
         }
@@ -463,7 +527,7 @@ fun OnboardingSlide2Stage(
     }
   }
 
-  val activeIdx = OnboardingDemoAudioEngine.activeLineIndex(clockSec, lyrics)
+  val activeIdx = OnboardingDemoAudioEngine.activeLineIndex(clockSec, activeLyrics)
   val scrollYState = animateFloatAsState(
     targetValue = 66f - activeIdx * 44f,
     animationSpec = if (reducedMotion) snap() else tween(600, easing = AurixDesignTokens.MainEasing),
@@ -475,14 +539,17 @@ fun OnboardingSlide2Stage(
     verticalArrangement = Arrangement.spacedBy(10.dp, Alignment.CenterVertically),
     horizontalAlignment = Alignment.CenterHorizontally
   ) {
-    // Now-playing header: 62x62 radius-16 cover with glow + title/artist + 44dp speaker button
+    // Now-playing header: 62x62 radius-16 real cover with glow + title/artist + 44dp speaker button
     Row(
       modifier = Modifier.fillMaxWidth(),
       verticalAlignment = Alignment.CenterVertically,
       horizontalArrangement = Arrangement.spacedBy(12.dp)
     ) {
       val coverShape = RoundedCornerShape(16.dp)
-      Box(
+      OnboardingArtworkBox(
+        artworkUrl = showcase.song.artworkUrl,
+        baseHue = showcase.accentBaseHue,
+        contentDescription = showcase.song.title,
         modifier = Modifier
           .size(62.dp)
           .shadow(
@@ -492,11 +559,10 @@ fun OnboardingSlide2Stage(
             spotColor = accentColor.copy(alpha = 0.5f)
           )
           .clip(coverShape)
-          .background(AurixDesignTokens.coverGradientBrush(160f))
       )
       Column(modifier = Modifier.weight(1f)) {
         Text(
-          text = "Hong Kong",
+          text = showcase.song.title,
           color = AurixDesignTokens.TextPrimary,
           fontFamily = fontFamily,
           fontSize = 17.sp,
@@ -505,7 +571,7 @@ fun OnboardingSlide2Stage(
           overflow = TextOverflow.Ellipsis
         )
         Text(
-          text = "The Weeknd",
+          text = showcase.song.artist,
           color = AurixDesignTokens.TextMuted,
           fontFamily = fontFamily,
           fontSize = 12.sp,
@@ -527,22 +593,43 @@ fun OnboardingSlide2Stage(
             }
           )
           .semantics { contentDescription = speakerCd }
-          .clickable(role = Role.Button) {
+          .clickable(role = Role.Button, enabled = !isResolvingAudio) {
             if (soundOn) {
               audioEngine.stop()
               soundOn = false
             } else {
-              val started = audioEngine.start(clockSec)
-              soundOn = started
+              scope.launch {
+                isResolvingAudio = true
+                val streamUrl = resolvedStreamUrl
+                  ?: OnboardingShowcaseRepository.resolvePlayablePreviewUrl(showcase.song)
+                    ?.also { resolvedStreamUrl = it }
+                val started = withContext(Dispatchers.IO) {
+                  audioEngine.start(
+                    initialTimeSec = clockSec,
+                    overrideAudioSrc = streamUrl,
+                    context = context
+                  )
+                }
+                isResolvingAudio = false
+                soundOn = started
+              }
             }
           }
           .testTag("onboarding_s2_speaker_button"),
         contentAlignment = Alignment.Center
       ) {
-        OnboardingSpeakerIcon(
-          soundOn = soundOn,
-          color = if (soundOn) AurixDesignTokens.DarkInk else AurixDesignTokens.TextPrimary
-        )
+        if (isResolvingAudio) {
+          CircularProgressIndicator(
+            modifier = Modifier.size(18.dp),
+            strokeWidth = 2.dp,
+            color = accentColor
+          )
+        } else {
+          OnboardingSpeakerIcon(
+            soundOn = soundOn,
+            color = if (soundOn) AurixDesignTokens.DarkInk else AurixDesignTokens.TextPrimary
+          )
+        }
       }
     }
 
@@ -566,74 +653,101 @@ fun OnboardingSlide2Stage(
         },
       contentAlignment = Alignment.TopCenter
     ) {
-      Column(
-        modifier = Modifier
-          .fillMaxWidth()
-          .graphicsLayer {
-            translationY = scrollYState.value * density
-          },
-        horizontalAlignment = Alignment.CenterHorizontally
-      ) {
-        lyrics.forEachIndexed { idx, line ->
-          val isCurrentLine = idx == activeIdx
-          val fillFraction = OnboardingDemoAudioEngine.computeKaraokeFill(clockSec, idx, lyrics, totalSec)
-          val lineScaleState = animateFloatAsState(
-            targetValue = if (isCurrentLine) 1.08f else 0.90f,
-            animationSpec = if (reducedMotion) snap() else tween(450, easing = AurixDesignTokens.MainEasing),
-            label = "s2_line_scale_$idx"
+      if (isLoadingShowcase && showcase.lyrics.isEmpty()) {
+        Row(
+          modifier = Modifier.align(Alignment.Center),
+          verticalAlignment = Alignment.CenterVertically,
+          horizontalArrangement = Arrangement.spacedBy(8.dp)
+        ) {
+          CircularProgressIndicator(
+            modifier = Modifier.size(16.dp),
+            strokeWidth = 1.8.dp,
+            color = accentColor
           )
-          val lineAlphaState = animateFloatAsState(
-            targetValue = when {
-              isCurrentLine -> 1.0f
-              reducedMotion -> 0.70f
-              else -> 0.45f
+          Text(
+            text = syncingLabel,
+            color = AurixDesignTokens.TextMuted,
+            fontFamily = fontFamily,
+            fontSize = 13.sp,
+            fontWeight = FontWeight.SemiBold
+          )
+        }
+      } else {
+        Column(
+          modifier = Modifier
+            .fillMaxWidth()
+            .graphicsLayer {
+              translationY = scrollYState.value * density
             },
-            animationSpec = if (reducedMotion) snap() else tween(450, easing = AurixDesignTokens.MainEasing),
-            label = "s2_line_alpha_$idx"
-          )
-          val lineBlurMod = if (!isCurrentLine && !reducedMotion) Modifier.blur(3.5.dp) else Modifier
-
-          Box(
-            modifier = Modifier
-              .fillMaxWidth()
-              .height(44.dp)
-              .graphicsLayer {
-                alpha = lineAlphaState.value
-                val s = lineScaleState.value
-                scaleX = s
-                scaleY = s
-              }
-              .then(lineBlurMod),
-            contentAlignment = Alignment.Center
-          ) {
-            // Base unfilled line (rgba(255,255,255,.32))
-            Text(
-              text = line.text,
-              color = Color.White.copy(alpha = 0.32f),
-              fontFamily = fontFamily,
-              fontSize = 18.sp,
-              fontWeight = FontWeight.ExtraBold,
-              maxLines = 1,
-              softWrap = false,
-              textAlign = TextAlign.Center
+          horizontalAlignment = Alignment.CenterHorizontally
+        ) {
+          activeLyrics.forEachIndexed { idx, line ->
+            val isCurrentLine = idx == activeIdx
+            val fillFraction = OnboardingDemoAudioEngine.computeKaraokeFill(
+              timeSec = clockSec,
+              lineIndex = idx,
+              lines = activeLyrics,
+              totalSeconds = totalSec
             )
-            // Karaoke left-to-right white fill clipped cleanly on GPU
-            if (fillFraction > 0.001f) {
+            val lineScaleState = animateFloatAsState(
+              targetValue = if (isCurrentLine) 1.08f else 0.90f,
+              animationSpec = if (reducedMotion) snap() else tween(450, easing = AurixDesignTokens.MainEasing),
+              label = "s2_line_scale_$idx"
+            )
+            val lineAlphaState = animateFloatAsState(
+              targetValue = when {
+                isCurrentLine -> 1.0f
+                reducedMotion -> 0.70f
+                else -> 0.45f
+              },
+              animationSpec = if (reducedMotion) snap() else tween(450, easing = AurixDesignTokens.MainEasing),
+              label = "s2_line_alpha_$idx"
+            )
+            val lineBlurMod = if (!isCurrentLine && !reducedMotion) Modifier.blur(3.5.dp) else Modifier
+
+            Box(
+              modifier = Modifier
+                .fillMaxWidth()
+                .height(44.dp)
+                .padding(horizontal = 4.dp)
+                .graphicsLayer {
+                  alpha = lineAlphaState.value
+                  val s = lineScaleState.value
+                  scaleX = s
+                  scaleY = s
+                }
+                .then(lineBlurMod),
+              contentAlignment = Alignment.Center
+            ) {
+              // Base unfilled line (rgba(255,255,255,.32))
               Text(
                 text = line.text,
-                color = Color.White,
+                color = Color.White.copy(alpha = 0.32f),
                 fontFamily = fontFamily,
-                fontSize = 18.sp,
+                fontSize = 17.sp,
                 fontWeight = FontWeight.ExtraBold,
                 maxLines = 1,
-                softWrap = false,
-                textAlign = TextAlign.Center,
-                modifier = Modifier.drawWithContent {
-                  clipRect(right = size.width * fillFraction) {
-                    this@drawWithContent.drawContent()
-                  }
-                }
+                overflow = TextOverflow.Ellipsis,
+                textAlign = TextAlign.Center
               )
+              // Karaoke left-to-right white fill clipped cleanly on GPU
+              if (fillFraction > 0.001f) {
+                Text(
+                  text = line.text,
+                  color = Color.White,
+                  fontFamily = fontFamily,
+                  fontSize = 17.sp,
+                  fontWeight = FontWeight.ExtraBold,
+                  maxLines = 1,
+                  overflow = TextOverflow.Ellipsis,
+                  textAlign = TextAlign.Center,
+                  modifier = Modifier.drawWithContent {
+                    clipRect(right = size.width * fillFraction) {
+                      this@drawWithContent.drawContent()
+                    }
+                  }
+                )
+              }
             }
           }
         }
@@ -683,24 +797,39 @@ fun OnboardingSlide2Stage(
       }
     }
 
-    Text(
-      text = captionText,
-      color = AurixDesignTokens.TextMuted.copy(alpha = 0.7f),
-      fontFamily = fontFamily,
-      fontSize = 10.sp
-    )
+    Row(
+      verticalAlignment = Alignment.CenterVertically,
+      horizontalArrangement = Arrangement.spacedBy(8.dp)
+    ) {
+      Text(
+        text = captionText,
+        color = AurixDesignTokens.TextMuted.copy(alpha = 0.7f),
+        fontFamily = fontFamily,
+        fontSize = 10.sp
+      )
+      OnboardingShuffleChip(
+        label = shuffleLabel,
+        accentColor = accentColor,
+        fontFamily = fontFamily,
+        hazeState = hazeState,
+        enabled = !isLoadingShowcase,
+        onClick = onShuffleSong,
+        testTag = "onboarding_s2_shuffle_button"
+      )
+    }
   }
 }
 
 /**
  * SLIDE 3 — "Make it yours."
- * 150x150 radius-30 gradient cover tile with pop animation, transport controls,
+ * 150x150 radius-30 gradient/artwork cover tile with pop animation, transport controls,
  * 4 x 30dp accent swatches (auto-cycles every 1.1s until chosen; resets on leave if unchosen),
  * plus a compact real Backdrop picker wired to app settings.
  */
 @Composable
 fun OnboardingSlide3Stage(
   isActive: Boolean,
+  showcase: OnboardingShowcaseTrack,
   accentColor: Color,
   selectedPreset: AurixDesignTokens.AccentPreset,
   selectedBackdrop: AurixDesignTokens.BackdropPreset,
@@ -747,7 +876,7 @@ fun OnboardingSlide3Stage(
     verticalArrangement = Arrangement.spacedBy(10.dp, Alignment.CenterVertically),
     horizontalAlignment = Alignment.CenterHorizontally
   ) {
-    // 150x150 radius-30 gradient cover tile
+    // 150x150 radius-30 accent-framed cover tile displaying the featured real song
     val tileShape = RoundedCornerShape(30.dp)
     Box(
       modifier = Modifier
@@ -764,27 +893,53 @@ fun OnboardingSlide3Stage(
           spotColor = accentColor.copy(alpha = 0.65f)
         )
         .clip(tileShape)
-        .background(AurixDesignTokens.accentGradientBrush(accentColor)),
+        .background(AurixDesignTokens.accentGradientBrush(accentColor))
+        .border(2.dp, accentColor.copy(alpha = 0.72f), tileShape),
       contentAlignment = Alignment.Center
     ) {
-      OnboardingMusicNoteIcon(color = Color.White, modifier = Modifier.size(64.dp), strokeDp = 1.8.dp)
+      if (showcase.song.artworkUrl.isNotBlank()) {
+        OnboardingArtworkBox(
+          artworkUrl = showcase.song.artworkUrl,
+          baseHue = showcase.accentBaseHue,
+          contentDescription = showcase.song.title,
+          modifier = Modifier.fillMaxSize()
+        )
+        // Subtle accent wash at bottom edge so swatch color shifts reflect immediately on the cover
+        Box(
+          modifier = Modifier
+            .fillMaxSize()
+            .background(
+              Brush.verticalGradient(
+                colors = listOf(
+                  accentColor.copy(alpha = 0.14f),
+                  Color.Transparent,
+                  accentColor.copy(alpha = 0.34f)
+                )
+              )
+            )
+        )
+      } else {
+        OnboardingMusicNoteIcon(color = Color.White, modifier = Modifier.size(64.dp), strokeDp = 1.8.dp)
+      }
     }
 
     Column(horizontalAlignment = Alignment.CenterHorizontally) {
       Text(
-        text = "Hong Kong",
+        text = showcase.song.title,
         color = AurixDesignTokens.TextPrimary,
         fontFamily = fontFamily,
         fontSize = 16.sp,
         fontWeight = FontWeight.ExtraBold,
-        maxLines = 1
+        maxLines = 1,
+        overflow = TextOverflow.Ellipsis
       )
       Text(
-        text = "The Weeknd",
+        text = showcase.song.artist,
         color = AurixDesignTokens.TextMuted,
         fontFamily = fontFamily,
         fontSize = 12.sp,
-        maxLines = 1
+        maxLines = 1,
+        overflow = TextOverflow.Ellipsis
       )
     }
 
@@ -906,13 +1061,16 @@ fun OnboardingSlide3Stage(
 
 /**
  * SLIDE 4 — "Ready to listen?"
- * 170x170 Orb with 130x130 Orbi mascot, 1.5dp rotating dashed ring (12s), breathing accent glow (2.4s),
- * 2 expanding 2dp ripple rings (2.8s / 1.4s delay), 3 floating notes "♪ ♫ ♪" (3s), and glass track pill.
+ * 170x170 Orb with animated 130x130 Orbi mascot (rotating Saturn-style ring + 3D orbiting beads +
+ * blinking eyes + floating bob), 1.5dp rotating dashed halo (12s), breathing accent glow (2.4s),
+ * 2 expanding 2dp ripple rings (2.8s / 1.4s delay), 5 graceful swaying floating musical notes
+ * ("♪ ♫ ♩ ♬ ♪") with soft glow auras, and glass pill showcasing the exact real featured song.
  */
 @Composable
 fun OnboardingSlide4Stage(
   isActive: Boolean,
   replaySeed: Int,
+  showcase: OnboardingShowcaseTrack,
   accentColor: Color,
   fontFamily: FontFamily,
   hazeState: HazeState?,
@@ -967,25 +1125,28 @@ fun OnboardingSlide4Stage(
     animationSpec = infiniteRepeatable(
       animation = tween(durationMillis = 2800, easing = LinearEasing),
       repeatMode = RepeatMode.Restart,
-      initialStartOffset = androidx.compose.animation.core.StartOffset(1400)
+      initialStartOffset = StartOffset(1400)
     ),
     label = "s4_ripple_2"
   )
 
-  // Three floating notes: "♪ ♫ ♪" (20sp, accent / violet / accent, rising 70dp, 14deg tilt, 3s, delays 0 / 900 / 1800ms)
-  val noteDelays = remember { intArrayOf(0, 900, 1800) }
-  val noteSymbols = remember { listOf("♪", "♫", "♪") }
-  val noteColors = remember(accentColor) { listOf(accentColor, AurixDesignTokens.AccentB, accentColor) }
-  val noteOffsetsX = remember { listOf((-78).dp, 76.dp, (-62).dp) }
-  val noteOffsetsY = remember { listOf(28.dp, 8.dp, (-28).dp) }
-  val noteProgressStates = List(3) { i ->
+  // Five floating musical notes around Orbi with staggered timings, sinusoidal sway, scale swell, and glow
+  val noteDelays = remember { intArrayOf(0, 650, 1300, 1950, 2550) }
+  val noteSymbols = remember { listOf("♪", "♫", "♩", "♬", "♪") }
+  val noteColors = remember(accentColor) {
+    listOf(accentColor, AurixDesignTokens.AccentB, Color(0xFFE0F2FE), accentColor, AurixDesignTokens.AccentB)
+  }
+  val noteOffsetsX = remember { listOf((-82).dp, 78.dp, (-64).dp, 68.dp, 18.dp) }
+  val noteOffsetsY = remember { listOf(30.dp, 16.dp, (-20).dp, (-28).dp, (-54).dp) }
+  val noteSizes = remember { listOf(22.sp, 20.sp, 18.sp, 21.sp, 17.sp) }
+  val noteProgressStates = List(5) { i ->
     loopTransition?.animateFloat(
       initialValue = 0f,
       targetValue = 1f,
       animationSpec = infiniteRepeatable(
-        animation = tween(durationMillis = 3000, easing = LinearEasing),
+        animation = tween(durationMillis = 3200, easing = LinearEasing),
         repeatMode = RepeatMode.Restart,
-        initialStartOffset = androidx.compose.animation.core.StartOffset(noteDelays[i])
+        initialStartOffset = StartOffset(noteDelays[i])
       ),
       label = "s4_note_$i"
     )
@@ -997,7 +1158,7 @@ fun OnboardingSlide4Stage(
     horizontalAlignment = Alignment.CenterHorizontally
   ) {
     Box(
-      modifier = Modifier.size(214.dp),
+      modifier = Modifier.size(218.dp),
       contentAlignment = Alignment.Center
     ) {
       // Soft accent radial glow (inset -18dp => 206dp around 170dp orb)
@@ -1055,45 +1216,64 @@ fun OnboardingSlide4Stage(
         )
       }
 
-      // 130x130 Orbi mascot
+      // 130x130 Orbi mascot with animated rotating Saturn-style ring
       OnboardingOrbiMascot(
         isActive = isActive,
         reducedMotion = reducedMotion,
         replaySeed = replaySeed,
+        accentColor = accentColor,
         modifier = Modifier
           .size(130.dp)
           .testTag("onboarding_s4_orbi")
       )
 
-      // Three floating notes "♪ ♫ ♪"
-      for (i in 0 until 3) {
+      // Five floating musical notes rising with sinusoidal horizontal sway, scale swell, tilt, & glow halo
+      for (i in 0 until 5) {
         val pState = noteProgressStates[i]
-        Text(
-          text = noteSymbols[i],
-          color = noteColors[i],
-          fontSize = 20.sp,
-          fontWeight = FontWeight.Bold,
+        val noteColor = noteColors[i]
+        Box(
           modifier = Modifier
             .offset(x = noteOffsetsX[i], y = noteOffsetsY[i])
             .graphicsLayer {
-              val p = pState?.value ?: 0.35f
-              translationY = if (reducedMotion) 0f else -70f * p * density
-              rotationZ = if (reducedMotion) 0f else 14f * (if (i % 2 == 0) 1f else -1f) * p
+              val p = pState?.value ?: (0.25f + i * 0.12f)
+              val swaySign = if (i % 2 == 0) 1f else -1f
+              val swayX = if (reducedMotion) 0f else sin(p * 2.0 * PI).toFloat() * 10f * swaySign
+              translationX = swayX * density
+              translationY = if (reducedMotion) 0f else -74f * p * density
+              rotationZ = if (reducedMotion) 0f else 16f * swaySign * sin(p * PI).toFloat()
+              val scale = if (reducedMotion) 1f else 0.72f + 0.36f * sin(p * PI).toFloat()
+              scaleX = scale
+              scaleY = scale
               alpha = if (reducedMotion) {
-                0.7f
+                if (i < 3) 0.72f else 0f
               } else {
                 when {
-                  p < 0.15f -> p / 0.15f
-                  p > 0.75f -> ((1f - p) / 0.25f).coerceIn(0f, 1f)
+                  p < 0.16f -> p / 0.16f
+                  p > 0.72f -> ((1f - p) / 0.28f).coerceIn(0f, 1f)
                   else -> 1f
                 }
               }
-            }
-        )
+            },
+          contentAlignment = Alignment.Center
+        ) {
+          Canvas(modifier = Modifier.size(28.dp)) {
+            drawCircle(
+              brush = Brush.radialGradient(
+                colors = listOf(noteColor.copy(alpha = 0.42f), Color.Transparent)
+              )
+            )
+          }
+          Text(
+            text = noteSymbols[i],
+            color = noteColor,
+            fontSize = noteSizes[i],
+            fontWeight = FontWeight.Bold
+          )
+        }
       }
     }
 
-    // Glass pill under orb: equalizer + "Hong Kong · The Weeknd" (13sp/600)
+    // Glass pill under orb: equalizer + real featured song ("Title · Artist", 13sp/600)
     Row(
       modifier = Modifier
         .onboardingGlass(shape = RoundedCornerShape(99.dp), hazeState = hazeState)
@@ -1109,13 +1289,56 @@ fun OnboardingSlide4Stage(
         height = 14.dp
       )
       Text(
-        text = "Hong Kong · The Weeknd",
+        text = "${showcase.song.title} · ${showcase.song.artist}",
         color = AurixDesignTokens.TextPrimary,
         fontFamily = fontFamily,
         fontSize = 13.sp,
         fontWeight = FontWeight.SemiBold,
-        maxLines = 1
+        maxLines = 1,
+        overflow = TextOverflow.Ellipsis
       )
     }
+  }
+}
+
+@Composable
+private fun OnboardingShuffleChip(
+  label: String,
+  accentColor: Color,
+  fontFamily: FontFamily,
+  hazeState: HazeState?,
+  enabled: Boolean,
+  onClick: () -> Unit,
+  testTag: String
+) {
+  val chipShape = RoundedCornerShape(99.dp)
+  Row(
+    modifier = Modifier
+      .onboardingFocusRing(chipShape)
+      .onboardingGlass(
+        shape = chipShape,
+        hazeState = hazeState,
+        borderColor = accentColor.copy(alpha = 0.35f)
+      )
+      .clickable(enabled = enabled, role = Role.Button, onClick = onClick)
+      .padding(horizontal = 9.dp, vertical = 4.dp)
+      .testTag(testTag),
+    verticalAlignment = Alignment.CenterVertically,
+    horizontalArrangement = Arrangement.spacedBy(4.dp)
+  ) {
+    Icon(
+      imageVector = Icons.Rounded.Shuffle,
+      contentDescription = null,
+      tint = accentColor,
+      modifier = Modifier.size(12.dp)
+    )
+    Text(
+      text = label,
+      color = AurixDesignTokens.TextPrimary.copy(alpha = 0.9f),
+      fontFamily = fontFamily,
+      fontSize = 10.sp,
+      fontWeight = FontWeight.SemiBold,
+      maxLines = 1
+    )
   }
 }

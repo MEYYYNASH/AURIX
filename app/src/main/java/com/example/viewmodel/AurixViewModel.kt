@@ -259,7 +259,8 @@ class AurixViewModel(application: Application) : AndroidViewModel(application) {
       com.example.widget.WidgetCustomizerConfig.DEFAULT
     )
   val reducedMotion = prefsManager.reducedMotion.stateIn(viewModelScope, SharingStarted.Lazily, false)
-  val onboardingCompleted = prefsManager.onboardingCompleted.stateIn(viewModelScope, SharingStarted.Eagerly, false)
+  private val _onboardingCompleted = MutableStateFlow(prefsManager.isOnboardingCompletedSync())
+  val onboardingCompleted: StateFlow<Boolean> = _onboardingCompleted.asStateFlow()
   val githubOwner = prefsManager.githubOwner.stateIn(viewModelScope, SharingStarted.Lazily, "MEYYYNASH")
   val githubRepo = prefsManager.githubRepo.stateIn(viewModelScope, SharingStarted.Lazily, "AURIX")
   val moodFlowEnabled: StateFlow<Boolean> = prefsManager.moodFlowEnabled
@@ -1478,8 +1479,18 @@ class AurixViewModel(application: Application) : AndroidViewModel(application) {
         }
         val savedLang = runCatching { prefsManager.language.first() }.getOrDefault("en")
         runCatching { LocaleHelper.saveLanguageSync(application, savedLang) }
-        runCatching { prefsManager.onboardingCompleted.first() }
+        val dsOnboardingCompleted = runCatching { prefsManager.onboardingCompleted.first() }.getOrDefault(false)
         val lastSeenVersionCode = runCatching { prefsManager.lastSeenVersionCode.first() }.getOrDefault(0L)
+        val resolvedOnboardingCompleted = dsOnboardingCompleted ||
+          prefsManager.isOnboardingCompletedSync() ||
+          lastSeenVersionCode > 0L
+        if (resolvedOnboardingCompleted) {
+          prefsManager.setOnboardingCompletedSync(true)
+          if (!dsOnboardingCompleted) {
+            runCatching { prefsManager.setOnboardingCompleted(true) }
+          }
+        }
+        _onboardingCompleted.value = resolvedOnboardingCompleted
         if (lastSeenVersionCode < BuildConfig.VERSION_CODE.toLong()) {
           _showWhatsNewSheet.value = true
         }
@@ -5629,7 +5640,11 @@ class AurixViewModel(application: Application) : AndroidViewModel(application) {
       )
     }
   }
-  fun setOnboardingCompleted(completed: Boolean) { safeLaunch(notifyUser = false) { prefsManager.setOnboardingCompleted(completed) } }
+  fun setOnboardingCompleted(completed: Boolean) {
+    _onboardingCompleted.value = completed
+    prefsManager.setOnboardingCompletedSync(completed)
+    safeLaunch(notifyUser = false) { prefsManager.setOnboardingCompleted(completed) }
+  }
   fun setGithubOwner(owner: String) { safeLaunch(notifyUser = false) { prefsManager.setGithubOwner(owner) } }
   fun setGithubRepo(repo: String) { safeLaunch(notifyUser = false) { prefsManager.setGithubRepo(repo) } }
 

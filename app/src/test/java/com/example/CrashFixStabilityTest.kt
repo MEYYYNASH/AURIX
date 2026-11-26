@@ -12,10 +12,10 @@ import org.junit.Test
 class CrashFixStabilityTest {
 
   @Test
-  fun release242_metadataAndVersionCodeAreConsistent() {
-    assertEquals("2.4.2", BuildConfig.VERSION_NAME)
-    assertEquals(20402, BuildConfig.VERSION_CODE)
-    assertTrue("Release 2.4.2 versionCode must exceed 2.4.1 (20401)", BuildConfig.VERSION_CODE > 20401)
+  fun release243_metadataAndVersionCodeAreConsistent() {
+    assertEquals("2.4.3", BuildConfig.VERSION_NAME)
+    assertEquals(20403, BuildConfig.VERSION_CODE)
+    assertTrue("Release 2.4.3 versionCode must exceed 2.4.2 (20402)", BuildConfig.VERSION_CODE > 20402)
     assertEquals(4, com.example.ui.screens.ONBOARDING_SLIDE_COUNT)
     assertTrue(com.example.ui.screens.MINI_PLAYER_HIGH_REFRESH_OPTIMIZED)
     assertTrue(com.example.ui.screens.MINI_PLAYER_SLIDE_UP_DAMPING in 0.7f..0.95f)
@@ -1067,7 +1067,7 @@ class CrashFixStabilityTest {
 
   @Test
   fun remoteJsonUpdateChecker_granularVersioningAndTimestamps_workEndToEnd() {
-    assertEquals(20402, BuildConfig.VERSION_CODE)
+    assertEquals(20403, BuildConfig.VERSION_CODE)
     assertEquals(20301L, com.example.data.GitHubUpdater.deriveVersionCodeFromTag("v2.3.1"))
     assertEquals(20301L, com.example.data.GitHubUpdater.deriveVersionCodeFromTag("v2.3.1+20301"))
     assertEquals(20312L, com.example.data.GitHubUpdater.deriveVersionCodeFromTag("v2.3.1.2"))
@@ -1076,15 +1076,16 @@ class CrashFixStabilityTest {
     assertEquals(20400L, com.example.data.GitHubUpdater.deriveVersionCodeFromTag("v2.4.0"))
     assertEquals(20401L, com.example.data.GitHubUpdater.deriveVersionCodeFromTag("v2.4.1"))
     assertEquals(20402L, com.example.data.GitHubUpdater.deriveVersionCodeFromTag("v2.4.2"))
+    assertEquals(20403L, com.example.data.GitHubUpdater.deriveVersionCodeFromTag("v2.4.3"))
 
     val server = com.sun.net.httpserver.HttpServer.create(java.net.InetSocketAddress("127.0.0.1", 0), 0)
     val port = server.address.port
     server.createContext("/version.json") { exchange ->
       val body = """
         {
-          "versionName": "2.4.2.1",
+          "versionName": "2.4.3.1",
           "publishedAt": "2026-11-26T22:15:30Z",
-          "apkUrl": "http://127.0.0.1:$port/AURIX-v2.4.2.1.apk",
+          "apkUrl": "http://127.0.0.1:$port/AURIX-v2.4.3.1.apk",
           "sha256": "0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef",
           "notes": ["Granular 4-segment hotfix release"]
         }
@@ -1108,8 +1109,8 @@ class CrashFixStabilityTest {
       val derivedCode = com.example.data.GitHubUpdater.deriveVersionCodeFromTag(versionName)
       val parsedTs = com.example.data.GitHubUpdater.parseIsoTimestampMs(publishedAt)
 
-      assertEquals("2.4.2.1", versionName)
-      assertEquals(20421L, derivedCode)
+      assertEquals("2.4.3.1", versionName)
+      assertEquals(20431L, derivedCode)
       assertTrue(parsedTs > 0L)
 
       val remote = com.example.data.RemoteVersionInfo(
@@ -1519,5 +1520,74 @@ class CrashFixStabilityTest {
         unsafePattern.find(text) == null
       )
     }
+  }
+
+  @Test
+  fun onboarding243_realRandomSongShowcaseAndOrbiSaturnRingAreVerified() {
+    val repo = com.example.ui.screens.onboarding.OnboardingShowcaseRepository
+    assertTrue("Showcase pool must have multiple real songs", repo.REAL_SONG_SEEDS.size >= 10)
+
+    // Verify random picks vary across launches and excludeSeedKey prevents repeating the same song
+    val pickedKeys = mutableSetOf<String>()
+    val rng = kotlin.random.Random(243)
+    var lastKey: String? = null
+    repeat(12) {
+      val track = repo.buildInitialRandomShowcase(
+        localSongs = emptyList(),
+        onPhoneLabel = "On your phone",
+        excludeSeedKey = lastKey,
+        random = rng
+      )
+      if (lastKey != null) {
+        assertTrue("Shuffle must pick a different song than $lastKey", track.seedKey != lastKey)
+      }
+      pickedKeys.add(track.seedKey)
+      lastKey = track.seedKey
+
+      // Search query & Row 1 MUST match the featured song title
+      assertTrue(track.searchQuery.isNotBlank())
+      assertTrue(
+        "Search query '${track.searchQuery}' should match song title '${track.song.title}'",
+        track.song.title.contains(track.searchQuery, ignoreCase = true)
+      )
+      assertEquals(3, track.searchRows.size)
+      assertEquals(track.song.title, track.searchRows[0].title)
+    }
+    assertTrue("Expected at least 4 distinct songs across 12 random draws, got ${pickedKeys.size}", pickedKeys.size >= 4)
+
+    // Verify lyric start window jumps straight to the first meaningful vocal line
+    val sampleRealLyrics = listOf(
+      com.example.ui.screens.onboarding.OnboardingLyricLine(0.0f, "♪"),
+      com.example.ui.screens.onboarding.OnboardingLyricLine(14.5f, "I've been tryna call"),
+      com.example.ui.screens.onboarding.OnboardingLyricLine(18.0f, "I've been on my own for long enough")
+    )
+    val (winStart, safeDur) = repo.selectLyricStartWindow(sampleRealLyrics, 200f)
+    assertEquals(14.5f, winStart, 0.01f)
+    assertEquals(200f, safeDur, 0.01f)
+
+    // Verify Orbi rotating Saturn ring and floating notes are implemented in onboarding components
+    val javaRoot = java.io.File("src/main/java").let {
+      if (it.exists()) it else java.io.File("app/src/main/java")
+    }
+    val sharedSrc = java.io.File(javaRoot, "com/example/ui/screens/onboarding/OnboardingSharedComponents.kt").readText()
+    assertTrue(sharedSrc.contains("orbi_saturn_orbit"))
+    assertTrue(sharedSrc.contains("orbi_saturn_tilt"))
+    assertTrue(sharedSrc.contains("rotatingRingBrush"))
+    val stagesSrc = java.io.File(javaRoot, "com/example/ui/screens/onboarding/OnboardingSlideStages.kt").readText()
+    assertTrue(stagesSrc.contains("OnboardingOrbiMascot"))
+    assertTrue(stagesSrc.contains("s4_note_"))
+    assertTrue(stagesSrc.contains("onboarding_s1_shuffle_button"))
+    assertTrue(stagesSrc.contains("onboarding_s2_shuffle_button"))
+
+    // Verify onboarding shows ONLY on first open (sync SharedPreferences mirror + resolved before isAppInitialized)
+    val prefsSrc = java.io.File(javaRoot, "com/example/data/PreferencesManager.kt").readText()
+    assertTrue(prefsSrc.contains("isOnboardingCompletedSync"))
+    assertTrue(prefsSrc.contains("setOnboardingCompletedSync"))
+    val vmSrc = java.io.File(javaRoot, "com/example/viewmodel/AurixViewModel.kt").readText()
+    assertTrue(vmSrc.contains("_onboardingCompleted.value = resolvedOnboardingCompleted"))
+    assertTrue(
+      "onboardingCompleted must resolve before _isAppInitialized = true",
+      vmSrc.indexOf("_onboardingCompleted.value = resolvedOnboardingCompleted") < vmSrc.indexOf("_isAppInitialized.value = true")
+    )
   }
 }

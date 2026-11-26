@@ -236,6 +236,8 @@
     <string name="onboarding_backdrop_aurora">អូរ៉ូរ៉ា</string>
     <string name="onboarding_backdrop_midnight">ពាក់កណ្តាលអធ្រាត្រ</string>
     <string name="onboarding_backdrop_minimal">សាមញ្ញ</string>
+    <string name="onboarding_another_song">បទផ្សេងទៀត</string>
+    <string name="onboarding_syncing_lyrics">កំពុងទាញយកទំនុកច្រៀងពិត…</string>
     <string name="onboarding_lang_en">EN</string>
     <string name="onboarding_lang_km">ខ្មែរ</string>
     <string name="because_section_title">ដោយសារអ្នកបានស្ដាប់</string>

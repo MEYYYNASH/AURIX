@@ -10,9 +10,9 @@ on:
   workflow_dispatch:
     inputs:
       tag:
-        description: 'Release tag (e.g. v2.4.2)'
+        description: 'Release tag (e.g. v2.4.3)'
         required: false
-        default: 'v2.4.2'
+        default: 'v2.4.3'
 
 permissions:
   contents: write
@@ -62,8 +62,8 @@ jobs:
           code_m = re.search(r'versionCode\s*=\s*(\d+)', gradle_text)
           date_m = re.search(r'buildConfigField\(\s*"String"\s*,\s*"RELEASE_DATE"\s*,\s*"\\"([^\\"]+)\\""\s*\)', gradle_text)
 
-          version = (ver_m.group(1) if ver_m else "2.4.2").strip()
-          vcode = code_m.group(1) if code_m else "20402"
+          version = (ver_m.group(1) if ver_m else "2.4.3").strip()
+          vcode = code_m.group(1) if code_m else "20403"
           rdate = date_m.group(1) if date_m else time.strftime("%Y-%m-%d", time.gmtime())
 
           event_name = os.environ.get("GITHUB_EVENT_NAME", "")
