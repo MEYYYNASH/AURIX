@@ -2,9 +2,9 @@
   "versionName": "2.3.3",
   "versionCode": 20303,
   "releaseDate": "2026-11-25",
-  "releaseTimestampMs": 1795664365000,
+  "releaseTimestampMs": 1795668714000,
   "apkUrl": "https://github.com/MEYYYNASH/AURIX/releases/download/v2.3.3/AURIX-v2.3.3.apk",
-  "sha256": "3e56ee90d3213e7b4c93d0c2b457e6458bab2c93d7875a00b52b83b95e66716b",
+  "sha256": "0072a979fcc84fb8cefc44d141c1d7fc25f05cea1d5493ecec2096dd3951c2e0",
   "mandatory": false,
   "notes": [
     "Liquid Glass Segmented Tabs with Smooth 120Hz Spring Physics & Crash Fix (v2.3.3): Replaced Search source switch, Home filter chips, Settings theme picker, and Library tabs with physics-driven Liquid Glass segmented controls (white glass pill thumb, specular highlight, speed-reactive shadow, flick inertia, cross-tab haptics, Noto Sans Khmer support, TalkBack Role.Tab semantics, and Android 12+ Haze backdrop blur); fixed Android 12+ startup crash with explicit Haze backdrop styling and rebuilt drag tracking on a continuous frame-locked spring loop with a hardware-isolated thumb layer, soft edge rubber-banding, and zero frame stutter",
