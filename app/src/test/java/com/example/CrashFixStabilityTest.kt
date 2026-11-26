@@ -76,16 +76,16 @@ class CrashFixStabilityTest {
     }
     val enStrings = java.io.File(projectRoot, "src/main/res/values/strings.xml").readText()
     val kmStrings = java.io.File(projectRoot, "src/main/res/values-km/strings.xml").readText()
-    assertTrue(enStrings.contains("All your music. One place."))
+    assertTrue(enStrings.contains("What\\'s your favourite music?"))
     assertTrue(enStrings.contains("Lyrics that move with you."))
     assertTrue(enStrings.contains("Make it yours."))
     assertTrue(enStrings.contains("Ready to listen?"))
-    assertTrue(enStrings.contains("Tap the speaker to hear it"))
-    assertTrue(kmStrings.contains("ចម្រៀងទាំងអស់ នៅកន្លែងតែមួយ"))
+    assertTrue(enStrings.contains("Tap the speaker to adjust sound"))
+    assertTrue(kmStrings.contains("តើអ្នកចូលចិត្តតន្ត្រីអ្វី?"))
     assertTrue(kmStrings.contains("អត្ថបទចម្រៀងដែលរំកិលតាមចង្វាក់"))
     assertTrue(kmStrings.contains("ធ្វើឱ្យវាជារបស់អ្នក"))
     assertTrue(kmStrings.contains("ត្រៀមខ្លួនស្តាប់ហើយឬនៅ?"))
-    assertTrue(kmStrings.contains("ចុចឧបករណ៍បំពង្រីកសំឡេង ដើម្បីស្តាប់"))
+    assertTrue(kmStrings.contains("ចុចឧបករណ៍បំពងសំឡេង ដើម្បីបើក ឬបិទសំឡេង"))
   }
 
   @Test
@@ -1578,8 +1578,20 @@ class CrashFixStabilityTest {
     val stagesSrc = java.io.File(javaRoot, "com/example/ui/screens/onboarding/OnboardingSlideStages.kt").readText()
     assertTrue(stagesSrc.contains("OnboardingOrbiMascot"))
     assertTrue(stagesSrc.contains("s4_note_"))
-    assertTrue(stagesSrc.contains("onboarding_s1_shuffle_button"))
+    assertTrue(stagesSrc.contains("onboarding_s1_empty_prompt"))
     assertTrue(stagesSrc.contains("onboarding_s2_shuffle_button"))
+    assertTrue(stagesSrc.contains("onboarding_s1_search_input"))
+    assertTrue(stagesSrc.contains("OnboardingLoveButton"))
+
+    val onboardingSrc = java.io.File(javaRoot, "com/example/ui/screens/OnboardingScreen.kt").readText()
+    assertFalse(
+      "Background glows must not use clipped Modifier.blur(AurixDesignTokens.GlowBlurRadius)",
+      onboardingSrc.contains("Modifier.blur(AurixDesignTokens.GlowBlurRadius)")
+    )
+    assertTrue(onboardingSrc.contains("AMBIENT_VOLUME"))
+    assertTrue(onboardingSrc.contains("onRevealAppUnderneath"))
+    assertTrue(onboardingSrc.contains("canAdvanceFromCurrentSlide"))
+    assertEquals(0.24f, com.example.ui.screens.onboarding.OnboardingDemoAudioEngine.AMBIENT_VOLUME, 0.001f)
 
     // Verify onboarding shows ONLY on first open (sync SharedPreferences mirror + resolved before isAppInitialized)
     val prefsSrc = java.io.File(javaRoot, "com/example/data/PreferencesManager.kt").readText()
@@ -1587,6 +1599,7 @@ class CrashFixStabilityTest {
     assertTrue(prefsSrc.contains("setOnboardingCompletedSync"))
     val vmSrc = java.io.File(javaRoot, "com/example/viewmodel/AurixViewModel.kt").readText()
     assertTrue(vmSrc.contains("_onboardingCompleted.value = resolvedOnboardingCompleted"))
+    assertTrue(vmSrc.contains("fun setFavorite("))
     assertTrue(
       "onboardingCompleted must resolve before _isAppInitialized = true",
       vmSrc.indexOf("_onboardingCompleted.value = resolvedOnboardingCompleted") < vmSrc.indexOf("_isAppInitialized.value = true")

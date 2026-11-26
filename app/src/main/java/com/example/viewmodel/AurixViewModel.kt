@@ -4571,6 +4571,26 @@ class AurixViewModel(application: Application) : AndroidViewModel(application) {
     }
   }
 
+  fun setFavorite(song: Song, isFavorite: Boolean) {
+    viewModelScope.launch {
+      if (isFavorite) {
+        dao.insertFavorite(
+          FavoriteSongEntity(
+            id = song.id,
+            title = song.title,
+            artist = song.artist,
+            artworkUrl = song.artworkUrl,
+            durationSeconds = song.durationSeconds,
+            streamUrl = song.streamUrl,
+            source = song.source
+          )
+        )
+      } else {
+        dao.deleteFavorite(song.id)
+      }
+    }
+  }
+
   fun addLocalSong(uri: Uri) {
     importLocalSongs(listOf(uri))
   }

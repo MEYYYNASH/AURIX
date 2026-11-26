@@ -174,6 +174,7 @@ private fun AurixAppContent(
     ) {
       var onboardingSessionActive by remember { mutableStateOf(false) }
       var onboardingGateEvaluated by remember { mutableStateOf(false) }
+      var onboardingRevealingHome by remember { mutableStateOf(false) }
       LaunchedEffect(isAppInitialized) {
         if (isAppInitialized && !onboardingGateEvaluated) {
           onboardingGateEvaluated = true
@@ -183,45 +184,73 @@ private fun AurixAppContent(
         }
       }
 
+      val showOnboardingOverlay = isAppInitialized && (onboardingSessionActive || !onboardingCompleted)
+      val showMainShell = isAppInitialized && (!showOnboardingOverlay || onboardingRevealingHome)
+      val homeRevealScale by animateFloatAsState(
+        targetValue = if (!showOnboardingOverlay || onboardingRevealingHome) 1f else 0.94f,
+        animationSpec = if (reducedMotion) snap() else tween(durationMillis = 480, easing = AurixEase),
+        label = "home_reveal_scale"
+      )
+
       if (!isAppInitialized) {
         Box(modifier = Modifier.fillMaxSize())
-      } else if (onboardingSessionActive || !onboardingCompleted) {
-        val onboardingDim by viewModel.dynamicBgDim.collectAsStateWithLifecycle()
-        val onboardingLocalSongs by viewModel.localSongs.collectAsStateWithLifecycle()
-        val onboardingLyrics by viewModel.lyrics.collectAsStateWithLifecycle()
-        OnboardingScreen(
-          currentLanguage = currentLanguage,
-          initialAccentHex = accentHex,
-          initialDynamicBg = dynamicBg,
-          initialDynamicBgDim = onboardingDim,
-          localSongs = onboardingLocalSongs,
-          liveLyricsResult = onboardingLyrics,
-          reducedMotion = reducedMotion,
-          onLanguageChanged = { viewModel.setLanguage(it) },
-          onAccentColorChanged = { viewModel.setAccentColor(it) },
-          onBackdropChanged = { preset ->
-            viewModel.setDynamicBg(preset.dynamicBgEnabled)
-            viewModel.setDynamicBgBlur(preset.blurDp)
-            viewModel.setDynamicBgDim(preset.dimLevel)
-          },
-          onSkipped = { viewModel.setOnboardingCompleted(true) },
-          onFinished = {
-            viewModel.setOnboardingCompleted(true)
-            onboardingSessionActive = false
-          }
-        )
       } else {
-        AurixMainShell(
-          viewModel = viewModel,
-          currentLanguage = currentLanguage,
-          launchSplashDismissed = launchSplashDismissed,
-          dynamicBg = dynamicBg,
-          reducedMotion = reducedMotion,
-          darkTheme = darkTheme,
-          amoledTheme = amoledTheme,
-          dynamicAlbumTheme = dynamicAlbumTheme,
-          albumDynamicPalette = activeDynamicPalette
-        )
+        if (showMainShell) {
+          Box(
+            modifier = Modifier
+              .fillMaxSize()
+              .graphicsLayer {
+                scaleX = homeRevealScale
+                scaleY = homeRevealScale
+              }
+          ) {
+            AurixMainShell(
+              viewModel = viewModel,
+              currentLanguage = currentLanguage,
+              launchSplashDismissed = launchSplashDismissed,
+              dynamicBg = dynamicBg,
+              reducedMotion = reducedMotion,
+              darkTheme = darkTheme,
+              amoledTheme = amoledTheme,
+              dynamicAlbumTheme = dynamicAlbumTheme,
+              albumDynamicPalette = activeDynamicPalette
+            )
+          }
+        }
+
+        if (showOnboardingOverlay) {
+          val onboardingDim by viewModel.dynamicBgDim.collectAsStateWithLifecycle()
+          val onboardingLocalSongs by viewModel.localSongs.collectAsStateWithLifecycle()
+          val onboardingFavorites by viewModel.favorites.collectAsStateWithLifecycle()
+          val onboardingFavoriteIds = remember(onboardingFavorites) { onboardingFavorites.map { it.id }.toSet() }
+          val onboardingLyrics by viewModel.lyrics.collectAsStateWithLifecycle()
+          OnboardingScreen(
+            currentLanguage = currentLanguage,
+            initialAccentHex = accentHex,
+            initialDynamicBg = dynamicBg,
+            initialDynamicBgDim = onboardingDim,
+            localSongs = onboardingLocalSongs,
+            favoriteIds = onboardingFavoriteIds,
+            liveLyricsResult = onboardingLyrics,
+            reducedMotion = reducedMotion,
+            onLanguageChanged = { viewModel.setLanguage(it) },
+            onAccentColorChanged = { viewModel.setAccentColor(it) },
+            onBackdropChanged = { preset ->
+              viewModel.setDynamicBg(preset.dynamicBgEnabled)
+              viewModel.setDynamicBgBlur(preset.blurDp)
+              viewModel.setDynamicBgDim(preset.dimLevel)
+            },
+            onSetFavorite = { song, loved -> viewModel.setFavorite(song, loved) },
+            onToggleFavorite = { song -> viewModel.toggleFavorite(song) },
+            onRevealAppUnderneath = { onboardingRevealingHome = true },
+            onSkipped = { viewModel.setOnboardingCompleted(true) },
+            onFinished = {
+              viewModel.setOnboardingCompleted(true)
+              onboardingSessionActive = false
+              onboardingRevealingHome = false
+            }
+          )
+        }
       }
 
       if (!launchSplashDismissed) {
@@ -769,30 +798,36 @@ private fun AurixMainShell(
               val isExitingDetail = initialTabIdx < 0 && targetTabIdx >= 0
               when {
                 isEnteringDetail -> {
-                  (fadeIn(tween(280, easing = AurixEase)) +
-                    slideInHorizontally(tween(300, easing = AurixEase)) { it / 8 } +
-                    scaleIn(tween(300, easing = AurixEase), initialScale = 0.97f)) togetherWith
-                    (fadeOut(tween(200, easing = AurixEase)) +
-                      slideOutHorizontally(tween(260, easing = AurixEase)) { -it / 16 })
+                  (fadeIn(tween(300, easing = AurixEase)) +
+                    slideInHorizontally(tween(320, easing = AurixEase)) { it / 6 } +
+                    scaleIn(tween(320, easing = AurixEase), initialScale = 0.94f)) togetherWith
+                    (fadeOut(tween(220, easing = AurixEase)) +
+                      slideOutHorizontally(tween(280, easing = AurixEase)) { -it / 12 } +
+                      scaleOut(tween(280, easing = AurixEase), targetScale = 0.96f))
                 }
                 isExitingDetail -> {
-                  (fadeIn(tween(260, easing = AurixEase)) +
-                    slideInHorizontally(tween(280, easing = AurixEase)) { -it / 14 }) togetherWith
-                    (fadeOut(tween(200, easing = AurixEase)) +
-                      slideOutHorizontally(tween(260, easing = AurixEase)) { it / 8 } +
-                      scaleOut(tween(240, easing = AurixEase), targetScale = 0.97f))
+                  (fadeIn(tween(280, easing = AurixEase)) +
+                    slideInHorizontally(tween(300, easing = AurixEase)) { -it / 10 } +
+                    scaleIn(tween(300, easing = AurixEase), initialScale = 0.95f)) togetherWith
+                    (fadeOut(tween(220, easing = AurixEase)) +
+                      slideOutHorizontally(tween(280, easing = AurixEase)) { it / 6 } +
+                      scaleOut(tween(260, easing = AurixEase), targetScale = 0.93f))
                 }
                 initialTabIdx >= 0 && targetTabIdx >= 0 && initialTabIdx != targetTabIdx -> {
                   val forward = targetTabIdx > initialTabIdx
                   (fadeIn(tween(260, easing = AurixEase)) +
-                    slideInHorizontally(tween(280, easing = AurixEase)) { if (forward) it / 14 else -it / 14 }) togetherWith
-                    (fadeOut(tween(180, easing = AurixEase)) +
-                      slideOutHorizontally(tween(220, easing = AurixEase)) { if (forward) -it / 18 else it / 18 })
+                    slideInHorizontally(tween(280, easing = AurixEase)) { if (forward) it / 12 else -it / 12 } +
+                    scaleIn(tween(280, easing = AurixEase), initialScale = 0.97f)) togetherWith
+                    (fadeOut(tween(190, easing = AurixEase)) +
+                      slideOutHorizontally(tween(230, easing = AurixEase)) { if (forward) -it / 16 else it / 16 } +
+                      scaleOut(tween(220, easing = AurixEase), targetScale = 0.97f))
                 }
                 else -> {
                   (fadeIn(tween(260, easing = AurixEase)) +
-                    slideInVertically(tween(280, easing = AurixEase)) { it / 28 }) togetherWith
-                    fadeOut(tween(180))
+                    slideInVertically(tween(280, easing = AurixEase)) { it / 24 } +
+                    scaleIn(tween(280, easing = AurixEase), initialScale = 0.96f)) togetherWith
+                    (fadeOut(tween(180, easing = AurixEase)) +
+                      scaleOut(tween(200, easing = AurixEase), targetScale = 0.97f))
                 }
               }.using(SizeTransform(clip = false))
             }

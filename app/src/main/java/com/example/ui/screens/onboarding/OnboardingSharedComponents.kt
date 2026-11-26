@@ -32,11 +32,18 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.composed
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.draw.drawWithContent
+import androidx.compose.foundation.clickable
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.rounded.Favorite
+import androidx.compose.material.icons.rounded.FavoriteBorder
+import androidx.compose.material3.Icon
 import androidx.compose.ui.focus.onFocusChanged
-import androidx.compose.ui.geometry.CornerRadius
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.geometry.Rect
 import androidx.compose.ui.geometry.Size
+import androidx.compose.ui.semantics.Role
+import androidx.compose.ui.semantics.contentDescription
+import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.Path
@@ -168,11 +175,67 @@ fun Modifier.onboardingGlass(
   }
   val base = this.clip(shape)
   val blurred = if (hazeState != null && Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
-    base.hazeChild(state = hazeState, shape = shape, style = hazeStyle)
+    base.hazeChild(state = hazeState, style = hazeStyle)
   } else {
     base.background(fillColor, shape)
   }
   blurred.border(borderWidth, borderColor, shape)
+}
+
+/**
+ * Animated Love (Favourite) heart toggle with spring pop feedback.
+ */
+@Composable
+fun OnboardingLoveButton(
+  isLoved: Boolean,
+  loveCd: String,
+  unloveCd: String,
+  onClick: () -> Unit,
+  modifier: Modifier = Modifier,
+  reducedMotion: Boolean = false
+) {
+  val heartScale = remember { Animatable(1f) }
+  var prevLoved by remember { mutableStateOf(isLoved) }
+  LaunchedEffect(isLoved, reducedMotion) {
+    if (isLoved != prevLoved) {
+      prevLoved = isLoved
+      if (!reducedMotion) {
+        heartScale.snapTo(0.72f)
+        heartScale.animateTo(
+          targetValue = 1.0f,
+          animationSpec = tween(durationMillis = 360, easing = AurixDesignTokens.SpringEasing)
+        )
+      }
+    }
+  }
+  val activeRed = Color(0xFFFF4D7D)
+  Box(
+    modifier = modifier
+      .size(38.dp)
+      .clip(androidx.compose.foundation.shape.CircleShape)
+      .background(if (isLoved) activeRed.copy(alpha = 0.16f) else Color.White.copy(alpha = 0.05f))
+      .border(
+        width = 1.dp,
+        color = if (isLoved) activeRed.copy(alpha = 0.55f) else AurixDesignTokens.GlassBorder,
+        shape = androidx.compose.foundation.shape.CircleShape
+      )
+      .semantics { contentDescription = if (isLoved) unloveCd else loveCd }
+      .clickable(role = Role.Button, onClick = onClick),
+    contentAlignment = Alignment.Center
+  ) {
+    Icon(
+      imageVector = if (isLoved) Icons.Rounded.Favorite else Icons.Rounded.FavoriteBorder,
+      contentDescription = null,
+      tint = if (isLoved) activeRed else AurixDesignTokens.TextMuted,
+      modifier = Modifier
+        .size(18.dp)
+        .graphicsLayer {
+          val s = heartScale.value
+          scaleX = s
+          scaleY = s
+        }
+    )
+  }
 }
 
 /**

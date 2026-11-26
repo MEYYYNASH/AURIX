@@ -20,7 +20,8 @@ data class OnboardingSearchRowData(
   val badge: String,
   val artworkUrl: String = "",
   val baseHue: Float = 195f,
-  val isLocal: Boolean = false
+  val isLocal: Boolean = false,
+  val song: Song? = null
 )
 
 /**
@@ -254,7 +255,8 @@ object OnboardingShowcaseRepository {
           badge = fmt,
           artworkUrl = pickedLocal.artworkUrl,
           baseHue = hue,
-          isLocal = true
+          isLocal = true,
+          song = pickedLocal
         ),
         OnboardingSearchRowData(
           title = pickedLocal.title,
@@ -262,7 +264,8 @@ object OnboardingShowcaseRepository {
           badge = "HD",
           artworkUrl = pickedLocal.artworkUrl,
           baseHue = (hue + 48f) % 360f,
-          isLocal = false
+          isLocal = false,
+          song = pickedLocal
         ),
         OnboardingSearchRowData(
           title = "${pickedLocal.title} (Mix)",
@@ -270,7 +273,8 @@ object OnboardingShowcaseRepository {
           badge = "HD",
           artworkUrl = "",
           baseHue = (hue + 115f) % 360f,
-          isLocal = false
+          isLocal = false,
+          song = pickedLocal
         )
       )
       return OnboardingShowcaseTrack(
@@ -306,21 +310,24 @@ object OnboardingShowcaseRepository {
         subtitle = "${seed.artist} · YouTube",
         badge = "HD",
         baseHue = seed.baseHue,
-        isLocal = false
+        isLocal = false,
+        song = placeholderSong
       ),
       OnboardingSearchRowData(
         title = seed.altTitle,
         subtitle = "${seed.altArtist} · YouTube",
         badge = "HD",
         baseHue = (seed.baseHue + 52f) % 360f,
-        isLocal = false
+        isLocal = false,
+        song = placeholderSong.copy(id = "seed_${seed.key}_alt", title = seed.altTitle, artist = seed.altArtist)
       ),
       OnboardingSearchRowData(
         title = seed.title,
         subtitle = "${seed.artist} · $onPhoneLabel",
         badge = localFormat,
         baseHue = (seed.baseHue + 128f) % 360f,
-        isLocal = true
+        isLocal = true,
+        song = placeholderSong
       )
     )
     return OnboardingShowcaseTrack(
@@ -430,13 +437,25 @@ object OnboardingShowcaseRepository {
 
     val ytRow2 = ytMatches.firstOrNull()?.let { item ->
       val (cleanTitle, cleanArtist) = YoutubeTitleCleaner.parseTitleAndArtist(item.rawTitle, item.author)
+      val dur = item.durationSeconds.takeIf { it > 35L } ?: 210L
+      val songObj = Song(
+        id = "yt_${item.videoId}",
+        title = cleanTitle,
+        artist = cleanArtist,
+        artworkUrl = item.thumbnailUrl,
+        durationSeconds = dur,
+        streamUrl = "https://www.youtube.com/watch?v=${item.videoId}",
+        source = "YouTube",
+        fullDurationSeconds = dur
+      )
       OnboardingSearchRowData(
         title = cleanTitle,
         subtitle = "$cleanArtist · YouTube",
         badge = "HD",
         artworkUrl = item.thumbnailUrl,
         baseHue = (hue + 52f) % 360f,
-        isLocal = false
+        isLocal = false,
+        song = songObj
       )
     } ?: OnboardingSearchRowData(
       title = localSong.title,
@@ -444,18 +463,31 @@ object OnboardingShowcaseRepository {
       badge = "HD",
       artworkUrl = localSong.artworkUrl,
       baseHue = (hue + 52f) % 360f,
-      isLocal = false
+      isLocal = false,
+      song = localSong
     )
 
     val ytRow3 = ytMatches.getOrNull(1)?.let { item ->
       val (cleanTitle, cleanArtist) = YoutubeTitleCleaner.parseTitleAndArtist(item.rawTitle, item.author)
+      val dur = item.durationSeconds.takeIf { it > 35L } ?: 210L
+      val songObj = Song(
+        id = "yt_${item.videoId}",
+        title = cleanTitle,
+        artist = cleanArtist,
+        artworkUrl = item.thumbnailUrl,
+        durationSeconds = dur,
+        streamUrl = "https://www.youtube.com/watch?v=${item.videoId}",
+        source = "YouTube",
+        fullDurationSeconds = dur
+      )
       OnboardingSearchRowData(
         title = cleanTitle,
         subtitle = "$cleanArtist · YouTube",
         badge = "HD",
         artworkUrl = item.thumbnailUrl,
         baseHue = (hue + 118f) % 360f,
-        isLocal = false
+        isLocal = false,
+        song = songObj
       )
     } ?: OnboardingSearchRowData(
       title = "${localSong.title} (Acoustic)",
@@ -463,7 +495,8 @@ object OnboardingShowcaseRepository {
       badge = "HD",
       artworkUrl = "",
       baseHue = (hue + 118f) % 360f,
-      isLocal = false
+      isLocal = false,
+      song = localSong
     )
 
     val durSec = localSong.durationSeconds.takeIf { it > 10L }?.toFloat()
@@ -476,7 +509,8 @@ object OnboardingShowcaseRepository {
         badge = fmt,
         artworkUrl = localSong.artworkUrl,
         baseHue = hue,
-        isLocal = true
+        isLocal = true,
+        song = localSong
       ),
       ytRow2,
       ytRow3
@@ -572,13 +606,25 @@ object OnboardingShowcaseRepository {
         matchingSecondYt.rawTitle,
         matchingSecondYt.author
       )
+      val dur2 = matchingSecondYt.durationSeconds.takeIf { it > 35L } ?: seed.durationSeconds
+      val song2 = Song(
+        id = "yt_${matchingSecondYt.videoId}",
+        title = cleanTitle,
+        artist = cleanArtist,
+        artworkUrl = matchingSecondYt.thumbnailUrl,
+        durationSeconds = dur2,
+        streamUrl = "https://www.youtube.com/watch?v=${matchingSecondYt.videoId}",
+        source = "YouTube",
+        fullDurationSeconds = dur2
+      )
       OnboardingSearchRowData(
         title = cleanTitle,
         subtitle = "$cleanArtist · YouTube",
         badge = "HD",
         artworkUrl = matchingSecondYt.thumbnailUrl,
         baseHue = (seed.baseHue + 52f) % 360f,
-        isLocal = false
+        isLocal = false,
+        song = song2
       )
     } else {
       OnboardingSearchRowData(
@@ -587,7 +633,8 @@ object OnboardingShowcaseRepository {
         badge = "HD",
         artworkUrl = "",
         baseHue = (seed.baseHue + 52f) % 360f,
-        isLocal = false
+        isLocal = false,
+        song = featuredSong
       )
     }
 
@@ -601,7 +648,8 @@ object OnboardingShowcaseRepository {
         badge = extractLocalAudioFormatBadge(matchingLocal),
         artworkUrl = matchingLocal.artworkUrl,
         baseHue = (seed.baseHue + 128f) % 360f,
-        isLocal = true
+        isLocal = true,
+        song = matchingLocal
       )
     } else {
       OnboardingSearchRowData(
@@ -610,7 +658,8 @@ object OnboardingShowcaseRepository {
         badge = defaultLocalBadge,
         artworkUrl = featuredSong.artworkUrl,
         baseHue = (seed.baseHue + 128f) % 360f,
-        isLocal = true
+        isLocal = true,
+        song = featuredSong
       )
     }
 
@@ -621,7 +670,8 @@ object OnboardingShowcaseRepository {
         badge = "HD",
         artworkUrl = featuredSong.artworkUrl,
         baseHue = seed.baseHue,
-        isLocal = false
+        isLocal = false,
+        song = featuredSong
       ),
       row2,
       row3
@@ -673,5 +723,153 @@ object OnboardingShowcaseRepository {
       }
       resolved
     }.getOrNull()
+  }
+
+  /**
+   * Live interactive search for Slide 1 ("What's your favourite music?"):
+   * combines matching local phone songs with live YouTube results so the user can pick any real song.
+   */
+  suspend fun searchUserFavoriteSongs(
+    query: String,
+    localSongs: List<Song>,
+    onPhoneLabel: String,
+    limit: Int = 6
+  ): List<OnboardingSearchRowData> = withContext(Dispatchers.IO) {
+    val trimmed = query.trim()
+    if (trimmed.isBlank()) return@withContext emptyList()
+    val lower = trimmed.lowercase()
+
+    val localMatches = localSongs
+      .filter { song ->
+        song.title.lowercase().contains(lower) || song.artist.lowercase().contains(lower)
+      }
+      .take(2)
+      .map { song ->
+        OnboardingSearchRowData(
+          title = song.title,
+          subtitle = "${song.artist} · $onPhoneLabel",
+          badge = extractLocalAudioFormatBadge(song),
+          artworkUrl = song.artworkUrl,
+          baseHue = deterministicHue("${song.title}|${song.artist}"),
+          isLocal = true,
+          song = song
+        )
+      }
+
+    val ytMatches = runCatching {
+      YoutubeExtractor.searchSongs(trimmed, limit = limit)
+    }.getOrDefault(emptyList())
+      .mapNotNull { item ->
+        val (cleanTitle, cleanArtist) = YoutubeTitleCleaner.parseTitleAndArtist(item.rawTitle, item.author)
+        if (cleanTitle.isBlank()) return@mapNotNull null
+        val dur = item.durationSeconds.takeIf { it > 25L } ?: 210L
+        val song = Song(
+          id = "yt_${item.videoId}",
+          title = cleanTitle,
+          artist = cleanArtist.ifBlank { item.author.ifBlank { "YouTube" } },
+          artworkUrl = item.thumbnailUrl,
+          durationSeconds = dur,
+          streamUrl = "https://www.youtube.com/watch?v=${item.videoId}",
+          source = "YouTube",
+          fullDurationSeconds = dur
+        )
+        OnboardingSearchRowData(
+          title = song.title,
+          subtitle = "${song.artist} · YouTube",
+          badge = "HD",
+          artworkUrl = song.artworkUrl,
+          baseHue = deterministicHue("${song.title}|${song.artist}"),
+          isLocal = false,
+          song = song
+        )
+      }
+
+    (localMatches + ytMatches)
+      .distinctBy { "${it.title.lowercase()}|${it.subtitle.lowercase()}" }
+      .take(limit)
+  }
+
+  /**
+   * Hydrates a user-picked favourite song into a complete [OnboardingShowcaseTrack] with real
+   * synced LRCLIB lyrics so Slides 2, 3, and 4 immediately adapt to their chosen song.
+   */
+  suspend fun buildShowcaseFromSelectedSong(
+    context: Context,
+    selectedSong: Song,
+    currentQuery: String,
+    currentRows: List<OnboardingSearchRowData>,
+    onPhoneLabel: String
+  ): OnboardingShowcaseTrack = withContext(Dispatchers.IO) {
+    // If the song is still a placeholder seed id, try resolving a real YouTube track first
+    val resolvedSong = if (selectedSong.id.startsWith("seed_")) {
+      val ytItems = runCatching {
+        YoutubeExtractor.searchSongs("${selectedSong.title} ${selectedSong.artist}", limit = 3)
+      }.getOrDefault(emptyList())
+      val best = ytItems.firstOrNull()
+      if (best != null) {
+        val (cleanTitle, cleanArtist) = YoutubeTitleCleaner.parseTitleAndArtist(best.rawTitle, best.author)
+        val dur = best.durationSeconds.takeIf { it > 30L } ?: selectedSong.durationSeconds
+        Song(
+          id = "yt_${best.videoId}",
+          title = cleanTitle.ifBlank { selectedSong.title },
+          artist = cleanArtist.ifBlank { selectedSong.artist },
+          artworkUrl = best.thumbnailUrl.ifBlank { selectedSong.artworkUrl },
+          durationSeconds = dur,
+          streamUrl = "https://www.youtube.com/watch?v=${best.videoId}",
+          source = "YouTube",
+          fullDurationSeconds = dur
+        )
+      } else {
+        selectedSong
+      }
+    } else {
+      selectedSong
+    }
+
+    val outcome = runCatching {
+      LyricsMatcher.matchWithOutcome(
+        song = resolvedSong,
+        context = context,
+        overrideDurationSec = resolvedSong.durationSeconds.takeIf { it > 30L }?.toDouble()
+      )
+    }.getOrNull()
+
+    val syncedLines = (outcome as? LyricsMatchOutcome.Verified)
+      ?.lyricsResult
+      ?.synced
+      .orEmpty()
+      .filter { it.text.isNotBlank() }
+      .map { OnboardingLyricLine(it.timestampMs / 1000f, it.text.trim()) }
+
+    val durSec = resolvedSong.durationSeconds.takeIf { it > 10L }?.toFloat()
+      ?: OnboardingDemoAudioEngine.LOOP_DURATION_SECONDS
+    val (winStart, safeDur) = selectLyricStartWindow(syncedLines, durSec)
+    val hue = deterministicHue("${resolvedSong.title}|${resolvedSong.artist}")
+    val rows = currentRows.ifEmpty {
+      listOf(
+        OnboardingSearchRowData(
+          title = resolvedSong.title,
+          subtitle = "${resolvedSong.artist} · ${if (resolvedSong.source.equals("Local", true)) onPhoneLabel else "YouTube"}",
+          badge = if (resolvedSong.source.equals("Local", true)) extractLocalAudioFormatBadge(resolvedSong) else "HD",
+          artworkUrl = resolvedSong.artworkUrl,
+          baseHue = hue,
+          isLocal = resolvedSong.source.equals("Local", true),
+          song = resolvedSong
+        )
+      )
+    }
+
+    OnboardingShowcaseTrack(
+      seedKey = "picked_${resolvedSong.id}",
+      song = resolvedSong,
+      searchQuery = currentQuery.ifBlank { deriveSearchQueryFromTitle(resolvedSong.title) },
+      searchRows = rows,
+      lyrics = syncedLines,
+      lyricWindowStartSec = winStart,
+      durationSeconds = safeDur,
+      hasVerifiedRealLyrics = syncedLines.size >= 4,
+      accentBaseHue = hue,
+      isLiveFetched = true
+    )
   }
 }

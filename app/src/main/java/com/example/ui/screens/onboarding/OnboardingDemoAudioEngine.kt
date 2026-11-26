@@ -42,6 +42,8 @@ class OnboardingDemoAudioEngine(
     const val LOOP_DURATION_SECONDS = BARS * BAR_SECONDS // 19.2s
 
     const val MASTER_GAIN = 0.2f
+    const val AMBIENT_VOLUME = 0.24f
+    const val FULL_VOLUME = 0.78f
     const val ECHO_DELAY_SECONDS = 0.3f
     const val ECHO_FEEDBACK = 0.38f
     const val ECHO_WET = 0.35f
@@ -312,27 +314,36 @@ class OnboardingDemoAudioEngine(
   private var audioTrack: AudioTrack? = null
   private var mediaPlayer: MediaPlayer? = null
   private var cachedPcm: ShortArray? = null
-  private var isPlayingInternal = false
+  @Volatile private var isPlayingInternal = false
+  @Volatile private var currentVolumeInternal = AMBIENT_VOLUME
+  @Volatile private var fadeGeneration = 0L
   private var trackStartElapsedMs = 0L
   private var trackStartOffsetSec = 0f
 
   val isPlaying: Boolean
     get() = isPlayingInternal
 
+  val currentVolume: Float
+    get() = currentVolumeInternal
+
   var totalDurationSeconds: Float = LOOP_DURATION_SECONDS
     private set
 
   /**
-   * Starts audio playback (opt-in only). Plays [overrideAudioSrc] or [audioSrc] via [MediaPlayer]
-   * when available (supporting local files, content:// URIs, and extracted YouTube audio streams
-   * with User-Agent headers), falling back seamlessly to the procedural synth loop if offline/unavailable.
+   * Starts audio playback at a gentle ambient volume ([volume], defaulting to [AMBIENT_VOLUME] = 0.24f)
+   * with a smooth fade-in so selecting a song feels atmospheric rather than startling.
    */
   fun start(
     initialTimeSec: Float = 0f,
     overrideAudioSrc: String? = null,
-    context: android.content.Context? = null
+    context: android.content.Context? = null,
+    volume: Float = AMBIENT_VOLUME,
+    fadeInMs: Long = 520L
   ): Boolean {
     stop()
+    val targetVol = volume.coerceIn(0.02f, 1f)
+    currentVolumeInternal = targetVol
+    val gen = ++fadeGeneration
     val customSrc = (overrideAudioSrc ?: audioSrc)?.trim().orEmpty()
     if (customSrc.isNotEmpty()) {
       val startedReal = runCatching {
@@ -361,10 +372,15 @@ class OnboardingDemoAudioEngine(
           totalDurationSeconds = durSec
           val seekMs = ((initialTimeSec % durSec) * 1000f).toInt().coerceIn(0, duration)
           seekTo(seekMs)
+          val initialVol = if (fadeInMs > 0L) 0.01f else targetVol
+          setVolume(initialVol, initialVol)
           start()
         }
         mediaPlayer = mp
         isPlayingInternal = true
+        if (fadeInMs > 0L) {
+          startFadeThread(gen = gen, fromVol = 0.01f, toVol = targetVol, durationMs = fadeInMs, stopAfter = false)
+        }
         true
       }.getOrElse {
         stop()
@@ -404,17 +420,77 @@ class OnboardingDemoAudioEngine(
         .coerceIn(0, pcm.size - 1)
       track.setLoopPoints(0, pcm.size, -1)
       runCatching { track.setPlaybackHeadPosition(startFrame) }
+      val initialVol = if (fadeInMs > 0L) 0.01f else targetVol
+      runCatching { track.setVolume(initialVol) }
       track.play()
       audioTrack = track
       totalDurationSeconds = LOOP_DURATION_SECONDS
       trackStartOffsetSec = startFrame.toFloat() / SAMPLE_RATE
       trackStartElapsedMs = SystemClock.elapsedRealtime()
       isPlayingInternal = true
+      if (fadeInMs > 0L) {
+        startFadeThread(gen = gen, fromVol = 0.01f, toVol = targetVol, durationMs = fadeInMs, stopAfter = false)
+      }
       true
     }.getOrElse {
       stop()
       false
     }
+  }
+
+  fun setVolume(volume: Float) {
+    val clamped = volume.coerceIn(0f, 1f)
+    currentVolumeInternal = clamped
+    fadeGeneration++
+    applyVolumeNow(clamped)
+  }
+
+  fun fadeOutAndStop(durationMs: Long = 380L) {
+    if (!isPlayingInternal) {
+      stop()
+      return
+    }
+    val gen = ++fadeGeneration
+    startFadeThread(
+      gen = gen,
+      fromVol = currentVolumeInternal,
+      toVol = 0f,
+      durationMs = durationMs.coerceAtLeast(80L),
+      stopAfter = true
+    )
+  }
+
+  private fun applyVolumeNow(vol: Float) {
+    val v = vol.coerceIn(0f, 1f)
+    runCatching { mediaPlayer?.setVolume(v, v) }
+    runCatching { audioTrack?.setVolume(v) }
+  }
+
+  private fun startFadeThread(
+    gen: Long,
+    fromVol: Float,
+    toVol: Float,
+    durationMs: Long,
+    stopAfter: Boolean
+  ) {
+    Thread {
+      val steps = 16
+      val stepMs = (durationMs / steps).coerceAtLeast(10L)
+      for (i in 1..steps) {
+        if (fadeGeneration != gen || !isPlayingInternal) return@Thread
+        val t = i.toFloat() / steps
+        val vol = fromVol + (toVol - fromVol) * t
+        applyVolumeNow(vol)
+        try {
+          Thread.sleep(stepMs)
+        } catch (_: InterruptedException) {
+          return@Thread
+        }
+      }
+      if (stopAfter && fadeGeneration == gen) {
+        stop()
+      }
+    }.apply { isDaemon = true }.start()
   }
 
   /**
@@ -435,6 +511,7 @@ class OnboardingDemoAudioEngine(
   }
 
   fun stop() {
+    fadeGeneration++
     isPlayingInternal = false
     runCatching {
       mediaPlayer?.stop()

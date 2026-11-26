@@ -1,10 +1,10 @@
 package com.example.ui.screens
 
 import android.os.Build
+import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.animateColorAsState
 import androidx.compose.animation.core.Animatable
 import androidx.compose.animation.core.FastOutSlowInEasing
-import androidx.compose.animation.core.LinearEasing
 import androidx.compose.animation.core.RepeatMode
 import androidx.compose.animation.core.animateFloat
 import androidx.compose.animation.core.animateFloatAsState
@@ -12,6 +12,10 @@ import androidx.compose.animation.core.infiniteRepeatable
 import androidx.compose.animation.core.rememberInfiniteTransition
 import androidx.compose.animation.core.snap
 import androidx.compose.animation.core.tween
+import androidx.compose.animation.expandVertically
+import androidx.compose.animation.fadeIn
+import androidx.compose.animation.fadeOut
+import androidx.compose.animation.shrinkVertically
 import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
@@ -26,12 +30,14 @@ import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.WindowInsets
 import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.ime
+import androidx.compose.foundation.layout.imePadding
 import androidx.compose.foundation.layout.navigationBarsPadding
-import androidx.compose.foundation.layout.offset
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.statusBarsPadding
@@ -52,6 +58,7 @@ import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.BlurredEdgeTreatment
 import androidx.compose.ui.draw.blur
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.draw.drawWithContent
@@ -59,6 +66,7 @@ import androidx.compose.ui.draw.shadow
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.TransformOrigin
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.input.key.Key
 import androidx.compose.ui.input.key.KeyEventType
@@ -71,6 +79,7 @@ import androidx.compose.ui.layout.onGloballyPositioned
 import androidx.compose.ui.layout.positionInRoot
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalDensity
+import androidx.compose.ui.platform.LocalFocusManager
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.semantics.Role
@@ -89,6 +98,7 @@ import com.example.model.Song
 import com.example.ui.screens.onboarding.OnboardingArrowLeftIcon
 import com.example.ui.screens.onboarding.OnboardingArrowRightIcon
 import com.example.ui.screens.onboarding.OnboardingDemoAudioEngine
+import com.example.ui.screens.onboarding.OnboardingSearchRowData
 import com.example.ui.screens.onboarding.OnboardingShowcaseRepository
 import com.example.ui.screens.onboarding.OnboardingSlide1Stage
 import com.example.ui.screens.onboarding.OnboardingSlide2Stage
@@ -100,8 +110,11 @@ import com.example.ui.screens.onboarding.onboardingGlass
 import com.example.ui.theme.AurixDesignTokens
 import dev.chrisbanes.haze.HazeState
 import dev.chrisbanes.haze.haze
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.Job
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.withContext
 import kotlin.math.abs
 import kotlin.math.hypot
 
@@ -114,24 +127,28 @@ fun OnboardingScreen(
   initialDynamicBg: Boolean = true,
   initialDynamicBgDim: Float = 0.40f,
   localSongs: List<Song> = emptyList(),
+  favoriteIds: Set<String> = emptySet(),
   liveLyricsResult: LyricsResult? = null,
   audioSrc: String? = null,
   reducedMotion: Boolean = false,
   onLanguageChanged: (String) -> Unit = {},
   onAccentColorChanged: (String) -> Unit = {},
   onBackdropChanged: (AurixDesignTokens.BackdropPreset) -> Unit = {},
+  onSetFavorite: (Song, Boolean) -> Unit = { _, _ -> },
+  onToggleFavorite: (Song) -> Unit = {},
+  onRevealAppUnderneath: () -> Unit = {},
   onSkipped: () -> Unit = {},
   onFinished: () -> Unit
 ) {
   val scope = rememberCoroutineScope()
   val density = LocalDensity.current
+  val focusManager = LocalFocusManager.current
   val hazeState = remember { HazeState() }
 
   val isKhmer = LocaleHelper.normalizeLanguage(currentLanguage) == LocaleHelper.LANG_KM
   val fontFamily = remember(isKhmer) { AurixDesignTokens.fontFamily(isKhmer) }
 
   var currentSlide by remember { mutableIntStateOf(0) }
-  // Incremented each time a slide becomes current so entrance animations replay every time
   var slideReplaySeeds by remember { mutableStateOf(intArrayOf(1, 0, 0, 0)) }
 
   // Slide 3 live accent + backdrop state
@@ -143,16 +160,17 @@ fun OnboardingScreen(
     mutableStateOf(AurixDesignTokens.BackdropPreset.fromSettings(initialDynamicBg, initialDynamicBgDim))
   }
 
-  // Smooth 0.8s Accent A color transition across the entire screen
   val animatedAccentA by animateColorAsState(
     targetValue = selectedAccentPreset.color,
     animationSpec = if (reducedMotion) snap() else tween(durationMillis = 800, easing = AurixDesignTokens.MainEasing),
     label = "onboarding_accent_a"
   )
 
-  // If user leaves Slide 3 without manually choosing an accent, reset back to default cyan blue
   var previousSlide by remember { mutableIntStateOf(0) }
   LaunchedEffect(currentSlide) {
+    if (currentSlide != 0) {
+      focusManager.clearFocus()
+    }
     if (previousSlide == 2 && currentSlide != 2 && !userChoseAccent) {
       selectedAccentPreset = AurixDesignTokens.AccentPresets.first()
     }
@@ -165,7 +183,7 @@ fun OnboardingScreen(
   val context = LocalContext.current
   val onPhoneLabel = stringResource(id = R.string.onboarding_location)
 
-  // Live random real-song showcase (real song + matching YouTube/phone search + real synced LRCLIB lyrics)
+  // Live song showcase shared across Slides 1, 2, 3, and 4
   var showcaseTrack by remember {
     mutableStateOf(
       OnboardingShowcaseRepository.buildInitialRandomShowcase(
@@ -176,8 +194,36 @@ fun OnboardingScreen(
   }
   var isLoadingShowcase by remember { mutableStateOf(true) }
   var shuffleRequestCount by remember { mutableIntStateOf(0) }
+  var hasUserPickedSong by remember { mutableStateOf(false) }
 
+  // Slide 1 interactive search state
+  var userSearchQuery by remember { mutableStateOf("") }
+  var userSearchResults by remember { mutableStateOf<List<OnboardingSearchRowData>>(emptyList()) }
+  var isSearchingUserSongs by remember { mutableStateOf(false) }
+
+  // Debounced live YouTube + local search when the user types their favourite music
+  LaunchedEffect(userSearchQuery, localSongs, onPhoneLabel) {
+    val trimmed = userSearchQuery.trim()
+    if (trimmed.isEmpty()) {
+      userSearchResults = emptyList()
+      isSearchingUserSongs = false
+      return@LaunchedEffect
+    }
+    isSearchingUserSongs = true
+    delay(320L)
+    val results = OnboardingShowcaseRepository.searchUserFavoriteSongs(
+      query = trimmed,
+      localSongs = localSongs,
+      onPhoneLabel = onPhoneLabel,
+      limit = 6
+    )
+    userSearchResults = results
+    isSearchingUserSongs = false
+  }
+
+  // Initial real random song fetch (only applies if the user hasn't already picked their own favourite)
   LaunchedEffect(shuffleRequestCount) {
+    if (hasUserPickedSong && shuffleRequestCount == 0) return@LaunchedEffect
     isLoadingShowcase = true
     val excludeKey = if (shuffleRequestCount > 0) showcaseTrack.seedKey else null
     val initialPick = if (shuffleRequestCount > 0) {
@@ -196,11 +242,13 @@ fun OnboardingScreen(
       excludeSeedKey = excludeKey,
       preferredInitial = initialPick
     )
-    showcaseTrack = liveTrack
+    if (!hasUserPickedSong || shuffleRequestCount > 0) {
+      showcaseTrack = liveTrack
+    }
     isLoadingShowcase = false
   }
 
-  // Keep local row subtitle updated immediately when user toggles EN / Khmer
+  // Keep local row subtitles localized when switching EN / Khmer
   LaunchedEffect(onPhoneLabel) {
     val updatedRows = showcaseTrack.searchRows.map { row ->
       if (row.isLocal) {
@@ -215,14 +263,110 @@ fun OnboardingScreen(
     }
   }
 
-  // Shared Audio + Lyric Sync engine for Slide 2 (released cleanly on exit)
+  // Shared ambient audio engine spanning all 4 slides so selected favourite music plays softly throughout
   val audioEngine = remember(audioSrc) { OnboardingDemoAudioEngine(audioSrc = audioSrc) }
+  var isPreviewPlaying by remember { mutableStateOf(false) }
+  var isResolvingPreview by remember { mutableStateOf(false) }
+  var resolvedStreamCache by remember { mutableStateOf<Pair<String, String?>?>(null) }
+  var previewJob by remember { mutableStateOf<Job?>(null) }
+  var hydrateSongJob by remember { mutableStateOf<Job?>(null) }
+
   DisposableEffect(audioEngine) {
-    onDispose { audioEngine.release() }
+    onDispose {
+      previewJob?.cancel()
+      hydrateSongJob?.cancel()
+      audioEngine.release()
+    }
+  }
+
+  fun startSoftAmbientPreview(song: Song, startAtSec: Float) {
+    previewJob?.cancel()
+    previewJob = scope.launch {
+      isResolvingPreview = true
+      val cached = resolvedStreamCache?.takeIf { it.first == song.id }?.second
+      val streamUrl = cached ?: OnboardingShowcaseRepository.resolvePlayablePreviewUrl(song).also {
+        resolvedStreamCache = song.id to it
+      }
+      val started = withContext(Dispatchers.IO) {
+        audioEngine.start(
+          initialTimeSec = startAtSec,
+          overrideAudioSrc = streamUrl,
+          context = context,
+          volume = OnboardingDemoAudioEngine.AMBIENT_VOLUME,
+          fadeInMs = 560L
+        )
+      }
+      isResolvingPreview = false
+      isPreviewPlaying = started
+    }
+  }
+
+  fun toggleAmbientPreview() {
+    if (isPreviewPlaying) {
+      previewJob?.cancel()
+      audioEngine.fadeOutAndStop(260L)
+      isPreviewPlaying = false
+      isResolvingPreview = false
+    } else {
+      startSoftAmbientPreview(
+        song = showcaseTrack.song,
+        startAtSec = showcaseTrack.lyricWindowStartSec
+      )
+    }
+  }
+
+  fun handleUserSelectFavoriteSong(pickedSong: Song) {
+    hasUserPickedSong = true
+    // Auto-add picked song to App Favourites (Love)
+    onSetFavorite(pickedSong, true)
+
+    // Immediately show the picked song across Slides 1-4 while hydrating real lyrics + audio stream
+    val activeRows = if (userSearchQuery.isNotBlank()) userSearchResults else showcaseTrack.searchRows
+    val immediateHue = OnboardingShowcaseRepository.deterministicHue("${pickedSong.title}|${pickedSong.artist}")
+    showcaseTrack = showcaseTrack.copy(
+      seedKey = "picked_${pickedSong.id}",
+      song = pickedSong,
+      searchQuery = userSearchQuery.ifBlank { OnboardingShowcaseRepository.deriveSearchQueryFromTitle(pickedSong.title) },
+      searchRows = activeRows.ifEmpty { showcaseTrack.searchRows },
+      lyrics = emptyList(),
+      lyricWindowStartSec = 0f,
+      durationSeconds = pickedSong.durationSeconds.takeIf { it > 10L }?.toFloat()
+        ?: OnboardingDemoAudioEngine.LOOP_DURATION_SECONDS,
+      hasVerifiedRealLyrics = false,
+      accentBaseHue = immediateHue
+    )
+
+    // Hydrate real synced lyrics + ensure playable YouTube track, then start soft ambient preview
+    hydrateSongJob?.cancel()
+    hydrateSongJob = scope.launch {
+      isLoadingShowcase = true
+      val hydrated = OnboardingShowcaseRepository.buildShowcaseFromSelectedSong(
+        context = context,
+        selectedSong = pickedSong,
+        currentQuery = userSearchQuery,
+        currentRows = activeRows,
+        onPhoneLabel = onPhoneLabel
+      )
+      showcaseTrack = hydrated
+      isLoadingShowcase = false
+      // If placeholder seed resolved to real YouTube song ID, also ensure the resolved song is Loved
+      if (hydrated.song.id != pickedSong.id) {
+        onSetFavorite(hydrated.song, true)
+      }
+      startSoftAmbientPreview(
+        song = hydrated.song,
+        startAtSec = hydrated.lyricWindowStartSec
+      )
+    }
   }
 
   fun shuffleShowcaseSong() {
+    hasUserPickedSong = false
+    previewJob?.cancel()
+    hydrateSongJob?.cancel()
     audioEngine.stop()
+    isPreviewPlaying = false
+    isResolvingPreview = false
     shuffleRequestCount++
   }
 
@@ -240,7 +384,7 @@ fun OnboardingScreen(
       } else {
         animatedPageOffset.animateTo(
           targetValue = clamped.toFloat(),
-          animationSpec = tween(durationMillis = 600, easing = AurixDesignTokens.MainEasing)
+          animationSpec = tween(durationMillis = 560, easing = AurixDesignTokens.MainEasing)
         )
       }
     }
@@ -256,15 +400,20 @@ fun OnboardingScreen(
     }
   }
 
-  // Finish circular reveal state
+  // Full-screen Start transition state (iris expansion + AURIX wordmark + seamless dissolve into Home)
   var isFinishing by remember { mutableStateOf(false) }
+  var isRevealingApp by remember { mutableStateOf(false) }
   var buttonCenterInRoot by remember { mutableStateOf(Offset.Zero) }
   val finishRadiusFraction = remember { Animatable(0f) }
   val finishWordmarkProgress = remember { Animatable(0f) }
+  val finishDissolveAlpha = remember { Animatable(1f) }
 
   fun triggerFinish() {
     if (isFinishing) return
-    audioEngine.stop()
+    focusManager.clearFocus()
+    previewJob?.cancel()
+    audioEngine.fadeOutAndStop(420L)
+    isPreviewPlaying = false
     isFinishing = true
     if (userChoseAccent) {
       onAccentColorChanged(selectedAccentPreset.hex)
@@ -274,38 +423,54 @@ fun OnboardingScreen(
       if (reducedMotion) {
         finishRadiusFraction.snapTo(1.5f)
         finishWordmarkProgress.snapTo(1f)
-        delay(220L)
+        onRevealAppUnderneath()
+        isRevealingApp = true
+        delay(180L)
+        finishDissolveAlpha.snapTo(0f)
         onFinished()
       } else {
         launch {
           finishRadiusFraction.animateTo(
-            targetValue = 1.5f,
-            animationSpec = tween(durationMillis = 850, easing = AurixDesignTokens.FinishRevealEasing)
+            targetValue = 1.55f,
+            animationSpec = tween(durationMillis = 720, easing = AurixDesignTokens.FinishRevealEasing)
           )
         }
         launch {
-          delay(500L)
+          delay(340L)
           finishWordmarkProgress.animateTo(
             targetValue = 1f,
-            animationSpec = tween(durationMillis = 600, easing = AurixDesignTokens.MainEasing)
+            animationSpec = tween(durationMillis = 480, easing = AurixDesignTokens.MainEasing)
           )
-          delay(280L)
+          // Mount Home underneath while full-screen gradient covers viewport, then smoothly dissolve out
+          onRevealAppUnderneath()
+          isRevealingApp = true
+          delay(180L)
+          finishDissolveAlpha.animateTo(
+            targetValue = 0f,
+            animationSpec = tween(durationMillis = 420, easing = AurixDesignTokens.MainEasing)
+          )
           onFinished()
         }
       }
     }
   }
 
+  val canAdvanceFromCurrentSlide = currentSlide > 0 || hasUserPickedSong
+  val isKeyboardOpen = WindowInsets.ime.getBottom(density) > 0
+
   BoxWithConstraints(
     modifier = Modifier
       .fillMaxSize()
-      .background(AurixDesignTokens.Background)
+      .graphicsLayer {
+        alpha = if (isRevealingApp) finishDissolveAlpha.value else 1f
+      }
+      .background(if (isRevealingApp) Color.Transparent else AurixDesignTokens.Background)
       .focusable()
       .onPreviewKeyEvent { keyEvent ->
         if (keyEvent.type == KeyEventType.KeyDown && !isFinishing) {
           when (keyEvent.key) {
             Key.DirectionRight -> {
-              if (currentSlide < ONBOARDING_SLIDE_COUNT - 1) {
+              if (currentSlide < ONBOARDING_SLIDE_COUNT - 1 && canAdvanceFromCurrentSlide) {
                 navigateToSlide(currentSlide + 1)
                 true
               } else false
@@ -328,375 +493,415 @@ fun OnboardingScreen(
     val rootWidthPx = with(density) { maxWidth.toPx() }
     val rootHeightPx = with(density) { rootMaxHeightDp.toPx() }
     val isCompactHeight = rootMaxHeightDp <= 700.dp
-    val isTallScreen = rootMaxHeightDp >= 780.dp
 
-    // Background Layer (Haze source): Two blurred drifting circles (blur 80, opacity 0.42)
-    Box(
-      modifier = Modifier
-        .fillMaxSize()
-        .haze(state = hazeState)
-        .background(AurixDesignTokens.Background)
-    ) {
-      OnboardingBackgroundGlows(
-        currentSlide = currentSlide,
-        accentA = animatedAccentA,
-        backdropPreset = selectedBackdrop,
-        reducedMotion = reducedMotion,
-        screenHeightDp = rootMaxHeightDp.value
-      )
-    }
-
-    // Centered max-width 460dp column (non-scrolling, safe-area insets respected)
-    Column(
-      modifier = Modifier
-        .align(Alignment.Center)
-        .fillMaxHeight()
-        .widthIn(max = 460.dp)
-        .fillMaxWidth()
-        .statusBarsPadding()
-        .navigationBarsPadding(),
-      horizontalAlignment = Alignment.CenterHorizontally
-    ) {
-      // b) Progress segments: 4 bars, gap 6dp, padding 16/20/0, height 3dp, radius 2dp
-      Row(
+    // Hide underlying onboarding slides once the full-screen iris completely covers the viewport
+    if (!isRevealingApp) {
+      // Seamless full-bleed GPU radial aurora glows (ZERO rectangular blur clipping or corner seams!)
+      Box(
         modifier = Modifier
-          .fillMaxWidth()
-          .padding(start = 20.dp, end = 20.dp, top = 16.dp),
-        horizontalArrangement = Arrangement.spacedBy(6.dp)
+          .fillMaxSize()
+          .haze(state = hazeState)
+          .background(AurixDesignTokens.Background)
       ) {
-        for (i in 0 until ONBOARDING_SLIDE_COUNT) {
-          val fillFractionState = animateFloatAsState(
-            targetValue = if (i <= currentSlide) 1f else 0f,
-            animationSpec = if (reducedMotion) snap() else tween(550, easing = AurixDesignTokens.MainEasing),
-            label = "progress_seg_$i"
-          )
-          Box(
-            modifier = Modifier
-              .weight(1f)
-              .height(3.dp)
-              .clip(RoundedCornerShape(2.dp))
-              .background(AurixDesignTokens.ProgressTrack)
-          ) {
-            Box(
-              modifier = Modifier
-                .fillMaxHeight()
-                .fillMaxWidth()
-                .graphicsLayer {
-                  scaleX = fillFractionState.value
-                  transformOrigin = androidx.compose.ui.graphics.TransformOrigin(0f, 0.5f)
-                }
-                .clip(RoundedCornerShape(2.dp))
-                .background(Color.White)
-            )
-          }
-        }
+        OnboardingBackgroundGlows(
+          currentSlide = currentSlide,
+          accentA = animatedAccentA,
+          backdropPreset = selectedBackdrop,
+          reducedMotion = reducedMotion
+        )
       }
 
-      // c) Top bar (padding 14/20/0): Skip glass pill (left, hidden on last slide) + EN / ខ្មែរ pill (right)
-      Row(
+      // Centered max-width 460dp column with safe-area + IME insets
+      Column(
         modifier = Modifier
+          .align(Alignment.Center)
+          .fillMaxHeight()
+          .widthIn(max = 460.dp)
           .fillMaxWidth()
-          .padding(start = 20.dp, end = 20.dp, top = 14.dp),
-        horizontalArrangement = Arrangement.SpaceBetween,
-        verticalAlignment = Alignment.CenterVertically
+          .statusBarsPadding()
+          .navigationBarsPadding()
+          .imePadding(),
+        horizontalAlignment = Alignment.CenterHorizontally
       ) {
-        if (currentSlide < ONBOARDING_SLIDE_COUNT - 1) {
-          val skipShape = RoundedCornerShape(99.dp)
-          Box(
-            modifier = Modifier
-              .onboardingFocusRing(skipShape)
-              .onboardingGlass(shape = skipShape, hazeState = hazeState)
-              .clickable(role = Role.Button) {
-                onSkipped()
-                navigateToSlide(ONBOARDING_SLIDE_COUNT - 1)
-              }
-              .padding(horizontal = 16.dp, vertical = 9.dp)
-              .testTag("onboarding_skip_button")
-          ) {
-            Text(
-              text = stringResource(id = R.string.onboarding_skip),
-              color = AurixDesignTokens.TextPrimary,
-              fontFamily = fontFamily,
-              fontSize = 13.sp,
-              fontWeight = FontWeight.SemiBold
-            )
-          }
-        } else {
-          Spacer(modifier = Modifier.width(1.dp))
-        }
-
-        // Language toggle glass pill ("EN" / "ខ្មែរ", 12sp/600, padding 7x12)
-        val langPillShape = RoundedCornerShape(99.dp)
+        // Progress segments
         Row(
           modifier = Modifier
-            .onboardingGlass(shape = langPillShape, hazeState = hazeState)
-            .padding(3.dp)
-            .testTag("onboarding_language_toggle"),
+            .fillMaxWidth()
+            .padding(start = 20.dp, end = 20.dp, top = 14.dp),
+          horizontalArrangement = Arrangement.spacedBy(6.dp)
+        ) {
+          for (i in 0 until ONBOARDING_SLIDE_COUNT) {
+            val fillFractionState = animateFloatAsState(
+              targetValue = if (i <= currentSlide) 1f else 0f,
+              animationSpec = if (reducedMotion) snap() else tween(520, easing = AurixDesignTokens.MainEasing),
+              label = "progress_seg_$i"
+            )
+            Box(
+              modifier = Modifier
+                .weight(1f)
+                .height(3.dp)
+                .clip(RoundedCornerShape(2.dp))
+                .background(AurixDesignTokens.ProgressTrack)
+            ) {
+              Box(
+                modifier = Modifier
+                  .fillMaxHeight()
+                  .fillMaxWidth()
+                  .graphicsLayer {
+                    scaleX = fillFractionState.value
+                    transformOrigin = TransformOrigin(0f, 0.5f)
+                  }
+                  .clip(RoundedCornerShape(2.dp))
+                  .background(Color.White)
+              )
+            }
+          }
+        }
+
+        // Top bar: Skip glass pill + EN / ខ្មែរ toggle
+        Row(
+          modifier = Modifier
+            .fillMaxWidth()
+            .padding(start = 20.dp, end = 20.dp, top = 12.dp),
+          horizontalArrangement = Arrangement.SpaceBetween,
           verticalAlignment = Alignment.CenterVertically
         ) {
-          LanguageSegmentButton(
-            label = stringResource(id = R.string.onboarding_lang_en),
-            active = !isKhmer,
-            fontFamily = AurixDesignTokens.SoraFontFamily,
-            onClick = { onLanguageChanged(LocaleHelper.LANG_EN) },
-            testTag = "onboarding_lang_en"
-          )
-          LanguageSegmentButton(
-            label = stringResource(id = R.string.onboarding_lang_km),
-            active = isKhmer,
-            fontFamily = AurixDesignTokens.NotoSansKhmerFontFamily,
-            onClick = { onLanguageChanged(LocaleHelper.LANG_KM) },
-            testTag = "onboarding_lang_km"
-          )
+          if (currentSlide < ONBOARDING_SLIDE_COUNT - 1) {
+            val skipShape = RoundedCornerShape(99.dp)
+            Box(
+              modifier = Modifier
+                .onboardingFocusRing(skipShape)
+                .onboardingGlass(shape = skipShape, hazeState = hazeState)
+                .clickable(role = Role.Button) {
+                  focusManager.clearFocus()
+                  onSkipped()
+                  navigateToSlide(ONBOARDING_SLIDE_COUNT - 1)
+                }
+                .padding(horizontal = 16.dp, vertical = 9.dp)
+                .testTag("onboarding_skip_button")
+            ) {
+              Text(
+                text = stringResource(id = R.string.onboarding_skip),
+                color = AurixDesignTokens.TextPrimary,
+                fontFamily = fontFamily,
+                fontSize = 13.sp,
+                fontWeight = FontWeight.SemiBold
+              )
+            }
+          } else {
+            Spacer(modifier = Modifier.width(1.dp))
+          }
+
+          val langPillShape = RoundedCornerShape(99.dp)
+          Row(
+            modifier = Modifier
+              .onboardingGlass(shape = langPillShape, hazeState = hazeState)
+              .padding(3.dp)
+              .testTag("onboarding_language_toggle"),
+            verticalAlignment = Alignment.CenterVertically
+          ) {
+            LanguageSegmentButton(
+              label = stringResource(id = R.string.onboarding_lang_en),
+              active = !isKhmer,
+              fontFamily = AurixDesignTokens.SoraFontFamily,
+              onClick = { onLanguageChanged(LocaleHelper.LANG_EN) },
+              testTag = "onboarding_lang_en"
+            )
+            LanguageSegmentButton(
+              label = stringResource(id = R.string.onboarding_lang_km),
+              active = isKhmer,
+              fontFamily = AurixDesignTokens.NotoSansKhmerFontFamily,
+              onClick = { onLanguageChanged(LocaleHelper.LANG_KM) },
+              testTag = "onboarding_lang_km"
+            )
+          }
         }
-      }
 
-      // d) Slide viewport: custom horizontal swipe pager following finger cleanly (8dp slop, 30% edge resistance, 18% advance)
-      val dragSlopPx = with(density) { OnboardingSwipePhysics.DRAG_START_SLOP_DP.dp.toPx() }
-      BoxWithConstraints(
-        modifier = Modifier
-          .weight(1f)
-          .fillMaxWidth()
-          .pointerInput(currentSlide, isFinishing, reducedMotion) {
-            if (isFinishing) return@pointerInput
-            val viewportWidth = size.width.toFloat().coerceAtLeast(1f)
-            awaitEachGesture {
-              val down = awaitFirstDown(requireUnconsumed = false)
-              var totalDx = 0f
-              var totalDy = 0f
-              var horizontalLocked = false
-              var verticalLocked = false
+        // Slide viewport: smooth horizontal swipe pager
+        val dragSlopPx = with(density) { OnboardingSwipePhysics.DRAG_START_SLOP_DP.dp.toPx() }
+        BoxWithConstraints(
+          modifier = Modifier
+            .weight(1f)
+            .fillMaxWidth()
+            .pointerInput(currentSlide, hasUserPickedSong, isFinishing, reducedMotion) {
+              if (isFinishing) return@pointerInput
+              val viewportWidth = size.width.toFloat().coerceAtLeast(1f)
+              awaitEachGesture {
+                val down = awaitFirstDown(requireUnconsumed = false)
+                var totalDx = 0f
+                var totalDy = 0f
+                var horizontalLocked = false
+                var verticalLocked = false
 
-              while (true) {
-                val event = awaitPointerEvent()
-                val change = event.changes.firstOrNull { it.id == down.id } ?: break
-                if (!change.pressed) {
+                while (true) {
+                  val event = awaitPointerEvent()
+                  val change = event.changes.firstOrNull { it.id == down.id } ?: break
+                  if (!change.pressed) {
+                    if (horizontalLocked) {
+                      val rawTarget = OnboardingSwipePhysics.resolveTargetIndex(
+                        rawDragPx = totalDx,
+                        viewportWidthPx = viewportWidth,
+                        currentIndex = currentSlide,
+                        pageCount = ONBOARDING_SLIDE_COUNT
+                      )
+                      val target = if (currentSlide == 0 && !hasUserPickedSong && rawTarget > 0) 0 else rawTarget
+                      isDragging = false
+                      dragDeltaPx = 0f
+                      navigateToSlide(target)
+                    }
+                    break
+                  }
+                  val delta = change.positionChange()
+                  totalDx += delta.x
+                  totalDy += delta.y
+
+                  if (!horizontalLocked && !verticalLocked) {
+                    if (abs(totalDx) > dragSlopPx && abs(totalDx) > abs(totalDy)) {
+                      horizontalLocked = true
+                      isDragging = true
+                    } else if (abs(totalDy) > dragSlopPx && abs(totalDy) > abs(totalDx)) {
+                      verticalLocked = true
+                    }
+                  }
+
                   if (horizontalLocked) {
-                    val target = OnboardingSwipePhysics.resolveTargetIndex(
-                      rawDragPx = totalDx,
-                      viewportWidthPx = viewportWidth,
-                      currentIndex = currentSlide,
-                      pageCount = ONBOARDING_SLIDE_COUNT
-                    )
-                    isDragging = false
-                    dragDeltaPx = 0f
-                    navigateToSlide(target)
-                  }
-                  break
-                }
-                val delta = change.positionChange()
-                totalDx += delta.x
-                totalDy += delta.y
-
-                if (!horizontalLocked && !verticalLocked) {
-                  if (abs(totalDx) > dragSlopPx && abs(totalDx) > abs(totalDy)) {
-                    horizontalLocked = true
-                    isDragging = true
-                  } else if (abs(totalDy) > dragSlopPx && abs(totalDy) > abs(totalDx)) {
-                    verticalLocked = true
-                  }
-                }
-
-                if (horizontalLocked) {
-                  change.consume()
-                  val resisted = OnboardingSwipePhysics.applyEdgeResistance(
-                    rawDragPx = totalDx,
-                    currentIndex = currentSlide,
-                    pageCount = ONBOARDING_SLIDE_COUNT
-                  )
-                  dragDeltaPx = resisted
-                  scope.launch {
-                    animatedPageOffset.snapTo(currentSlide - (resisted / viewportWidth))
+                    change.consume()
+                    val resisted = if (currentSlide == 0 && !hasUserPickedSong && totalDx < 0f) {
+                      totalDx * OnboardingSwipePhysics.EDGE_RESISTANCE
+                    } else {
+                      OnboardingSwipePhysics.applyEdgeResistance(
+                        rawDragPx = totalDx,
+                        currentIndex = currentSlide,
+                        pageCount = ONBOARDING_SLIDE_COUNT
+                      )
+                    }
+                    dragDeltaPx = resisted
+                    scope.launch {
+                      animatedPageOffset.snapTo(currentSlide - (resisted / viewportWidth))
+                    }
                   }
                 }
               }
             }
-          }
-      ) {
-        val pageWidthDp = maxWidth
-        val pageWidthPx = with(density) { pageWidthDp.toPx() }
-        val stageWidth = minOf(320.dp, pageWidthDp * 0.84f)
-        val stageHeight = minOf(330.dp, rootMaxHeightDp * 0.40f).coerceAtLeast(250.dp)
-        val slideGap = if (isCompactHeight) 16.dp else 26.dp
+        ) {
+          val pageWidthDp = maxWidth
+          val pageWidthPx = with(density) { pageWidthDp.toPx() }
+          val stageMaxWidth = minOf(352.dp, pageWidthDp * 0.90f)
+          val slideGap = if (isCompactHeight) 10.dp else 16.dp
 
-        val titles = listOf(
-          stringResource(id = R.string.onboarding_p1_title),
-          stringResource(id = R.string.onboarding_p2_title),
-          stringResource(id = R.string.onboarding_p3_title),
-          stringResource(id = R.string.onboarding_p4_title)
-        )
-        val bodies = listOf(
-          stringResource(id = R.string.onboarding_p1_desc),
-          stringResource(id = R.string.onboarding_p2_desc),
-          stringResource(id = R.string.onboarding_p3_desc),
-          stringResource(id = R.string.onboarding_p4_desc)
-        )
-
-        for (pageIndex in 0 until ONBOARDING_SLIDE_COUNT) {
-          val isCurrent = pageIndex == currentSlide
-          val stageScaleState = animateFloatAsState(
-            targetValue = if (isCurrent) 1.0f else 0.90f,
-            animationSpec = if (reducedMotion) snap() else tween(600, easing = AurixDesignTokens.MainEasing),
-            label = "stage_scale_$pageIndex"
+          val titles = listOf(
+            stringResource(id = R.string.onboarding_p1_title),
+            stringResource(id = R.string.onboarding_p2_title),
+            stringResource(id = R.string.onboarding_p3_title),
+            stringResource(id = R.string.onboarding_p4_title)
           )
-          val stageAlphaState = animateFloatAsState(
-            targetValue = if (isCurrent) 1.0f else 0.30f,
-            animationSpec = if (reducedMotion) snap() else tween(600, easing = AurixDesignTokens.MainEasing),
-            label = "stage_alpha_$pageIndex"
+          val bodies = listOf(
+            stringResource(id = R.string.onboarding_p1_desc),
+            stringResource(id = R.string.onboarding_p2_desc),
+            stringResource(id = R.string.onboarding_p3_desc),
+            stringResource(id = R.string.onboarding_p4_desc)
           )
 
-          Column(
-            modifier = Modifier
-              .fillMaxSize()
-              .graphicsLayer {
-                translationX = (pageIndex - animatedPageOffset.value) * pageWidthPx
-              }
-              .padding(horizontal = 24.dp),
-            verticalArrangement = Arrangement.spacedBy(slideGap, Alignment.CenterVertically),
-            horizontalAlignment = Alignment.CenterHorizontally
-          ) {
-            Box(
+          for (pageIndex in 0 until ONBOARDING_SLIDE_COUNT) {
+            val isCurrent = pageIndex == currentSlide
+            val stageScaleState = animateFloatAsState(
+              targetValue = if (isCurrent) 1.0f else 0.92f,
+              animationSpec = if (reducedMotion) snap() else tween(560, easing = AurixDesignTokens.MainEasing),
+              label = "stage_scale_$pageIndex"
+            )
+            val stageAlphaState = animateFloatAsState(
+              targetValue = if (isCurrent) 1.0f else 0.28f,
+              animationSpec = if (reducedMotion) snap() else tween(560, easing = AurixDesignTokens.MainEasing),
+              label = "stage_alpha_$pageIndex"
+            )
+
+            Column(
               modifier = Modifier
-                .width(stageWidth)
-                .height(stageHeight)
+                .fillMaxSize()
                 .graphicsLayer {
-                  val s = stageScaleState.value
-                  scaleX = s
-                  scaleY = s
-                  alpha = stageAlphaState.value
-                },
-              contentAlignment = Alignment.Center
+                  translationX = (pageIndex - animatedPageOffset.value) * pageWidthPx
+                }
+                .padding(horizontal = 20.dp, vertical = 6.dp),
+              verticalArrangement = Arrangement.spacedBy(slideGap, Alignment.CenterVertically),
+              horizontalAlignment = Alignment.CenterHorizontally
             ) {
-              when (pageIndex) {
-                0 -> OnboardingSlide1Stage(
-                  isActive = isCurrent && !isFinishing,
-                  replaySeed = slideReplaySeeds[0],
-                  showcase = showcaseTrack,
-                  isLoadingShowcase = isLoadingShowcase,
-                  accentColor = animatedAccentA,
-                  fontFamily = fontFamily,
-                  hazeState = hazeState,
-                  isCompactHeight = isCompactHeight,
-                  isTallScreen = isTallScreen,
-                  reducedMotion = reducedMotion,
-                  onShuffleSong = { shuffleShowcaseSong() }
-                )
-                1 -> OnboardingSlide2Stage(
-                  isActive = isCurrent && !isFinishing,
-                  replaySeed = slideReplaySeeds[1],
-                  showcase = showcaseTrack,
-                  isLoadingShowcase = isLoadingShowcase,
-                  accentColor = animatedAccentA,
-                  fontFamily = fontFamily,
-                  hazeState = hazeState,
-                  reducedMotion = reducedMotion,
-                  audioEngine = audioEngine,
-                  onShuffleSong = { shuffleShowcaseSong() }
-                )
-                2 -> OnboardingSlide3Stage(
-                  isActive = isCurrent && !isFinishing,
-                  showcase = showcaseTrack,
-                  accentColor = animatedAccentA,
-                  selectedPreset = selectedAccentPreset,
-                  selectedBackdrop = selectedBackdrop,
-                  userChoseAccent = userChoseAccent,
-                  fontFamily = fontFamily,
-                  hazeState = hazeState,
-                  reducedMotion = reducedMotion,
-                  onSelectSwatch = { preset ->
-                    selectedAccentPreset = preset
-                    userChoseAccent = true
-                    onAccentColorChanged(preset.hex)
+              // Flexible stage container — gives every slide generous space with ZERO vertical clipping!
+              Box(
+                modifier = Modifier
+                  .weight(1f)
+                  .widthIn(max = stageMaxWidth)
+                  .fillMaxWidth()
+                  .graphicsLayer {
+                    val s = stageScaleState.value
+                    scaleX = s
+                    scaleY = s
+                    alpha = stageAlphaState.value
+                    clip = false
                   },
-                  onAutoCycleSwatch = { preset ->
-                    if (!userChoseAccent) {
+                contentAlignment = Alignment.Center
+              ) {
+                when (pageIndex) {
+                  0 -> OnboardingSlide1Stage(
+                    isActive = isCurrent && !isFinishing,
+                    searchQuery = userSearchQuery,
+                    onSearchQueryChange = { userSearchQuery = it },
+                    searchResults = userSearchResults,
+                    isSearchingSongs = isSearchingUserSongs,
+                    showcase = showcaseTrack,
+                    hasUserPickedSong = hasUserPickedSong,
+                    favoriteIds = favoriteIds,
+                    isPreviewPlaying = isPreviewPlaying,
+                    isResolvingPreview = isResolvingPreview,
+                    accentColor = animatedAccentA,
+                    fontFamily = fontFamily,
+                    hazeState = hazeState,
+                    isCompactHeight = isCompactHeight,
+                    isKeyboardOpen = isKeyboardOpen,
+                    reducedMotion = reducedMotion,
+                    onSelectSong = { song -> handleUserSelectFavoriteSong(song) },
+                    onToggleLove = { song -> onToggleFavorite(song) },
+                    onTogglePreviewSound = { toggleAmbientPreview() }
+                  )
+                  1 -> OnboardingSlide2Stage(
+                    isActive = isCurrent && !isFinishing,
+                    replaySeed = slideReplaySeeds[1],
+                    showcase = showcaseTrack,
+                    isLoadingShowcase = isLoadingShowcase,
+                    isLoved = showcaseTrack.song.id in favoriteIds,
+                    isPreviewPlaying = isPreviewPlaying,
+                    isResolvingPreview = isResolvingPreview,
+                    accentColor = animatedAccentA,
+                    fontFamily = fontFamily,
+                    hazeState = hazeState,
+                    reducedMotion = reducedMotion,
+                    audioEngine = audioEngine,
+                    onToggleLove = { onToggleFavorite(showcaseTrack.song) },
+                    onTogglePreviewSound = { toggleAmbientPreview() },
+                    onShuffleSong = { shuffleShowcaseSong() }
+                  )
+                  2 -> OnboardingSlide3Stage(
+                    isActive = isCurrent && !isFinishing,
+                    showcase = showcaseTrack,
+                    isPreviewPlaying = isPreviewPlaying,
+                    accentColor = animatedAccentA,
+                    selectedPreset = selectedAccentPreset,
+                    selectedBackdrop = selectedBackdrop,
+                    userChoseAccent = userChoseAccent,
+                    fontFamily = fontFamily,
+                    hazeState = hazeState,
+                    isCompactHeight = isCompactHeight,
+                    reducedMotion = reducedMotion,
+                    onTogglePreviewSound = { toggleAmbientPreview() },
+                    onSelectSwatch = { preset ->
                       selectedAccentPreset = preset
+                      userChoseAccent = true
+                      onAccentColorChanged(preset.hex)
+                    },
+                    onAutoCycleSwatch = { preset ->
+                      if (!userChoseAccent) {
+                        selectedAccentPreset = preset
+                      }
+                    },
+                    onSelectBackdrop = { preset ->
+                      selectedBackdrop = preset
+                      onBackdropChanged(preset)
                     }
-                  },
-                  onSelectBackdrop = { preset ->
-                    selectedBackdrop = preset
-                    onBackdropChanged(preset)
-                  }
-                )
-                3 -> OnboardingSlide4Stage(
-                  isActive = isCurrent && !isFinishing,
-                  replaySeed = slideReplaySeeds[3],
-                  showcase = showcaseTrack,
-                  accentColor = animatedAccentA,
+                  )
+                  3 -> OnboardingSlide4Stage(
+                    isActive = isCurrent && !isFinishing,
+                    replaySeed = slideReplaySeeds[3],
+                    showcase = showcaseTrack,
+                    isLoved = showcaseTrack.song.id in favoriteIds,
+                    isPreviewPlaying = isPreviewPlaying,
+                    accentColor = animatedAccentA,
+                    fontFamily = fontFamily,
+                    hazeState = hazeState,
+                    reducedMotion = reducedMotion
+                  )
+                }
+              }
+
+              // Hide bottom title/description cleanly while keyboard is active on Slide 1 so input never squeezes
+              AnimatedVisibility(
+                visible = !(pageIndex == 0 && isKeyboardOpen),
+                enter = fadeIn(tween(220)) + expandVertically(),
+                exit = fadeOut(tween(150)) + shrinkVertically()
+              ) {
+                OnboardingSlideTextBlock(
+                  title = titles[pageIndex],
+                  body = bodies[pageIndex],
+                  isActive = isCurrent,
+                  replaySeed = slideReplaySeeds[pageIndex],
+                  isKhmer = isKhmer,
+                  isCompactHeight = isCompactHeight,
                   fontFamily = fontFamily,
-                  hazeState = hazeState,
                   reducedMotion = reducedMotion
                 )
               }
             }
-
-            // Text block: Title + Body with 700ms staggered entrance (delay 100ms / 250ms, fade + translateY 16 + blur 6->0)
-            OnboardingSlideTextBlock(
-              title = titles[pageIndex],
-              body = bodies[pageIndex],
-              isActive = isCurrent,
-              replaySeed = slideReplaySeeds[pageIndex],
-              isKhmer = isKhmer,
-              isCompactHeight = isCompactHeight,
-              fontFamily = fontFamily,
-              reducedMotion = reducedMotion
-            )
-          }
-        }
-      }
-
-      // f) Bottom bar (padding 6/24/26, gap 12): Back circle (58dp, slides 2..4) + Main gradient button (height 58, radius 29)
-      Row(
-        modifier = Modifier
-          .fillMaxWidth()
-          .padding(start = 24.dp, end = 24.dp, top = 6.dp, bottom = 26.dp),
-        horizontalArrangement = Arrangement.spacedBy(12.dp),
-        verticalAlignment = Alignment.CenterVertically
-      ) {
-        if (currentSlide > 0) {
-          val backCd = stringResource(id = R.string.onboarding_back_cd)
-          Box(
-            modifier = Modifier
-              .size(58.dp)
-              .onboardingFocusRing(CircleShape)
-              .onboardingGlass(shape = CircleShape, hazeState = hazeState)
-              .semantics { contentDescription = backCd }
-              .clickable(role = Role.Button) { navigateToSlide(currentSlide - 1) }
-              .testTag("onboarding_back_button"),
-            contentAlignment = Alignment.Center
-          ) {
-            OnboardingArrowLeftIcon(color = AurixDesignTokens.TextPrimary, strokeDp = 2.4.dp)
           }
         }
 
-        val isLastSlide = currentSlide == ONBOARDING_SLIDE_COUNT - 1
-        val ctaLabel = stringResource(
-          id = if (isLastSlide) R.string.onboarding_get_started else R.string.onboarding_next
-        )
-        OnboardingMainButton(
-          label = ctaLabel,
-          accentA = animatedAccentA,
-          fontFamily = fontFamily,
-          isLastSlide = isLastSlide,
-          readyPulse = isButtonReadyPulse,
-          reducedMotion = reducedMotion,
-          onPositionedCenter = { center -> buttonCenterInRoot = center },
-          onClick = {
-            if (isLastSlide) {
-              triggerFinish()
-            } else {
-              navigateToSlide(currentSlide + 1)
-            }
-          },
+        // Bottom bar: Back circle + Main gradient CTA button
+        Row(
           modifier = Modifier
-            .weight(1f)
-            .height(58.dp)
-            .testTag("onboarding_main_button")
-        )
+            .fillMaxWidth()
+            .padding(
+              start = 24.dp,
+              end = 24.dp,
+              top = 6.dp,
+              bottom = if (isKeyboardOpen) 10.dp else 22.dp
+            ),
+          horizontalArrangement = Arrangement.spacedBy(12.dp),
+          verticalAlignment = Alignment.CenterVertically
+        ) {
+          if (currentSlide > 0) {
+            val backCd = stringResource(id = R.string.onboarding_back_cd)
+            Box(
+              modifier = Modifier
+                .size(58.dp)
+                .onboardingFocusRing(CircleShape)
+                .onboardingGlass(shape = CircleShape, hazeState = hazeState)
+                .semantics { contentDescription = backCd }
+                .clickable(role = Role.Button) { navigateToSlide(currentSlide - 1) }
+                .testTag("onboarding_back_button"),
+              contentAlignment = Alignment.Center
+            ) {
+              OnboardingArrowLeftIcon(color = AurixDesignTokens.TextPrimary, strokeDp = 2.4.dp)
+            }
+          }
+
+          val isLastSlide = currentSlide == ONBOARDING_SLIDE_COUNT - 1
+          val ctaLabel = stringResource(
+            id = if (isLastSlide) R.string.onboarding_get_started else R.string.onboarding_next
+          )
+          OnboardingMainButton(
+            label = ctaLabel,
+            accentA = animatedAccentA,
+            fontFamily = fontFamily,
+            isLastSlide = isLastSlide,
+            enabled = canAdvanceFromCurrentSlide,
+            readyPulse = isButtonReadyPulse && canAdvanceFromCurrentSlide,
+            reducedMotion = reducedMotion,
+            onPositionedCenter = { center -> buttonCenterInRoot = center },
+            onClick = {
+              if (!canAdvanceFromCurrentSlide) return@OnboardingMainButton
+              if (isLastSlide) {
+                triggerFinish()
+              } else {
+                navigateToSlide(currentSlide + 1)
+              }
+            },
+            modifier = Modifier
+              .weight(1f)
+              .height(58.dp)
+              .testTag("onboarding_main_button")
+          )
+        }
       }
     }
 
-    // g) Finish transition overlay: circular gradient reveal (0 -> 150%, 850ms) + "AURIX" wordmark (40sp/800, 0.2em)
+    // Full-screen Start transition overlay: circular gradient reveal -> AURIX wordmark -> smooth dissolve to Home
     if (isFinishing) {
       val maxRadius = hypot(rootWidthPx, rootHeightPx)
       val origin = if (buttonCenterInRoot == Offset.Zero) {
@@ -731,7 +936,7 @@ fun OnboardingScreen(
           fontFamily = AurixDesignTokens.SoraFontFamily,
           fontSize = 40.sp,
           fontWeight = FontWeight.ExtraBold,
-          letterSpacing = 8.sp, // 0.2em of 40sp
+          letterSpacing = 8.sp,
           modifier = Modifier.graphicsLayer {
             alpha = wm
             val s = 0.86f + 0.14f * wm
@@ -773,18 +978,22 @@ private fun LanguageSegmentButton(
   }
 }
 
+/**
+ * Full-screen seamless GPU radial aurora glows.
+ * Replaces bounded Modifier.blur(80.dp) boxes so there are ZERO rectangular clipping edges or seams
+ * across all Android versions while rendering at silky 120fps.
+ */
 @Composable
 private fun OnboardingBackgroundGlows(
   currentSlide: Int,
   accentA: Color,
   backdropPreset: AurixDesignTokens.BackdropPreset,
-  reducedMotion: Boolean,
-  screenHeightDp: Float
+  reducedMotion: Boolean
 ) {
   val glowOpacity = when (backdropPreset) {
-    AurixDesignTokens.BackdropPreset.AURORA -> AurixDesignTokens.GlowOpacity
-    AurixDesignTokens.BackdropPreset.MIDNIGHT -> AurixDesignTokens.GlowOpacity * 0.62f
-    AurixDesignTokens.BackdropPreset.MINIMAL -> 0.14f
+    AurixDesignTokens.BackdropPreset.AURORA -> 0.44f
+    AurixDesignTokens.BackdropPreset.MIDNIGHT -> 0.27f
+    AurixDesignTokens.BackdropPreset.MINIMAL -> 0.13f
   }
 
   val driftTransition = if (!reducedMotion) {
@@ -794,7 +1003,7 @@ private fun OnboardingBackgroundGlows(
   }
   val driftXState = driftTransition?.animateFloat(
     initialValue = 0f,
-    targetValue = 26f,
+    targetValue = 28f,
     animationSpec = infiniteRepeatable(
       animation = tween(durationMillis = 11000, easing = FastOutSlowInEasing),
       repeatMode = RepeatMode.Reverse
@@ -803,7 +1012,7 @@ private fun OnboardingBackgroundGlows(
   )
   val driftYState = driftTransition?.animateFloat(
     initialValue = 0f,
-    targetValue = -22f,
+    targetValue = -24f,
     animationSpec = infiniteRepeatable(
       animation = tween(durationMillis = 11000, easing = FastOutSlowInEasing),
       repeatMode = RepeatMode.Reverse
@@ -812,65 +1021,73 @@ private fun OnboardingBackgroundGlows(
   )
 
   val slideX1State = animateFloatAsState(
-    targetValue = currentSlide * 50f,
+    targetValue = currentSlide * 46f,
     animationSpec = if (reducedMotion) snap() else tween(1200, easing = AurixDesignTokens.MainEasing),
     label = "glow_slide_x1"
   )
   val slideY1State = animateFloatAsState(
-    targetValue = if (currentSlide % 2 == 1) 60f else -20f,
+    targetValue = if (currentSlide % 2 == 1) 52f else -18f,
     animationSpec = if (reducedMotion) snap() else tween(1200, easing = AurixDesignTokens.MainEasing),
     label = "glow_slide_y1"
   )
   val slideX2State = animateFloatAsState(
-    targetValue = -currentSlide * 40f,
+    targetValue = -currentSlide * 38f,
     animationSpec = if (reducedMotion) snap() else tween(1200, easing = AurixDesignTokens.MainEasing),
     label = "glow_slide_x2"
   )
   val slideY2State = animateFloatAsState(
-    targetValue = if (currentSlide % 2 == 1) -50f else 30f,
+    targetValue = if (currentSlide % 2 == 1) -46f else 28f,
     animationSpec = if (reducedMotion) snap() else tween(1200, easing = AurixDesignTokens.MainEasing),
     label = "glow_slide_y2"
   )
 
-  Box(modifier = Modifier.fillMaxSize()) {
-    // Circle 1: 300x300, left -90, top 10%, Accent A, blur 80, opacity 0.42
-    val c1Top = (screenHeightDp * 0.10f).dp
-    Box(
-      modifier = Modifier
-        .align(Alignment.TopStart)
-        .offset(x = (-90).dp, y = c1Top)
-        .size(300.dp)
-        .graphicsLayer {
-          translationX = (slideX1State.value + (driftXState?.value ?: 0f)) * density
-          translationY = (slideY1State.value + (driftYState?.value ?: 0f)) * density
-          alpha = glowOpacity
-        }
-        .then(if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) Modifier.blur(AurixDesignTokens.GlowBlurRadius) else Modifier)
-        .background(
-          brush = Brush.radialGradient(colors = listOf(accentA, accentA.copy(alpha = 0.25f), Color.Transparent)),
-          shape = CircleShape
-        )
+  Canvas(modifier = Modifier.fillMaxSize()) {
+    val d = density
+    val driftX = (driftXState?.value ?: 0f) * d
+    val driftY = (driftYState?.value ?: 0f) * d
+
+    // Orb 1: Accent A smooth aurora halo (huge soft falloff, zero square bounds)
+    val c1Center = Offset(
+      x = size.width * 0.16f + slideX1State.value * d + driftX,
+      y = size.height * 0.24f + slideY1State.value * d + driftY
+    )
+    val c1Radius = maxOf(size.width * 0.86f, 340f * d)
+    drawCircle(
+      brush = Brush.radialGradient(
+        colorStops = arrayOf(
+          0.00f to accentA.copy(alpha = glowOpacity),
+          0.32f to accentA.copy(alpha = glowOpacity * 0.56f),
+          0.62f to accentA.copy(alpha = glowOpacity * 0.18f),
+          0.86f to accentA.copy(alpha = glowOpacity * 0.03f),
+          1.00f to Color.Transparent
+        ),
+        center = c1Center,
+        radius = c1Radius
+      ),
+      radius = c1Radius,
+      center = c1Center
     )
 
-    // Circle 2: 280x280, right -100, top 34%, Accent B (#7965FF), blur 80, opacity 0.42 (reversed drift)
-    val c2Top = (screenHeightDp * 0.34f).dp
-    Box(
-      modifier = Modifier
-        .align(Alignment.TopEnd)
-        .offset(x = 100.dp, y = c2Top)
-        .size(280.dp)
-        .graphicsLayer {
-          translationX = (slideX2State.value - (driftXState?.value ?: 0f)) * density
-          translationY = (slideY2State.value - (driftYState?.value ?: 0f)) * density
-          alpha = glowOpacity
-        }
-        .then(if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) Modifier.blur(AurixDesignTokens.GlowBlurRadius) else Modifier)
-        .background(
-          brush = Brush.radialGradient(
-            colors = listOf(AurixDesignTokens.AccentB, AurixDesignTokens.AccentB.copy(alpha = 0.25f), Color.Transparent)
-          ),
-          shape = CircleShape
-        )
+    // Orb 2: Accent B (#7965FF) smooth aurora halo (opposite drift)
+    val c2Center = Offset(
+      x = size.width * 0.86f + slideX2State.value * d - driftX,
+      y = size.height * 0.48f + slideY2State.value * d - driftY
+    )
+    val c2Radius = maxOf(size.width * 0.82f, 320f * d)
+    drawCircle(
+      brush = Brush.radialGradient(
+        colorStops = arrayOf(
+          0.00f to AurixDesignTokens.AccentB.copy(alpha = glowOpacity * 0.96f),
+          0.34f to AurixDesignTokens.AccentB.copy(alpha = glowOpacity * 0.50f),
+          0.64f to AurixDesignTokens.AccentB.copy(alpha = glowOpacity * 0.16f),
+          0.88f to AurixDesignTokens.AccentB.copy(alpha = glowOpacity * 0.02f),
+          1.00f to Color.Transparent
+        ),
+        center = c2Center,
+        radius = c2Radius
+      ),
+      radius = c2Radius,
+      center = c2Center
     )
   }
 }
@@ -898,29 +1115,29 @@ private fun OnboardingSlideTextBlock(
       titleProgress.snapTo(0f)
       bodyProgress.snapTo(0f)
       launch {
-        delay(100L)
-        titleProgress.animateTo(1f, tween(700, easing = AurixDesignTokens.MainEasing))
+        delay(80L)
+        titleProgress.animateTo(1f, tween(640, easing = AurixDesignTokens.MainEasing))
       }
       launch {
-        delay(250L)
-        bodyProgress.animateTo(1f, tween(700, easing = AurixDesignTokens.MainEasing))
+        delay(210L)
+        bodyProgress.animateTo(1f, tween(640, easing = AurixDesignTokens.MainEasing))
       }
     }
   }
 
-  val titleSize = if (isCompactHeight) 24.sp else 27.sp
-  val bodySize = if (isCompactHeight) 13.5.sp else 14.5.sp
+  val titleSize = if (isCompactHeight) 22.sp else 25.sp
+  val bodySize = if (isCompactHeight) 13.sp else 14.sp
   val titleLineHeight = titleSize * if (isKhmer) AurixDesignTokens.TitleLineHeightKm else AurixDesignTokens.TitleLineHeightEn
   val bodyLineHeight = bodySize * if (isKhmer) AurixDesignTokens.BodyLineHeightKm else AurixDesignTokens.BodyLineHeightEn
 
-  val tBlur = ((1f - titleProgress.value) * 6f).coerceAtLeast(0f).dp
-  val bBlur = ((1f - bodyProgress.value) * 6f).coerceAtLeast(0f).dp
+  val tBlur = ((1f - titleProgress.value) * 5f).coerceAtLeast(0f).dp
+  val bBlur = ((1f - bodyProgress.value) * 5f).coerceAtLeast(0f).dp
 
   Column(
     modifier = Modifier
-      .widthIn(max = 320.dp)
+      .widthIn(max = 330.dp)
       .fillMaxWidth()
-      .padding(top = 6.dp),
+      .padding(top = 4.dp, bottom = 4.dp),
     horizontalAlignment = Alignment.CenterHorizontally
   ) {
     Text(
@@ -930,17 +1147,23 @@ private fun OnboardingSlideTextBlock(
       fontSize = titleSize,
       fontWeight = FontWeight.ExtraBold,
       lineHeight = titleLineHeight,
-      letterSpacing = (-0.54).sp, // -0.02em of 27sp
+      letterSpacing = (-0.45).sp,
       textAlign = TextAlign.Center,
       modifier = Modifier
         .graphicsLayer {
           val p = titleProgress.value
           alpha = p
-          translationY = (1f - p) * 16f * density
+          translationY = (1f - p) * 14f * density
         }
-        .then(if (!reducedMotion && tBlur > 0.2.dp) Modifier.blur(tBlur) else Modifier)
+        .then(
+          if (!reducedMotion && tBlur > 0.2.dp && Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
+            Modifier.blur(tBlur, edgeTreatment = BlurredEdgeTreatment.Unbounded)
+          } else {
+            Modifier
+          }
+        )
     )
-    Spacer(modifier = Modifier.height(10.dp))
+    Spacer(modifier = Modifier.height(8.dp))
     Text(
       text = body,
       color = AurixDesignTokens.TextMuted,
@@ -953,9 +1176,15 @@ private fun OnboardingSlideTextBlock(
         .graphicsLayer {
           val p = bodyProgress.value
           alpha = p
-          translationY = (1f - p) * 16f * density
+          translationY = (1f - p) * 14f * density
         }
-        .then(if (!reducedMotion && bBlur > 0.2.dp) Modifier.blur(bBlur) else Modifier)
+        .then(
+          if (!reducedMotion && bBlur > 0.2.dp && Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
+            Modifier.blur(bBlur, edgeTreatment = BlurredEdgeTreatment.Unbounded)
+          } else {
+            Modifier
+          }
+        )
     )
   }
 }
@@ -966,6 +1195,7 @@ private fun OnboardingMainButton(
   accentA: Color,
   fontFamily: FontFamily,
   isLastSlide: Boolean,
+  enabled: Boolean,
   readyPulse: Boolean,
   reducedMotion: Boolean,
   onPositionedCenter: (Offset) -> Unit,
@@ -975,12 +1205,17 @@ private fun OnboardingMainButton(
   val interactionSource = remember { MutableInteractionSource() }
   val isPressed by interactionSource.collectIsPressedAsState()
   val pressScaleState = animateFloatAsState(
-    targetValue = if (isPressed) 0.97f else 1f,
+    targetValue = if (isPressed && enabled) 0.97f else 1f,
     animationSpec = if (reducedMotion) snap() else tween(140, easing = AurixDesignTokens.MainEasing),
     label = "main_btn_press"
   )
+  val enabledAlphaState = animateFloatAsState(
+    targetValue = if (enabled) 1f else 0.42f,
+    animationSpec = if (reducedMotion) snap() else tween(280, easing = AurixDesignTokens.MainEasing),
+    label = "main_btn_enabled_alpha"
+  )
 
-  val pulseTransition = if (readyPulse && !reducedMotion) {
+  val pulseTransition = if (readyPulse && enabled && !reducedMotion) {
     rememberInfiniteTransition(label = "main_btn_ready_pulse")
   } else {
     null
@@ -995,10 +1230,9 @@ private fun OnboardingMainButton(
     label = "main_btn_pulse"
   )
 
-  // Last slide diagonal white shine sweep (100deg, 2.4s loop, 1s delay)
   val shineOffset = remember { Animatable(-0.6f) }
-  LaunchedEffect(isLastSlide, reducedMotion) {
-    if (!isLastSlide || reducedMotion) {
+  LaunchedEffect(isLastSlide, enabled, reducedMotion) {
+    if (!isLastSlide || !enabled || reducedMotion) {
       shineOffset.snapTo(-0.6f)
       return@LaunchedEffect
     }
@@ -1009,16 +1243,17 @@ private fun OnboardingMainButton(
         targetValue = 1.5f,
         animationSpec = tween(durationMillis = 1200, easing = AurixDesignTokens.MainEasing)
       )
-      delay(1200L) // total 2.4s loop cadence
+      delay(1200L)
     }
   }
 
   val shape = RoundedCornerShape(29.dp)
-  val glowElevation = if (readyPulse && !reducedMotion) {
-    (18f + (pulseProgress?.value ?: 0f) * 14f).dp
-  } else {
-    16.dp
+  val glowElevation = when {
+    !enabled -> 0.dp
+    readyPulse && !reducedMotion -> (18f + (pulseProgress?.value ?: 0f) * 14f).dp
+    else -> 16.dp
   }
+  val inkColor = if (enabled) AurixDesignTokens.DarkInk else AurixDesignTokens.TextMuted
 
   Box(
     modifier = modifier
@@ -1030,23 +1265,37 @@ private fun OnboardingMainButton(
         val s = pressScaleState.value
         scaleX = s
         scaleY = s
+        alpha = enabledAlphaState.value
       }
-      .shadow(
-        elevation = glowElevation,
-        shape = shape,
-        ambientColor = accentA.copy(alpha = 0.72f),
-        spotColor = accentA.copy(alpha = 0.78f)
+      .then(
+        if (enabled) {
+          Modifier.shadow(
+            elevation = glowElevation,
+            shape = shape,
+            ambientColor = accentA.copy(alpha = 0.72f),
+            spotColor = accentA.copy(alpha = 0.78f)
+          )
+        } else {
+          Modifier
+        }
       )
       .onboardingFocusRing(shape)
       .clip(shape)
-      .background(
-        Brush.linearGradient(
-          colors = listOf(accentA, AurixDesignTokens.AccentB)
-        )
+      .then(
+        if (enabled) {
+          Modifier.background(
+            Brush.linearGradient(
+              colors = listOf(accentA, AurixDesignTokens.AccentB)
+            )
+          )
+        } else {
+          Modifier
+            .background(Color.White.copy(alpha = 0.10f), shape)
+        }
       )
       .drawWithContent {
         drawContent()
-        if (isLastSlide && !reducedMotion) {
+        if (isLastSlide && enabled && !reducedMotion) {
           val x = size.width * shineOffset.value
           val band = size.width * 0.34f
           drawRect(
@@ -1059,6 +1308,7 @@ private fun OnboardingMainButton(
         }
       }
       .clickable(
+        enabled = enabled,
         interactionSource = interactionSource,
         indication = null,
         role = Role.Button,
@@ -1072,12 +1322,12 @@ private fun OnboardingMainButton(
     ) {
       Text(
         text = label,
-        color = AurixDesignTokens.DarkInk,
+        color = inkColor,
         fontFamily = fontFamily,
         fontSize = 16.sp,
         fontWeight = FontWeight.ExtraBold
       )
-      OnboardingArrowRightIcon(color = AurixDesignTokens.DarkInk, strokeDp = 2.6.dp)
+      OnboardingArrowRightIcon(color = inkColor, strokeDp = 2.6.dp)
     }
   }
 }
