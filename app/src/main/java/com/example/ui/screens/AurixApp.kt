@@ -1305,6 +1305,8 @@ private fun AurixMainShell(
               isAddedToLibrary = isAlbumAddedToLibrary,
               isAlbumDownloaded = isAlbumDownloaded,
               hasCurrentSong = currentSong != null,
+              verifiedLyricsIds = verifiedLyricsIds,
+              onCheckLyrics = { viewModel.ensureLyricsVerified(it) },
               reducedMotion = reducedMotion,
               onAddToLibraryClick = {
                 viewModel.toggleAlbumInLibrary(activeAlbumInfo.tracks, activeAlbumInfo.title)

@@ -49,28 +49,28 @@ enum class LyricsTagSize(
   val spacing: Dp
 ) {
   Mini(
-    height = 16.dp,
-    startPadding = 5.dp,
-    endPadding = 6.dp,
-    iconSize = 9.5.dp,
-    fontSize = 8.5.sp,
-    spacing = 3.dp
+    height = 15.dp,
+    startPadding = 4.5.dp,
+    endPadding = 5.5.dp,
+    iconSize = 8.5.dp,
+    fontSize = 8.sp,
+    spacing = 2.5.dp
   ),
   Standard(
-    height = 18.dp,
-    startPadding = 6.dp,
-    endPadding = 8.dp,
-    iconSize = 11.dp,
-    fontSize = 10.sp,
-    spacing = 4.dp
+    height = 17.dp,
+    startPadding = 5.5.dp,
+    endPadding = 7.dp,
+    iconSize = 10.dp,
+    fontSize = 9.2.sp,
+    spacing = 3.dp
   ),
   Full(
-    height = 22.dp,
-    startPadding = 7.dp,
-    endPadding = 9.dp,
-    iconSize = 12.dp,
-    fontSize = 11.sp,
-    spacing = 4.dp
+    height = 20.dp,
+    startPadding = 6.5.dp,
+    endPadding = 8.5.dp,
+    iconSize = 11.dp,
+    fontSize = 10.2.sp,
+    spacing = 3.5.dp
   )
 }
 
@@ -85,42 +85,40 @@ fun LyricsTag(
 ) {
   AnimatedVisibility(
     visible = visible,
-    enter = if (reducedMotion) fadeIn(snap()) else fadeIn(tween(durationMillis = 220)),
-    exit = if (reducedMotion) fadeOut(snap()) else fadeOut(tween(durationMillis = 160)),
+    enter = if (reducedMotion) fadeIn(snap()) else fadeIn(tween(durationMillis = 200)),
+    exit = if (reducedMotion) fadeOut(snap()) else fadeOut(tween(durationMillis = 150)),
     modifier = modifier.wrapContentWidth(unbounded = false)
   ) {
+    val accent = MaterialTheme.colorScheme.primary
     val fillColor = if (darkTheme) {
-      AurixCardDark
+      accent.copy(alpha = 0.14f)
     } else {
-      MaterialTheme.colorScheme.surface
+      accent.copy(alpha = 0.10f)
     }
     val contentTint = if (darkTheme) {
-      Color(0xFFEBF7FF)
+      androidx.compose.ui.graphics.lerp(accent, Color.White, 0.35f)
     } else {
-      Color(0xFF1E293B)
+      androidx.compose.ui.graphics.lerp(accent, Color(0xFF0F172A), 0.18f)
     }
     val iconTint = if (darkTheme) {
-      AurixAccentCyan
+      androidx.compose.ui.graphics.lerp(accent, Color.White, 0.18f)
     } else {
-      Color(0xFF0284C7)
+      accent
     }
     val borderBrush = Brush.horizontalGradient(
-      colors = listOf(AurixAccentCyan, AurixAccentViolet)
+      colors = listOf(
+        accent.copy(alpha = if (darkTheme) 0.45f else 0.36f),
+        AurixAccentViolet.copy(alpha = if (darkTheme) 0.38f else 0.28f)
+      )
     )
 
     Surface(
       shape = CircleShape,
       color = fillColor,
-      border = BorderStroke(1.dp, borderBrush),
+      border = BorderStroke(0.75.dp, borderBrush),
       modifier = Modifier
         .height(size.height)
         .defaultMinSize(minWidth = 1.dp)
-        .shadow(
-          elevation = if (darkTheme) 6.dp else 3.dp,
-          shape = CircleShape,
-          ambientColor = AurixAccentCyan.copy(alpha = 0.55f),
-          spotColor = AurixAccentViolet.copy(alpha = 0.55f)
-        )
         .then(
           if (onClick != null) Modifier.clickable { onClick() } else Modifier
         )
@@ -143,8 +141,8 @@ fun LyricsTag(
           text = stringResource(id = R.string.lyrics_tag_label),
           style = MaterialTheme.typography.labelSmall.copy(
             fontSize = size.fontSize,
-            fontWeight = FontWeight.Bold,
-            letterSpacing = 0.4.sp,
+            fontWeight = FontWeight.SemiBold,
+            letterSpacing = 0.25.sp,
             lineHeight = size.fontSize
           ),
           color = contentTint,

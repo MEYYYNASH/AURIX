@@ -1030,6 +1030,7 @@ fun SongRow(
     isResolving = false,
     reducedMotion = reducedMotion,
     darkTheme = darkTheme,
+    hasLyrics = hasLyrics,
     downloadProgress = null,
     isDownloaded = false,
     genreBadge = genreBadge,
@@ -1181,31 +1182,40 @@ fun LibraryFramelessTrackRow(
 
       Row(
         verticalAlignment = Alignment.CenterVertically,
-        horizontalArrangement = Arrangement.spacedBy(6.dp)
+        horizontalArrangement = Arrangement.spacedBy(5.dp)
       ) {
+        if (hasLyrics) {
+          LyricsTag(
+            visible = true,
+            size = LyricsTagSize.Mini,
+            darkTheme = darkTheme,
+            reducedMotion = reducedMotion
+          )
+        }
+
         if (!genreBadge.isNullOrBlank()) {
           Box(
             modifier = Modifier
               .clip(CircleShape)
-              .background(accentColor.copy(alpha = if (darkTheme) 0.15f else 0.11f))
+              .background(accentColor.copy(alpha = if (darkTheme) 0.14f else 0.10f))
               .border(
                 width = 0.7.dp,
-                color = accentColor.copy(alpha = if (darkTheme) 0.38f else 0.28f),
+                color = accentColor.copy(alpha = if (darkTheme) 0.36f else 0.26f),
                 shape = CircleShape
               )
               .then(
                 if (onGenreBadgeClick != null) Modifier.clickable { onGenreBadgeClick() }
                 else Modifier
               )
-              .padding(horizontal = 6.5.dp, vertical = 1.dp)
+              .padding(horizontal = 6.dp, vertical = 1.dp)
               .testTag("song_genre_badge_${song.id}"),
             contentAlignment = Alignment.Center
           ) {
             Text(
               text = genreBadge,
               style = MaterialTheme.typography.labelSmall.copy(
-                fontSize = 9.5.sp,
-                lineHeight = 12.sp,
+                fontSize = 9.sp,
+                lineHeight = 11.sp,
                 fontWeight = FontWeight.SemiBold
               ),
               color = if (darkTheme) {
@@ -1221,7 +1231,7 @@ fun LibraryFramelessTrackRow(
         Text(
           text = subtitleText,
           style = MaterialTheme.typography.bodySmall.copy(
-            fontSize = 12.5.sp,
+            fontSize = 12.2.sp,
             lineHeight = 16.sp
           ),
           maxLines = 1,
@@ -1322,6 +1332,7 @@ fun SongDownloadRow(
     isResolving = isResolving,
     reducedMotion = reducedMotion,
     darkTheme = darkTheme,
+    hasLyrics = hasLyrics,
     downloadProgress = downloadProgress,
     isDownloaded = isDownloaded,
     onCheckLyrics = onCheckLyrics,
@@ -1431,6 +1442,7 @@ private fun StandaloneSongCard(
   isResolving: Boolean,
   reducedMotion: Boolean,
   darkTheme: Boolean,
+  hasLyrics: Boolean = false,
   downloadProgress: Float?,
   isDownloaded: Boolean,
   genreBadge: String? = null,
@@ -1582,15 +1594,24 @@ private fun StandaloneSongCard(
 
             Row(
               verticalAlignment = Alignment.CenterVertically,
-              horizontalArrangement = Arrangement.spacedBy(6.dp)
+              horizontalArrangement = Arrangement.spacedBy(5.dp)
             ) {
+              if (hasLyrics) {
+                LyricsTag(
+                  visible = true,
+                  size = LyricsTagSize.Mini,
+                  darkTheme = darkTheme,
+                  reducedMotion = reducedMotion
+                )
+              }
+
               if (!genreBadge.isNullOrBlank()) {
                 val pillModifier = Modifier
                   .clip(CircleShape)
-                  .background(accentColor.copy(alpha = if (darkTheme) 0.16f else 0.12f))
+                  .background(accentColor.copy(alpha = if (darkTheme) 0.14f else 0.10f))
                   .border(
-                    width = 0.8.dp,
-                    color = accentColor.copy(alpha = if (darkTheme) 0.42f else 0.32f),
+                    width = 0.75.dp,
+                    color = accentColor.copy(alpha = if (darkTheme) 0.36f else 0.26f),
                     shape = CircleShape
                   )
                   .then(
@@ -1600,15 +1621,15 @@ private fun StandaloneSongCard(
                       Modifier
                     }
                   )
-                  .padding(horizontal = 7.dp, vertical = 1.5.dp)
+                  .padding(horizontal = 6.dp, vertical = 1.dp)
                   .testTag("song_genre_badge_${song.id}")
 
                 Box(modifier = pillModifier, contentAlignment = Alignment.Center) {
                   Text(
                     text = genreBadge,
                     style = MaterialTheme.typography.labelSmall.copy(
-                      fontSize = 10.sp,
-                      lineHeight = 13.sp,
+                      fontSize = 9.sp,
+                      lineHeight = 11.sp,
                       fontWeight = FontWeight.SemiBold
                     ),
                     color = if (darkTheme) {

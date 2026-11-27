@@ -252,6 +252,8 @@ fun AlbumTrackListSection(
   isAddedToLibrary: Boolean = false,
   isAlbumDownloaded: Boolean = false,
   hasCurrentSong: Boolean = currentSong != null,
+  verifiedLyricsIds: Set<String> = emptySet(),
+  onCheckLyrics: ((Song) -> Unit)? = null,
   reducedMotion: Boolean = false,
   onAddToLibraryClick: () -> Unit = {},
   onDownloadAlbumClick: () -> Unit = {},
@@ -605,6 +607,8 @@ fun AlbumTrackListSection(
             track = song,
             isCurrentTrack = isCurrent,
             isPlaying = isCurrent && isPlaying,
+            hasLyrics = song.id in verifiedLyricsIds,
+            onCheckLyrics = onCheckLyrics,
             accentColor = dominantAccent,
             glassColor = surfaceGlass,
             reducedMotion = effectiveReducedMotion,
@@ -1915,6 +1919,8 @@ fun TrackRow(
   track: Song,
   isCurrentTrack: Boolean,
   isPlaying: Boolean,
+  hasLyrics: Boolean = false,
+  onCheckLyrics: ((Song) -> Unit)? = null,
   accentColor: Color = AlbumDesignTokens.Accent,
   reducedMotion: Boolean = false,
   onClick: () -> Unit,
@@ -1925,6 +1931,13 @@ fun TrackRow(
   modifier: Modifier = Modifier,
   glassColor: Color = AlbumDesignTokens.GlassFill
 ) {
+  LaunchedEffect(track.id) {
+    if (onCheckLyrics != null) {
+      kotlinx.coroutines.delay(350L)
+      onCheckLyrics.invoke(track)
+    }
+  }
+
   val rowShape = RoundedCornerShape(15.dp)
   val rowInteraction = remember { MutableInteractionSource() }
   val rowFocused by rowInteraction.collectIsFocusedAsState()
@@ -2067,8 +2080,17 @@ fun TrackRow(
       )
       Row(
         modifier = Modifier.fillMaxWidth(),
-        verticalAlignment = Alignment.CenterVertically
+        verticalAlignment = Alignment.CenterVertically,
+        horizontalArrangement = Arrangement.spacedBy(5.dp)
       ) {
+        if (hasLyrics) {
+          LyricsTag(
+            visible = true,
+            size = LyricsTagSize.Mini,
+            darkTheme = true,
+            reducedMotion = reducedMotion
+          )
+        }
         Text(
           text = artistText,
           style = MaterialTheme.typography.bodySmall.copy(
@@ -2082,17 +2104,7 @@ fun TrackRow(
           modifier = Modifier.weight(1f, fill = false)
         )
         Text(
-          text = " · ",
-          style = MaterialTheme.typography.bodySmall.copy(
-            fontFamily = AlbumDesignTokens.OutfitFontFamily,
-            fontSize = 12.sp,
-            lineHeight = 16.sp
-          ),
-          color = AlbumDesignTokens.DimText,
-          maxLines = 1
-        )
-        Text(
-          text = durationText,
+          text = "· $durationText",
           style = MaterialTheme.typography.bodySmall.copy(
             fontFamily = AlbumDesignTokens.OutfitFontFamily,
             fontSize = 12.sp,
