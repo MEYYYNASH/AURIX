@@ -892,4 +892,57 @@
     <string name="queue_drag_handle_cd">អូសដើម្បីប្ដូរលំដាប់បទចម្រៀង</string>
     <string name="queue_swipe_remove_label">ដកចេញ</string>
     <string name="queue_gesture_hint">អូសចំណុចកាន់ដើម្បីប្ដូរលំដាប់ · អូសឆ្វេងដើម្បីដកចេញ</string>
+
+    <!-- v2.4.4 Flagship Upgrades: Audio Pro, Offline Controls, Track Editor, Monthly Recap, Driving Mode & Settings Search -->
+    <string name="audio_pro_title">ប្រព័ន្ធសំឡេង Audio Pro</string>
+    <string name="audio_route_bluetooth">ប៊្លូធូស</string>
+    <string name="audio_route_headphones">កាសស្តាប់</string>
+    <string name="audio_route_speaker">ឧបករណ៍បំពងសំឡេង</string>
+    <string name="audio_pro_auto_bt_title">ប្ដូរ EQ ស្វ័យប្រវត្តិតាមឧបករណ៍</string>
+    <string name="audio_pro_auto_bt_sub">ចងចាំ EQ ផ្សេងគ្នាសម្រាប់ ប៊្លូធូស កាសស្តាប់ និង ឧបករណ៍បំពងសំឡេង</string>
+    <string name="audio_pro_loudness_title">លំនឹងកម្រិតសំឡេងស្វ័យប្រវត្តិ</string>
+    <string name="audio_pro_loudness_sub">ធ្វើឱ្យកម្រិតសំឡេងស្មើគ្នារវាងឯកសារក្នុងម៉ាស៊ីន និង YouTube</string>
+    <string name="sleep_timer_fade_out">បន្ថយសំឡេងរលូន 15 វិ</string>
+    <string name="sleep_timer_end_of_song">ឈប់ពេលចប់បទ</string>
+    <string name="standby_sleep_timer_label">ម៉ោងគេង</string>
+
+    <string name="download_wifi_only_title">ទាញយកតែលើ Wi-Fi</string>
+    <string name="download_storage_used_format">ទំហំផ្ទុកអ៊ីនធឺណិតគ្មាន៖ %1$d MB / %2$s</string>
+
+    <string name="edit_track_info_title">កែសម្រួលព័ត៌មានបទចម្រៀង</string>
+    <string name="edit_track_info_subtitle">កែចំណងជើង សិល្បករ អាល់ប៊ុម និងគម្របរូបភាពថ្មី</string>
+    <string name="edit_track_change_cover">ប្ដូរគម្របអាល់ប៊ុម</string>
+    <string name="edit_track_change_cover_sub">ជ្រើសរើសរូបភាពដោយសុវត្ថិភាពពីវិចិត្រសាល</string>
+    <string name="edit_track_field_title">ចំណងជើងបទ</string>
+    <string name="edit_track_field_artist">សិល្បករ</string>
+    <string name="edit_track_field_album">អាល់ប៊ុម</string>
+    <string name="edit_track_field_year">ឆ្នាំ</string>
+    <string name="edit_track_field_genre">ប្រភេទតន្ត្រី</string>
+    <string name="edit_track_save_button">រក្សាទុកការកែប្រែ</string>
+    <string name="details_edit_info">កែព័ត៌មាន</string>
+
+    <string name="recap_story_title">សង្ខេប AURIX</string>
+    <string name="recap_banner_title">សង្ខេប AURIX ប្រចាំខែរបស់អ្នក</string>
+    <string name="recap_banner_subtitle">ចុចដើម្បីមើល Story និងចែករំលែកកាត 9:16 ស្អាតៗ</string>
+    <string name="recap_open_story">មើល Story</string>
+    <string name="recap_share_story">ចែករំលែក 9:16</string>
+    <string name="recap_minutes_listened">នាទីស្តាប់</string>
+    <string name="recap_total_plays">ចំនួនចាក់</string>
+    <string name="recap_streak_days">ថ្ងៃជាប់គ្នា</string>
+    <string name="recap_artists_count">សិល្បករ</string>
+    <string name="recap_top_artist_label">សិល្បករលេខ ១ របស់អ្នក</string>
+    <string name="recap_top_track_label">បទចម្រៀងស្តាប់ច្រើនបំផុត</string>
+    <string name="recap_dna_label">DNA តន្ត្រីរបស់អ្នក</string>
+
+    <string name="driving_mode_title">ម៉ូដបើកបរ</string>
+    <string name="driving_mode_subtitle">ប៊ូតុងធំៗច្បាស់ល្អ និងទំនុកច្រៀងផ្ទាល់ពេលបើកបរ</string>
+    <string name="driving_mode_exit">ចេញ</string>
+    <string name="driving_mode_empty">មិនមានបទកំពុងចាក់</string>
+
+    <string name="settings_search_placeholder">ស្វែងរកការកំណត់ (EQ, ទំនុកច្រៀង, វិដ្ជិត…)</string>
+    <string name="settings_search_no_results">រកមិនឃើញការកំណត់ដែលត្រូវគ្នាទេ</string>
+    <string name="settings_quick_driving">បើកបរ</string>
+    <string name="settings_quick_audio_pro">Audio Pro</string>
+    <string name="settings_quick_downloads">ទាញយក</string>
+    <string name="settings_quick_recap">សង្ខេប</string>
 </resources>

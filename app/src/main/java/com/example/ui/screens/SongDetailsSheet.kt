@@ -16,7 +16,9 @@ import androidx.compose.material.icons.automirrored.rounded.PlaylistPlay
 import androidx.compose.material.icons.rounded.Block
 import androidx.compose.material.icons.rounded.Close
 import androidx.compose.material.icons.rounded.DeleteOutline
+import androidx.compose.material.icons.rounded.DirectionsCar
 import androidx.compose.material.icons.rounded.Edit
+import androidx.compose.material.icons.rounded.EditNote
 import androidx.compose.material.icons.rounded.Favorite
 import androidx.compose.material.icons.rounded.FavoriteBorder
 import androidx.compose.material.icons.rounded.LibraryAdd
@@ -68,7 +70,9 @@ fun SongDetailsSheet(
   onPlayNext: (() -> Unit)? = null,
   onAddToQueue: (() -> Unit)? = null,
   onOpenStandby: (() -> Unit)? = null,
+  onOpenDrivingMode: (() -> Unit)? = null,
   onOpenOrbiCompanion: (() -> Unit)? = null,
+  onEditTrackInfo: (() -> Unit)? = null,
   onEditLyrics: (() -> Unit)? = null,
   isCustomLyrics: Boolean = false,
   onDelete: (() -> Unit)? = null
@@ -329,6 +333,20 @@ fun SongDetailsSheet(
               )
             )
           }
+          if (onOpenDrivingMode != null) {
+            add(
+              SheetActionSpec(
+                icon = Icons.Rounded.DirectionsCar,
+                label = stringResource(id = R.string.driving_mode_title),
+                active = false,
+                testTag = "details_driving_mode_button",
+                onClick = {
+                  onDismiss()
+                  onOpenDrivingMode()
+                }
+              )
+            )
+          }
           if (onOpenOrbiCompanion != null) {
             add(
               SheetActionSpec(
@@ -339,6 +357,20 @@ fun SongDetailsSheet(
                 onClick = {
                   onDismiss()
                   onOpenOrbiCompanion()
+                }
+              )
+            )
+          }
+          if (onEditTrackInfo != null) {
+            add(
+              SheetActionSpec(
+                icon = Icons.Rounded.EditNote,
+                label = stringResource(id = R.string.details_edit_info),
+                active = false,
+                testTag = "details_edit_track_info_button",
+                onClick = {
+                  onDismiss()
+                  onEditTrackInfo()
                 }
               )
             )

@@ -92,6 +92,7 @@ fun NowPlayingSheet(
   sleepMinutes: Int,
   sleepRemainingSeconds: Long = 0L,
   sleepEndOfTrack: Boolean = false,
+  sleepFadeOutEnabled: Boolean = true,
   onPlayPause: () -> Unit,
   onNext: () -> Unit,
   onPrevious: () -> Unit,
@@ -103,6 +104,7 @@ fun NowPlayingSheet(
   onSetSleepMinutes: (Int) -> Unit = {},
   onSetSleepEndOfTrack: () -> Unit = {},
   onCancelSleep: () -> Unit = {},
+  onToggleSleepFadeOut: (Boolean) -> Unit = {},
   onSeek: (Long) -> Unit,
   onFavorite: () -> Unit,
   onClose: () -> Unit,
@@ -119,6 +121,10 @@ fun NowPlayingSheet(
   onEqBassBoostChanged: (Int) -> Unit = {},
   onEqVirtualizerChanged: (Int) -> Unit = {},
   onResetEq: () -> Unit = {},
+  onToggleLoudnessNorm: (Boolean) -> Unit = {},
+  onLoudnessTargetGainChanged: (Int) -> Unit = {},
+  onToggleAutoBtEq: (Boolean) -> Unit = {},
+  onSelectRoutePreset: (com.example.playback.AudioOutputRoute, EqPreset) -> Unit = { _, _ -> },
   queue: List<Song> = emptyList(),
   djAutoMixEnabled: Boolean = false,
   beatfadeSeconds: Int = 4,
@@ -150,6 +156,8 @@ fun NowPlayingSheet(
   developerModeEnabled: Boolean = false,
   onOpenLyricsEditor: (() -> Unit)? = null,
   onOpenStandby: () -> Unit = {},
+  onOpenDrivingMode: (() -> Unit)? = null,
+  onEditTrackInfo: ((Song) -> Unit)? = null,
   orbiMood: OrbiMood = OrbiMood.CLASSIC_IDLE,
   orbiTheme: OrbiCompanionTheme = OrbiCompanionTheme.CLASSIC,
   orbiBeatEnergy: Float = 0f,
@@ -923,7 +931,9 @@ fun NowPlayingSheet(
         onPlayNext = onPlayNextSong?.let { cb -> { cb(song) } },
         onAddToQueue = onAddToQueueSong?.let { cb -> { cb(song) } },
         onOpenStandby = onOpenStandby,
+        onOpenDrivingMode = onOpenDrivingMode,
         onOpenOrbiCompanion = onOpenOrbiCompanion,
+        onEditTrackInfo = onEditTrackInfo?.let { cb -> { cb(song) } },
         onEditLyrics = if (developerModeEnabled) onOpenLyricsEditor else null,
         isCustomLyrics = lyricsResult?.isCustom == true && developerModeEnabled,
         onDelete = onDeleteSong
@@ -939,6 +949,10 @@ fun NowPlayingSheet(
         onBassBoostChanged = onEqBassBoostChanged,
         onVirtualizerChanged = onEqVirtualizerChanged,
         onReset = onResetEq,
+        onToggleLoudnessNorm = onToggleLoudnessNorm,
+        onLoudnessTargetGainChanged = onLoudnessTargetGainChanged,
+        onToggleAutoBtEq = onToggleAutoBtEq,
+        onSelectRoutePreset = onSelectRoutePreset,
         onDismiss = { showEqualizer = false }
       )
     }
@@ -969,10 +983,12 @@ fun NowPlayingSheet(
         sleepMinutes = sleepMinutes,
         sleepRemainingSeconds = sleepRemainingSeconds,
         sleepEndOfTrack = sleepEndOfTrack,
+        sleepFadeOutEnabled = sleepFadeOutEnabled,
         playbackSpeed = playbackSpeed,
         onSetSleepMinutes = onSetSleepMinutes,
         onSetSleepEndOfTrack = onSetSleepEndOfTrack,
         onCancelSleep = onCancelSleep,
+        onToggleSleepFadeOut = onToggleSleepFadeOut,
         onSetPlaybackSpeed = onSetPlaybackSpeed,
         onDismiss = { showSleepSpeed = false }
       )
@@ -1052,10 +1068,12 @@ private fun SleepAndSpeedStudioSheet(
   sleepMinutes: Int,
   sleepRemainingSeconds: Long,
   sleepEndOfTrack: Boolean,
+  sleepFadeOutEnabled: Boolean,
   playbackSpeed: Float,
   onSetSleepMinutes: (Int) -> Unit,
   onSetSleepEndOfTrack: () -> Unit,
   onCancelSleep: () -> Unit,
+  onToggleSleepFadeOut: (Boolean) -> Unit,
   onSetPlaybackSpeed: (Float) -> Unit,
   onDismiss: () -> Unit
 ) {
@@ -1222,6 +1240,36 @@ private fun SleepAndSpeedStudioSheet(
                 )
               }
             }
+          }
+        }
+
+        Spacer(modifier = Modifier.height(12.dp))
+
+        // Smooth 15-second ease-out volume fade-out toggle
+        Surface(
+          shape = RoundedCornerShape(16.dp),
+          color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.05f),
+          border = BorderStroke(1.dp, MaterialTheme.colorScheme.onSurface.copy(alpha = 0.09f)),
+          modifier = Modifier.fillMaxWidth()
+        ) {
+          Row(
+            modifier = Modifier
+              .fillMaxWidth()
+              .clickable { onToggleSleepFadeOut(!sleepFadeOutEnabled) }
+              .padding(horizontal = 14.dp, vertical = 10.dp),
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.SpaceBetween
+          ) {
+            Text(
+              text = stringResource(id = R.string.sleep_timer_fade_out),
+              style = MaterialTheme.typography.bodyMedium.copy(fontWeight = FontWeight.SemiBold),
+              color = MaterialTheme.colorScheme.onSurface
+            )
+            Switch(
+              checked = sleepFadeOutEnabled,
+              onCheckedChange = onToggleSleepFadeOut,
+              modifier = Modifier.testTag("sleep_fade_out_switch")
+            )
           }
         }
 

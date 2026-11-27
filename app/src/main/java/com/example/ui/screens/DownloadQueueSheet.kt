@@ -36,6 +36,10 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.ModalBottomSheet
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
+import androidx.compose.foundation.horizontalScroll
+import androidx.compose.foundation.rememberScrollState
+import androidx.compose.material.icons.rounded.Wifi
+import androidx.compose.material3.Switch
 import androidx.compose.material3.minimumInteractiveComponentSize
 import androidx.compose.material3.rememberModalBottomSheetState
 import androidx.compose.runtime.Composable
@@ -63,7 +67,12 @@ fun DownloadQueueSheet(
   onRetryItem: (String) -> Unit,
   onCancelAll: () -> Unit,
   onRetryAllFailed: () -> Unit,
-  onClearFinished: () -> Unit
+  onClearFinished: () -> Unit,
+  wifiOnly: Boolean = false,
+  storageCapMb: Int = 0,
+  usedStorageMb: Int = 0,
+  onToggleWifiOnly: (Boolean) -> Unit = {},
+  onSelectStorageCapMb: (Int) -> Unit = {}
 ) {
   val sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true)
   val activeCount = items.count { it.isActive }
@@ -143,6 +152,85 @@ fun DownloadQueueSheet(
             contentDescription = stringResource(id = R.string.error_dialog_dismiss),
             tint = MaterialTheme.colorScheme.onSurfaceVariant
           )
+        }
+      }
+
+      // Offline Download Controls (Wi-Fi Only + Storage Cap)
+      Column(
+        modifier = Modifier
+          .fillMaxWidth()
+          .clip(RoundedCornerShape(18.dp))
+          .background(if (darkTheme) Color.White.copy(alpha = 0.05f) else Color.Black.copy(alpha = 0.03f))
+          .border(1.dp, MaterialTheme.colorScheme.onSurface.copy(alpha = 0.10f), RoundedCornerShape(18.dp))
+          .padding(horizontal = 14.dp, vertical = 10.dp),
+        verticalArrangement = Arrangement.spacedBy(8.dp)
+      ) {
+        Row(
+          modifier = Modifier.fillMaxWidth(),
+          verticalAlignment = Alignment.CenterVertically,
+          horizontalArrangement = Arrangement.SpaceBetween
+        ) {
+          Row(
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.spacedBy(8.dp)
+          ) {
+            Icon(
+              imageVector = Icons.Rounded.Wifi,
+              contentDescription = null,
+              tint = if (wifiOnly) Color(0xFF43C7F4) else MaterialTheme.colorScheme.onSurfaceVariant,
+              modifier = Modifier.size(18.dp)
+            )
+            Column {
+              Text(
+                text = stringResource(id = R.string.download_wifi_only_title),
+                style = MaterialTheme.typography.bodyMedium.copy(fontWeight = FontWeight.SemiBold),
+                color = MaterialTheme.colorScheme.onSurface
+              )
+              Text(
+                text = stringResource(id = R.string.download_storage_used_format, usedStorageMb, if (storageCapMb > 0) "${storageCapMb} MB" else "∞"),
+                style = MaterialTheme.typography.labelSmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant
+              )
+            }
+          }
+          Switch(
+            checked = wifiOnly,
+            onCheckedChange = onToggleWifiOnly,
+            modifier = Modifier.testTag("download_wifi_only_switch")
+          )
+        }
+
+        Row(
+          modifier = Modifier
+            .fillMaxWidth()
+            .horizontalScroll(rememberScrollState()),
+          horizontalArrangement = Arrangement.spacedBy(6.dp)
+        ) {
+          val capOptions = listOf(500 to "500 MB", 1024 to "1 GB", 2048 to "2 GB", 5120 to "5 GB", 0 to "Unlimited")
+          capOptions.forEach { (capMb, label) ->
+            val selected = storageCapMb == capMb
+            Surface(
+              onClick = { onSelectStorageCapMb(capMb) },
+              shape = CircleShape,
+              color = if (selected) Color(0xFF43C7F4).copy(alpha = 0.22f)
+              else MaterialTheme.colorScheme.onSurface.copy(alpha = 0.06f),
+              border = BorderStroke(
+                1.dp,
+                if (selected) Color(0xFF43C7F4).copy(alpha = 0.65f)
+                else MaterialTheme.colorScheme.onSurface.copy(alpha = 0.10f)
+              ),
+              modifier = Modifier.testTag("download_cap_$capMb")
+            ) {
+              Text(
+                text = label,
+                style = MaterialTheme.typography.labelSmall.copy(
+                  fontWeight = if (selected) FontWeight.Bold else FontWeight.Medium
+                ),
+                color = if (selected) Color(0xFF43C7F4) else MaterialTheme.colorScheme.onSurface,
+                modifier = Modifier.padding(horizontal = 10.dp, vertical = 6.dp)
+              )
+            }
+          }
         }
       }
 

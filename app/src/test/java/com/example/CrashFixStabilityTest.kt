@@ -12,10 +12,10 @@ import org.junit.Test
 class CrashFixStabilityTest {
 
   @Test
-  fun release243_metadataAndVersionCodeAreConsistent() {
-    assertEquals("2.4.3", BuildConfig.VERSION_NAME)
-    assertEquals(20403, BuildConfig.VERSION_CODE)
-    assertTrue("Release 2.4.3 versionCode must exceed 2.4.2 (20402)", BuildConfig.VERSION_CODE > 20402)
+  fun release244_metadataAndVersionCodeAreConsistent() {
+    assertEquals("2.4.4", BuildConfig.VERSION_NAME)
+    assertEquals(20404, BuildConfig.VERSION_CODE)
+    assertTrue("Release 2.4.4 versionCode must exceed 2.4.3 (20403)", BuildConfig.VERSION_CODE > 20403)
     assertEquals(4, com.example.ui.screens.ONBOARDING_SLIDE_COUNT)
     assertTrue(com.example.ui.screens.MINI_PLAYER_HIGH_REFRESH_OPTIMIZED)
     assertTrue(com.example.ui.screens.MINI_PLAYER_SLIDE_UP_DAMPING in 0.7f..0.95f)
@@ -1067,7 +1067,7 @@ class CrashFixStabilityTest {
 
   @Test
   fun remoteJsonUpdateChecker_granularVersioningAndTimestamps_workEndToEnd() {
-    assertEquals(20403, BuildConfig.VERSION_CODE)
+    assertEquals(20404, BuildConfig.VERSION_CODE)
     assertEquals(20301L, com.example.data.GitHubUpdater.deriveVersionCodeFromTag("v2.3.1"))
     assertEquals(20301L, com.example.data.GitHubUpdater.deriveVersionCodeFromTag("v2.3.1+20301"))
     assertEquals(20312L, com.example.data.GitHubUpdater.deriveVersionCodeFromTag("v2.3.1.2"))
@@ -1077,15 +1077,16 @@ class CrashFixStabilityTest {
     assertEquals(20401L, com.example.data.GitHubUpdater.deriveVersionCodeFromTag("v2.4.1"))
     assertEquals(20402L, com.example.data.GitHubUpdater.deriveVersionCodeFromTag("v2.4.2"))
     assertEquals(20403L, com.example.data.GitHubUpdater.deriveVersionCodeFromTag("v2.4.3"))
+    assertEquals(20404L, com.example.data.GitHubUpdater.deriveVersionCodeFromTag("v2.4.4"))
 
     val server = com.sun.net.httpserver.HttpServer.create(java.net.InetSocketAddress("127.0.0.1", 0), 0)
     val port = server.address.port
     server.createContext("/version.json") { exchange ->
       val body = """
         {
-          "versionName": "2.4.3.1",
-          "publishedAt": "2026-11-26T22:15:30Z",
-          "apkUrl": "http://127.0.0.1:$port/AURIX-v2.4.3.1.apk",
+          "versionName": "2.4.4.1",
+          "publishedAt": "2026-11-27T22:15:30Z",
+          "apkUrl": "http://127.0.0.1:$port/AURIX-v2.4.4.1.apk",
           "sha256": "0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef",
           "notes": ["Granular 4-segment hotfix release"]
         }
@@ -1109,8 +1110,8 @@ class CrashFixStabilityTest {
       val derivedCode = com.example.data.GitHubUpdater.deriveVersionCodeFromTag(versionName)
       val parsedTs = com.example.data.GitHubUpdater.parseIsoTimestampMs(publishedAt)
 
-      assertEquals("2.4.3.1", versionName)
-      assertEquals(20431L, derivedCode)
+      assertEquals("2.4.4.1", versionName)
+      assertEquals(20441L, derivedCode)
       assertTrue(parsedTs > 0L)
 
       val remote = com.example.data.RemoteVersionInfo(
@@ -1617,5 +1618,154 @@ class CrashFixStabilityTest {
       "onboardingCompleted must resolve before _isAppInitialized = true",
       vmSrc.indexOf("_onboardingCompleted.value = resolvedOnboardingCompleted") < vmSrc.indexOf("_isAppInitialized.value = true")
     )
+  }
+
+  @Test
+  fun dailyDiscovery_precomputesScoresAndNeverViolatesTimSortContract() {
+    val largeCatalog = (1..150).map { idx ->
+      Song(
+        id = "disc_track_$idx",
+        title = "Discovery Track $idx",
+        artist = "Artist ${idx % 12}",
+        artworkUrl = "",
+        durationSeconds = 180L,
+        streamUrl = "",
+        genre = when (idx % 4) {
+          0 -> "Pop"
+          1 -> "Lo-fi"
+          2 -> "R&B"
+          else -> "Hip-Hop"
+        }
+      )
+    }
+
+    for (salt in 0..10) {
+      val mix = com.example.recommendation.RecommendationEngine.buildDailyDiscovery(
+        playLogs = emptyList(),
+        richHistory = emptyList(),
+        favorites = largeCatalog.take(3),
+        feedback = emptyMap(),
+        catalog = largeCatalog,
+        nowMs = 1_795_772_000_000L,
+        refreshSalt = salt,
+        limit = 20
+      )
+      assertTrue("Daily Discovery should produce tracks without TimSort crash", mix != null && mix.tracks.size == 20)
+    }
+
+    // Same day + salt must be deterministic
+    val first = com.example.recommendation.RecommendationEngine.buildDailyDiscovery(
+      playLogs = emptyList(),
+      richHistory = emptyList(),
+      favorites = emptyList(),
+      feedback = emptyMap(),
+      catalog = largeCatalog,
+      nowMs = 1_795_772_000_000L,
+      refreshSalt = 2,
+      limit = 20
+    )
+    val second = com.example.recommendation.RecommendationEngine.buildDailyDiscovery(
+      playLogs = emptyList(),
+      richHistory = emptyList(),
+      favorites = emptyList(),
+      feedback = emptyMap(),
+      catalog = largeCatalog,
+      nowMs = 1_795_772_000_000L,
+      refreshSalt = 2,
+      limit = 20
+    )
+    assertEquals(first?.tracks?.map { it.id }, second?.tracks?.map { it.id })
+  }
+
+  @Test
+  fun release244_fiveFlagshipUpgradesAreVerified() {
+    // 1. Shareable Lyric Story Cards (9:16 Story vs 4:5 Feed + Liquid Glass & Vinyl themes)
+    assertEquals(6, com.example.share.ShareThemeStyle.entries.size)
+    assertTrue(com.example.share.ShareThemeStyle.entries.contains(com.example.share.ShareThemeStyle.LIQUID_GLASS))
+    assertTrue(com.example.share.ShareThemeStyle.entries.contains(com.example.share.ShareThemeStyle.VINYL))
+    assertEquals(9f / 16f, com.example.share.ShareCardAspect.STORY_9_16.ratio, 0.0001f)
+    assertEquals(4f / 5f, com.example.share.ShareCardAspect.FEED_4_5.ratio, 0.0001f)
+
+    // 2. Audio Pro Suite (Bluetooth Auto-EQ, Loudness Normalization & Route Presets)
+    com.example.playback.AudioEqualizerController.restoreAudioProSettings(
+      loudnessNormEnabled = true,
+      loudnessTargetGainMb = 450,
+      autoSwitchBluetoothEq = true,
+      bluetoothEqPresetId = com.example.playback.EqPreset.BASS_BOOST.id,
+      headphonesEqPresetId = com.example.playback.EqPreset.POP.id,
+      speakerEqPresetId = com.example.playback.EqPreset.VOCAL.id
+    )
+    val btState = com.example.playback.AudioEqualizerController.onAudioOutputRouteChanged(
+      com.example.playback.AudioOutputRouteInfo(com.example.playback.AudioOutputRoute.BLUETOOTH, "AirPods Pro")
+    )
+    assertEquals(com.example.playback.AudioOutputRoute.BLUETOOTH, btState.activeOutputRoute)
+    assertEquals("AirPods Pro", btState.activeOutputName)
+    assertEquals(com.example.playback.EqPreset.BASS_BOOST.id, btState.presetId)
+    assertTrue(btState.loudnessNormEnabled)
+    assertEquals(450, btState.loudnessTargetGainMb)
+
+    val spkState = com.example.playback.AudioEqualizerController.onAudioOutputRouteChanged(
+      com.example.playback.AudioOutputRouteInfo(com.example.playback.AudioOutputRoute.SPEAKER, "")
+    )
+    assertEquals(com.example.playback.EqPreset.VOCAL.id, spkState.presetId)
+
+    // 3. Track Metadata Override Store (non-destructive local tag & cover editing)
+    val baseSong = Song("local_42", "IMG_0042_messy.mp3", "Unknown Artist", "", 210L, "content://media/42", year = "", genre = "")
+    val override = com.example.data.TrackMetadataOverride(
+      songId = "local_42",
+      title = "ស្នេហ៍ក្នុងក្តីស្រមៃ",
+      artist = "VannDa",
+      album = "Skull 2",
+      year = "2026",
+      genre = "Khmer",
+      artworkPath = "file:///custom/cover.jpg"
+    )
+    val patched = override.applyTo(baseSong)
+    assertEquals("ស្នេហ៍ក្នុងក្តីស្រមៃ", patched.title)
+    assertEquals("VannDa", patched.artist)
+    assertEquals("2026", patched.year)
+    assertEquals("Khmer", patched.genre)
+    assertEquals("file:///custom/cover.jpg", patched.artworkUrl)
+
+    // 4. Monthly AURIX Recap Story Calculator
+    val nowMs = 1_795_858_400_000L
+    val dayMs = 24L * 60L * 60L * 1000L
+    val sampleSong = Song("s_recap_1", "Midnight Glow", "Sinn Sisamouth", "https://example.com/art.jpg", 240L, "https://example.com/s.mp3", genre = "Khmer")
+    val logs = listOf(
+      com.example.recommendation.PlayLogRecord(song = sampleSong, playedAtMs = nowMs - 2 * dayMs, listenedDurationMs = 240_000L),
+      com.example.recommendation.PlayLogRecord(song = sampleSong, playedAtMs = nowMs - 1 * dayMs, listenedDurationMs = 240_000L),
+      com.example.recommendation.PlayLogRecord(song = sampleSong, playedAtMs = nowMs, listenedDurationMs = 240_000L)
+    )
+    val dna = com.example.recommendation.RecommendationEngine.buildMusicDna(logs)
+    val recap = com.example.recommendation.MonthlyRecapCalculator.buildRecap(
+      playLogs = logs,
+      richHistory = emptyList(),
+      musicDna = dna,
+      favorites = listOf(sampleSong),
+      nowMs = nowMs
+    )
+    assertTrue(recap.hasData)
+    assertEquals(3, recap.totalPlays)
+    assertEquals(3, recap.longestStreakDays)
+    assertEquals("Sinn Sisamouth", recap.topArtistName)
+    assertEquals(sampleSong.id, recap.topTrack?.song?.id)
+    assertTrue(recap.totalListeningMinutes >= 10)
+
+    // 5. Preferences keys, Settings Search, Driving Mode & zero prohibited permissions
+    assertEquals("eq_auto_bt_switch", com.example.data.PreferencesManager.EQ_AUTO_BT_SWITCH.name)
+    assertEquals("loudness_norm_enabled", com.example.data.PreferencesManager.LOUDNESS_NORM_ENABLED.name)
+    assertEquals("sleep_timer_fade_out", com.example.data.PreferencesManager.SLEEP_TIMER_FADE_OUT.name)
+    assertEquals("download_wifi_only", com.example.data.PreferencesManager.DOWNLOAD_WIFI_ONLY.name)
+    assertEquals("download_storage_cap_mb", com.example.data.PreferencesManager.DOWNLOAD_STORAGE_CAP_MB.name)
+
+    val projectRoot = java.io.File(System.getProperty("user.dir") ?: ".").let { dir ->
+      if (java.io.File(dir, "src/main/java").exists()) dir else java.io.File(dir, "app")
+    }
+    val settingsSrc = java.io.File(projectRoot, "src/main/java/com/example/ui/screens/SettingsScreen.kt").readText()
+    val drivingSrc = java.io.File(projectRoot, "src/main/java/com/example/ui/screens/DrivingModeScreen.kt").readText()
+    val manifestSrc = java.io.File(projectRoot, "src/main/AndroidManifest.xml").readText()
+    assertTrue("SettingsScreen must include live search bar", settingsSrc.contains("settings_search_input"))
+    assertTrue("DrivingModeScreen must keep screen awake and support BackHandler", drivingSrc.contains("FLAG_KEEP_SCREEN_ON") && drivingSrc.contains("BackHandler"))
+    assertFalse("Must NOT declare BLUETOOTH_CONNECT permission", manifestSrc.contains("BLUETOOTH_CONNECT"))
   }
 }

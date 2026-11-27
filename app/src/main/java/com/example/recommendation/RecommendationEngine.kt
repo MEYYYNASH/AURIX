@@ -812,11 +812,13 @@ object RecommendationEngine {
       .eachCount()
 
     val selected = unheard
-      .sortedByDescending { track ->
+      .map { track ->
         val genreBoost = (preferredGenres[track.genre] ?: 0) * 14.0
-        genreBoost + rng.nextDouble(0.0, 20.0)
+        track to (genreBoost + rng.nextDouble(0.0, 20.0))
       }
+      .sortedByDescending { it.second }
       .take(limit)
+      .map { it.first }
 
     return PersonalMix(
       id = "daily_discovery",

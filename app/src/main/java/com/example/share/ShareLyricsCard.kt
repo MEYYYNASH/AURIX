@@ -80,8 +80,15 @@ enum class ShareCardMode {
   SONG
 }
 
+enum class ShareCardAspect(val ratio: Float, val label: String) {
+  FEED_4_5(4f / 5f, "4:5"),
+  STORY_9_16(9f / 16f, "9:16")
+}
+
 enum class ShareThemeStyle(val label: String) {
   ART("Art"),
+  LIQUID_GLASS("Glass"),
+  VINYL("Vinyl"),
   VIBRANT("Vibrant"),
   DARK("Dark"),
   MONO("Mono")
@@ -113,7 +120,8 @@ data class ShareCardData(
   val mode: ShareCardMode,
   val theme: ShareGradientTheme,
   val swatches: SharePaletteSwatches,
-  val brandName: String = "AURIX MUSIC"
+  val brandName: String = "AURIX MUSIC",
+  val aspect: ShareCardAspect = ShareCardAspect.FEED_4_5
 )
 
 data class ShareCardLyricsAnimFrame(
@@ -384,6 +392,24 @@ object SharePaletteExtractor {
         swatchSecondary = swatches.muted,
         swatchTertiary = swatches.darkVibrant,
         showBlurredArtwork = true
+      ),
+      ShareGradientTheme(
+        id = "liquid_glass",
+        style = ShareThemeStyle.LIQUID_GLASS,
+        name = "Glass",
+        swatchPrimary = Color(0xFF43C7F4),
+        swatchSecondary = Color(0xFF7965FF),
+        swatchTertiary = Color(0xFF080C14),
+        showBlurredArtwork = false
+      ),
+      ShareGradientTheme(
+        id = "vinyl",
+        style = ShareThemeStyle.VINYL,
+        name = "Vinyl",
+        swatchPrimary = Color(0xFFE7D6B8),
+        swatchSecondary = Color(0xFF3E352B),
+        swatchTertiary = Color(0xFF14110E),
+        showBlurredArtwork = false
       ),
       ShareGradientTheme(
         id = "vibrant",
@@ -754,6 +780,116 @@ object ShareCardRenderer {
         )
       }
 
+      ShareThemeStyle.LIQUID_GLASS -> {
+        // Obsidian Liquid Glass (#080C14) + neon cyan & electric violet aurora blooms + frosted inner frame
+        canvas.drawColor(android.graphics.Color.rgb(8, 12, 20))
+        val cyanGlow = Paint(Paint.ANTI_ALIAS_FLAG).apply {
+          shader = RadialGradient(
+            w * 0.16f + driftX, h * 0.18f + driftY, w * 0.85f,
+            android.graphics.Color.argb(122, 67, 199, 244),
+            android.graphics.Color.TRANSPARENT,
+            Shader.TileMode.CLAMP
+          )
+        }
+        canvas.drawRect(cardRect, cyanGlow)
+        val violetGlow = Paint(Paint.ANTI_ALIAS_FLAG).apply {
+          shader = RadialGradient(
+            w * 0.88f - driftX * 0.8f, h * 0.72f - driftY * 0.8f, w * 0.82f,
+            android.graphics.Color.argb(115, 121, 101, 255),
+            android.graphics.Color.TRANSPARENT,
+            Shader.TileMode.CLAMP
+          )
+        }
+        canvas.drawRect(cardRect, violetGlow)
+
+        // Translucent frosted glass inner panel with specular rim
+        val pad = w * 0.045f
+        val glassRect = RectF(pad, pad, w - pad, h - pad)
+        val glassFill = Paint(Paint.ANTI_ALIAS_FLAG).apply {
+          shader = LinearGradient(
+            0f, pad, w, h - pad,
+            intArrayOf(
+              android.graphics.Color.argb(40, 255, 255, 255),
+              android.graphics.Color.argb(14, 255, 255, 255),
+              android.graphics.Color.argb(26, 67, 199, 244)
+            ),
+            floatArrayOf(0f, 0.55f, 1f),
+            Shader.TileMode.CLAMP
+          )
+        }
+        canvas.drawRoundRect(glassRect, w * 0.055f, w * 0.055f, glassFill)
+        val glassStroke = Paint(Paint.ANTI_ALIAS_FLAG).apply {
+          this.style = Paint.Style.STROKE
+          strokeWidth = (w / 1080f) * 3f
+          color = android.graphics.Color.argb(72, 255, 255, 255)
+        }
+        canvas.drawRoundRect(glassRect, w * 0.055f, w * 0.055f, glassStroke)
+      }
+
+      ShareThemeStyle.VINYL -> {
+        // Editorial dark espresso-vinyl sleeve with peeking grooved vinyl disc
+        val sleevePaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
+          shader = LinearGradient(
+            0f, 0f, w, h,
+            intArrayOf(
+              android.graphics.Color.rgb(36, 30, 25),
+              android.graphics.Color.rgb(20, 17, 14),
+              android.graphics.Color.rgb(12, 10, 9)
+            ),
+            floatArrayOf(0f, 0.55f, 1f),
+            Shader.TileMode.CLAMP
+          )
+        }
+        canvas.drawRect(cardRect, sleevePaint)
+
+        // Subtle warm studio rim light
+        val warmLight = Paint(Paint.ANTI_ALIAS_FLAG).apply {
+          shader = RadialGradient(
+            w * 0.80f + driftX * 0.4f, h * 0.22f + driftY * 0.4f, w * 0.72f,
+            android.graphics.Color.argb(66, 239, 214, 174),
+            android.graphics.Color.TRANSPARENT,
+            Shader.TileMode.CLAMP
+          )
+        }
+        canvas.drawRect(cardRect, warmLight)
+
+        // Tactile vinyl disc peeking in upper-right quadrant
+        val discCx = w * 0.86f
+        val discCy = h * 0.24f
+        val discR = w * 0.36f
+        val discPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
+          shader = RadialGradient(
+            discCx, discCy, discR,
+            intArrayOf(
+              android.graphics.Color.rgb(32, 32, 36),
+              android.graphics.Color.rgb(14, 14, 16),
+              android.graphics.Color.rgb(28, 28, 32),
+              android.graphics.Color.rgb(10, 10, 12)
+            ),
+            floatArrayOf(0f, 0.48f, 0.76f, 1f),
+            Shader.TileMode.CLAMP
+          )
+        }
+        canvas.drawCircle(discCx, discCy, discR, discPaint)
+
+        // Micro vinyl grooves
+        val groovePaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
+          this.style = Paint.Style.STROKE
+          strokeWidth = (w / 1080f) * 1.8f
+          color = android.graphics.Color.argb(36, 255, 255, 255)
+        }
+        for (ring in 1..6) {
+          canvas.drawCircle(discCx, discCy, discR * (0.42f + ring * 0.088f), groovePaint)
+        }
+        // Center cream vinyl label & spindle hole
+        val labelPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
+          color = ColorUtils.blendARGB(swatches.vibrant.toArgb(), android.graphics.Color.rgb(239, 230, 214), 0.55f)
+        }
+        canvas.drawCircle(discCx, discCy, discR * 0.30f, labelPaint)
+        val holePaint = Paint(Paint.ANTI_ALIAS_FLAG).apply { color = android.graphics.Color.rgb(18, 16, 14) }
+        canvas.drawCircle(discCx, discCy, discR * 0.06f, holePaint)
+      }
+
       ShareThemeStyle.MONO -> {
         // Pure pitch black with a subtle white radial glow
         val basePaint = Paint().apply {
@@ -869,6 +1005,8 @@ object ShareCardRenderer {
         )
       }
       ShareThemeStyle.DARK -> ColorUtils.calculateLuminance(swatches.darkVibrant.toArgb())
+      ShareThemeStyle.LIQUID_GLASS -> 0.08
+      ShareThemeStyle.VINYL -> 0.09
       ShareThemeStyle.MONO -> 0.04
     }
 
@@ -1590,7 +1728,7 @@ object ShareCardExporter {
     data: ShareCardData,
     widthPx: Int = ShareCardRenderer.EXPORT_WIDTH_PX
   ): Bitmap = withContext(Dispatchers.Default) {
-    val heightPx = (widthPx / ShareCardRenderer.CARD_ASPECT_RATIO).roundToInt().coerceAtLeast(1)
+    val heightPx = (widthPx / data.aspect.ratio).roundToInt().coerceAtLeast(1)
     val bitmap = Bitmap.createBitmap(widthPx, heightPx, Bitmap.Config.ARGB_8888)
     val canvas = Canvas(bitmap)
     ShareCardRenderer.draw(

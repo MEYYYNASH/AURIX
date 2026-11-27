@@ -118,6 +118,19 @@ class PreferencesManager(private val context: Context) {
     val KHMER_LYRICS_FONT = stringPreferencesKey("khmer_lyrics_font")
     val DJ_AUTO_MIX_ENABLED = booleanPreferencesKey("dj_auto_mix_enabled")
 
+    // Audio Pro Suite (v2.4.4)
+    val EQ_AUTO_BT_SWITCH = booleanPreferencesKey("eq_auto_bt_switch")
+    val EQ_BT_PRESET = stringPreferencesKey("eq_bt_preset")
+    val EQ_HEADPHONES_PRESET = stringPreferencesKey("eq_headphones_preset")
+    val EQ_SPEAKER_PRESET = stringPreferencesKey("eq_speaker_preset")
+    val LOUDNESS_NORM_ENABLED = booleanPreferencesKey("loudness_norm_enabled")
+    val LOUDNESS_TARGET_GAIN_MB = intPreferencesKey("loudness_target_gain_mb")
+    val SLEEP_TIMER_FADE_OUT = booleanPreferencesKey("sleep_timer_fade_out")
+
+    // Offline Download Controls (v2.4.4)
+    val DOWNLOAD_WIFI_ONLY = booleanPreferencesKey("download_wifi_only")
+    val DOWNLOAD_STORAGE_CAP_MB = intPreferencesKey("download_storage_cap_mb")
+
     fun decodeRecentSearches(raw: String?): List<String> {
       if (raw.isNullOrBlank()) return emptyList()
       return raw.split(RECENT_SEARCH_DELIMITER)
@@ -176,6 +189,15 @@ class PreferencesManager(private val context: Context) {
   }
   val eqBassBoost: Flow<Int> = safeDataFlow.map { prefs -> prefs[EQ_BASS_BOOST] ?: 0 }
   val eqVirtualizer: Flow<Int> = safeDataFlow.map { prefs -> prefs[EQ_VIRTUALIZER] ?: 0 }
+  val eqAutoBtSwitch: Flow<Boolean> = safeDataFlow.map { prefs -> prefs[EQ_AUTO_BT_SWITCH] ?: false }
+  val eqBtPreset: Flow<String> = safeDataFlow.map { prefs -> prefs[EQ_BT_PRESET] ?: "bass_boost" }
+  val eqHeadphonesPreset: Flow<String> = safeDataFlow.map { prefs -> prefs[EQ_HEADPHONES_PRESET] ?: "pop" }
+  val eqSpeakerPreset: Flow<String> = safeDataFlow.map { prefs -> prefs[EQ_SPEAKER_PRESET] ?: "vocal" }
+  val loudnessNormEnabled: Flow<Boolean> = safeDataFlow.map { prefs -> prefs[LOUDNESS_NORM_ENABLED] ?: false }
+  val loudnessTargetGainMb: Flow<Int> = safeDataFlow.map { prefs -> (prefs[LOUDNESS_TARGET_GAIN_MB] ?: 350).coerceIn(0, 900) }
+  val sleepTimerFadeOut: Flow<Boolean> = safeDataFlow.map { prefs -> prefs[SLEEP_TIMER_FADE_OUT] ?: true }
+  val downloadWifiOnly: Flow<Boolean> = safeDataFlow.map { prefs -> prefs[DOWNLOAD_WIFI_ONLY] ?: false }
+  val downloadStorageCapMb: Flow<Int> = safeDataFlow.map { prefs -> (prefs[DOWNLOAD_STORAGE_CAP_MB] ?: 0).coerceAtLeast(0) }
   val crossfadeSeconds: Flow<Int> = safeDataFlow.map { prefs -> prefs[CROSSFADE_SECONDS] ?: 0 }
   val crossfadeManualSkip: Flow<Boolean> = safeDataFlow.map { prefs -> prefs[CROSSFADE_MANUAL_SKIP] ?: true }
   val lastSeenVersionCode: Flow<Long> = safeDataFlow.map { prefs -> prefs[LAST_SEEN_VERSION_CODE] ?: 0L }
@@ -563,5 +585,39 @@ class PreferencesManager(private val context: Context) {
     context.dataStore.edit { prefs ->
       prefs[DJ_AUTO_MIX_ENABLED] = enabled
     }
+  }
+
+  suspend fun setEqAutoBtSwitch(enabled: Boolean) {
+    context.dataStore.edit { prefs -> prefs[EQ_AUTO_BT_SWITCH] = enabled }
+  }
+
+  suspend fun setEqRoutePreset(route: com.example.playback.AudioOutputRoute, presetId: String) {
+    context.dataStore.edit { prefs ->
+      when (route) {
+        com.example.playback.AudioOutputRoute.BLUETOOTH -> prefs[EQ_BT_PRESET] = presetId
+        com.example.playback.AudioOutputRoute.HEADPHONES -> prefs[EQ_HEADPHONES_PRESET] = presetId
+        com.example.playback.AudioOutputRoute.SPEAKER -> prefs[EQ_SPEAKER_PRESET] = presetId
+      }
+    }
+  }
+
+  suspend fun setLoudnessNormEnabled(enabled: Boolean) {
+    context.dataStore.edit { prefs -> prefs[LOUDNESS_NORM_ENABLED] = enabled }
+  }
+
+  suspend fun setLoudnessTargetGainMb(gainMb: Int) {
+    context.dataStore.edit { prefs -> prefs[LOUDNESS_TARGET_GAIN_MB] = gainMb.coerceIn(0, 900) }
+  }
+
+  suspend fun setSleepTimerFadeOut(enabled: Boolean) {
+    context.dataStore.edit { prefs -> prefs[SLEEP_TIMER_FADE_OUT] = enabled }
+  }
+
+  suspend fun setDownloadWifiOnly(wifiOnly: Boolean) {
+    context.dataStore.edit { prefs -> prefs[DOWNLOAD_WIFI_ONLY] = wifiOnly }
+  }
+
+  suspend fun setDownloadStorageCapMb(capMb: Int) {
+    context.dataStore.edit { prefs -> prefs[DOWNLOAD_STORAGE_CAP_MB] = capMb.coerceAtLeast(0) }
   }
 }

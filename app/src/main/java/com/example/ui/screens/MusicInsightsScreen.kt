@@ -80,6 +80,8 @@ fun MusicInsightsScreen(
   orbiTopVibeLabel: String = "AURIX",
   onSelectOrbiTheme: (OrbiCompanionTheme) -> Unit = {},
   onSelectOrbiMoodOverride: (OrbiMood?) -> Unit = {},
+  monthlyRecap: MonthlyRecapSummary? = null,
+  onOpenMonthlyRecap: (() -> Unit)? = null,
   onBack: () -> Unit,
   onSelectMostPlayedFilter: (MostPlayedFilter) -> Unit,
   onCheckLyrics: (Song) -> Unit,
@@ -154,6 +156,103 @@ fun MusicInsightsScreen(
             maxLines = 1,
             overflow = TextOverflow.Ellipsis
           )
+        }
+      }
+    }
+
+    // 0. Monthly AURIX Recap Story Banner
+    if (onOpenMonthlyRecap != null) {
+      item {
+        val recapSummary = monthlyRecap
+        Surface(
+          onClick = onOpenMonthlyRecap,
+          shape = RoundedCornerShape(24.dp),
+          color = Color.Transparent,
+          border = BorderStroke(1.dp, Color(0xFF42F5C8).copy(alpha = 0.42f)),
+          modifier = Modifier
+            .fillMaxWidth()
+            .testTag("insights_monthly_recap_banner")
+        ) {
+          Box(
+            modifier = Modifier
+              .fillMaxWidth()
+              .background(
+                Brush.linearGradient(
+                  colors = listOf(
+                    Color(0xFF0E293A),
+                    Color(0xFF1A153E),
+                    Color(0xFF0C1E2C)
+                  )
+                )
+              )
+              .padding(horizontal = 18.dp, vertical = 16.dp)
+          ) {
+            Row(
+              modifier = Modifier.fillMaxWidth(),
+              verticalAlignment = Alignment.CenterVertically,
+              horizontalArrangement = Arrangement.spacedBy(14.dp)
+            ) {
+              Box(
+                modifier = Modifier
+                  .size(48.dp)
+                  .clip(RoundedCornerShape(16.dp))
+                  .background(
+                    Brush.linearGradient(listOf(Color(0xFF42F5C8), Color(0xFF7B61FF)))
+                  ),
+                contentAlignment = Alignment.Center
+              ) {
+                Icon(
+                  imageVector = Icons.Rounded.AutoAwesome,
+                  contentDescription = null,
+                  tint = Color(0xFF06151C),
+                  modifier = Modifier.size(26.dp)
+                )
+              }
+              Column(modifier = Modifier.weight(1f)) {
+                Text(
+                  text = (recapSummary?.monthLabel ?: stringResource(id = R.string.recap_story_title)).uppercase(),
+                  style = MaterialTheme.typography.labelSmall.copy(
+                    fontWeight = FontWeight.ExtraBold,
+                    letterSpacing = 1.1.sp
+                  ),
+                  color = Color(0xFF42F5C8)
+                )
+                Spacer(modifier = Modifier.height(2.dp))
+                Text(
+                  text = stringResource(id = R.string.recap_banner_title),
+                  style = MaterialTheme.typography.titleMedium.copy(
+                    fontWeight = FontWeight.ExtraBold,
+                    fontSize = 16.sp
+                  ),
+                  color = Color.White,
+                  maxLines = 1,
+                  overflow = TextOverflow.Ellipsis
+                )
+                Text(
+                  text = if (recapSummary != null && recapSummary.hasData) {
+                    "${recapSummary.totalListeningMinutes} min · ${recapSummary.totalPlays} plays · ${recapSummary.peakVibeBadge}"
+                  } else {
+                    stringResource(id = R.string.recap_banner_subtitle)
+                  },
+                  style = MaterialTheme.typography.bodySmall,
+                  color = Color.White.copy(alpha = 0.78f),
+                  maxLines = 1,
+                  overflow = TextOverflow.Ellipsis
+                )
+              }
+              Surface(
+                shape = CircleShape,
+                color = Color(0xFF42F5C8)
+              ) {
+                Text(
+                  text = stringResource(id = R.string.recap_open_story),
+                  style = MaterialTheme.typography.labelMedium.copy(fontWeight = FontWeight.ExtraBold),
+                  color = Color(0xFF06151C),
+                  modifier = Modifier.padding(horizontal = 12.dp, vertical = 7.dp)
+                )
+              }
+            }
+          }
         }
       }
     }
@@ -940,6 +1039,7 @@ fun PlaylistDetailScreen(
   onSongClick: (Song, List<Song>) -> Unit,
   onFavoriteClick: (Song) -> Unit,
   onYoutubeSongDownloadClick: ((Song) -> Unit)? = null,
+  onDownloadAll: (() -> Unit)? = null,
   onSaveMix: (() -> Unit)? = null,
   onShareMix: (() -> Unit)? = null
 ) {
@@ -1064,11 +1164,30 @@ fun PlaylistDetailScreen(
             }
           }
 
-          if (onSaveMix != null || onShareMix != null) {
+          if (onDownloadAll != null || onSaveMix != null || onShareMix != null) {
             Row(
               modifier = Modifier.fillMaxWidth(),
-              horizontalArrangement = Arrangement.spacedBy(10.dp)
+              horizontalArrangement = Arrangement.spacedBy(8.dp)
             ) {
+              if (onDownloadAll != null) {
+                FilledTonalButton(
+                  onClick = onDownloadAll,
+                  shape = CircleShape,
+                  modifier = Modifier
+                    .weight(1f)
+                    .defaultMinSize(minHeight = 48.dp)
+                    .testTag("playlist_download_all_button")
+                ) {
+                  Icon(Icons.Rounded.DownloadForOffline, contentDescription = null, modifier = Modifier.size(18.dp))
+                  Spacer(modifier = Modifier.width(5.dp))
+                  Text(
+                    text = stringResource(id = R.string.playlist_download_all),
+                    fontWeight = FontWeight.SemiBold,
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis
+                  )
+                }
+              }
               if (onSaveMix != null) {
                 OutlinedButton(
                   onClick = onSaveMix,
@@ -1079,8 +1198,13 @@ fun PlaylistDetailScreen(
                     .testTag("playlist_save_mix_button")
                 ) {
                   Icon(Icons.Rounded.BookmarkAdd, contentDescription = null, modifier = Modifier.size(18.dp))
-                  Spacer(modifier = Modifier.width(6.dp))
-                  Text(stringResource(id = R.string.mix_save_to_library), fontWeight = FontWeight.SemiBold)
+                  Spacer(modifier = Modifier.width(5.dp))
+                  Text(
+                    text = stringResource(id = R.string.mix_save_to_library),
+                    fontWeight = FontWeight.SemiBold,
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis
+                  )
                 }
               }
               if (onShareMix != null) {
@@ -1093,8 +1217,13 @@ fun PlaylistDetailScreen(
                     .testTag("playlist_share_mix_button")
                 ) {
                   Icon(Icons.Rounded.Share, contentDescription = null, modifier = Modifier.size(18.dp))
-                  Spacer(modifier = Modifier.width(6.dp))
-                  Text(stringResource(id = R.string.mix_share), fontWeight = FontWeight.SemiBold)
+                  Spacer(modifier = Modifier.width(5.dp))
+                  Text(
+                    text = stringResource(id = R.string.mix_share),
+                    fontWeight = FontWeight.SemiBold,
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis
+                  )
                 }
               }
             }

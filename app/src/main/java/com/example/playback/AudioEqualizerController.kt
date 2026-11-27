@@ -2,6 +2,7 @@ package com.example.playback
 
 import android.media.audiofx.BassBoost
 import android.media.audiofx.Equalizer
+import android.media.audiofx.LoudnessEnhancer
 import android.media.audiofx.Virtualizer
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
@@ -44,7 +45,15 @@ data class EqualizerUiState(
   val bassBoostStrength: Int = 0,
   val virtualizerStrength: Int = 0,
   val audioSessionId: Int = 0,
-  val hardwareSupported: Boolean = true
+  val hardwareSupported: Boolean = true,
+  val loudnessNormEnabled: Boolean = false,
+  val loudnessTargetGainMb: Int = 350,
+  val autoSwitchBluetoothEq: Boolean = false,
+  val activeOutputRoute: AudioOutputRoute = AudioOutputRoute.SPEAKER,
+  val activeOutputName: String = "",
+  val bluetoothEqPresetId: String = EqPreset.BASS_BOOST.id,
+  val headphonesEqPresetId: String = EqPreset.POP.id,
+  val speakerEqPresetId: String = EqPreset.VOCAL.id
 )
 
 object AudioEqualizerController {
@@ -52,7 +61,9 @@ object AudioEqualizerController {
   private var equalizer: Equalizer? = null
   private var bassBoost: BassBoost? = null
   private var virtualizer: Virtualizer? = null
+  private var loudnessEnhancer: LoudnessEnhancer? = null
   private var currentSessionId: Int = 0
+  private var currentTrackIsLocal: Boolean = false
 
   private val _state = MutableStateFlow(EqualizerUiState())
   val state: StateFlow<EqualizerUiState> = _state.asStateFlow()
@@ -119,6 +130,10 @@ object AudioEqualizerController {
       runCatching {
         @Suppress("DEPRECATION")
         virtualizer = Virtualizer(0, sessionId)
+      }
+
+      runCatching {
+        loudnessEnhancer = LoudnessEnhancer(sessionId)
       }
 
       val prev = _state.value
@@ -243,6 +258,125 @@ object AudioEqualizerController {
     }
   }
 
+  fun restoreAudioProSettings(
+    loudnessNormEnabled: Boolean,
+    loudnessTargetGainMb: Int,
+    autoSwitchBluetoothEq: Boolean,
+    bluetoothEqPresetId: String,
+    headphonesEqPresetId: String,
+    speakerEqPresetId: String
+  ) {
+    synchronized(lock) {
+      _state.update {
+        it.copy(
+          loudnessNormEnabled = loudnessNormEnabled,
+          loudnessTargetGainMb = loudnessTargetGainMb.coerceIn(0, 900),
+          autoSwitchBluetoothEq = autoSwitchBluetoothEq,
+          bluetoothEqPresetId = EqPreset.fromId(bluetoothEqPresetId).id,
+          headphonesEqPresetId = EqPreset.fromId(headphonesEqPresetId).id,
+          speakerEqPresetId = EqPreset.fromId(speakerEqPresetId).id
+        )
+      }
+      if (autoSwitchBluetoothEq) {
+        applyRoutePresetLocked(_state.value.activeOutputRoute)
+      }
+      applyToHardwareLocked()
+    }
+  }
+
+  fun setLoudnessNormEnabled(enabled: Boolean): EqualizerUiState {
+    synchronized(lock) {
+      _state.update { it.copy(loudnessNormEnabled = enabled) }
+      applyToHardwareLocked()
+      return _state.value
+    }
+  }
+
+  fun setLoudnessTargetGainMb(gainMb: Int): EqualizerUiState {
+    synchronized(lock) {
+      val clamped = gainMb.coerceIn(0, 900)
+      _state.update { it.copy(loudnessTargetGainMb = clamped, loudnessNormEnabled = if (clamped > 0) true else it.loudnessNormEnabled) }
+      applyToHardwareLocked()
+      return _state.value
+    }
+  }
+
+  fun setAutoSwitchBluetoothEq(enabled: Boolean): EqualizerUiState {
+    synchronized(lock) {
+      _state.update { it.copy(autoSwitchBluetoothEq = enabled) }
+      if (enabled) {
+        applyRoutePresetLocked(_state.value.activeOutputRoute)
+      }
+      applyToHardwareLocked()
+      return _state.value
+    }
+  }
+
+  fun setRoutePreset(route: AudioOutputRoute, preset: EqPreset): EqualizerUiState {
+    synchronized(lock) {
+      _state.update {
+        when (route) {
+          AudioOutputRoute.BLUETOOTH -> it.copy(bluetoothEqPresetId = preset.id)
+          AudioOutputRoute.HEADPHONES -> it.copy(headphonesEqPresetId = preset.id)
+          AudioOutputRoute.SPEAKER -> it.copy(speakerEqPresetId = preset.id)
+        }
+      }
+      if (_state.value.autoSwitchBluetoothEq && _state.value.activeOutputRoute == route) {
+        applyRoutePresetLocked(route)
+      }
+      applyToHardwareLocked()
+      return _state.value
+    }
+  }
+
+  fun onAudioOutputRouteChanged(info: AudioOutputRouteInfo): EqualizerUiState {
+    synchronized(lock) {
+      _state.update {
+        it.copy(
+          activeOutputRoute = info.route,
+          activeOutputName = info.deviceName
+        )
+      }
+      if (_state.value.autoSwitchBluetoothEq) {
+        applyRoutePresetLocked(info.route)
+        applyToHardwareLocked()
+      }
+      return _state.value
+    }
+  }
+
+  fun applyTrackLoudnessCompensation(isLocalFile: Boolean) {
+    synchronized(lock) {
+      currentTrackIsLocal = isLocalFile
+      applyToHardwareLocked()
+    }
+  }
+
+  private fun applyRoutePresetLocked(route: AudioOutputRoute) {
+    val current = _state.value
+    val presetId = when (route) {
+      AudioOutputRoute.BLUETOOTH -> current.bluetoothEqPresetId
+      AudioOutputRoute.HEADPHONES -> current.headphonesEqPresetId
+      AudioOutputRoute.SPEAKER -> current.speakerEqPresetId
+    }
+    val preset = EqPreset.fromId(presetId)
+    val targetLevels = resampleLevels(
+      source = preset.normalizedBandsMb,
+      targetCount = current.bandFrequenciesHz.size,
+      minMb = current.minLevelMb,
+      maxMb = current.maxLevelMb
+    )
+    _state.update {
+      it.copy(
+        enabled = true,
+        presetId = preset.id,
+        bandLevelsMb = targetLevels,
+        bassBoostStrength = preset.bassBoostStrength.coerceIn(0, 1000),
+        virtualizerStrength = preset.virtualizerStrength.coerceIn(0, 1000)
+      )
+    }
+  }
+
   private fun applyToHardwareLocked() {
     val st = _state.value
     runCatching {
@@ -272,6 +406,20 @@ object AudioEqualizerController {
         virt.enabled = st.enabled && st.virtualizerStrength > 0
       }
     }
+    runCatching {
+      loudnessEnhancer?.let { le ->
+        // YouTube streams are typically normalized around -14 LUFS while local files vary more;
+        // add slight +100 mB lift for local files so streaming and offline tracks match smoothly.
+        val sourceDelta = if (currentTrackIsLocal) 100 else 0
+        val effectiveGain = if (st.loudnessNormEnabled) {
+          (st.loudnessTargetGainMb + sourceDelta).coerceIn(0, 1000)
+        } else {
+          0
+        }
+        le.setTargetGain(effectiveGain)
+        le.enabled = st.loudnessNormEnabled && effectiveGain > 0
+      }
+    }
   }
 
   private fun releaseHardwareLocked() {
@@ -284,6 +432,8 @@ object AudioEqualizerController {
       virtualizer?.release()
     }
     virtualizer = null
+    runCatching { loudnessEnhancer?.release() }
+    loudnessEnhancer = null
   }
 
   private fun resampleLevels(

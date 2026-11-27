@@ -42,6 +42,7 @@ import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.defaultMinSize
 import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
@@ -56,6 +57,7 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.rounded.AccessTime
 import androidx.compose.material.icons.rounded.BatteryChargingFull
+import androidx.compose.material.icons.rounded.Bedtime
 import androidx.compose.material.icons.rounded.Close
 import androidx.compose.material.icons.rounded.Dashboard
 import androidx.compose.material.icons.rounded.Explore
@@ -170,6 +172,12 @@ fun AmbientStandbyScreen(
   onSelectLayout: (StandbyLayout) -> Unit = {},
   onToggleGyroEnabled: (Boolean) -> Unit = {},
   onToggleVinylStyle: (Boolean) -> Unit = {},
+  sleepMinutes: Int = 0,
+  sleepEndOfTrack: Boolean = false,
+  sleepRemainingSeconds: Long = 0L,
+  onSetSleepMinutes: (Int) -> Unit = {},
+  onSetSleepEndOfTrack: () -> Unit = {},
+  onCancelSleepTimer: () -> Unit = {},
   onSeek: ((Long) -> Unit)? = null,
   onPlayPause: () -> Unit,
   onNext: () -> Unit,
@@ -1173,6 +1181,61 @@ fun AmbientStandbyScreen(
         horizontalArrangement = Arrangement.spacedBy(8.dp),
         verticalAlignment = Alignment.CenterVertically
       ) {
+        // Bedside Sleep Timer quick-cycle pill (Off -> 15m -> 30m -> 45m -> End of track -> Off)
+        val sleepActive = sleepEndOfTrack || sleepMinutes > 0 || sleepRemainingSeconds > 0L
+        val sleepBadgeText = when {
+          sleepEndOfTrack -> stringResource(id = R.string.sleep_timer_end_of_song)
+          sleepRemainingSeconds > 0L -> {
+            val mins = (sleepRemainingSeconds / 60L).toInt()
+            val secs = (sleepRemainingSeconds % 60L).toInt()
+            if (mins > 0) "${mins}m" else "${secs}s"
+          }
+          sleepMinutes > 0 -> "${sleepMinutes}m"
+          else -> null
+        }
+        Surface(
+          onClick = {
+            registerUserTouch()
+            when {
+              sleepEndOfTrack -> onCancelSleepTimer()
+              sleepMinutes == 0 -> onSetSleepMinutes(15)
+              sleepMinutes <= 15 -> onSetSleepMinutes(30)
+              sleepMinutes <= 30 -> onSetSleepMinutes(45)
+              else -> onSetSleepEndOfTrack()
+            }
+          },
+          shape = CircleShape,
+          color = if (sleepActive) palette.accent.copy(alpha = 0.24f) else Color.Black.copy(alpha = 0.36f),
+          border = BorderStroke(
+            1.dp,
+            if (sleepActive) palette.accent.copy(alpha = 0.72f) else Color.White.copy(alpha = 0.16f)
+          ),
+          modifier = Modifier
+            .defaultMinSize(minWidth = 44.dp, minHeight = 44.dp)
+            .testTag("standby_sleep_timer_button")
+        ) {
+          Row(
+            modifier = Modifier.padding(horizontal = if (sleepBadgeText != null) 12.dp else 10.dp, vertical = 10.dp),
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.spacedBy(5.dp)
+          ) {
+            Icon(
+              imageVector = Icons.Rounded.Bedtime,
+              contentDescription = stringResource(id = R.string.standby_sleep_timer_label),
+              tint = if (sleepActive) palette.accent else palette.textPrimary,
+              modifier = Modifier.size(18.dp)
+            )
+            if (sleepBadgeText != null) {
+              Text(
+                text = sleepBadgeText,
+                style = MaterialTheme.typography.labelSmall.copy(fontWeight = FontWeight.Bold),
+                color = palette.accent,
+                maxLines = 1
+              )
+            }
+          }
+        }
+
         // Layout switcher button (Split -> Poster -> Lyrics)
         StandbyTopGlassCircleButton(
           onClick = {

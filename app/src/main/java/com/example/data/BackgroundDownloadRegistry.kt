@@ -1,7 +1,11 @@
 package com.example.data
 
 import android.content.Context
+import android.net.ConnectivityManager
+import android.net.NetworkCapabilities
+import android.os.Environment
 import com.example.model.APP_ICON_ARTWORK
+import java.io.File
 import com.example.model.AudioFormatOption
 import com.example.model.Song
 import com.example.model.YoutubeAnalysisResult
@@ -144,14 +148,111 @@ object BackgroundDownloadRegistry {
         song.streamUrl.contains("youtu.be/", ignoreCase = true))
   }
 
+  fun isOnWifi(context: Context): Boolean {
+    return runCatching {
+      val cm = context.applicationContext.getSystemService(Context.CONNECTIVITY_SERVICE) as? ConnectivityManager
+        ?: return@runCatching true
+      val network = cm.activeNetwork ?: return@runCatching false
+      val caps = cm.getNetworkCapabilities(network) ?: return@runCatching false
+      caps.hasTransport(NetworkCapabilities.TRANSPORT_WIFI) ||
+        caps.hasTransport(NetworkCapabilities.TRANSPORT_ETHERNET)
+    }.getOrDefault(true)
+  }
+
+  fun computeOfflineStorageMb(context: Context): Int {
+    return runCatching {
+      val musicDir = context.applicationContext.getExternalFilesDir(Environment.DIRECTORY_MUSIC)
+        ?: File(context.applicationContext.filesDir, "downloads")
+      if (!musicDir.exists()) return@runCatching 0
+      val totalBytes = musicDir.walkTopDown().filter { it.isFile }.sumOf { it.length() }
+      (totalBytes / (1024L * 1024L)).toInt().coerceAtLeast(0)
+    }.getOrDefault(0)
+  }
+
+  /**
+   * Batch-queues all downloadable remote tracks in a playlist/mix while honoring
+   * Wi-Fi-only and offline storage cap settings. Returns number of tracks queued.
+   */
+  fun enqueuePlaylistDownload(
+    context: Context,
+    playlistTitle: String,
+    tracks: List<Song>,
+    wifiOnly: Boolean = false,
+    storageCapMb: Int = 0
+  ): Int {
+    val appContext = context.applicationContext
+    if (wifiOnly && !isOnWifi(appContext)) {
+      _feedbackEvents.tryEmit(
+        DownloadFeedbackEvent("Wi-Fi only downloads enabled — connect to Wi-Fi to download \"$playlistTitle\"", isError = true)
+      )
+      return 0
+    }
+    if (storageCapMb > 0) {
+      val usedMb = computeOfflineStorageMb(appContext)
+      if (usedMb >= storageCapMb) {
+        _feedbackEvents.tryEmit(
+          DownloadFeedbackEvent("Offline storage cap reached ($usedMb / $storageCapMb MB)", isError = true)
+        )
+        return 0
+      }
+    }
+
+    val downloaded = _downloadedSongIds.value
+    val active = _songDownloadProgress.value
+    val candidates = tracks
+      .distinctBy { it.id }
+      .filter { song ->
+        song.id !in downloaded &&
+          !active.containsKey(song.id) &&
+          song.streamUrl.isNotBlank() &&
+          !song.streamUrl.startsWith("file://", ignoreCase = true) &&
+          !song.streamUrl.startsWith("content://", ignoreCase = true)
+      }
+
+    if (candidates.isEmpty()) {
+      _feedbackEvents.tryEmit(DownloadFeedbackEvent("All tracks in \"$playlistTitle\" are already offline"))
+      return 0
+    }
+
+    val batchId = "playlist_${System.currentTimeMillis()}"
+    candidates.forEach { song ->
+      enqueueSongDownload(appContext, song, silentToast = true, batchId = batchId)
+    }
+    _feedbackEvents.tryEmit(
+      DownloadFeedbackEvent("Queued ${candidates.size} tracks from \"$playlistTitle\" for offline download")
+    )
+    return candidates.size
+  }
+
   fun enqueueSongDownload(
     context: Context,
     song: Song,
     silentToast: Boolean = false,
-    batchId: String = "single"
+    batchId: String = "single",
+    wifiOnly: Boolean = false,
+    storageCapMb: Int = 0
   ) {
     val appContext = context.applicationContext
     if (_songDownloadProgress.value.containsKey(song.id)) return
+    if (wifiOnly && !isOnWifi(appContext)) {
+      if (!silentToast) {
+        _feedbackEvents.tryEmit(
+          DownloadFeedbackEvent("Wi-Fi only downloads enabled — connect to Wi-Fi first", isError = true)
+        )
+      }
+      return
+    }
+    if (storageCapMb > 0) {
+      val usedMb = computeOfflineStorageMb(appContext)
+      if (usedMb >= storageCapMb) {
+        if (!silentToast) {
+          _feedbackEvents.tryEmit(
+            DownloadFeedbackEvent("Offline storage cap reached ($usedMb / $storageCapMb MB)", isError = true)
+          )
+        }
+        return
+      }
+    }
 
     upsertQueueItem(
       DownloadQueueItem(

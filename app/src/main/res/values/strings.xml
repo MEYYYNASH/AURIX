@@ -995,4 +995,57 @@
     <string name="queue_drag_handle_cd">Drag to reorder track</string>
     <string name="queue_swipe_remove_label">Remove</string>
     <string name="queue_gesture_hint">Drag handle to reorder · Swipe left to remove</string>
+
+    <!-- v2.4.4 Flagship Upgrades: Audio Pro, Offline Controls, Track Editor, Monthly Recap, Driving Mode & Settings Search -->
+    <string name="audio_pro_title">Audio Pro Suite</string>
+    <string name="audio_route_bluetooth">Bluetooth</string>
+    <string name="audio_route_headphones">Headphones</string>
+    <string name="audio_route_speaker">Speaker</string>
+    <string name="audio_pro_auto_bt_title">Auto-Switch EQ by Output</string>
+    <string name="audio_pro_auto_bt_sub">Remember separate EQ presets for Bluetooth, Headphones &amp; Speaker</string>
+    <string name="audio_pro_loudness_title">Loudness Normalization</string>
+    <string name="audio_pro_loudness_sub">Balance volume smoothly across local files &amp; YouTube streams</string>
+    <string name="sleep_timer_fade_out">15s smooth fade-out</string>
+    <string name="sleep_timer_end_of_song">End of track</string>
+    <string name="standby_sleep_timer_label">Sleep Timer</string>
+
+    <string name="download_wifi_only_title">Wi-Fi only downloads</string>
+    <string name="download_storage_used_format">Offline storage: %1$d MB / %2$s</string>
+
+    <string name="edit_track_info_title">Edit Track Info</string>
+    <string name="edit_track_info_subtitle">Update title, artist, album &amp; custom cover art</string>
+    <string name="edit_track_change_cover">Change Cover Art</string>
+    <string name="edit_track_change_cover_sub">Pick any photo securely from your gallery</string>
+    <string name="edit_track_field_title">Track Title</string>
+    <string name="edit_track_field_artist">Artist</string>
+    <string name="edit_track_field_album">Album</string>
+    <string name="edit_track_field_year">Year</string>
+    <string name="edit_track_field_genre">Genre</string>
+    <string name="edit_track_save_button">Save Changes</string>
+    <string name="details_edit_info">Edit Info</string>
+
+    <string name="recap_story_title">AURIX RECAP</string>
+    <string name="recap_banner_title">Your Monthly AURIX Recap</string>
+    <string name="recap_banner_subtitle">Tap to view your interactive Story &amp; shareable 9:16 card</string>
+    <string name="recap_open_story">View Story</string>
+    <string name="recap_share_story">Share 9:16 Recap</string>
+    <string name="recap_minutes_listened">Minutes</string>
+    <string name="recap_total_plays">Plays</string>
+    <string name="recap_streak_days">Day Streak</string>
+    <string name="recap_artists_count">Artists</string>
+    <string name="recap_top_artist_label">YOUR #1 ARTIST</string>
+    <string name="recap_top_track_label">MOST REPLAYED TRACK</string>
+    <string name="recap_dna_label">YOUR MUSIC DNA</string>
+
+    <string name="driving_mode_title">Driving Mode</string>
+    <string name="driving_mode_subtitle">Large high-contrast controls &amp; live lyrics for the road</string>
+    <string name="driving_mode_exit">Exit</string>
+    <string name="driving_mode_empty">No track playing</string>
+
+    <string name="settings_search_placeholder">Search settings (EQ, lyrics, widgets, theme…)</string>
+    <string name="settings_search_no_results">No matching settings found</string>
+    <string name="settings_quick_driving">Driving</string>
+    <string name="settings_quick_audio_pro">Audio Pro</string>
+    <string name="settings_quick_downloads">Offline</string>
+    <string name="settings_quick_recap">Recap</string>
 </resources>

@@ -30,6 +30,9 @@ import com.example.lyrics.LyricsMatchOutcome
 import com.example.lyrics.LyricsMatcher
 import com.example.model.*
 import com.example.playback.AudioEqualizerController
+import com.example.playback.AudioOutputRoute
+import com.example.playback.AudioOutputRouteInfo
+import com.example.playback.AudioOutputRouter
 import com.example.playback.AudioSpectrumBus
 import com.example.playback.CrossfadeController
 import com.example.playback.CrossfadeSettings
@@ -633,11 +636,18 @@ class AurixViewModel(application: Application) : AndroidViewModel(application) {
     .catchSafe(emptyList(), "Local Songs Error")
     .stateIn(viewModelScope, SharingStarted.Lazily, emptyList())
 
+  private val _trackOverrides = MutableStateFlow<Map<String, TrackMetadataOverride>>(emptyMap())
+  val trackOverrides: StateFlow<Map<String, TrackMetadataOverride>> = _trackOverrides.asStateFlow()
+
   val localSongs: StateFlow<List<Song>> = combine(
     rawLocalSongs,
-    albumCoverEntities
-  ) { list, covers ->
-    list.map { effectiveArtworkForSong(it, covers) }
+    albumCoverEntities,
+    _trackOverrides
+  ) { list, covers, overrides ->
+    list.map { raw ->
+      val withOverride = overrides[raw.id]?.applyTo(raw) ?: raw
+      effectiveArtworkForSong(withOverride, covers)
+    }
   }
     .catchSafe(emptyList())
     .stateIn(viewModelScope, SharingStarted.Lazily, emptyList())
@@ -790,6 +800,39 @@ class AurixViewModel(application: Application) : AndroidViewModel(application) {
       viewModelScope,
       SharingStarted.Lazily,
       RecommendationEngine.buildMusicDna(emptyList())
+    )
+
+  val monthlyRecap: StateFlow<MonthlyRecapSummary> = combine(
+    qualifiedPlayLogs,
+    richPlayHistory,
+    musicDna,
+    favorites
+  ) { logs, rich, dna, favs ->
+    MonthlyRecapCalculator.buildRecap(
+      playLogs = logs,
+      richHistory = rich,
+      musicDna = dna,
+      favorites = favs
+    )
+  }
+    .flowOn(Dispatchers.Default)
+    .catchSafe(
+      MonthlyRecapCalculator.buildRecap(
+        playLogs = emptyList(),
+        richHistory = emptyList(),
+        musicDna = RecommendationEngine.buildMusicDna(emptyList()),
+        favorites = emptyList()
+      )
+    )
+    .stateIn(
+      viewModelScope,
+      SharingStarted.Lazily,
+      MonthlyRecapCalculator.buildRecap(
+        playLogs = emptyList(),
+        richHistory = emptyList(),
+        musicDna = RecommendationEngine.buildMusicDna(emptyList()),
+        favorites = emptyList()
+      )
     )
 
   val trendingTracks: StateFlow<List<RankedTrack>> = qualifiedPlayLogs.map { logs ->
@@ -1232,10 +1275,12 @@ class AurixViewModel(application: Application) : AndroidViewModel(application) {
   val currentSong: StateFlow<Song?> = combine(
     _rawCurrentSong,
     favoriteIds,
-    albumCoverEntities
-  ) { song, favs, covers ->
+    albumCoverEntities,
+    _trackOverrides
+  ) { song, favs, covers, overrides ->
     song?.let {
-      val withAlbumArt = effectiveArtworkForSong(it, covers)
+      val withOverride = overrides[it.id]?.applyTo(it) ?: it
+      val withAlbumArt = effectiveArtworkForSong(withOverride, covers)
       withAlbumArt.copy(isFavorite = withAlbumArt.id in favs)
     }
   }
@@ -1288,7 +1333,20 @@ class AurixViewModel(application: Application) : AndroidViewModel(application) {
     .stateIn(viewModelScope, SharingStarted.Eagerly, emptySet())
 
   val equalizerState: StateFlow<EqualizerUiState> = AudioEqualizerController.state
+  val audioOutputInfo: StateFlow<AudioOutputRouteInfo> = AudioOutputRouter.outputInfo
   val crossfadeSettings: StateFlow<CrossfadeSettings> = CrossfadeController.state
+
+  val sleepTimerFadeOut: StateFlow<Boolean> = prefsManager.sleepTimerFadeOut
+    .catch { emit(true) }
+    .stateIn(viewModelScope, SharingStarted.Eagerly, true)
+
+  val downloadWifiOnly: StateFlow<Boolean> = prefsManager.downloadWifiOnly
+    .catch { emit(false) }
+    .stateIn(viewModelScope, SharingStarted.Eagerly, false)
+
+  val downloadStorageCapMb: StateFlow<Int> = prefsManager.downloadStorageCapMb
+    .catch { emit(0) }
+    .stateIn(viewModelScope, SharingStarted.Eagerly, 0)
 
   val smartPlaylists: StateFlow<List<SmartPlaylist>> = combine(
     localSongs,
@@ -1458,6 +1516,12 @@ class AurixViewModel(application: Application) : AndroidViewModel(application) {
         val eqBands = runCatching { prefsManager.eqBands.first() }.getOrDefault(emptyList())
         val eqBass = runCatching { prefsManager.eqBassBoost.first() }.getOrDefault(0)
         val eqVirtualizer = runCatching { prefsManager.eqVirtualizer.first() }.getOrDefault(0)
+        val eqAutoBt = runCatching { prefsManager.eqAutoBtSwitch.first() }.getOrDefault(false)
+        val eqBtPreset = runCatching { prefsManager.eqBtPreset.first() }.getOrDefault("bass_boost")
+        val eqHpPreset = runCatching { prefsManager.eqHeadphonesPreset.first() }.getOrDefault("pop")
+        val eqSpkPreset = runCatching { prefsManager.eqSpeakerPreset.first() }.getOrDefault("vocal")
+        val loudnessNorm = runCatching { prefsManager.loudnessNormEnabled.first() }.getOrDefault(false)
+        val loudnessGainMb = runCatching { prefsManager.loudnessTargetGainMb.first() }.getOrDefault(350)
         runCatching {
           AudioEqualizerController.restoreSettings(
             enabled = eqEnabled,
@@ -1466,6 +1530,22 @@ class AurixViewModel(application: Application) : AndroidViewModel(application) {
             bassBoostStrength = eqBass,
             virtualizerStrength = eqVirtualizer
           )
+          AudioEqualizerController.restoreAudioProSettings(
+            loudnessNormEnabled = loudnessNorm,
+            loudnessTargetGainMb = loudnessGainMb,
+            autoSwitchBluetoothEq = eqAutoBt,
+            bluetoothEqPresetId = eqBtPreset,
+            headphonesEqPresetId = eqHpPreset,
+            speakerEqPresetId = eqSpkPreset
+          )
+        }
+        runCatching {
+          AudioOutputRouter.start(application) { routeInfo ->
+            AudioEqualizerController.onAudioOutputRouteChanged(routeInfo)
+          }
+        }
+        runCatching {
+          _trackOverrides.value = TrackMetadataOverrideStore.loadAllSync(application)
         }
         val crossfadeSec = runCatching { prefsManager.crossfadeSeconds.first() }.getOrDefault(0)
         val crossfadeManualSkip = runCatching { prefsManager.crossfadeManualSkip.first() }.getOrDefault(true)
@@ -1922,6 +2002,12 @@ class AurixViewModel(application: Application) : AndroidViewModel(application) {
     _currentPosition.value = 0L
     _durationMs.value = (enriched.durationSeconds * 1000L).coerceAtLeast(1000L)
     _lyricOffsetMs.value = 0L
+    runCatching {
+      val isLocalTrack = enriched.id.startsWith("local_") ||
+        enriched.streamUrl.startsWith("content://", ignoreCase = true) ||
+        enriched.streamUrl.startsWith("file://", ignoreCase = true)
+      AudioEqualizerController.applyTrackLoudnessCompensation(isLocalTrack)
+    }
 
     // Update MoodFlow live match readout for the newly active track
     if (moodFlowEnabled.value && (_moodFlowCurrentPick.value?.song?.id != enriched.id)) {
@@ -2752,7 +2838,54 @@ class AurixViewModel(application: Application) : AndroidViewModel(application) {
   }
 
   fun downloadSong(context: Context, song: Song) {
-    BackgroundDownloadRegistry.enqueueSongDownload(context, song)
+    BackgroundDownloadRegistry.enqueueSongDownload(
+      context = context,
+      song = song,
+      wifiOnly = downloadWifiOnly.value,
+      storageCapMb = downloadStorageCapMb.value
+    )
+  }
+
+  fun downloadPlaylist(context: Context, playlistTitle: String, tracks: List<Song>) {
+    BackgroundDownloadRegistry.enqueuePlaylistDownload(
+      context = context,
+      playlistTitle = playlistTitle,
+      tracks = tracks,
+      wifiOnly = downloadWifiOnly.value,
+      storageCapMb = downloadStorageCapMb.value
+    )
+  }
+
+  fun setDownloadWifiOnly(wifiOnly: Boolean) {
+    safeLaunch(notifyUser = false) { prefsManager.setDownloadWifiOnly(wifiOnly) }
+  }
+
+  fun setDownloadStorageCapMb(capMb: Int) {
+    safeLaunch(notifyUser = false) { prefsManager.setDownloadStorageCapMb(capMb) }
+  }
+
+  fun saveTrackMetadataOverride(override: TrackMetadataOverride) {
+    val updatedMap = _trackOverrides.value + (override.songId to override)
+    _trackOverrides.value = updatedMap
+    safeLaunch(notifyUser = false) {
+      TrackMetadataOverrideStore.saveAll(getApplication(), updatedMap)
+    }
+    _rawCurrentSong.value?.let { cur ->
+      if (cur.id == override.songId) {
+        _rawCurrentSong.value = override.applyTo(cur)
+      }
+    }
+    _queue.update { q ->
+      q.map { item -> if (item.id == override.songId) override.applyTo(item) else item }
+    }
+  }
+
+  fun clearTrackMetadataOverride(songId: String) {
+    val updatedMap = _trackOverrides.value - songId
+    _trackOverrides.value = updatedMap
+    safeLaunch(notifyUser = false) {
+      TrackMetadataOverrideStore.saveAll(getApplication(), updatedMap)
+    }
   }
 
   private fun todayDateKey(): String {
@@ -3744,9 +3877,11 @@ class AurixViewModel(application: Application) : AndroidViewModel(application) {
         delay(1_000L)
         remaining -= 1L
         _sleepRemainingSeconds.value = remaining
-        if (remaining in 1L..8L) {
-          val fadeVol = (remaining / 8f).coerceIn(0.05f, 1f)
-          runCatching { mediaController?.volume = fadeVol }
+        val fadeWindowSec = if (sleepTimerFadeOut.value) 15L else 0L
+        if (fadeWindowSec > 0L && remaining in 1L..fadeWindowSec) {
+          val linear = remaining.toFloat() / fadeWindowSec.toFloat()
+          val easeOutVol = (linear * linear).coerceIn(0.04f, 1f)
+          runCatching { mediaController?.volume = easeOutVol }
         }
       }
       runCatching {
@@ -3758,6 +3893,10 @@ class AurixViewModel(application: Application) : AndroidViewModel(application) {
       _sleepMinutes.value = 0
       _sleepRemainingSeconds.value = 0L
     }
+  }
+
+  fun setSleepTimerFadeOut(enabled: Boolean) {
+    safeLaunch(notifyUser = false) { prefsManager.setSleepTimerFadeOut(enabled) }
   }
 
   fun setSleepEndOfTrack() {
@@ -5324,6 +5463,31 @@ class AurixViewModel(application: Application) : AndroidViewModel(application) {
     persistEqualizerState(updated)
   }
 
+  fun setLoudnessNormEnabled(enabled: Boolean) {
+    AudioEqualizerController.setLoudnessNormEnabled(enabled)
+    safeLaunch(notifyUser = false) { prefsManager.setLoudnessNormEnabled(enabled) }
+  }
+
+  fun setLoudnessTargetGainMb(gainMb: Int) {
+    val updated = AudioEqualizerController.setLoudnessTargetGainMb(gainMb)
+    safeLaunch(notifyUser = false) {
+      prefsManager.setLoudnessTargetGainMb(updated.loudnessTargetGainMb)
+      prefsManager.setLoudnessNormEnabled(updated.loudnessNormEnabled)
+    }
+  }
+
+  fun setAutoSwitchBluetoothEq(enabled: Boolean) {
+    val updated = AudioEqualizerController.setAutoSwitchBluetoothEq(enabled)
+    safeLaunch(notifyUser = false) { prefsManager.setEqAutoBtSwitch(enabled) }
+    persistEqualizerState(updated)
+  }
+
+  fun setEqRoutePreset(route: AudioOutputRoute, preset: EqPreset) {
+    val updated = AudioEqualizerController.setRoutePreset(route, preset)
+    safeLaunch(notifyUser = false) { prefsManager.setEqRoutePreset(route, preset.id) }
+    persistEqualizerState(updated)
+  }
+
   private fun persistEqualizerState(eqState: EqualizerUiState) {
     safeLaunch(notifyUser = false) {
       prefsManager.saveEqualizerSettings(
@@ -5678,6 +5842,7 @@ class AurixViewModel(application: Application) : AndroidViewModel(application) {
       }
     }
     super.onCleared()
+    runCatching { AudioOutputRouter.stop(getApplication()) }
     runCatching { mediaController?.removeListener(playerListener) }
     runCatching { controllerFuture?.let { MediaController.releaseFuture(it) } }
   }

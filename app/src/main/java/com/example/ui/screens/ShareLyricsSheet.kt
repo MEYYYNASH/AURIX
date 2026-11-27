@@ -16,6 +16,7 @@ import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
@@ -58,6 +59,7 @@ import com.example.lyrics.LrcParser
 import com.example.model.APP_ICON_ARTWORK
 import com.example.model.LyricsResult
 import com.example.model.Song
+import com.example.share.ShareCardAspect
 import com.example.share.ShareCardData
 import com.example.share.ShareCardExporter
 import com.example.share.ShareCardMode
@@ -127,6 +129,7 @@ fun ShareLyricsSheet(
   var cardMode by remember(hasLyrics) {
     mutableStateOf(if (hasLyrics) ShareCardMode.LYRICS else ShareCardMode.SONG)
   }
+  var cardAspect by remember { mutableStateOf(ShareCardAspect.FEED_4_5) }
   var selectedIndices by remember(initialSelection) {
     mutableStateOf(initialSelection)
   }
@@ -158,6 +161,24 @@ fun ShareLyricsSheet(
           swatchSecondary = fallbackC1,
           swatchTertiary = fallbackC2,
           showBlurredArtwork = true
+        ),
+        ShareGradientTheme(
+          id = "liquid_glass",
+          style = ShareThemeStyle.LIQUID_GLASS,
+          name = "Glass",
+          swatchPrimary = Color(0xFF43C7F4),
+          swatchSecondary = Color(0xFF7965FF),
+          swatchTertiary = Color(0xFF080C14),
+          showBlurredArtwork = false
+        ),
+        ShareGradientTheme(
+          id = "vinyl",
+          style = ShareThemeStyle.VINYL,
+          name = "Vinyl",
+          swatchPrimary = Color(0xFFE7D6B8),
+          swatchSecondary = Color(0xFF3E352B),
+          swatchTertiary = Color(0xFF14110E),
+          showBlurredArtwork = false
         ),
         ShareGradientTheme(
           id = "vibrant",
@@ -237,6 +258,7 @@ fun ShareLyricsSheet(
     blurredArtworkBitmap,
     orderedSelectedLines,
     cardMode,
+    cardAspect,
     activeTheme,
     swatches
   ) {
@@ -249,7 +271,8 @@ fun ShareLyricsSheet(
       mode = if (hasLyrics) cardMode else ShareCardMode.SONG,
       theme = activeTheme,
       swatches = swatches,
-      brandName = "AURIX MUSIC"
+      brandName = "AURIX MUSIC",
+      aspect = cardAspect
     )
   }
 
@@ -350,7 +373,7 @@ fun ShareLyricsSheet(
               modifier = Modifier
                 .fillMaxWidth()
                 .aspectRatio(
-                  ratio = ShareCardRenderer.CARD_ASPECT_RATIO,
+                  ratio = cardAspect.ratio,
                   matchHeightConstraintsFirst = !isCompactHeight
                 )
                 .testTag("share_lyrics_card_preview")
@@ -417,18 +440,59 @@ fun ShareLyricsSheet(
                 )
               }
             }
+            // 9:16 Story vs 4:5 Feed toggle pill
+            Surface(
+              onClick = {
+                haptics.performHapticFeedback(HapticFeedbackType.TextHandleMove)
+                cardAspect = if (cardAspect == ShareCardAspect.FEED_4_5) {
+                  ShareCardAspect.STORY_9_16
+                } else {
+                  ShareCardAspect.FEED_4_5
+                }
+              },
+              shape = CircleShape,
+              color = if (cardAspect == ShareCardAspect.STORY_9_16) {
+                MaterialTheme.colorScheme.primary.copy(alpha = 0.18f)
+              } else {
+                MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.72f)
+              },
+              border = BorderStroke(
+                1.dp,
+                if (cardAspect == ShareCardAspect.STORY_9_16) {
+                  MaterialTheme.colorScheme.primary.copy(alpha = 0.60f)
+                } else {
+                  MaterialTheme.colorScheme.onSurface.copy(alpha = 0.12f)
+                }
+              ),
+              modifier = Modifier
+                .defaultMinSize(minHeight = 36.dp)
+                .testTag("share_aspect_toggle_pill")
+            ) {
+              Text(
+                text = if (cardAspect == ShareCardAspect.STORY_9_16) "Story 9:16" else "Feed 4:5",
+                style = MaterialTheme.typography.labelSmall.copy(fontWeight = FontWeight.Bold),
+                color = if (cardAspect == ShareCardAspect.STORY_9_16) {
+                  MaterialTheme.colorScheme.primary
+                } else {
+                  MaterialTheme.colorScheme.onSurface
+                },
+                modifier = Modifier.padding(horizontal = 11.dp, vertical = 8.dp)
+              )
+            }
           }
 
           Spacer(modifier = Modifier.height(10.dp))
 
-          // 3. 4 COLOR SWATCHES CENTERED ON A ROW BELOW IT (28dp each with check ring, smaller & quieter)
+          // 3. COLOR SWATCHES (Art, Glass, Vinyl, Vibrant, Dark, Mono)
           Row(
-            modifier = Modifier.fillMaxWidth(),
+            modifier = Modifier
+              .fillMaxWidth()
+              .horizontalScroll(rememberScrollState()),
             horizontalArrangement = Arrangement.Center,
             verticalAlignment = Alignment.CenterVertically
           ) {
             Row(
-              horizontalArrangement = Arrangement.spacedBy(18.dp),
+              horizontalArrangement = Arrangement.spacedBy(14.dp),
               verticalAlignment = Alignment.CenterVertically
             ) {
               gradientThemes.forEachIndexed { index, themeOption ->

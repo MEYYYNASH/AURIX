@@ -62,6 +62,7 @@ import com.example.data.UpdateManager
 import com.example.data.UpdateStage
 import com.example.data.UpdateUiState
 import kotlinx.coroutines.delay
+import com.example.playback.AudioOutputRoute
 import com.example.playback.CrossfadeSettings
 import com.example.playback.EqPreset
 import com.example.playback.EqualizerUiState
@@ -110,6 +111,10 @@ fun SettingsScreen(
   onEqBassBoostChanged: (Int) -> Unit = {},
   onEqVirtualizerChanged: (Int) -> Unit = {},
   onResetEq: () -> Unit = {},
+  onToggleLoudnessNorm: (Boolean) -> Unit = {},
+  onLoudnessTargetGainChanged: (Int) -> Unit = {},
+  onToggleAutoBtEq: (Boolean) -> Unit = {},
+  onSelectRoutePreset: (AudioOutputRoute, EqPreset) -> Unit = { _, _ -> },
   crossfadeSettings: CrossfadeSettings = CrossfadeSettings(),
   onCrossfadeSecondsChanged: (Int) -> Unit = {},
   onCrossfadeManualSkipChanged: (Boolean) -> Unit = {},
@@ -165,6 +170,9 @@ fun SettingsScreen(
   onWidgetShowLyricsChanged: (Boolean) -> Unit = {},
   onApplyGlassStyleToAll: (com.example.widget.WidgetGlassStyle) -> Unit = {},
   onOpenStandby: () -> Unit = {},
+  onOpenDrivingMode: () -> Unit = {},
+  onOpenDownloads: () -> Unit = {},
+  onOpenMonthlyRecap: () -> Unit = {},
   standbyAutoLaunch: Boolean = false,
   onStandbyAutoLaunchChanged: (Boolean) -> Unit = {},
   onUnlockDeveloperMode: () -> Unit = {},
@@ -200,7 +208,26 @@ fun SettingsScreen(
   var buildNumberTapCount by remember { mutableIntStateOf(0) }
   var lastBuildTapAtMs by remember { mutableLongStateOf(0L) }
   var activeDevToast by remember { mutableStateOf<android.widget.Toast?>(null) }
+  var searchQuery by remember { mutableStateOf("") }
   var selectedAppIcon by remember { mutableStateOf(com.example.data.IconManager.getCurrentIcon(context)) }
+  val normalizedQuery = searchQuery.trim().lowercase(Locale.ROOT)
+  fun matchesSection(keywords: String): Boolean {
+    if (normalizedQuery.isEmpty()) return true
+    val tokens = normalizedQuery.split(" ").filter { it.isNotBlank() }
+    val hay = keywords.lowercase(Locale.ROOT)
+    return tokens.all { hay.contains(it) }
+  }
+  val showUpdateSection = matchesSection("update release version apk github download check កំណែ ទាញយក ថ្មី")
+  val showThemeSection = matchesSection("theme dark light amoled accent color dynamic material you album art icon orbi appearance ពណ៌ រចនាប័ទ្ម រូបតំណាង")
+  val showAudioSection = matchesSection("audio pro eq equalizer bluetooth headphones speaker loudness normalization bass boost virtualizer crossfade dj visualizer navigation bar dynamic background blur dim glass motion youtube clean hidden blocked playback សំឡេង តុល្យភាព ប៊្លូធូស លំនឹង")
+  val showLyricsSection = matchesSection("lyrics animation khmer font dangrek kantumruy koulen noto sync ទំនុកច្រៀង អក្សរ ខ្មែរ")
+  val showWidgetsSection = matchesSection("widget home screen glass style now playing cover mini វិដ្ជិត")
+  val showStandbySection = matchesSection("standby clock charging bedside gyro sleep timer ម៉ោង គេង")
+  val showLanguageSection = matchesSection("language english khmer locale ភាសា ខ្មែរ អង់គ្លេស")
+  val showDeveloperSection = developerModeUnlocked && matchesSection("developer custom lyrics lrc editor debug កែ")
+  val showAboutSection = matchesSection("about build version license aurix orbi mascot lab អំពី កំណែ")
+  val anySectionVisible = showUpdateSection || showThemeSection || showAudioSection || showLyricsSection ||
+    showWidgetsSection || showStandbySection || showLanguageSection || showDeveloperSection || showAboutSection
 
   val isPresetAccent = remember(currentAccentHex) {
     accents.any { (hex, _) ->
@@ -273,7 +300,130 @@ fun SettingsScreen(
       }
     }
 
+    // Live Settings Search Bar + Quick Launch Strip (v2.4.4)
+    item {
+      Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
+        OutlinedTextField(
+          value = searchQuery,
+          onValueChange = { searchQuery = it },
+          singleLine = true,
+          shape = RoundedCornerShape(18.dp),
+          leadingIcon = {
+            Icon(
+              imageVector = Icons.Rounded.Search,
+              contentDescription = null,
+              tint = MaterialTheme.colorScheme.onSurfaceVariant
+            )
+          },
+          trailingIcon = {
+            if (searchQuery.isNotEmpty()) {
+              IconButton(
+                onClick = { searchQuery = "" },
+                modifier = Modifier
+                  .minimumInteractiveComponentSize()
+                  .testTag("settings_search_clear")
+              ) {
+                Icon(
+                  imageVector = Icons.Rounded.Close,
+                  contentDescription = stringResource(id = R.string.cd_close_sheet),
+                  tint = MaterialTheme.colorScheme.onSurfaceVariant
+                )
+              }
+            }
+          },
+          placeholder = {
+            Text(
+              text = stringResource(id = R.string.settings_search_placeholder),
+              maxLines = 1,
+              overflow = TextOverflow.Ellipsis
+            )
+          },
+          modifier = Modifier
+            .fillMaxWidth()
+            .testTag("settings_search_input")
+        )
+
+        if (normalizedQuery.isEmpty()) {
+          Row(
+            modifier = Modifier.fillMaxWidth(),
+            horizontalArrangement = Arrangement.spacedBy(8.dp)
+          ) {
+            val quickItems = listOf(
+              Triple(Icons.Rounded.DirectionsCar, stringResource(id = R.string.settings_quick_driving), "settings_open_driving_mode" to onOpenDrivingMode),
+              Triple(Icons.Rounded.GraphicEq, stringResource(id = R.string.settings_quick_audio_pro), "settings_open_audio_pro" to { showEqualizerSheet = true }),
+              Triple(Icons.Rounded.DownloadForOffline, stringResource(id = R.string.settings_quick_downloads), "settings_open_downloads" to onOpenDownloads),
+              Triple(Icons.Rounded.AutoAwesome, stringResource(id = R.string.settings_quick_recap), "settings_open_recap" to onOpenMonthlyRecap)
+            )
+            quickItems.forEach { (icon, label, tagAction) ->
+              val (tag, action) = tagAction
+              Surface(
+                onClick = action,
+                shape = RoundedCornerShape(18.dp),
+                color = if (darkTheme) Color(0xFF131B2A).copy(alpha = 0.85f) else MaterialTheme.colorScheme.surface.copy(alpha = 0.92f),
+                border = androidx.compose.foundation.BorderStroke(
+                  1.dp,
+                  MaterialTheme.colorScheme.primary.copy(alpha = 0.24f)
+                ),
+                modifier = Modifier
+                  .weight(1f)
+                  .defaultMinSize(minHeight = 64.dp)
+                  .testTag(tag)
+              ) {
+                Column(
+                  modifier = Modifier.padding(vertical = 10.dp, horizontal = 6.dp),
+                  horizontalAlignment = Alignment.CenterHorizontally,
+                  verticalArrangement = Arrangement.spacedBy(5.dp)
+                ) {
+                  Icon(
+                    imageVector = icon,
+                    contentDescription = label,
+                    tint = MaterialTheme.colorScheme.primary,
+                    modifier = Modifier.size(21.dp)
+                  )
+                  Text(
+                    text = label,
+                    style = MaterialTheme.typography.labelSmall.copy(fontWeight = FontWeight.Bold),
+                    color = MaterialTheme.colorScheme.onSurface,
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis
+                  )
+                }
+              }
+            }
+          }
+        }
+      }
+    }
+
+    if (!anySectionVisible) {
+      item {
+        GlassCard(darkTheme = darkTheme, cornerRadius = 22.dp, modifier = Modifier.fillMaxWidth()) {
+          Column(
+            modifier = Modifier
+              .fillMaxWidth()
+              .padding(24.dp),
+            horizontalAlignment = Alignment.CenterHorizontally,
+            verticalArrangement = Arrangement.spacedBy(8.dp)
+          ) {
+            Icon(
+              imageVector = Icons.Rounded.SearchOff,
+              contentDescription = null,
+              tint = MaterialTheme.colorScheme.onSurfaceVariant,
+              modifier = Modifier.size(30.dp)
+            )
+            Text(
+              text = stringResource(id = R.string.settings_search_no_results),
+              style = MaterialTheme.typography.bodyMedium,
+              color = MaterialTheme.colorScheme.onSurfaceVariant,
+              textAlign = TextAlign.Center
+            )
+          }
+        }
+      }
+    }
+
     // Glass Update & Release Card
+    if (showUpdateSection) {
     item {
       AppUpdateReleaseCard(
         logoState = logoState,
@@ -300,8 +450,10 @@ fun SettingsScreen(
         onOpenGitHubRepo = { onOpenGitHubRepo(context) }
       )
     }
+    }
 
     // Theme & Accent Glass Card
+    if (showThemeSection) {
     item {
       GlassCard(darkTheme = darkTheme, cornerRadius = 24.dp, modifier = Modifier.fillMaxWidth()) {
         Column(
@@ -558,8 +710,10 @@ fun SettingsScreen(
         }
       }
     }
+    }
 
     // Now Playing Preferences Glass Card
+    if (showAudioSection) {
     item {
       GlassCard(darkTheme = darkTheme, cornerRadius = 24.dp, modifier = Modifier.fillMaxWidth()) {
         Column(modifier = Modifier.padding(vertical = 6.dp)) {
@@ -1027,8 +1181,10 @@ fun SettingsScreen(
         }
       }
     }
+    }
 
     // Lyrics Glass Card (Settings > Lyrics > Lyrics animation)
+    if (showLyricsSection) {
     item {
       GlassCard(darkTheme = darkTheme, cornerRadius = 24.dp, modifier = Modifier.fillMaxWidth()) {
         Column(modifier = Modifier.padding(vertical = 8.dp)) {
@@ -1094,8 +1250,10 @@ fun SettingsScreen(
         }
       }
     }
+    }
 
     // Widgets Glass Card (6 Classic quick-apply styles + AURIX Now Playing 3x10 customizer)
+    if (showWidgetsSection) {
     item {
       SettingsWidgetsGlassCard(
         darkTheme = darkTheme,
@@ -1116,8 +1274,10 @@ fun SettingsScreen(
         onApplyGlassStyleToAll = onApplyGlassStyleToAll
       )
     }
+    }
 
     // Standby Mode Glass Card (Bedside & Charging Player + Optional Auto-Open Toggle)
+    if (showStandbySection) {
     item {
       GlassCard(darkTheme = darkTheme, cornerRadius = 24.dp, modifier = Modifier.fillMaxWidth()) {
         Column(modifier = Modifier.fillMaxWidth()) {
@@ -1197,8 +1357,10 @@ fun SettingsScreen(
         }
       }
     }
+    }
 
     // Language Glass Card
+    if (showLanguageSection) {
     item {
       GlassCard(darkTheme = darkTheme, cornerRadius = 24.dp, modifier = Modifier.fillMaxWidth()) {
         Column(
@@ -1243,9 +1405,10 @@ fun SettingsScreen(
         }
       }
     }
+    }
 
     // Developer Mode Glass Card (appears after unlocking; turning off hides tools without deleting anything)
-    if (developerModeUnlocked) {
+    if (showDeveloperSection) {
       item {
         GlassCard(darkTheme = darkTheme, cornerRadius = 24.dp, modifier = Modifier.fillMaxWidth()) {
           Column(
@@ -1361,6 +1524,7 @@ fun SettingsScreen(
     }
 
     // About Glass Card
+    if (showAboutSection) {
     item {
       GlassCard(darkTheme = darkTheme, cornerRadius = 24.dp, modifier = Modifier.fillMaxWidth()) {
         Column(
@@ -1518,6 +1682,7 @@ fun SettingsScreen(
         }
       }
     }
+    }
   }
 
   if (showDeveloperLyricsManagerSheet && developerModeEnabled) {
@@ -1562,6 +1727,10 @@ fun SettingsScreen(
       onBassBoostChanged = onEqBassBoostChanged,
       onVirtualizerChanged = onEqVirtualizerChanged,
       onReset = onResetEq,
+      onToggleLoudnessNorm = onToggleLoudnessNorm,
+      onLoudnessTargetGainChanged = onLoudnessTargetGainChanged,
+      onToggleAutoBtEq = onToggleAutoBtEq,
+      onSelectRoutePreset = onSelectRoutePreset,
       onDismiss = { showEqualizerSheet = false }
     )
   }

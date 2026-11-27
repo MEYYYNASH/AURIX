@@ -17,11 +17,15 @@ import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.rounded.BluetoothAudio
 import androidx.compose.material.icons.rounded.Close
 import androidx.compose.material.icons.rounded.Equalizer
 import androidx.compose.material.icons.rounded.GraphicEq
+import androidx.compose.material.icons.rounded.Headphones
 import androidx.compose.material.icons.rounded.RestartAlt
+import androidx.compose.material.icons.rounded.Speaker
 import androidx.compose.material.icons.rounded.SurroundSound
+import androidx.compose.material.icons.rounded.VolumeUp
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
@@ -57,6 +61,10 @@ fun EqualizerSheet(
   onBandLevelChanged: (Int, Int) -> Unit,
   onBassBoostChanged: (Int) -> Unit,
   onVirtualizerChanged: (Int) -> Unit = {},
+  onToggleLoudnessNorm: (Boolean) -> Unit = {},
+  onLoudnessTargetGainChanged: (Int) -> Unit = {},
+  onToggleAutoBtEq: (Boolean) -> Unit = {},
+  onSelectRoutePreset: (com.example.playback.AudioOutputRoute, EqPreset) -> Unit = { _, _ -> },
   onReset: () -> Unit,
   onDismiss: () -> Unit
 ) {
@@ -536,6 +544,210 @@ fun EqualizerSheet(
             .fillMaxWidth()
             .testTag("eq_virtualizer_slider")
         )
+
+        Spacer(modifier = Modifier.height(14.dp))
+
+        // Audio Pro Suite: Bluetooth Auto-EQ + Loudness Normalization
+        Column(
+          modifier = Modifier
+            .fillMaxWidth()
+            .clip(RoundedCornerShape(20.dp))
+            .background(glassPanelFill)
+            .border(1.dp, glassPanelBorder, RoundedCornerShape(20.dp))
+            .padding(14.dp)
+            .testTag("audio_pro_suite_card"),
+          verticalArrangement = Arrangement.spacedBy(12.dp)
+        ) {
+          // Active Output Route Header
+          Row(
+            modifier = Modifier.fillMaxWidth(),
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.SpaceBetween
+          ) {
+            Row(
+              verticalAlignment = Alignment.CenterVertically,
+              horizontalArrangement = Arrangement.spacedBy(8.dp)
+            ) {
+              Icon(
+                imageVector = when (state.activeOutputRoute) {
+                  com.example.playback.AudioOutputRoute.BLUETOOTH -> Icons.Rounded.BluetoothAudio
+                  com.example.playback.AudioOutputRoute.HEADPHONES -> Icons.Rounded.Headphones
+                  com.example.playback.AudioOutputRoute.SPEAKER -> Icons.Rounded.Speaker
+                },
+                contentDescription = null,
+                tint = accent,
+                modifier = Modifier.size(18.dp)
+              )
+              Text(
+                text = stringResource(id = R.string.audio_pro_title),
+                style = MaterialTheme.typography.titleSmall.copy(fontWeight = FontWeight.Bold),
+                color = MaterialTheme.colorScheme.onSurface
+              )
+            }
+            Surface(
+              shape = CircleShape,
+              color = accent.copy(alpha = 0.16f),
+              border = BorderStroke(1.dp, accent.copy(alpha = 0.40f))
+            ) {
+              val routeLabel = state.activeOutputName.ifBlank {
+                when (state.activeOutputRoute) {
+                  com.example.playback.AudioOutputRoute.BLUETOOTH -> stringResource(id = R.string.audio_route_bluetooth)
+                  com.example.playback.AudioOutputRoute.HEADPHONES -> stringResource(id = R.string.audio_route_headphones)
+                  com.example.playback.AudioOutputRoute.SPEAKER -> stringResource(id = R.string.audio_route_speaker)
+                }
+              }
+              Text(
+                text = routeLabel,
+                style = MaterialTheme.typography.labelSmall.copy(fontWeight = FontWeight.Bold),
+                color = accent,
+                maxLines = 1,
+                overflow = TextOverflow.Ellipsis,
+                modifier = Modifier.padding(horizontal = 10.dp, vertical = 4.dp)
+              )
+            }
+          }
+
+          // Bluetooth / Device Auto-EQ Switch
+          Row(
+            modifier = Modifier.fillMaxWidth(),
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.SpaceBetween
+          ) {
+            Column(modifier = Modifier.weight(1f).padding(end = 8.dp)) {
+              Text(
+                text = stringResource(id = R.string.audio_pro_auto_bt_title),
+                style = MaterialTheme.typography.bodyMedium.copy(fontWeight = FontWeight.SemiBold),
+                color = MaterialTheme.colorScheme.onSurface
+              )
+              Text(
+                text = stringResource(id = R.string.audio_pro_auto_bt_sub),
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant
+              )
+            }
+            Switch(
+              checked = state.autoSwitchBluetoothEq,
+              onCheckedChange = onToggleAutoBtEq,
+              modifier = Modifier.testTag("eq_auto_bt_switch")
+            )
+          }
+
+          if (state.autoSwitchBluetoothEq) {
+            val cycleOrder = listOf(EqPreset.BASS_BOOST, EqPreset.POP, EqPreset.VOCAL, EqPreset.CLUB, EqPreset.FLAT, EqPreset.ACOUSTIC)
+            Row(
+              modifier = Modifier.fillMaxWidth(),
+              horizontalArrangement = Arrangement.spacedBy(8.dp)
+            ) {
+              val routes = listOf(
+                Triple(com.example.playback.AudioOutputRoute.BLUETOOTH, stringResource(id = R.string.audio_route_bluetooth), state.bluetoothEqPresetId),
+                Triple(com.example.playback.AudioOutputRoute.HEADPHONES, stringResource(id = R.string.audio_route_headphones), state.headphonesEqPresetId),
+                Triple(com.example.playback.AudioOutputRoute.SPEAKER, stringResource(id = R.string.audio_route_speaker), state.speakerEqPresetId)
+              )
+              routes.forEach { (route, label, presetId) ->
+                val curPreset = EqPreset.fromId(presetId)
+                val isRouteActive = state.activeOutputRoute == route
+                Surface(
+                  onClick = {
+                    val idx = cycleOrder.indexOf(curPreset)
+                    val next = cycleOrder[(idx + 1) % cycleOrder.size]
+                    onSelectRoutePreset(route, next)
+                  },
+                  shape = RoundedCornerShape(14.dp),
+                  color = if (isRouteActive) accent.copy(alpha = 0.16f) else Color.White.copy(alpha = if (isDark) 0.04f else 0.5f),
+                  border = BorderStroke(
+                    1.dp,
+                    if (isRouteActive) accent.copy(alpha = 0.55f) else MaterialTheme.colorScheme.onSurface.copy(alpha = 0.10f)
+                  ),
+                  modifier = Modifier
+                    .weight(1f)
+                    .testTag("eq_route_preset_${route.id}")
+                ) {
+                  Column(
+                    modifier = Modifier.padding(horizontal = 8.dp, vertical = 8.dp),
+                    horizontalAlignment = Alignment.CenterHorizontally
+                  ) {
+                    Text(
+                      text = label,
+                      style = MaterialTheme.typography.labelSmall,
+                      color = MaterialTheme.colorScheme.onSurfaceVariant,
+                      maxLines = 1,
+                      overflow = TextOverflow.Ellipsis
+                    )
+                    Text(
+                      text = presetDisplayName(curPreset),
+                      style = MaterialTheme.typography.labelMedium.copy(fontWeight = FontWeight.Bold),
+                      color = if (isRouteActive) accent else MaterialTheme.colorScheme.onSurface,
+                      maxLines = 1,
+                      overflow = TextOverflow.Ellipsis
+                    )
+                  }
+                }
+              }
+            }
+          }
+
+          HorizontalDivider(color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.08f))
+
+          // Loudness Normalization Switch + Strength Slider
+          Row(
+            modifier = Modifier.fillMaxWidth(),
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.SpaceBetween
+          ) {
+            Row(
+              verticalAlignment = Alignment.CenterVertically,
+              horizontalArrangement = Arrangement.spacedBy(8.dp),
+              modifier = Modifier.weight(1f).padding(end = 8.dp)
+            ) {
+              Icon(
+                imageVector = Icons.Rounded.VolumeUp,
+                contentDescription = null,
+                tint = if (state.loudnessNormEnabled) accent else MaterialTheme.colorScheme.onSurfaceVariant,
+                modifier = Modifier.size(18.dp)
+              )
+              Column {
+                Text(
+                  text = stringResource(id = R.string.audio_pro_loudness_title),
+                  style = MaterialTheme.typography.bodyMedium.copy(fontWeight = FontWeight.SemiBold),
+                  color = MaterialTheme.colorScheme.onSurface
+                )
+                Text(
+                  text = stringResource(id = R.string.audio_pro_loudness_sub),
+                  style = MaterialTheme.typography.bodySmall,
+                  color = MaterialTheme.colorScheme.onSurfaceVariant
+                )
+              }
+            }
+            Switch(
+              checked = state.loudnessNormEnabled,
+              onCheckedChange = onToggleLoudnessNorm,
+              modifier = Modifier.testTag("eq_loudness_norm_switch")
+            )
+          }
+
+          if (state.loudnessNormEnabled) {
+            Row(
+              modifier = Modifier.fillMaxWidth(),
+              verticalAlignment = Alignment.CenterVertically,
+              horizontalArrangement = Arrangement.SpaceBetween
+            ) {
+              Text(
+                text = "+${(state.loudnessTargetGainMb / 100f).let { String.format("%.1f", it) }} dB",
+                style = MaterialTheme.typography.labelMedium.copy(fontWeight = FontWeight.Bold),
+                color = accent,
+                modifier = Modifier.width(56.dp)
+              )
+              Slider(
+                value = state.loudnessTargetGainMb.toFloat(),
+                onValueChange = { onLoudnessTargetGainChanged(it.roundToInt()) },
+                valueRange = 0f..900f,
+                modifier = Modifier
+                  .weight(1f)
+                  .testTag("eq_loudness_gain_slider")
+              )
+            }
+          }
+        }
 
         if (!state.hardwareSupported && state.audioSessionId > 0) {
           Text(

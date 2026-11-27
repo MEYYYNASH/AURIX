@@ -470,6 +470,15 @@ private fun AurixMainShell(
   var showWidgetCustomizer by remember { mutableStateOf(false) }
   var showOrbiCompanionSheet by remember { mutableStateOf(false) }
   var showAmbientStandby by remember { mutableStateOf(false) }
+  var showMonthlyRecapStory by remember { mutableStateOf(false) }
+  var showDrivingMode by remember { mutableStateOf(false) }
+  var editingTrackInfoSong by remember { mutableStateOf<com.example.model.Song?>(null) }
+  val monthlyRecap by viewModel.monthlyRecap.collectAsStateWithLifecycle()
+  val audioOutputInfo by viewModel.audioOutputInfo.collectAsStateWithLifecycle()
+  val sleepTimerFadeOut by viewModel.sleepTimerFadeOut.collectAsStateWithLifecycle()
+  val downloadWifiOnly by viewModel.downloadWifiOnly.collectAsStateWithLifecycle()
+  val downloadStorageCapMb by viewModel.downloadStorageCapMb.collectAsStateWithLifecycle()
+  val trackOverrides by viewModel.trackOverrides.collectAsStateWithLifecycle()
   val smartPlaylists by viewModel.smartPlaylists.collectAsStateWithLifecycle()
   var orbiMoodOverride by remember { mutableStateOf<OrbiMood?>(null) }
   var isLibraryCreateAlbumOpen by remember { mutableStateOf(false) }
@@ -960,6 +969,8 @@ private fun AurixMainShell(
                 orbiTopVibeLabel = orbiTopVibeLabel,
                 onSelectOrbiTheme = { theme -> viewModel.setOrbiCompanionTheme(theme.id) },
                 onSelectOrbiMoodOverride = { overrideMood -> orbiMoodOverride = overrideMood },
+                monthlyRecap = monthlyRecap,
+                onOpenMonthlyRecap = { showMonthlyRecapStory = true },
                 onBack = { currentScreen = Screen.Home },
                 onSelectMostPlayedFilter = { viewModel.setMostPlayedFilter(it) },
                 onCheckLyrics = { viewModel.ensureLyricsVerified(it) },
@@ -992,7 +1003,10 @@ private fun AurixMainShell(
                     onCheckLyrics = { viewModel.ensureLyricsVerified(it) },
                     onSongClick = { song, queue -> viewModel.playSong(song, queue) },
                     onFavoriteClick = { viewModel.toggleFavorite(it) },
-                    onYoutubeSongDownloadClick = { viewModel.openYoutubeFormatSheet(it) }
+                    onYoutubeSongDownloadClick = { viewModel.openYoutubeFormatSheet(it) },
+                    onDownloadAll = if (tiktokViralNewPipeSongs.isNotEmpty()) {
+                      { viewModel.downloadPlaylist(context, "Viral Charts", tiktokViralNewPipeSongs) }
+                    } else null
                   )
                 }
                 screen.key == "discover_weekly" -> {
@@ -1027,6 +1041,9 @@ private fun AurixMainShell(
                     onCheckLyrics = { viewModel.ensureLyricsVerified(it) },
                     onSongClick = { song, queue -> viewModel.playSong(song, queue) },
                     onFavoriteClick = { viewModel.toggleFavorite(it) },
+                    onDownloadAll = if (dwTracks.isNotEmpty()) {
+                      { viewModel.downloadPlaylist(context, "Discover Weekly", dwTracks) }
+                    } else null,
                     onSaveMix = if (dwTracks.isNotEmpty()) {
                       { viewModel.saveMixAsPlaylist("Discover Weekly", dwTracks) }
                     } else null,
@@ -1058,6 +1075,9 @@ private fun AurixMainShell(
                     onCheckLyrics = { viewModel.ensureLyricsVerified(it) },
                     onSongClick = { song, queue -> viewModel.playSong(song, queue) },
                     onFavoriteClick = { viewModel.toggleFavorite(it) },
+                    onDownloadAll = if (mixTracks.isNotEmpty()) {
+                      { viewModel.downloadPlaylist(context, "$mixTitle Mix", mixTracks) }
+                    } else null,
                     onSaveMix = if (mixTracks.isNotEmpty()) {
                       { viewModel.saveMixAsPlaylist("$mixTitle Mix", mixTracks) }
                     } else null,
@@ -1093,6 +1113,9 @@ private fun AurixMainShell(
                     onCheckLyrics = { viewModel.ensureLyricsVerified(it) },
                     onSongClick = { song, q -> viewModel.playSong(song, q) },
                     onFavoriteClick = { viewModel.toggleFavorite(it) },
+                    onDownloadAll = if (spTracks.isNotEmpty()) {
+                      { viewModel.downloadPlaylist(context, spTitle, spTracks) }
+                    } else null,
                     onSaveMix = if (spTracks.isNotEmpty()) {
                       { viewModel.saveMixAsPlaylist(spTitle, spTracks) }
                     } else null,
@@ -1125,6 +1148,9 @@ private fun AurixMainShell(
                     onCheckLyrics = { viewModel.ensureLyricsVerified(it) },
                     onSongClick = { song, queue -> viewModel.playSong(song, queue) },
                     onFavoriteClick = { viewModel.toggleFavorite(it) },
+                    onDownloadAll = if (mixTracks.isNotEmpty()) {
+                      { viewModel.downloadPlaylist(context, mixTitle, mixTracks) }
+                    } else null,
                     onSaveMix = if (mixTracks.isNotEmpty()) {
                       { viewModel.saveMixAsPlaylist(mixTitle, mixTracks) }
                     } else null,
@@ -1156,6 +1182,9 @@ private fun AurixMainShell(
                     onCheckLyrics = { viewModel.ensureLyricsVerified(it) },
                     onSongClick = { song, queue -> viewModel.playSong(song, queue) },
                     onFavoriteClick = { viewModel.toggleFavorite(it) },
+                    onDownloadAll = if (mixTracks.isNotEmpty()) {
+                      { viewModel.downloadPlaylist(context, "Daily Discovery", mixTracks) }
+                    } else null,
                     onSaveMix = if (mixTracks.isNotEmpty()) {
                       { viewModel.saveMixAsPlaylist("Daily Discovery", mixTracks) }
                     } else null,
@@ -1186,6 +1215,9 @@ private fun AurixMainShell(
                     onCheckLyrics = { viewModel.ensureLyricsVerified(it) },
                     onSongClick = { song, queue -> viewModel.playSong(song, queue) },
                     onFavoriteClick = { viewModel.toggleFavorite(it) },
+                    onDownloadAll = if (mixTracks.isNotEmpty()) {
+                      { viewModel.downloadPlaylist(context, "Favorites Mix", mixTracks) }
+                    } else null,
                     onSaveMix = if (mixTracks.isNotEmpty()) {
                       { viewModel.saveMixAsPlaylist("Favorites Mix", mixTracks) }
                     } else null,
@@ -1241,6 +1273,9 @@ private fun AurixMainShell(
                     onCheckLyrics = { viewModel.ensureLyricsVerified(it) },
                     onSongClick = { song, queue -> viewModel.playSong(song, queue) },
                     onFavoriteClick = { viewModel.toggleFavorite(it) },
+                    onDownloadAll = if (moodTracks.isNotEmpty()) {
+                      { viewModel.downloadPlaylist(context, "${matchedMood.displayName} Mix", moodTracks) }
+                    } else null,
                     onSaveMix = if (moodTracks.isNotEmpty()) {
                       { viewModel.saveMixAsPlaylist("${matchedMood.displayName} Mix", moodTracks) }
                     } else null,
@@ -1467,6 +1502,10 @@ private fun AurixMainShell(
               onEqBassBoostChanged = { viewModel.setBassBoostStrength(it) },
               onEqVirtualizerChanged = { viewModel.setVirtualizerStrength(it) },
               onResetEq = { viewModel.resetEqualizer() },
+              onToggleLoudnessNorm = { viewModel.setLoudnessNormEnabled(it) },
+              onLoudnessTargetGainChanged = { viewModel.setLoudnessTargetGainMb(it) },
+              onToggleAutoBtEq = { viewModel.setAutoSwitchBluetoothEq(it) },
+              onSelectRoutePreset = { route, preset -> viewModel.setEqRoutePreset(route, preset) },
               crossfadeSettings = crossfadeSettings,
               onCrossfadeSecondsChanged = { viewModel.setCrossfadeSeconds(it) },
               onCrossfadeManualSkipChanged = { viewModel.setCrossfadeManualSkip(it) },
@@ -1518,6 +1557,9 @@ private fun AurixMainShell(
               onWidgetShowLyricsChanged = { viewModel.setWidgetShowLyrics(it) },
               onApplyGlassStyleToAll = { viewModel.applyGlassStyleToAllWidgets(it) },
               onOpenStandby = { showAmbientStandby = true },
+              onOpenDrivingMode = { showDrivingMode = true },
+              onOpenDownloads = { showDownloadQueueSheet = true },
+              onOpenMonthlyRecap = { showMonthlyRecapStory = true },
               standbyAutoLaunch = standbyAutoLaunch,
               onStandbyAutoLaunchChanged = { viewModel.setStandbyAutoLaunch(it) },
               onUnlockDeveloperMode = { viewModel.unlockDeveloperMode() },
@@ -1738,6 +1780,7 @@ private fun AurixMainShell(
             sleepMinutes = sleepMinutes,
             sleepRemainingSeconds = sleepRemainingSeconds,
             sleepEndOfTrack = sleepEndOfTrack,
+            sleepFadeOutEnabled = sleepTimerFadeOut,
             onPlayPause = { viewModel.togglePlayPause() },
             onNext = { viewModel.nextTrack() },
             onPrevious = { viewModel.previousTrack() },
@@ -1749,6 +1792,7 @@ private fun AurixMainShell(
             onSetSleepMinutes = { viewModel.setSleepTimerMinutes(it) },
             onSetSleepEndOfTrack = { viewModel.setSleepEndOfTrack() },
             onCancelSleep = { viewModel.cancelSleepTimer() },
+            onToggleSleepFadeOut = { viewModel.setSleepTimerFadeOut(it) },
             onSeek = { viewModel.seekTo(it) },
             onFavorite = { viewModel.toggleFavorite(song) },
             onClose = { showNowPlaying = false },
@@ -1765,6 +1809,10 @@ private fun AurixMainShell(
             onEqBassBoostChanged = { viewModel.setBassBoostStrength(it) },
             onEqVirtualizerChanged = { viewModel.setVirtualizerStrength(it) },
             onResetEq = { viewModel.resetEqualizer() },
+            onToggleLoudnessNorm = { viewModel.setLoudnessNormEnabled(it) },
+            onLoudnessTargetGainChanged = { viewModel.setLoudnessTargetGainMb(it) },
+            onToggleAutoBtEq = { viewModel.setAutoSwitchBluetoothEq(it) },
+            onSelectRoutePreset = { route, preset -> viewModel.setEqRoutePreset(route, preset) },
             queue = queue,
             djAutoMixEnabled = crossfadeSettings.djAutoMixEnabled,
             beatfadeSeconds = crossfadeSettings.effectiveDurationSeconds.coerceAtLeast(4),
@@ -1812,6 +1860,8 @@ private fun AurixMainShell(
             developerModeEnabled = developerModeEnabled,
             onOpenLyricsEditor = { showCustomLyricsEditor = true },
             onOpenStandby = { showAmbientStandby = true },
+            onOpenDrivingMode = { showDrivingMode = true },
+            onEditTrackInfo = { target -> editingTrackInfoSong = target },
             orbiMood = effectiveOrbiMood,
             orbiTheme = activeOrbiTheme,
             orbiBeatEnergy = nowPlayingBeatEnergy,
@@ -1887,6 +1937,12 @@ private fun AurixMainShell(
           onSelectLayout = { newLayout -> viewModel.setStandbyLayout(newLayout.id) },
           onToggleGyroEnabled = { enabled -> viewModel.setStandbyGyroEnabled(enabled) },
           onToggleVinylStyle = { isVinyl -> viewModel.setStandbyVinylStyle(isVinyl) },
+          sleepMinutes = sleepMinutes,
+          sleepEndOfTrack = sleepEndOfTrack,
+          sleepRemainingSeconds = sleepRemainingSeconds,
+          onSetSleepMinutes = { viewModel.setSleepTimerMinutes(it) },
+          onSetSleepEndOfTrack = { viewModel.setSleepEndOfTrack() },
+          onCancelSleepTimer = { viewModel.cancelSleepTimer() },
           onSeek = { targetMs -> viewModel.seekTo(targetMs) },
           onPlayPause = { viewModel.togglePlayPause() },
           onNext = { viewModel.nextTrack() },
@@ -1997,7 +2053,9 @@ private fun AurixMainShell(
             songForAlbumPicker = detailTarget
           },
           onPlayNext = { viewModel.playNext(detailTarget) },
-          onAddToQueue = { viewModel.addToQueue(detailTarget) }
+          onAddToQueue = { viewModel.addToQueue(detailTarget) },
+          onOpenDrivingMode = { showDrivingMode = true },
+          onEditTrackInfo = { editingTrackInfoSong = detailTarget }
         )
       }
 
@@ -2059,6 +2117,9 @@ private fun AurixMainShell(
       }
 
       if (showDownloadQueueSheet) {
+        val usedStorageMb = remember(downloadQueueItems, downloadedSongIds) {
+          com.example.data.BackgroundDownloadRegistry.computeOfflineStorageMb(context)
+        }
         DownloadQueueSheet(
           items = downloadQueueItems,
           darkTheme = darkTheme,
@@ -2067,7 +2128,58 @@ private fun AurixMainShell(
           onRetryItem = { viewModel.retryDownloadItem(context, it) },
           onCancelAll = { viewModel.cancelAllDownloads() },
           onRetryAllFailed = { viewModel.retryAllFailedDownloads(context) },
-          onClearFinished = { viewModel.clearFinishedDownloads() }
+          onClearFinished = { viewModel.clearFinishedDownloads() },
+          wifiOnly = downloadWifiOnly,
+          storageCapMb = downloadStorageCapMb,
+          usedStorageMb = usedStorageMb,
+          onToggleWifiOnly = { viewModel.setDownloadWifiOnly(it) },
+          onSelectStorageCapMb = { viewModel.setDownloadStorageCapMb(it) }
+        )
+      }
+
+      if (showMonthlyRecapStory) {
+        MonthlyRecapStoryOverlay(
+          recap = monthlyRecap,
+          accentColor = MaterialTheme.colorScheme.primary,
+          reducedMotion = reducedMotion,
+          onClose = { showMonthlyRecapStory = false }
+        )
+      }
+
+      if (showDrivingMode) {
+        DrivingModeScreen(
+          song = currentSong,
+          isPlaying = isPlaying,
+          isShuffle = shuffleEnabled,
+          djAutoMixEnabled = crossfadeSettings.djAutoMixEnabled,
+          audioOutputInfo = audioOutputInfo,
+          lyricsResult = lyrics,
+          positionProvider = { viewModel.getLivePlaybackPositionMs() },
+          lyricOffsetMs = lyricOffsetMs,
+          accentColor = MaterialTheme.colorScheme.primary,
+          onPlayPause = { viewModel.togglePlayPause() },
+          onNext = { viewModel.nextTrack() },
+          onPrevious = { viewModel.previousTrack() },
+          onToggleFavorite = { currentSong?.let { viewModel.toggleFavorite(it) } },
+          onToggleShuffle = { viewModel.toggleShuffle() },
+          onToggleDjAutoMix = { viewModel.setDjAutoMixEnabled(!crossfadeSettings.djAutoMixEnabled) },
+          onClose = { showDrivingMode = false }
+        )
+      }
+
+      editingTrackInfoSong?.let { editTarget ->
+        EditTrackInfoSheet(
+          song = editTarget,
+          existingOverride = trackOverrides[editTarget.id],
+          onSave = { override ->
+            viewModel.saveTrackMetadataOverride(override)
+            editingTrackInfoSong = null
+          },
+          onReset = {
+            viewModel.clearTrackMetadataOverride(editTarget.id)
+            editingTrackInfoSong = null
+          },
+          onDismiss = { editingTrackInfoSong = null }
         )
       }
 
