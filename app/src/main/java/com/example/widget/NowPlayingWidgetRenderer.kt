@@ -965,7 +965,8 @@ object NowPlayingWidgetRenderer {
       canvas.drawPath(nextTri, iconP)
     }
 
-    // Helper: draw single-line text
+    // Helper: draw single-line text strictly in the card's pixel coordinate space (density = 2.2f)
+    // so text never overflows outside the widget card or overlaps the play/pause button
     fun drawSingleLine(
       text: String,
       x: Float,
@@ -974,23 +975,60 @@ object NowPlayingWidgetRenderer {
       sizeDp: Float,
       color: Int,
       bold: Boolean,
-      centered: Boolean = false
+      centered: Boolean = false,
+      isLyricLine: Boolean = false
     ) {
-      val bmp = renderStyledTextBitmap(
-        context = context,
-        style = style,
-        text = text,
-        textColor = color,
-        baseTextSizeDp = sizeDp,
-        isBold = bold,
-        widthDp = (maxWidthPx / density).coerceAtLeast(60f),
-        maxLines = 1,
-        centered = centered
-      )
-      if (bmp != null) {
-        val drawX = if (centered) x - bmp.width * 0.5f else x
-        canvas.drawBitmap(bmp, drawX, y, null)
+      val clean = text.trim()
+      if (clean.isEmpty()) return
+      val safeWidthPx = maxWidthPx.roundToInt().coerceIn(48, (w - dp(24f)).roundToInt())
+      val isRtl = context.resources.configuration.layoutDirection == View.LAYOUT_DIRECTION_RTL
+      val baseTypeface = when (style) {
+        NowPlayingWidgetStyle.PIXEL -> Typeface.create(Typeface.MONOSPACE, if (bold) Typeface.BOLD else Typeface.NORMAL)
+        NowPlayingWidgetStyle.PAPER -> {
+          val serif = KhmerTypography.loadTypeface(context, R.font.playfair_display, if (bold) Typeface.BOLD else Typeface.NORMAL)
+          if (serif != Typeface.DEFAULT) serif else Typeface.SERIF
+        }
+        else -> {
+          if (bold && !isLyricLine) KhmerTypography.loadOutfitTypeface(context, isBold = true)
+          else KhmerTypography.loadUiTypeface(context, isBold = bold)
+        }
       }
+      val styledText: CharSequence = if (style == NowPlayingWidgetStyle.PIXEL || style == NowPlayingWidgetStyle.PAPER) {
+        buildStyleMixedSpannable(context, clean, baseTypeface, bold)
+      } else {
+        KhmerTypography.buildStyledSpannable(
+          context = context,
+          text = clean,
+          isTitle = bold && !isLyricLine,
+          khmerLyricsFont = KhmerLyricsFont.KANTUMRUY_PRO,
+          isBold = bold
+        )
+      }
+      val paint = TextPaint(Paint.ANTI_ALIAS_FLAG).apply {
+        typeface = baseTypeface
+        this.color = color
+        textSize = dp(sizeDp)
+      }
+      val align = when {
+        centered -> Layout.Alignment.ALIGN_CENTER
+        isRtl -> Layout.Alignment.ALIGN_OPPOSITE
+        else -> Layout.Alignment.ALIGN_NORMAL
+      }
+      val layout = StaticLayout.Builder
+        .obtain(styledText, 0, styledText.length, paint, safeWidthPx)
+        .setAlignment(align)
+        .setLineSpacing(dp(1.2f), 1.12f)
+        .setIncludePad(true)
+        .setMaxLines(1)
+        .setEllipsize(TextUtils.TruncateAt.END)
+        .build()
+
+      canvas.save()
+      val drawX = if (centered) x - safeWidthPx * 0.5f else x
+      canvas.translate(drawX, y)
+      canvas.clipRect(0f, -dp(4f), safeWidthPx.toFloat(), layout.height + dp(6f))
+      layout.draw(canvas)
+      canvas.restore()
     }
 
     // 2. Layout composition per StudioSize
@@ -1000,25 +1038,25 @@ object NowPlayingWidgetRenderer {
           val artH = h * 0.53f
           val artBmp = createSquareArt(context, rawArt, w, palette)
           canvas.drawBitmap(scaleCenterCrop(artBmp, w, artH.roundToInt()), 0f, 0f, null)
-          drawPlayButton(w - dp(26f), artH, dp(17f))
-          drawSingleLine(title, dp(12f), artH + dp(10f), w - dp(24f), 12.5f, primaryColor, true)
-          drawSingleLine(artist, dp(12f), artH + dp(28f), w - dp(24f), 10.5f, secondaryColor, false)
+          drawPlayButton(w - dp(26f), artH, dp(16f))
+          drawSingleLine(title, dp(12f), artH + dp(9f), w - dp(28f), 11.2f, primaryColor, true)
+          drawSingleLine(artist, dp(12f), artH + dp(26f), w - dp(28f), 9.4f, secondaryColor, false)
           drawStyleProgress(dp(12f), h - dp(12f), w - dp(24f))
         } else if (style == NowPlayingWidgetStyle.RING) {
-          val ringS = dp(86f)
+          val ringS = dp(84f)
           drawStyleCover((w - ringS) * 0.5f, dp(12f), ringS)
-          drawPlayButton(w * 0.5f, dp(12f) + ringS * 0.5f, dp(16f))
-          drawSingleLine(title, w * 0.5f, h - dp(44f), w - dp(20f), 12.5f, primaryColor, true, centered = true)
-          drawSingleLine(artist, w * 0.5f, h - dp(25f), w - dp(20f), 10.5f, secondaryColor, false, centered = true)
+          drawPlayButton(w * 0.5f, dp(12f) + ringS * 0.5f, dp(15f))
+          drawSingleLine(title, w * 0.5f, h - dp(43f), w - dp(24f), 11.2f, primaryColor, true, centered = true)
+          drawSingleLine(artist, w * 0.5f, h - dp(25f), w - dp(24f), 9.4f, secondaryColor, false, centered = true)
         } else {
           val topY = topContentOffset + dp(12f)
-          drawPlayButton(dp(28f), topY + dp(17f), dp(17f))
+          drawPlayButton(dp(27f), topY + dp(16f), dp(16f))
           if (style != NowPlayingWidgetStyle.VINYL && style != NowPlayingWidgetStyle.NIGHT && style != NowPlayingWidgetStyle.TYPE) {
-            val artS = dp(56f)
+            val artS = dp(54f)
             drawStyleCover(w - artS - dp(12f), topY, artS)
           }
-          drawSingleLine(title, dp(12f), h - dp(54f), w - dp(24f), 12.5f, primaryColor, true)
-          drawSingleLine(artist, dp(12f), h - dp(35f), w - dp(24f), 10.5f, secondaryColor, false)
+          drawSingleLine(title, dp(12f), h - dp(53f), w - dp(24f), 11.2f, primaryColor, true)
+          drawSingleLine(artist, dp(12f), h - dp(35f), w - dp(24f), 9.4f, secondaryColor, false)
           drawStyleProgress(dp(12f), h - dp(13f), w - dp(24f))
         }
       }
@@ -1028,87 +1066,87 @@ object NowPlayingWidgetRenderer {
           val artBmp = createSquareArt(context, rawArt, h, palette)
           canvas.drawBitmap(artBmp, 0f, 0f, null)
           val textX = h + dp(12f)
-          val textW = w - textX - dp(56f)
-          drawSingleLine(title, textX, dp(12f), textW, 13f, primaryColor, true)
-          drawSingleLine(artist, textX, dp(31f), textW, 10.5f, secondaryColor, false)
-          drawStyleProgress(textX, h - dp(14f), textW)
-          drawPlayButton(w - dp(28f), h * 0.5f, dp(17f))
+          val textW = (w - textX - dp(56f)).coerceAtLeast(dp(60f))
+          drawSingleLine(title, textX, dp(11f), textW, 11.2f, primaryColor, true)
+          drawSingleLine(artist, textX, dp(29f), textW, 9.4f, secondaryColor, false)
+          drawStyleProgress(textX, h - dp(13f), textW)
+          drawPlayButton(w - dp(28f), h * 0.5f, dp(16f))
         } else {
           var textX = dp(14f)
           val cy = (h + topContentOffset) * 0.5f
           if (style != NowPlayingWidgetStyle.VINYL && style != NowPlayingWidgetStyle.NIGHT && style != NowPlayingWidgetStyle.TYPE) {
-            val artS = dp(44f)
+            val artS = dp(42f)
             drawStyleCover(dp(12f), cy - artS * 0.5f, artS)
-            textX = dp(66f)
+            textX = dp(64f)
           }
-          val rightPad = if (style == NowPlayingWidgetStyle.VINYL) dp(92f) else dp(56f)
-          val textW = (w - textX - rightPad).coerceAtLeast(dp(80f))
-          drawSingleLine(title, textX, topContentOffset + dp(10f), textW, 13f, primaryColor, true)
-          drawSingleLine(artist, textX, topContentOffset + dp(28f), textW, 10.5f, secondaryColor, false)
-          drawStyleProgress(textX, h - dp(13f), textW)
-          drawPlayButton(w - (if (style == NowPlayingWidgetStyle.VINYL) dp(66f) else dp(28f)), cy, dp(17f))
+          val rightPad = if (style == NowPlayingWidgetStyle.VINYL) dp(94f) else dp(58f)
+          val textW = (w - textX - rightPad).coerceAtLeast(dp(60f))
+          drawSingleLine(title, textX, topContentOffset + dp(8f), textW, 11.0f, primaryColor, true)
+          drawSingleLine(artist, textX, topContentOffset + dp(25f), textW, 9.2f, secondaryColor, false)
+          drawStyleProgress(textX, h - dp(12f), textW)
+          drawPlayButton(w - (if (style == NowPlayingWidgetStyle.VINYL) dp(66f) else dp(28f)), cy, dp(16f))
         }
       }
 
       NowPlayingStudioSize.MEDIUM -> {
         if (style == NowPlayingWidgetStyle.RING) {
-          val ringS = dp(110f)
+          val ringS = dp(106f)
           drawStyleCover(dp(16f), (h - ringS) * 0.5f, ringS)
-          val rightX = dp(142f)
-          val rightW = w - rightX - dp(16f)
-          drawSingleLine(title, rightX, dp(24f), rightW, 16f, primaryColor, true)
-          drawSingleLine(artist, rightX, dp(48f), rightW, 12f, secondaryColor, false)
-          drawTransportCluster(rightX, h - dp(36f), dp(18f))
+          val rightX = dp(138f)
+          val rightW = (w - rightX - dp(18f)).coerceAtLeast(dp(70f))
+          drawSingleLine(title, rightX, dp(24f), rightW, 13.8f, primaryColor, true)
+          drawSingleLine(artist, rightX, dp(46f), rightW, 10.6f, secondaryColor, false)
+          drawTransportCluster(rightX, h - dp(36f), dp(17f))
         } else if (style == NowPlayingWidgetStyle.LIGHT) {
           val bleedW = (w * 0.40f).roundToInt()
           val artBmp = createSquareArt(context, rawArt, max(bleedW, h), palette)
           canvas.drawBitmap(scaleCenterCrop(artBmp, bleedW, h), 0f, 0f, null)
           val rightX = bleedW + dp(16f)
-          val rightW = w - rightX - dp(16f)
-          drawSingleLine(title, rightX, dp(18f), rightW, 15.5f, primaryColor, true)
-          drawSingleLine(artist, rightX, dp(40f), rightW, 12f, secondaryColor, false)
-          drawStyleProgress(rightX, dp(76f), rightW)
-          drawTransportCluster(rightX, h - dp(32f), dp(18f))
+          val rightW = (w - rightX - dp(18f)).coerceAtLeast(dp(70f))
+          drawSingleLine(title, rightX, dp(18f), rightW, 13.5f, primaryColor, true)
+          drawSingleLine(artist, rightX, dp(39f), rightW, 10.6f, secondaryColor, false)
+          drawStyleProgress(rightX, dp(74f), rightW)
+          drawTransportCluster(rightX, h - dp(32f), dp(17f))
         } else {
-          val topY = topContentOffset + dp(14f)
+          val topY = topContentOffset + dp(13f)
           val artOnLeft = style == NowPlayingWidgetStyle.PIXEL || style == NowPlayingWidgetStyle.PAPER
-          val artS = if (style == NowPlayingWidgetStyle.PAPER) dp(78f) else dp(74f)
+          val artS = if (style == NowPlayingWidgetStyle.PAPER) dp(74f) else dp(70f)
           var textX = dp(16f)
-          var textW = w - dp(32f)
+          var textW = w - dp(36f)
           if (artOnLeft) {
             drawStyleCover(dp(16f), topY, artS)
             textX = dp(16f) + artS + dp(14f)
-            textW = w - textX - dp(16f)
+            textW = w - textX - dp(18f)
           } else if (style != NowPlayingWidgetStyle.VINYL && style != NowPlayingWidgetStyle.NIGHT && style != NowPlayingWidgetStyle.TYPE) {
             drawStyleCover(w - artS - dp(16f), topY, artS)
-            textW = w - artS - dp(44f)
+            textW = w - artS - dp(46f)
           } else if (style == NowPlayingWidgetStyle.VINYL) {
-            textW = w - dp(116f)
+            textW = w - dp(118f)
           }
-          drawSingleLine(title, textX, topY + dp(2f), textW, if (style == NowPlayingWidgetStyle.TYPE) 20f else 16f, primaryColor, true)
-          drawSingleLine(artist, textX, topY + dp(26f), textW, 12f, secondaryColor, false)
-          drawStyleProgress(dp(16f), h - dp(54f), if (style == NowPlayingWidgetStyle.VINYL) w - dp(116f) else w - dp(32f))
-          drawTransportCluster(dp(16f), h - dp(24f), dp(17f))
+          drawSingleLine(title, textX, topY + dp(2f), textW, if (style == NowPlayingWidgetStyle.TYPE) 16.5f else 13.8f, primaryColor, true)
+          drawSingleLine(artist, textX, topY + dp(24f), textW, 10.6f, secondaryColor, false)
+          drawStyleProgress(dp(16f), h - dp(54f), if (style == NowPlayingWidgetStyle.VINYL) w - dp(118f) else w - dp(32f))
+          drawTransportCluster(dp(16f), h - dp(24f), dp(16.5f))
         }
       }
 
       NowPlayingStudioSize.LYRICS -> {
-        val topY = topContentOffset + dp(10f)
-        drawSingleLine("$title · $artist", dp(16f), topY, w - dp(68f), 11f, secondaryColor, true)
-        drawPlayButton(w - dp(28f), topY + dp(10f), dp(13f))
-        val lineW = if (style == NowPlayingWidgetStyle.VINYL) w - dp(96f) else w - dp(32f)
+        val topY = topContentOffset + dp(11f)
+        drawSingleLine("$title · $artist", dp(16f), topY, w - dp(72f), 9.8f, secondaryColor, true)
+        drawPlayButton(w - dp(28f), topY + dp(9f), dp(12.5f))
+        val lineW = if (style == NowPlayingWidgetStyle.VINYL) w - dp(104f) else w - dp(38f)
         val centerLyrics = style == NowPlayingWidgetStyle.RING
         val lx = if (centerLyrics) w * 0.5f else dp(16f)
-        drawSingleLine(prevLyric, lx, topY + dp(30f), lineW, 11.5f, withAlpha(secondaryColor, 0x99), false, centered = centerLyrics)
+        drawSingleLine(prevLyric, lx, topY + dp(31f), lineW, 10.2f, withAlpha(secondaryColor, 0x99), false, centered = centerLyrics, isLyricLine = true)
         val currY = topY + dp(52f)
         if (style == NowPlayingWidgetStyle.VINYL) {
           val pillP = Paint(Paint.ANTI_ALIAS_FLAG).apply { color = 0xFF161618.toInt() }
-          canvas.drawRoundRect(RectF(dp(14f), currY - dp(2f), w - dp(76f), currY + dp(24f)), dp(6f), dp(6f), pillP)
-          drawSingleLine(currLyric, dp(22f), currY, lineW - dp(16f), 13f, 0xFFEAB32E.toInt(), true)
+          canvas.drawRoundRect(RectF(dp(14f), currY - dp(2f), w - dp(84f), currY + dp(22f)), dp(6f), dp(6f), pillP)
+          drawSingleLine(currLyric, dp(22f), currY, lineW - dp(18f), 11.4f, 0xFFEAB32E.toInt(), true, isLyricLine = true)
         } else if (style == NowPlayingWidgetStyle.LIGHT) {
           val markerP = Paint(Paint.ANTI_ALIAS_FLAG).apply { color = 0xFFFECDD3.toInt() }
-          canvas.drawRoundRect(RectF(dp(14f), currY + dp(8f), w - dp(28f), currY + dp(23f)), dp(3f), dp(3f), markerP)
-          drawSingleLine(currLyric, dp(16f), currY, lineW, 13.5f, 0xFF141418.toInt(), true)
+          canvas.drawRoundRect(RectF(dp(14f), currY + dp(6f), w - dp(28f), currY + dp(21f)), dp(4f), dp(4f), markerP)
+          drawSingleLine(currLyric, dp(18f), currY, lineW - dp(8f), 11.6f, 0xFF141418.toInt(), true, isLyricLine = true)
         } else {
           val prefixCurr = if (style == NowPlayingWidgetStyle.PIXEL) "> $currLyric" else currLyric
           val currColor = when (style) {
@@ -1116,9 +1154,9 @@ object NowPlayingWidgetRenderer {
             NowPlayingWidgetStyle.PAPER, NowPlayingWidgetStyle.AURA, NowPlayingWidgetStyle.FLOAT -> accentColor
             else -> primaryColor
           }
-          drawSingleLine(prefixCurr, lx, currY, lineW, 13.5f, currColor, true, centered = centerLyrics)
+          drawSingleLine(prefixCurr, lx, currY, lineW, 11.8f, currColor, true, centered = centerLyrics, isLyricLine = true)
         }
-        drawSingleLine(nextLyric, lx, topY + dp(80f), lineW, 11.5f, withAlpha(secondaryColor, 0x99), false, centered = centerLyrics)
+        drawSingleLine(nextLyric, lx, topY + dp(80f), lineW, 10.2f, withAlpha(secondaryColor, 0x99), false, centered = centerLyrics, isLyricLine = true)
         drawStyleProgress(dp(16f), h - dp(13f), w - dp(32f))
       }
 
@@ -1127,22 +1165,22 @@ object NowPlayingWidgetRenderer {
           val artH = (h * 0.55f).roundToInt()
           val artBmp = createSquareArt(context, rawArt, max(w, artH), palette)
           canvas.drawBitmap(scaleCenterCrop(artBmp, w, artH), 0f, 0f, null)
-          drawSingleLine(title, dp(18f), artH + dp(16f), w - dp(36f), 18f, primaryColor, true)
-          drawSingleLine(artist, dp(18f), artH + dp(42f), w - dp(36f), 13f, secondaryColor, false)
+          drawSingleLine(title, dp(18f), artH + dp(16f), w - dp(36f), 15.8f, primaryColor, true)
+          drawSingleLine(artist, dp(18f), artH + dp(40f), w - dp(36f), 11.6f, secondaryColor, false)
           drawStyleProgress(dp(18f), h - dp(72f), w - dp(36f))
-          drawTransportCluster(0f, h - dp(34f), dp(19f), centered = true)
+          drawTransportCluster(0f, h - dp(34f), dp(18.5f), centered = true)
         } else {
           val topY = topContentOffset + dp(20f)
           if (style != NowPlayingWidgetStyle.VINYL && style != NowPlayingWidgetStyle.NIGHT && style != NowPlayingWidgetStyle.TYPE) {
-            val artS = dp(170f)
+            val artS = dp(166f)
             drawStyleCover((w - artS) * 0.5f, topY, artS)
           }
           val centered = style == NowPlayingWidgetStyle.RING
           val tx = if (centered) w * 0.5f else dp(20f)
-          drawSingleLine(title, tx, h - dp(132f), w - dp(40f), if (style == NowPlayingWidgetStyle.TYPE) 28f else 19f, primaryColor, true, centered = centered)
-          drawSingleLine(artist, tx, h - dp(100f), w - dp(40f), 13.5f, secondaryColor, false, centered = centered)
+          drawSingleLine(title, tx, h - dp(130f), w - dp(40f), if (style == NowPlayingWidgetStyle.TYPE) 22f else 16.5f, primaryColor, true, centered = centered)
+          drawSingleLine(artist, tx, h - dp(98f), w - dp(40f), 11.8f, secondaryColor, false, centered = centered)
           drawStyleProgress(dp(20f), h - dp(68f), w - dp(40f))
-          drawTransportCluster(dp(20f), h - dp(32f), dp(19f), centered = centered || style != NowPlayingWidgetStyle.VINYL)
+          drawTransportCluster(dp(20f), h - dp(32f), dp(18.5f), centered = centered || style != NowPlayingWidgetStyle.VINYL)
         }
       }
     }

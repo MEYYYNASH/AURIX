@@ -954,7 +954,7 @@ private fun NowPlayingStudioLivePreview(
                 color = primaryText,
                 fontFamily = effectiveFontFamily,
                 fontWeight = FontWeight.Bold,
-                fontSize = 12.5.sp,
+                fontSize = 11.2.sp,
                 maxLines = 1,
                 overflow = TextOverflow.Ellipsis
               )
@@ -962,7 +962,7 @@ private fun NowPlayingStudioLivePreview(
                 text = artist,
                 color = secondaryText,
                 fontFamily = effectiveFontFamily,
-                fontSize = 10.5.sp,
+                fontSize = 9.4.sp,
                 maxLines = 1,
                 overflow = TextOverflow.Ellipsis
               )
@@ -990,7 +990,7 @@ private fun NowPlayingStudioLivePreview(
             if (style != NowPlayingWidgetStyle.VINYL && style != NowPlayingWidgetStyle.TYPE && style != NowPlayingWidgetStyle.NIGHT) {
               PreviewArtworkSlot(
                 style = style,
-                size = 44.dp,
+                size = 42.dp,
                 artworkUrl = artworkUrl,
                 rawArtwork = rawArtwork,
                 progressFraction = progressFraction,
@@ -1008,7 +1008,7 @@ private fun NowPlayingStudioLivePreview(
                 color = primaryText,
                 fontFamily = effectiveFontFamily,
                 fontWeight = FontWeight.Bold,
-                fontSize = 13.sp,
+                fontSize = 11.2.sp,
                 maxLines = 1,
                 overflow = TextOverflow.Ellipsis
               )
@@ -1016,7 +1016,7 @@ private fun NowPlayingStudioLivePreview(
                 text = artist,
                 color = secondaryText,
                 fontFamily = effectiveFontFamily,
-                fontSize = 10.5.sp,
+                fontSize = 9.4.sp,
                 maxLines = 1,
                 overflow = TextOverflow.Ellipsis
               )
@@ -1030,7 +1030,7 @@ private fun NowPlayingStudioLivePreview(
                 )
               }
             }
-            StudioPlayButton(style = style, isPlaying = isPlaying, playBg = playBg, playIcon = playIcon, size = 34.dp)
+            StudioPlayButton(style = style, isPlaying = isPlaying, playBg = playBg, playIcon = playIcon, size = 32.dp)
           }
         }
 
@@ -1045,7 +1045,7 @@ private fun NowPlayingStudioLivePreview(
             ) {
               PreviewArtworkSlot(
                 style = style,
-                size = 108.dp,
+                size = 104.dp,
                 artworkUrl = artworkUrl,
                 rawArtwork = rawArtwork,
                 progressFraction = progressFraction,
@@ -1062,7 +1062,7 @@ private fun NowPlayingStudioLivePreview(
                     color = primaryText,
                     fontFamily = effectiveFontFamily,
                     fontWeight = FontWeight.Bold,
-                    fontSize = 16.sp,
+                    fontSize = 13.8.sp,
                     maxLines = 1,
                     overflow = TextOverflow.Ellipsis
                   )
@@ -1070,7 +1070,7 @@ private fun NowPlayingStudioLivePreview(
                     text = artist,
                     color = secondaryText,
                     fontFamily = effectiveFontFamily,
-                    fontSize = 12.sp,
+                    fontSize = 10.6.sp,
                     maxLines = 1,
                     overflow = TextOverflow.Ellipsis
                   )
@@ -1114,7 +1114,7 @@ private fun NowPlayingStudioLivePreview(
                     color = primaryText,
                     fontFamily = effectiveFontFamily,
                     fontWeight = FontWeight.Bold,
-                    fontSize = if (style == NowPlayingWidgetStyle.TYPE) 20.sp else 15.5.sp,
+                    fontSize = if (style == NowPlayingWidgetStyle.TYPE) 16.5.sp else 13.8.sp,
                     maxLines = 1,
                     overflow = TextOverflow.Ellipsis
                   )
@@ -1122,7 +1122,7 @@ private fun NowPlayingStudioLivePreview(
                     text = artist,
                     color = secondaryText,
                     fontFamily = effectiveFontFamily,
-                    fontSize = 12.sp,
+                    fontSize = 10.6.sp,
                     maxLines = 1,
                     overflow = TextOverflow.Ellipsis
                   )
@@ -1175,12 +1175,12 @@ private fun NowPlayingStudioLivePreview(
                 color = secondaryText,
                 fontFamily = effectiveFontFamily,
                 fontWeight = FontWeight.SemiBold,
-                fontSize = 11.sp,
+                fontSize = 9.8.sp,
                 maxLines = 1,
                 overflow = TextOverflow.Ellipsis,
-                modifier = Modifier.weight(1f)
+                modifier = Modifier.weight(1f).padding(end = 8.dp)
               )
-              StudioPlayButton(style = style, isPlaying = isPlaying, playBg = playBg, playIcon = playIcon, size = 26.dp)
+              StudioPlayButton(style = style, isPlaying = isPlaying, playBg = playBg, playIcon = playIcon, size = 25.dp)
             }
 
             Column(
@@ -1192,7 +1192,7 @@ private fun NowPlayingStudioLivePreview(
                 text = prevLyric,
                 color = secondaryText.copy(alpha = 0.55f),
                 fontFamily = effectiveFontFamily,
-                fontSize = 11.5.sp,
+                fontSize = 10.2.sp,
                 maxLines = 1,
                 overflow = TextOverflow.Ellipsis
               )
@@ -1209,7 +1209,7 @@ private fun NowPlayingStudioLivePreview(
                       color = Color(0xFFEAB32E),
                       fontFamily = effectiveFontFamily,
                       fontWeight = FontWeight.Bold,
-                      fontSize = 13.sp,
+                      fontSize = 11.4.sp,
                       maxLines = 1,
                       overflow = TextOverflow.Ellipsis
                     )
@@ -1226,7 +1226,7 @@ private fun NowPlayingStudioLivePreview(
                       color = Color(0xFF141418),
                       fontFamily = effectiveFontFamily,
                       fontWeight = FontWeight.Bold,
-                      fontSize = 13.sp,
+                      fontSize = 11.6.sp,
                       maxLines = 1,
                       overflow = TextOverflow.Ellipsis
                     )
@@ -1248,7 +1248,7 @@ private fun NowPlayingStudioLivePreview(
                     color = currColor,
                     fontFamily = effectiveFontFamily,
                     fontWeight = FontWeight.Bold,
-                    fontSize = 13.5.sp,
+                    fontSize = 11.8.sp,
                     maxLines = 1,
                     overflow = TextOverflow.Ellipsis
                   )
@@ -1258,7 +1258,7 @@ private fun NowPlayingStudioLivePreview(
                 text = nextLyric,
                 color = secondaryText.copy(alpha = 0.55f),
                 fontFamily = effectiveFontFamily,
-                fontSize = 11.5.sp,
+                fontSize = 10.2.sp,
                 maxLines = 1,
                 overflow = TextOverflow.Ellipsis
               )
@@ -1308,7 +1308,7 @@ private fun NowPlayingStudioLivePreview(
                 color = primaryText,
                 fontFamily = effectiveFontFamily,
                 fontWeight = FontWeight.ExtraBold,
-                fontSize = if (style == NowPlayingWidgetStyle.TYPE) 30.sp else 19.sp,
+                fontSize = if (style == NowPlayingWidgetStyle.TYPE) 22.sp else 16.5.sp,
                 maxLines = 1,
                 overflow = TextOverflow.Ellipsis
               )
@@ -1316,7 +1316,7 @@ private fun NowPlayingStudioLivePreview(
                 text = artist,
                 color = secondaryText,
                 fontFamily = effectiveFontFamily,
-                fontSize = 13.sp,
+                fontSize = 11.8.sp,
                 maxLines = 1,
                 overflow = TextOverflow.Ellipsis
               )
