@@ -5867,6 +5867,7 @@ class AurixViewModel(application: Application) : AndroidViewModel(application) {
   fun applyGlassStyleToAllWidgets(style: com.example.widget.WidgetGlassStyle) {
     safeLaunch(notifyUser = false) {
       val appCtx = getApplication<Application>()
+      AurixWidgetController.setApplyStudioToAllWidgets(appCtx, false)
       com.example.widget.WidgetStyleStore.applyStyleToAllWidgets(appCtx, style)
       AurixWidgetController.updateWidgetPickerPreviews(appCtx, style)
       AurixWidgetController.refreshWidgetsBlocking(

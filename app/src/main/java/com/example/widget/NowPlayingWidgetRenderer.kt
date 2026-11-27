@@ -542,4 +542,627 @@ object NowPlayingWidgetRenderer {
     val b = ((c1 and 0xFF) * (1f - t) + (c2 and 0xFF) * t).roundToInt()
     return (0xFF shl 24) or (r shl 16) or (g shl 8) or b
   }
+
+  /**
+   * Renders a complete, self-contained high-DPI home-screen widget card bitmap for any of the
+   * 5 standard sizes (Small 2x2, Compact 4x1, Medium 4x2, Lyrics 4x2, Large 4x4) and 10 distinct
+   * styles (Ring, Frost, Light, Night, Vinyl, Pixel, Paper, Aurora, Mono, Neon).
+   */
+  fun renderCompleteStudioCardBitmap(
+    context: Context,
+    style: NowPlayingWidgetStyle,
+    studioSize: NowPlayingStudioSize,
+    rawArt: Bitmap?,
+    palette: VinylCoverPalette,
+    titleRaw: String,
+    artistRaw: String,
+    prevLyricRaw: String,
+    currentLyricRaw: String,
+    nextLyricRaw: String,
+    progressFractionRaw: Float,
+    positionMs: Long,
+    durationMs: Long,
+    isPlaying: Boolean,
+    reducedMotion: Boolean
+  ): Bitmap {
+    val density = 2.2f
+    val w = (studioSize.widthDp * density).roundToInt().coerceAtLeast(200)
+    val h = (studioSize.heightDp * density).roundToInt().coerceAtLeast(120)
+    fun dp(v: Float): Float = v * density
+
+    val title = titleRaw.trim().ifBlank { "Midnight Drive" }
+    val artist = artistRaw.trim().ifBlank { "Nova Lane" }
+    val prevLyric = prevLyricRaw.trim().ifBlank { "Streetlights bend across the glass" }
+    val currLyric = currentLyricRaw.trim().ifBlank { "Keep the engine low and slow" }
+    val nextLyric = nextLyricRaw.trim().ifBlank { "Every mile a little closer" }
+    val progress = if (durationMs > 0L) {
+      progressFractionRaw.coerceIn(0.08f, 1f)
+    } else {
+      0.62f
+    }
+
+    val out = Bitmap.createBitmap(w, h, Bitmap.Config.ARGB_8888)
+    val canvas = Canvas(out)
+    val cardRect = RectF(0f, 0f, w.toFloat(), h.toFloat())
+    val cornerRadius = when (style) {
+      NowPlayingWidgetStyle.PIXEL -> dp(4f)
+      NowPlayingWidgetStyle.TYPE -> dp(16f)
+      NowPlayingWidgetStyle.PAPER -> dp(18f)
+      NowPlayingWidgetStyle.FLOAT -> dp(20f)
+      NowPlayingWidgetStyle.LIGHT, NowPlayingWidgetStyle.VINYL -> dp(22f)
+      else -> dp(24f)
+    }
+
+    val clipPath = android.graphics.Path().apply {
+      addRoundRect(cardRect, cornerRadius, cornerRadius, android.graphics.Path.Direction.CW)
+    }
+    canvas.save()
+    canvas.clipPath(clipPath)
+
+    // 1. Background per style
+    val bgPaint = Paint(Paint.ANTI_ALIAS_FLAG)
+    when (style) {
+      NowPlayingWidgetStyle.RING -> {
+        canvas.drawColor(0xFF13131A.toInt())
+      }
+      NowPlayingWidgetStyle.FROST -> {
+        if (rawArt != null) {
+          val blurred = scaleCenterCrop(rawArt, w, h)
+          canvas.drawBitmap(blurred, 0f, 0f, Paint(Paint.FILTER_BITMAP_FLAG))
+          canvas.drawColor(0xAA3A1940.toInt())
+        } else {
+          bgPaint.shader = LinearGradient(
+            0f, 0f, w.toFloat(), h.toFloat(),
+            intArrayOf(0xFF5C1F42.toInt(), 0xFF3E1C47.toInt(), 0xFF241634.toInt()),
+            floatArrayOf(0f, 0.52f, 1f),
+            Shader.TileMode.CLAMP
+          )
+          canvas.drawRect(cardRect, bgPaint)
+        }
+      }
+      NowPlayingWidgetStyle.LIGHT -> {
+        canvas.drawColor(0xFFFFFFFF.toInt())
+      }
+      NowPlayingWidgetStyle.NIGHT -> {
+        if (rawArt != null) {
+          val poster = scaleCenterCrop(rawArt, w, h)
+          canvas.drawBitmap(poster, 0f, 0f, Paint(Paint.FILTER_BITMAP_FLAG))
+        } else {
+          bgPaint.shader = LinearGradient(
+            0f, 0f, w.toFloat(), h.toFloat(),
+            intArrayOf(0xFF2CC4AA.toInt(), 0xFF24688E.toInt(), 0xFF282B78.toInt()),
+            floatArrayOf(0f, 0.48f, 1f),
+            Shader.TileMode.CLAMP
+          )
+          canvas.drawRect(cardRect, bgPaint)
+        }
+        val scrim = Paint(Paint.ANTI_ALIAS_FLAG).apply {
+          shader = LinearGradient(
+            0f, 0f, 0f, h.toFloat(),
+            intArrayOf(0x14070910, 0x99070910.toInt(), 0xF2070910.toInt()),
+            floatArrayOf(0f, 0.52f, 1f),
+            Shader.TileMode.CLAMP
+          )
+        }
+        canvas.drawRect(cardRect, scrim)
+      }
+      NowPlayingWidgetStyle.VINYL -> {
+        canvas.drawColor(0xFFEAB32E.toInt())
+      }
+      NowPlayingWidgetStyle.PIXEL -> {
+        canvas.drawColor(0xFF1C202B.toInt())
+      }
+      NowPlayingWidgetStyle.PAPER -> {
+        canvas.drawColor(0xFFEFE8DC.toInt())
+      }
+      NowPlayingWidgetStyle.AURA -> {
+        bgPaint.shader = LinearGradient(
+          0f, 0f, w.toFloat(), h.toFloat(),
+          intArrayOf(0xFF0B1D2C.toInt(), 0xFF143D4B.toInt(), 0xFF251E42.toInt()),
+          floatArrayOf(0f, 0.52f, 1f),
+          Shader.TileMode.CLAMP
+        )
+        canvas.drawRect(cardRect, bgPaint)
+      }
+      NowPlayingWidgetStyle.TYPE -> {
+        canvas.drawColor(0xFF111215.toInt())
+      }
+      NowPlayingWidgetStyle.FLOAT -> {
+        canvas.drawColor(0xFF090812.toInt())
+      }
+    }
+
+    val primaryColor = when (style) {
+      NowPlayingWidgetStyle.LIGHT -> 0xFF141418.toInt()
+      NowPlayingWidgetStyle.VINYL -> 0xFF161618.toInt()
+      NowPlayingWidgetStyle.PAPER -> 0xFF231F1C.toInt()
+      NowPlayingWidgetStyle.TYPE -> 0xFFF4F4F0.toInt()
+      else -> 0xFFFFFFFF.toInt()
+    }
+    val secondaryColor = when (style) {
+      NowPlayingWidgetStyle.LIGHT -> 0xFF71717A.toInt()
+      NowPlayingWidgetStyle.VINYL -> 0xFF4A380B.toInt()
+      NowPlayingWidgetStyle.PAPER -> 0xFF7A7067.toInt()
+      NowPlayingWidgetStyle.NIGHT -> 0xFFB4C6D0.toInt()
+      NowPlayingWidgetStyle.PIXEL -> 0xFF9BA3B8.toInt()
+      else -> 0xFF9C9CA9.toInt()
+    }
+    val accentColor = when (style) {
+      NowPlayingWidgetStyle.RING -> 0xFFF27D52.toInt()
+      NowPlayingWidgetStyle.FROST -> 0xFFFFFFFF.toInt()
+      NowPlayingWidgetStyle.LIGHT -> 0xFFE11D48.toInt()
+      NowPlayingWidgetStyle.NIGHT -> 0xFF4CE0B3.toInt()
+      NowPlayingWidgetStyle.VINYL -> 0xFF161618.toInt()
+      NowPlayingWidgetStyle.PIXEL -> 0xFFF4BD6A.toInt()
+      NowPlayingWidgetStyle.PAPER -> 0xFFA84A24.toInt()
+      NowPlayingWidgetStyle.AURA -> 0xFF5EEAD4.toInt()
+      NowPlayingWidgetStyle.TYPE -> 0xFFFF5A36.toInt()
+      NowPlayingWidgetStyle.FLOAT -> 0xFF00F0FF.toInt()
+    }
+    val trackColor = when (style) {
+      NowPlayingWidgetStyle.LIGHT -> 0xFFE4E4E7.toInt()
+      NowPlayingWidgetStyle.VINYL -> 0x33161618
+      NowPlayingWidgetStyle.PIXEL -> 0xFF353B4B.toInt()
+      NowPlayingWidgetStyle.PAPER -> 0x2E231F1C
+      NowPlayingWidgetStyle.TYPE -> 0xFF262830.toInt()
+      NowPlayingWidgetStyle.FLOAT -> 0xFF1E1B36.toInt()
+      else -> 0x38FFFFFF
+    }
+
+    // Helper: draw vinyl clipped disc
+    fun drawVinylDisc(cx: Float, cy: Float, radius: Float) {
+      val discPaint = Paint(Paint.ANTI_ALIAS_FLAG)
+      discPaint.color = 0xFF161618.toInt()
+      canvas.drawCircle(cx, cy, radius, discPaint)
+      val groovePaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
+        this.style = Paint.Style.STROKE
+        strokeWidth = dp(1.2f)
+        color = 0xFF2A2A2E.toInt()
+      }
+      var r = radius * 0.42f
+      while (r < radius * 0.92f) {
+        canvas.drawCircle(cx, cy, r, groovePaint)
+        r += dp(5.5f)
+      }
+      discPaint.color = 0xFFF08C6C.toInt()
+      canvas.drawCircle(cx, cy, radius * 0.32f, discPaint)
+      discPaint.color = 0xFF161618.toInt()
+      canvas.drawCircle(cx, cy, radius * 0.09f, discPaint)
+    }
+
+    if (style == NowPlayingWidgetStyle.VINYL) {
+      when (studioSize) {
+        NowPlayingStudioSize.SMALL -> drawVinylDisc(w + dp(12f), dp(22f), dp(54f))
+        NowPlayingStudioSize.COMPACT -> drawVinylDisc(w - dp(12f), h * 0.5f, dp(46f))
+        NowPlayingStudioSize.MEDIUM, NowPlayingStudioSize.LYRICS -> drawVinylDisc(w - dp(16f), h * 0.5f, dp(76f))
+        NowPlayingStudioSize.LARGE -> drawVinylDisc(w - dp(22f), dp(82f), dp(116f))
+      }
+    }
+
+    // Helper: draw Pixel HUD header bar
+    var topContentOffset = 0f
+    if (style == NowPlayingWidgetStyle.PIXEL) {
+      val barH = if (studioSize == NowPlayingStudioSize.COMPACT || studioSize == NowPlayingStudioSize.LYRICS) dp(15f) else dp(18f)
+      val barPaint = Paint().apply { color = 0xFFF4BD6A.toInt() }
+      canvas.drawRect(0f, 0f, w.toFloat(), barH, barPaint)
+      val hudTextPaint = TextPaint(Paint.ANTI_ALIAS_FLAG).apply {
+        color = 0xFF1C202B.toInt()
+        typeface = Typeface.create(Typeface.MONOSPACE, Typeface.BOLD)
+        textSize = dp(8.5f)
+        letterSpacing = 0.14f
+      }
+      canvas.drawText("NOW PLAYING", dp(10f), barH * 0.72f, hudTextPaint)
+      topContentOffset = barH
+    }
+
+    // Helper: draw style-specific cover art box
+    fun drawStyleCover(left: Float, top: Float, size: Float) {
+      val artBmp = createSquareArt(context, rawArt, size.roundToInt().coerceAtLeast(24), palette)
+      when (style) {
+        NowPlayingWidgetStyle.RING -> {
+          val cx = left + size * 0.5f
+          val cy = top + size * 0.5f
+          val stroke = (size * 0.055f).coerceAtLeast(dp(3.5f))
+          val r = size * 0.5f - stroke
+          val ringTrack = Paint(Paint.ANTI_ALIAS_FLAG).apply {
+            this.style = Paint.Style.STROKE
+            strokeWidth = stroke
+            color = 0xFF2A2A35.toInt()
+          }
+          canvas.drawCircle(cx, cy, r, ringTrack)
+          val ringFill = Paint(Paint.ANTI_ALIAS_FLAG).apply {
+            this.style = Paint.Style.STROKE
+            strokeWidth = stroke
+            strokeCap = Paint.Cap.ROUND
+            color = 0xFFF27D52.toInt()
+          }
+          val arcRect = RectF(cx - r, cy - r, cx + r, cy + r)
+          canvas.drawArc(arcRect, -90f, 360f * progress, false, ringFill)
+          val innerD = (size - stroke * 3.4f).roundToInt().coerceAtLeast(16)
+          val circleBmp = clipCircle(Bitmap.createScaledBitmap(artBmp, innerD, innerD, true))
+          canvas.drawBitmap(circleBmp, cx - innerD * 0.5f, cy - innerD * 0.5f, Paint(Paint.ANTI_ALIAS_FLAG))
+        }
+        NowPlayingWidgetStyle.PAPER -> {
+          canvas.save()
+          val cx = left + size * 0.5f
+          val cy = top + size * 0.5f
+          canvas.rotate(-4f, cx, cy)
+          val frameRect = RectF(left, top, left + size, top + size * 1.08f)
+          val shadowPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply { color = 0x26000000 }
+          canvas.drawRoundRect(RectF(frameRect.left + dp(2f), frameRect.top + dp(3f), frameRect.right + dp(2f), frameRect.bottom + dp(3f)), dp(3f), dp(3f), shadowPaint)
+          val whitePaint = Paint(Paint.ANTI_ALIAS_FLAG).apply { color = 0xFFFFFFFF.toInt() }
+          canvas.drawRoundRect(frameRect, dp(2f), dp(2f), whitePaint)
+          val pad = size * 0.08f
+          val innerS = (size - pad * 2f).roundToInt().coerceAtLeast(16)
+          val scaled = Bitmap.createScaledBitmap(artBmp, innerS, innerS, true)
+          canvas.drawBitmap(scaled, left + pad, top + pad, Paint(Paint.FILTER_BITMAP_FLAG))
+          // Masking tape
+          val tapeW = size * 0.36f
+          val tapeH = dp(7f)
+          val tapePaint = Paint(Paint.ANTI_ALIAS_FLAG).apply { color = 0xD9E2D3B9.toInt() }
+          canvas.drawRect(cx - tapeW * 0.5f, top - tapeH * 0.45f, cx + tapeW * 0.5f, top + tapeH * 0.55f, tapePaint)
+          canvas.restore()
+        }
+        NowPlayingWidgetStyle.PIXEL -> {
+          canvas.drawBitmap(artBmp, left, top, Paint(Paint.FILTER_BITMAP_FLAG))
+          val borderP = Paint().apply {
+            this.style = Paint.Style.STROKE
+            strokeWidth = dp(2f)
+            color = 0xFFFFFFFF.toInt()
+          }
+          canvas.drawRect(left, top, left + size, top + size, borderP)
+        }
+        NowPlayingWidgetStyle.AURA -> {
+          val cx = left + size * 0.5f
+          val cy = top + size * 0.5f
+          val halo = Paint(Paint.ANTI_ALIAS_FLAG).apply {
+            this.style = Paint.Style.STROKE
+            strokeWidth = dp(1.5f)
+            color = 0x335EEAD4
+          }
+          canvas.drawCircle(cx, cy, size * 0.54f, halo)
+          val circleBmp = clipCircle(artBmp)
+          canvas.drawBitmap(circleBmp, left, top, Paint(Paint.ANTI_ALIAS_FLAG))
+        }
+        else -> {
+          val rad = if (style == NowPlayingWidgetStyle.FLOAT) dp(10f) else dp(14f)
+          val rounded = Bitmap.createBitmap(size.roundToInt(), size.roundToInt(), Bitmap.Config.ARGB_8888)
+          val rc = Canvas(rounded)
+          val rp = Paint(Paint.ANTI_ALIAS_FLAG)
+          rc.drawRoundRect(RectF(0f, 0f, size, size), rad, rad, rp)
+          rp.xfermode = PorterDuffXfermode(PorterDuff.Mode.SRC_IN)
+          rc.drawBitmap(artBmp, 0f, 0f, rp)
+          canvas.drawBitmap(rounded, left, top, null)
+          if (style == NowPlayingWidgetStyle.FLOAT) {
+            val neonB = Paint(Paint.ANTI_ALIAS_FLAG).apply {
+              this.style = Paint.Style.STROKE
+              strokeWidth = dp(1.5f)
+              color = 0xFFFF2A85.toInt()
+            }
+            canvas.drawRoundRect(RectF(left, top, left + size, top + size), rad, rad, neonB)
+          }
+        }
+      }
+    }
+
+    // Helper: draw style progress bar
+    fun drawStyleProgress(left: Float, top: Float, width: Float) {
+      if (style == NowPlayingWidgetStyle.RING) return
+      if (style == NowPlayingWidgetStyle.PIXEL) {
+        val segs = 20
+        val gap = dp(2.2f)
+        val segW = ((width - gap * (segs - 1)) / segs).coerceAtLeast(dp(2f))
+        val segH = dp(6f)
+        val active = (segs * progress).roundToInt().coerceIn(1, segs)
+        val p = Paint()
+        for (i in 0 until segs) {
+          p.color = if (i < active) 0xFFF4BD6A.toInt() else 0xFF353B4B.toInt()
+          val sx = left + i * (segW + gap)
+          canvas.drawRect(sx, top, sx + segW, top + segH, p)
+        }
+        return
+      }
+      val barH = if (style == NowPlayingWidgetStyle.PAPER) dp(2.2f) else dp(3.8f)
+      val tp = Paint(Paint.ANTI_ALIAS_FLAG).apply { color = trackColor }
+      canvas.drawRoundRect(RectF(left, top, left + width, top + barH), barH * 0.5f, barH * 0.5f, tp)
+      val fillW = (width * progress).coerceIn(barH, width)
+      val fp = Paint(Paint.ANTI_ALIAS_FLAG).apply { color = accentColor }
+      canvas.drawRoundRect(RectF(left, top, left + fillW, top + barH), barH * 0.5f, barH * 0.5f, fp)
+      if (style == NowPlayingWidgetStyle.FROST || style == NowPlayingWidgetStyle.PAPER) {
+        val knobR = if (style == NowPlayingWidgetStyle.FROST) dp(4.8f) else dp(3.6f)
+        canvas.drawCircle(left + fillW, top + barH * 0.5f, knobR, fp)
+      }
+    }
+
+    // Helper: draw Play/Pause button
+    fun drawPlayButton(cx: Float, cy: Float, radius: Float) {
+      val btnBg = when (style) {
+        NowPlayingWidgetStyle.RING -> 0xFFF27D52.toInt()
+        NowPlayingWidgetStyle.FROST -> 0xFFFFFFFF.toInt()
+        NowPlayingWidgetStyle.LIGHT -> 0xFFE11D48.toInt()
+        NowPlayingWidgetStyle.NIGHT -> 0xFF4CE0B3.toInt()
+        NowPlayingWidgetStyle.VINYL -> 0xFF161618.toInt()
+        NowPlayingWidgetStyle.PIXEL -> 0xFFF4BD6A.toInt()
+        NowPlayingWidgetStyle.PAPER -> Color.TRANSPARENT
+        NowPlayingWidgetStyle.AURA -> 0xFF5EEAD4.toInt()
+        NowPlayingWidgetStyle.TYPE -> 0xFFFF5A36.toInt()
+        NowPlayingWidgetStyle.FLOAT -> 0x2800F0FF
+      }
+      val iconColor = when (style) {
+        NowPlayingWidgetStyle.LIGHT -> 0xFFFFFFFF.toInt()
+        NowPlayingWidgetStyle.VINYL -> 0xFFEAB32E.toInt()
+        NowPlayingWidgetStyle.PAPER -> 0xFF231F1C.toInt()
+        NowPlayingWidgetStyle.FLOAT -> 0xFF00F0FF.toInt()
+        else -> 0xFF13131A.toInt()
+      }
+      val bgP = Paint(Paint.ANTI_ALIAS_FLAG).apply { color = btnBg }
+      if (style == NowPlayingWidgetStyle.PIXEL) {
+        canvas.drawRect(cx - radius, cy - radius, cx + radius, cy + radius, bgP)
+      } else if (style == NowPlayingWidgetStyle.PAPER) {
+        val ringP = Paint(Paint.ANTI_ALIAS_FLAG).apply {
+          this.style = Paint.Style.STROKE
+          strokeWidth = dp(1.5f)
+          color = 0xFF231F1C.toInt()
+        }
+        canvas.drawCircle(cx, cy, radius, ringP)
+      } else {
+        canvas.drawCircle(cx, cy, radius, bgP)
+        if (style == NowPlayingWidgetStyle.FLOAT) {
+          val ringP = Paint(Paint.ANTI_ALIAS_FLAG).apply {
+            this.style = Paint.Style.STROKE
+            strokeWidth = dp(1.5f)
+            color = 0xFF00F0FF.toInt()
+          }
+          canvas.drawCircle(cx, cy, radius, ringP)
+        }
+      }
+      val iconP = Paint(Paint.ANTI_ALIAS_FLAG).apply { color = iconColor }
+      if (isPlaying) {
+        val bw = radius * 0.22f
+        val bh = radius * 0.42f
+        val gap = radius * 0.14f
+        canvas.drawRect(cx - gap - bw, cy - bh, cx - gap, cy + bh, iconP)
+        canvas.drawRect(cx + gap, cy - bh, cx + gap + bw, cy + bh, iconP)
+      } else {
+        val path = android.graphics.Path().apply {
+          moveTo(cx - radius * 0.24f, cy - radius * 0.36f)
+          lineTo(cx + radius * 0.38f, cy)
+          lineTo(cx - radius * 0.24f, cy + radius * 0.36f)
+          close()
+        }
+        canvas.drawPath(path, iconP)
+      }
+    }
+
+    // Helper: draw Prev/Play/Next cluster
+    fun drawTransportCluster(leftX: Float, centerY: Float, btnRadius: Float, centered: Boolean = false) {
+      val clusterW = dp(108f)
+      val startX = if (centered) (w - clusterW) * 0.5f else leftX
+      val prevCx = startX + dp(14f)
+      val playCx = startX + clusterW * 0.5f
+      val nextCx = startX + clusterW - dp(14f)
+      val iconP = Paint(Paint.ANTI_ALIAS_FLAG).apply { color = primaryColor }
+      val s = dp(5.5f)
+      // Prev icon
+      canvas.drawRect(prevCx - s, centerY - s, prevCx - s + dp(2f), centerY + s, iconP)
+      val prevTri = android.graphics.Path().apply {
+        moveTo(prevCx + s, centerY - s)
+        lineTo(prevCx - s + dp(2.5f), centerY)
+        lineTo(prevCx + s, centerY + s)
+        close()
+      }
+      canvas.drawPath(prevTri, iconP)
+      // Play/Pause
+      drawPlayButton(playCx, centerY, btnRadius)
+      // Next icon
+      canvas.drawRect(nextCx + s - dp(2f), centerY - s, nextCx + s, centerY + s, iconP)
+      val nextTri = android.graphics.Path().apply {
+        moveTo(nextCx - s, centerY - s)
+        lineTo(nextCx + s - dp(2.5f), centerY)
+        lineTo(nextCx - s, centerY + s)
+        close()
+      }
+      canvas.drawPath(nextTri, iconP)
+    }
+
+    // Helper: draw single-line text
+    fun drawSingleLine(
+      text: String,
+      x: Float,
+      y: Float,
+      maxWidthPx: Float,
+      sizeDp: Float,
+      color: Int,
+      bold: Boolean,
+      centered: Boolean = false
+    ) {
+      val bmp = renderStyledTextBitmap(
+        context = context,
+        style = style,
+        text = text,
+        textColor = color,
+        baseTextSizeDp = sizeDp,
+        isBold = bold,
+        widthDp = (maxWidthPx / density).coerceAtLeast(60f),
+        maxLines = 1,
+        centered = centered
+      )
+      if (bmp != null) {
+        val drawX = if (centered) x - bmp.width * 0.5f else x
+        canvas.drawBitmap(bmp, drawX, y, null)
+      }
+    }
+
+    // 2. Layout composition per StudioSize
+    when (studioSize) {
+      NowPlayingStudioSize.SMALL -> {
+        if (style == NowPlayingWidgetStyle.LIGHT) {
+          val artH = h * 0.53f
+          val artBmp = createSquareArt(context, rawArt, w, palette)
+          canvas.drawBitmap(scaleCenterCrop(artBmp, w, artH.roundToInt()), 0f, 0f, null)
+          drawPlayButton(w - dp(26f), artH, dp(17f))
+          drawSingleLine(title, dp(12f), artH + dp(10f), w - dp(24f), 12.5f, primaryColor, true)
+          drawSingleLine(artist, dp(12f), artH + dp(28f), w - dp(24f), 10.5f, secondaryColor, false)
+          drawStyleProgress(dp(12f), h - dp(12f), w - dp(24f))
+        } else if (style == NowPlayingWidgetStyle.RING) {
+          val ringS = dp(86f)
+          drawStyleCover((w - ringS) * 0.5f, dp(12f), ringS)
+          drawPlayButton(w * 0.5f, dp(12f) + ringS * 0.5f, dp(16f))
+          drawSingleLine(title, w * 0.5f, h - dp(44f), w - dp(20f), 12.5f, primaryColor, true, centered = true)
+          drawSingleLine(artist, w * 0.5f, h - dp(25f), w - dp(20f), 10.5f, secondaryColor, false, centered = true)
+        } else {
+          val topY = topContentOffset + dp(12f)
+          drawPlayButton(dp(28f), topY + dp(17f), dp(17f))
+          if (style != NowPlayingWidgetStyle.VINYL && style != NowPlayingWidgetStyle.NIGHT && style != NowPlayingWidgetStyle.TYPE) {
+            val artS = dp(56f)
+            drawStyleCover(w - artS - dp(12f), topY, artS)
+          }
+          drawSingleLine(title, dp(12f), h - dp(54f), w - dp(24f), 12.5f, primaryColor, true)
+          drawSingleLine(artist, dp(12f), h - dp(35f), w - dp(24f), 10.5f, secondaryColor, false)
+          drawStyleProgress(dp(12f), h - dp(13f), w - dp(24f))
+        }
+      }
+
+      NowPlayingStudioSize.COMPACT -> {
+        if (style == NowPlayingWidgetStyle.LIGHT) {
+          val artBmp = createSquareArt(context, rawArt, h, palette)
+          canvas.drawBitmap(artBmp, 0f, 0f, null)
+          val textX = h + dp(12f)
+          val textW = w - textX - dp(56f)
+          drawSingleLine(title, textX, dp(12f), textW, 13f, primaryColor, true)
+          drawSingleLine(artist, textX, dp(31f), textW, 10.5f, secondaryColor, false)
+          drawStyleProgress(textX, h - dp(14f), textW)
+          drawPlayButton(w - dp(28f), h * 0.5f, dp(17f))
+        } else {
+          var textX = dp(14f)
+          val cy = (h + topContentOffset) * 0.5f
+          if (style != NowPlayingWidgetStyle.VINYL && style != NowPlayingWidgetStyle.NIGHT && style != NowPlayingWidgetStyle.TYPE) {
+            val artS = dp(44f)
+            drawStyleCover(dp(12f), cy - artS * 0.5f, artS)
+            textX = dp(66f)
+          }
+          val rightPad = if (style == NowPlayingWidgetStyle.VINYL) dp(92f) else dp(56f)
+          val textW = (w - textX - rightPad).coerceAtLeast(dp(80f))
+          drawSingleLine(title, textX, topContentOffset + dp(10f), textW, 13f, primaryColor, true)
+          drawSingleLine(artist, textX, topContentOffset + dp(28f), textW, 10.5f, secondaryColor, false)
+          drawStyleProgress(textX, h - dp(13f), textW)
+          drawPlayButton(w - (if (style == NowPlayingWidgetStyle.VINYL) dp(66f) else dp(28f)), cy, dp(17f))
+        }
+      }
+
+      NowPlayingStudioSize.MEDIUM -> {
+        if (style == NowPlayingWidgetStyle.RING) {
+          val ringS = dp(110f)
+          drawStyleCover(dp(16f), (h - ringS) * 0.5f, ringS)
+          val rightX = dp(142f)
+          val rightW = w - rightX - dp(16f)
+          drawSingleLine(title, rightX, dp(24f), rightW, 16f, primaryColor, true)
+          drawSingleLine(artist, rightX, dp(48f), rightW, 12f, secondaryColor, false)
+          drawTransportCluster(rightX, h - dp(36f), dp(18f))
+        } else if (style == NowPlayingWidgetStyle.LIGHT) {
+          val bleedW = (w * 0.40f).roundToInt()
+          val artBmp = createSquareArt(context, rawArt, max(bleedW, h), palette)
+          canvas.drawBitmap(scaleCenterCrop(artBmp, bleedW, h), 0f, 0f, null)
+          val rightX = bleedW + dp(16f)
+          val rightW = w - rightX - dp(16f)
+          drawSingleLine(title, rightX, dp(18f), rightW, 15.5f, primaryColor, true)
+          drawSingleLine(artist, rightX, dp(40f), rightW, 12f, secondaryColor, false)
+          drawStyleProgress(rightX, dp(76f), rightW)
+          drawTransportCluster(rightX, h - dp(32f), dp(18f))
+        } else {
+          val topY = topContentOffset + dp(14f)
+          val artOnLeft = style == NowPlayingWidgetStyle.PIXEL || style == NowPlayingWidgetStyle.PAPER
+          val artS = if (style == NowPlayingWidgetStyle.PAPER) dp(78f) else dp(74f)
+          var textX = dp(16f)
+          var textW = w - dp(32f)
+          if (artOnLeft) {
+            drawStyleCover(dp(16f), topY, artS)
+            textX = dp(16f) + artS + dp(14f)
+            textW = w - textX - dp(16f)
+          } else if (style != NowPlayingWidgetStyle.VINYL && style != NowPlayingWidgetStyle.NIGHT && style != NowPlayingWidgetStyle.TYPE) {
+            drawStyleCover(w - artS - dp(16f), topY, artS)
+            textW = w - artS - dp(44f)
+          } else if (style == NowPlayingWidgetStyle.VINYL) {
+            textW = w - dp(116f)
+          }
+          drawSingleLine(title, textX, topY + dp(2f), textW, if (style == NowPlayingWidgetStyle.TYPE) 20f else 16f, primaryColor, true)
+          drawSingleLine(artist, textX, topY + dp(26f), textW, 12f, secondaryColor, false)
+          drawStyleProgress(dp(16f), h - dp(54f), if (style == NowPlayingWidgetStyle.VINYL) w - dp(116f) else w - dp(32f))
+          drawTransportCluster(dp(16f), h - dp(24f), dp(17f))
+        }
+      }
+
+      NowPlayingStudioSize.LYRICS -> {
+        val topY = topContentOffset + dp(10f)
+        drawSingleLine("$title · $artist", dp(16f), topY, w - dp(68f), 11f, secondaryColor, true)
+        drawPlayButton(w - dp(28f), topY + dp(10f), dp(13f))
+        val lineW = if (style == NowPlayingWidgetStyle.VINYL) w - dp(96f) else w - dp(32f)
+        val centerLyrics = style == NowPlayingWidgetStyle.RING
+        val lx = if (centerLyrics) w * 0.5f else dp(16f)
+        drawSingleLine(prevLyric, lx, topY + dp(30f), lineW, 11.5f, withAlpha(secondaryColor, 0x99), false, centered = centerLyrics)
+        val currY = topY + dp(52f)
+        if (style == NowPlayingWidgetStyle.VINYL) {
+          val pillP = Paint(Paint.ANTI_ALIAS_FLAG).apply { color = 0xFF161618.toInt() }
+          canvas.drawRoundRect(RectF(dp(14f), currY - dp(2f), w - dp(76f), currY + dp(24f)), dp(6f), dp(6f), pillP)
+          drawSingleLine(currLyric, dp(22f), currY, lineW - dp(16f), 13f, 0xFFEAB32E.toInt(), true)
+        } else if (style == NowPlayingWidgetStyle.LIGHT) {
+          val markerP = Paint(Paint.ANTI_ALIAS_FLAG).apply { color = 0xFFFECDD3.toInt() }
+          canvas.drawRoundRect(RectF(dp(14f), currY + dp(8f), w - dp(28f), currY + dp(23f)), dp(3f), dp(3f), markerP)
+          drawSingleLine(currLyric, dp(16f), currY, lineW, 13.5f, 0xFF141418.toInt(), true)
+        } else {
+          val prefixCurr = if (style == NowPlayingWidgetStyle.PIXEL) "> $currLyric" else currLyric
+          val currColor = when (style) {
+            NowPlayingWidgetStyle.RING, NowPlayingWidgetStyle.NIGHT, NowPlayingWidgetStyle.PIXEL,
+            NowPlayingWidgetStyle.PAPER, NowPlayingWidgetStyle.AURA, NowPlayingWidgetStyle.FLOAT -> accentColor
+            else -> primaryColor
+          }
+          drawSingleLine(prefixCurr, lx, currY, lineW, 13.5f, currColor, true, centered = centerLyrics)
+        }
+        drawSingleLine(nextLyric, lx, topY + dp(80f), lineW, 11.5f, withAlpha(secondaryColor, 0x99), false, centered = centerLyrics)
+        drawStyleProgress(dp(16f), h - dp(13f), w - dp(32f))
+      }
+
+      NowPlayingStudioSize.LARGE -> {
+        if (style == NowPlayingWidgetStyle.LIGHT) {
+          val artH = (h * 0.55f).roundToInt()
+          val artBmp = createSquareArt(context, rawArt, max(w, artH), palette)
+          canvas.drawBitmap(scaleCenterCrop(artBmp, w, artH), 0f, 0f, null)
+          drawSingleLine(title, dp(18f), artH + dp(16f), w - dp(36f), 18f, primaryColor, true)
+          drawSingleLine(artist, dp(18f), artH + dp(42f), w - dp(36f), 13f, secondaryColor, false)
+          drawStyleProgress(dp(18f), h - dp(72f), w - dp(36f))
+          drawTransportCluster(0f, h - dp(34f), dp(19f), centered = true)
+        } else {
+          val topY = topContentOffset + dp(20f)
+          if (style != NowPlayingWidgetStyle.VINYL && style != NowPlayingWidgetStyle.NIGHT && style != NowPlayingWidgetStyle.TYPE) {
+            val artS = dp(170f)
+            drawStyleCover((w - artS) * 0.5f, topY, artS)
+          }
+          val centered = style == NowPlayingWidgetStyle.RING
+          val tx = if (centered) w * 0.5f else dp(20f)
+          drawSingleLine(title, tx, h - dp(132f), w - dp(40f), if (style == NowPlayingWidgetStyle.TYPE) 28f else 19f, primaryColor, true, centered = centered)
+          drawSingleLine(artist, tx, h - dp(100f), w - dp(40f), 13.5f, secondaryColor, false, centered = centered)
+          drawStyleProgress(dp(20f), h - dp(68f), w - dp(40f))
+          drawTransportCluster(dp(20f), h - dp(32f), dp(19f), centered = centered || style != NowPlayingWidgetStyle.VINYL)
+        }
+      }
+    }
+
+    canvas.restore()
+
+    // Outer border
+    val borderPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
+      this.style = Paint.Style.STROKE
+      strokeWidth = if (style == NowPlayingWidgetStyle.PIXEL || style == NowPlayingWidgetStyle.FLOAT) dp(1.8f) else dp(1f)
+      color = when (style) {
+        NowPlayingWidgetStyle.FLOAT -> 0xFF00F0FF.toInt()
+        NowPlayingWidgetStyle.PIXEL -> 0xFF353B4B.toInt()
+        NowPlayingWidgetStyle.PAPER -> 0xFFDFD3C0.toInt()
+        else -> 0x22FFFFFF
+      }
+    }
+    val inset = borderPaint.strokeWidth * 0.5f
+    canvas.drawRoundRect(RectF(inset, inset, w - inset, h - inset), cornerRadius, cornerRadius, borderPaint)
+
+    return out
+  }
 }

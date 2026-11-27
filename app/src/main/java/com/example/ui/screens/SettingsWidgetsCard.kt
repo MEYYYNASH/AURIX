@@ -129,9 +129,13 @@ fun SettingsWidgetsGlassCard(
   var lastToast by remember { mutableStateOf<Toast?>(null) }
 
   LaunchedEffect(Unit) {
-    selectedClassicStyle = withContext(Dispatchers.IO) {
-      WidgetStyleStore.getLastChosenStyleForKind(context, WidgetKind.MUSIC)
+    val (classic, savedSnap) = withContext(Dispatchers.IO) {
+      val c = WidgetStyleStore.getLastChosenStyleForKind(context, WidgetKind.MUSIC)
+      val s = AurixWidgetController.readSnapshot(context)
+      c to s
     }
+    selectedClassicStyle = classic
+    studioSize = NowPlayingStudioSize.fromId(savedSnap.nowPlayingStudioSize)
   }
 
   val snapshot by produceState<com.example.widget.WidgetSnapshotState?>(initialValue = null) {
@@ -364,7 +368,15 @@ fun SettingsWidgetsGlassCard(
             selected = selected,
             darkTheme = darkTheme,
             modifier = Modifier.testTag("settings_np_size_${sizeOption.id}"),
-            onClick = { studioSize = sizeOption }
+            onClick = {
+              studioSize = sizeOption
+              AurixWidgetController.applyNowPlayingStudioToHomeScreen(
+                context = context,
+                style = nowPlayingWidgetStyle,
+                studioSize = sizeOption,
+                pinIfNoWidgetsPlaced = false
+              )
+            }
           )
         }
       }
@@ -419,8 +431,125 @@ fun SettingsWidgetsGlassCard(
             selected = selected,
             darkTheme = darkTheme,
             modifier = Modifier.testTag("settings_np_style_${npStyle.id}"),
-            onClick = { onSelectNowPlayingWidgetStyle(npStyle) }
+            onClick = {
+              onSelectNowPlayingWidgetStyle(npStyle)
+              AurixWidgetController.applyNowPlayingStudioToHomeScreen(
+                context = context,
+                style = npStyle,
+                studioSize = studioSize,
+                pinIfNoWidgetsPlaced = false
+              )
+            }
           )
+        }
+      }
+
+      // Apply to Home Screen & Pin Widget to Home Screen Action Row
+      Row(
+        modifier = Modifier.fillMaxWidth(),
+        horizontalArrangement = Arrangement.spacedBy(10.dp),
+        verticalAlignment = Alignment.CenterVertically
+      ) {
+        Surface(
+          onClick = {
+            val styleLabel = if (isKhmer) nowPlayingWidgetStyle.displayNameKm else nowPlayingWidgetStyle.displayNameEn
+            val sizeLabel = if (isKhmer) studioSize.labelKm else studioSize.labelEn
+            val updatedCount = AurixWidgetController.applyNowPlayingStudioToHomeScreen(
+              context = context,
+              style = nowPlayingWidgetStyle,
+              studioSize = studioSize,
+              pinIfNoWidgetsPlaced = true
+            )
+            lastToast?.cancel()
+            val msg = if (updatedCount > 0) {
+              if (isKhmer) {
+                "បានអនុវត្ត $styleLabel ($sizeLabel) ទៅលើ Widget លើអេក្រង់ដើមទាំងអស់"
+              } else {
+                "Applied $styleLabel ($sizeLabel) to $updatedCount Home Screen widget(s)"
+              }
+            } else {
+              if (isKhmer) {
+                "បានរក្សាទុក $styleLabel ($sizeLabel) · សូមបន្ថែម Widget ទៅអេក្រង់ដើម"
+              } else {
+                "Saved $styleLabel ($sizeLabel) · Pinning widget to Home Screen"
+              }
+            }
+            lastToast = Toast.makeText(context, msg, Toast.LENGTH_SHORT).also { it.show() }
+          },
+          shape = RoundedCornerShape(16.dp),
+          color = MaterialTheme.colorScheme.primary,
+          modifier = Modifier
+            .weight(1f)
+            .defaultMinSize(minHeight = 48.dp)
+            .testTag("settings_np_apply_home_btn")
+        ) {
+          Row(
+            modifier = Modifier.padding(horizontal = 14.dp, vertical = 12.dp),
+            horizontalArrangement = Arrangement.Center,
+            verticalAlignment = Alignment.CenterVertically
+          ) {
+            Icon(
+              imageVector = Icons.Rounded.Check,
+              contentDescription = null,
+              tint = MaterialTheme.colorScheme.onPrimary,
+              modifier = Modifier.size(18.dp)
+            )
+            Spacer(modifier = Modifier.width(6.dp))
+            Text(
+              text = if (isKhmer) "អនុវត្តទៅអេក្រង់ដើម" else "Apply to Home Screen",
+              style = MaterialTheme.typography.labelLarge.copy(fontWeight = FontWeight.Bold),
+              color = MaterialTheme.colorScheme.onPrimary,
+              maxLines = 1,
+              overflow = TextOverflow.Ellipsis
+            )
+          }
+        }
+
+        Surface(
+          onClick = {
+            val pinned = AurixWidgetController.requestPinNowPlayingWidget(
+              context = context,
+              style = nowPlayingWidgetStyle,
+              studioSize = studioSize
+            )
+            lastToast?.cancel()
+            val msg = if (pinned) {
+              if (isKhmer) "កំពុងបន្ថែម AURIX Now Playing ទៅអេក្រង់ដើម..." else "Adding AURIX Now Playing to Home Screen..."
+            } else {
+              if (isKhmer) {
+                "សូមសង្កត់លើអេក្រង់ដើម → Widgets → ជ្រើសរើស AURIX Now Playing"
+              } else {
+                "Long-press your Home Screen → Widgets → Drag AURIX Now Playing"
+              }
+            }
+            lastToast = Toast.makeText(context, msg, Toast.LENGTH_LONG).also { it.show() }
+          },
+          shape = RoundedCornerShape(16.dp),
+          color = MaterialTheme.colorScheme.primary.copy(alpha = 0.14f),
+          border = BorderStroke(1.dp, MaterialTheme.colorScheme.primary.copy(alpha = 0.45f)),
+          modifier = Modifier
+            .defaultMinSize(minHeight = 48.dp)
+            .testTag("settings_np_pin_home_btn")
+        ) {
+          Row(
+            modifier = Modifier.padding(horizontal = 14.dp, vertical = 12.dp),
+            horizontalArrangement = Arrangement.Center,
+            verticalAlignment = Alignment.CenterVertically
+          ) {
+            Icon(
+              imageVector = Icons.Rounded.Widgets,
+              contentDescription = null,
+              tint = MaterialTheme.colorScheme.primary,
+              modifier = Modifier.size(18.dp)
+            )
+            Spacer(modifier = Modifier.width(6.dp))
+            Text(
+              text = if (isKhmer) "+ បន្ថែម Widget" else "+ Add Widget",
+              style = MaterialTheme.typography.labelLarge.copy(fontWeight = FontWeight.Bold),
+              color = MaterialTheme.colorScheme.primary,
+              maxLines = 1
+            )
+          }
         }
       }
 

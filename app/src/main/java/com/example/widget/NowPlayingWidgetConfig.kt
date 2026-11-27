@@ -65,7 +65,17 @@ enum class NowPlayingStudioSize(
   COMPACT("studio_size_compact", "Compact 4×1", "បង្រួម 4×1", "4×1 · 329×72", 329, 72),
   MEDIUM("studio_size_medium", "Medium 4×2", "មធ្យម 4×2", "4×2 · 329×155", 329, 155),
   LYRICS("studio_size_lyrics", "Lyrics 4×2", "ទំនុកច្រៀង 4×2", "4×2 · 329×155", 329, 155),
-  LARGE("studio_size_large", "Large 4×4", "ធំ 4×4", "4×4 · 329×345", 329, 345)
+  LARGE("studio_size_large", "Large 4×4", "ធំ 4×4", "4×4 · 329×345", 329, 345);
+
+  companion object {
+    fun fromId(raw: String?): NowPlayingStudioSize {
+      if (raw.isNullOrBlank()) return MEDIUM
+      val key = raw.trim().lowercase()
+      return entries.firstOrNull {
+        it.id == key || it.id.removePrefix("studio_size_") == key || it.name.lowercase() == key
+      } ?: MEDIUM
+    }
+  }
 }
 
 /**

@@ -1,0 +1,56 @@
+<?xml version="1.0" encoding="utf-8"?>
+<FrameLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    android:id="@+id/widget_np_root"
+    android:layout_width="match_parent"
+    android:layout_height="match_parent"
+    android:clipChildren="false"
+    android:clipToPadding="false">
+
+    <ImageView
+        android:id="@+id/widget_np_bg"
+        android:layout_width="match_parent"
+        android:layout_height="match_parent"
+        android:contentDescription="@string/widget_cd_album_art"
+        android:scaleType="fitCenter" />
+
+    <!-- Top / Right Play-Pause tap zone for Small (2x2), Compact (4x1), and Lyrics (4x2) -->
+    <FrameLayout
+        android:id="@+id/widget_np_top_play_pause"
+        android:layout_width="68dp"
+        android:layout_height="68dp"
+        android:layout_gravity="top|end"
+        android:contentDescription="@string/widget_cd_play_pause" />
+
+    <!-- Bottom / Right Transport controls bar for Medium (4x2), Large (4x4), and Small/Compact bottom-right -->
+    <LinearLayout
+        android:id="@+id/widget_np_transport_bar"
+        android:layout_width="match_parent"
+        android:layout_height="76dp"
+        android:layout_gravity="bottom"
+        android:gravity="center_vertical"
+        android:orientation="horizontal"
+        android:weightSum="3">
+
+        <FrameLayout
+            android:id="@+id/widget_np_btn_prev"
+            android:layout_width="0dp"
+            android:layout_height="match_parent"
+            android:layout_weight="1"
+            android:contentDescription="@string/widget_cd_prev" />
+
+        <FrameLayout
+            android:id="@+id/widget_np_btn_play_pause"
+            android:layout_width="0dp"
+            android:layout_height="match_parent"
+            android:layout_weight="1"
+            android:contentDescription="@string/widget_cd_play_pause" />
+
+        <FrameLayout
+            android:id="@+id/widget_np_btn_next"
+            android:layout_width="0dp"
+            android:layout_height="match_parent"
+            android:layout_weight="1"
+            android:contentDescription="@string/widget_cd_next" />
+    </LinearLayout>
+
+</FrameLayout>
