@@ -3,17 +3,33 @@ package com.example.ui.screens
 import androidx.compose.animation.AnimatedContent
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.animateColorAsState
+import androidx.compose.animation.core.Animatable
+import androidx.compose.animation.core.FastOutSlowInEasing
+import androidx.compose.animation.core.RepeatMode
+import androidx.compose.animation.core.Spring
+import androidx.compose.animation.core.animateFloat
+import androidx.compose.animation.core.animateFloatAsState
+import androidx.compose.animation.core.infiniteRepeatable
+import androidx.compose.animation.core.rememberInfiniteTransition
 import androidx.compose.animation.core.snap
+import androidx.compose.animation.core.spring
 import androidx.compose.animation.core.tween
 import androidx.compose.animation.expandVertically
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
+import androidx.compose.animation.scaleIn
+import androidx.compose.animation.scaleOut
 import androidx.compose.animation.shrinkVertically
+import androidx.compose.animation.slideInHorizontally
 import androidx.compose.animation.slideInVertically
+import androidx.compose.animation.slideOutHorizontally
+import androidx.compose.animation.slideOutVertically
 import androidx.compose.animation.togetherWith
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.interaction.MutableInteractionSource
+import androidx.compose.foundation.interaction.collectIsPressedAsState
 import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
@@ -35,6 +51,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.res.stringResource
@@ -57,7 +74,9 @@ import com.example.ui.glass.aurixGlassHazeStyle
 import com.example.ui.theme.HeartRed
 import com.example.viewmodel.DailyFeedCategory
 import dev.chrisbanes.haze.hazeChild
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.StateFlow
+import kotlinx.coroutines.launch
 import java.util.Calendar
 
 private enum class DailyCardState { LOADING, ERROR, LOADED }
@@ -908,17 +927,15 @@ fun HomeScreen(
           modifier = Modifier
             .fillMaxWidth()
             .testTag("home_trending_music_section"),
-          verticalArrangement = Arrangement.spacedBy(12.dp)
+          verticalArrangement = Arrangement.spacedBy(14.dp)
         ) {
-          CleanSectionHeader(
+          TrendingMusicHeader(
             title = stringResource(id = R.string.home_trending_music_title),
+            selectedFeed = selectedFeed,
             subtitle = feedLocalizedSubtitle(selectedFeed),
             actionLabel = if (tiktokViralChartSongs.isNotEmpty()) stringResource(id = R.string.home_see_all) else null,
             onActionClick = onOpenAllTiktokViral,
             actionTestTag = "home_tiktok_viral_see_all",
-            isOpen = showTrendingSection,
-            onToggle = { showTrendingSection = !showTrendingSection },
-            toggleTestTag = "home_toggle_daily_feeds_button",
             darkTheme = darkTheme,
             reducedMotion = reducedMotion
           )
@@ -928,79 +945,13 @@ fun HomeScreen(
             enter = sectionEnter,
             exit = sectionExit
           ) {
-            Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
-              Box(modifier = Modifier.fillMaxWidth()) {
-                Row(
-                  modifier = Modifier
-                    .fillMaxWidth()
-                    .horizontalScroll(rememberScrollState())
-                    .padding(end = 24.dp),
-                  horizontalArrangement = Arrangement.spacedBy(6.dp)
-                ) {
-                  DailyFeedCategory.entries.forEach { category ->
-                    val selected = category == selectedFeed
-                    val chipBg by animateColorAsState(
-                      targetValue = when {
-                        selected -> AurixTealAccent
-                        darkTheme -> Color(0xFF151F30)
-                        else -> Color.White.copy(alpha = 0.84f)
-                      },
-                      animationSpec = if (reducedMotion) snap() else tween(200),
-                      label = "chip_bg_${category.id}"
-                    )
-                    val chipBorder by animateColorAsState(
-                      targetValue = when {
-                        selected -> AurixTealAccent
-                        darkTheme -> Color(0xFF273348)
-                        else -> Color.White
-                      },
-                      animationSpec = if (reducedMotion) snap() else tween(200),
-                      label = "chip_border_${category.id}"
-                    )
-                    val chipTextColor = if (selected) Color(0xFF06201C) else MaterialTheme.colorScheme.onSurface
-
-                    Row(
-                      verticalAlignment = Alignment.CenterVertically,
-                      horizontalArrangement = Arrangement.spacedBy(5.dp),
-                      modifier = Modifier
-                        .heightIn(min = 34.dp)
-                        .clip(CircleShape)
-                        .background(chipBg)
-                        .border(1.dp, chipBorder, CircleShape)
-                        .clickable { onSelectFeed(category) }
-                        .testTag("home_feed_chip_${category.id}")
-                        .padding(horizontal = 12.dp, vertical = 6.dp)
-                    ) {
-                      Icon(
-                        imageVector = feedCategoryIcon(category),
-                        contentDescription = null,
-                        tint = if (selected) Color(0xFF06201C) else AurixTealAccent,
-                        modifier = Modifier.size(13.dp)
-                      )
-                      Text(
-                        text = feedLocalizedLabel(category),
-                        style = MaterialTheme.typography.bodySmall.copy(
-                          fontWeight = if (selected) FontWeight.Bold else FontWeight.SemiBold,
-                          fontSize = 12.sp,
-                          lineHeight = 16.sp
-                        ),
-                        color = chipTextColor
-                      )
-                    }
-                  }
-                }
-                Box(
-                  modifier = Modifier
-                    .align(Alignment.CenterEnd)
-                    .width(36.dp)
-                    .fillMaxHeight()
-                    .background(
-                      Brush.horizontalGradient(
-                        colors = listOf(Color.Transparent, if (darkTheme) Color(0xFF0D121F) else Color.White)
-                      )
-                    )
-                )
-              }
+            Column(verticalArrangement = Arrangement.spacedBy(14.dp)) {
+              TrendingCategoryFilterBar(
+                selectedFeed = selectedFeed,
+                onSelectFeed = onSelectFeed,
+                darkTheme = darkTheme,
+                reducedMotion = reducedMotion
+              )
 
               val cardBgColor = if (darkTheme) Color(0xFF151F30) else Color.White.copy(alpha = 0.92f)
               val cardBorderColor = if (darkTheme) Color(0xFF273348) else Color.White
@@ -1018,19 +969,30 @@ fun HomeScreen(
                   .testTag("home_daily_feed_card")
               ) {
                 AnimatedContent(
-                  targetState = cardState,
+                  targetState = Pair(cardState, selectedFeed),
                   modifier = Modifier.fillMaxWidth(),
                   transitionSpec = {
                     if (reducedMotion) {
                       fadeIn(snap()) togetherWith fadeOut(snap())
-                    } else if (targetState == DailyCardState.LOADED) {
+                    } else if (initialState.first == DailyCardState.LOADED && targetState.first == DailyCardState.LOADED && initialState.second != targetState.second) {
+                      val direction = if (targetState.second.ordinal >= initialState.second.ordinal) 1 else -1
+                      (fadeIn(tween(260, easing = FastOutSlowInEasing)) +
+                        slideInHorizontally(
+                          animationSpec = spring(
+                            dampingRatio = Spring.DampingRatioNoBouncy,
+                            stiffness = Spring.StiffnessMediumLow
+                          )
+                        ) { fullWidth -> direction * (fullWidth / 7) }) togetherWith
+                        (fadeOut(tween(180)) +
+                          slideOutHorizontally(tween(200)) { fullWidth -> -direction * (fullWidth / 9) })
+                    } else if (targetState.first == DailyCardState.LOADED) {
                       (fadeIn(tween(320)) + slideInVertically(tween(320)) { it / 16 }) togetherWith fadeOut(tween(180))
                     } else {
                       fadeIn(tween(220)) togetherWith fadeOut(tween(160))
                     }
                   },
                   label = "daily_card_state_transition"
-                ) { state ->
+                ) { (state, activeFeed) ->
                   when (state) {
                     DailyCardState.ERROR -> {
                       Column(
@@ -1101,38 +1063,45 @@ fun HomeScreen(
                         verticalArrangement = Arrangement.spacedBy(8.dp)
                       ) {
                         displayTracks.forEachIndexed { idx, song ->
-                          if (song.id.startsWith("yt_")) {
-                            SongDownloadRow(
-                              song = song,
-                              index = idx + 1,
-                              isPlaying = isPlaying,
-                              isCurrent = currentSong?.id == song.id,
-                              isResolving = resolvingSongId == song.id,
-                              reducedMotion = reducedMotion,
-                              darkTheme = darkTheme,
-                              hasLyrics = song.id in verifiedLyricsIds,
-                              downloadProgress = songDownloadProgress[song.id],
-                              isDownloaded = song.id in downloadedSongIds,
-                              onCheckLyrics = onCheckLyrics,
-                              onSongClick = { onSongClick(song, trendingSongs) },
-                              onFavoriteClick = { onFavoriteClick(song) },
-                              onDownloadClick = { onYoutubeSongDownloadClick(song) },
-                              modifier = Modifier.testTag("home_yt_song_row_${song.id}")
-                            )
-                          } else {
-                            SongRow(
-                              song = song,
-                              isPlaying = isPlaying,
-                              isCurrent = currentSong?.id == song.id,
-                              reducedMotion = reducedMotion,
-                              darkTheme = darkTheme,
-                              hasLyrics = song.id in verifiedLyricsIds,
-                              rank = idx + 1,
-                              showSourceBadge = false,
-                              onCheckLyrics = onCheckLyrics,
-                              onSongClick = { onSongClick(song, trendingSongs) },
-                              onFavoriteClick = { onFavoriteClick(song) }
-                            )
+                          TrendingStaggeredTrackItem(
+                            index = idx,
+                            feedKey = activeFeed.id,
+                            songKey = song.id,
+                            reducedMotion = reducedMotion
+                          ) {
+                            if (song.id.startsWith("yt_")) {
+                              SongDownloadRow(
+                                song = song,
+                                index = idx + 1,
+                                isPlaying = isPlaying,
+                                isCurrent = currentSong?.id == song.id,
+                                isResolving = resolvingSongId == song.id,
+                                reducedMotion = reducedMotion,
+                                darkTheme = darkTheme,
+                                hasLyrics = song.id in verifiedLyricsIds,
+                                downloadProgress = songDownloadProgress[song.id],
+                                isDownloaded = song.id in downloadedSongIds,
+                                onCheckLyrics = onCheckLyrics,
+                                onSongClick = { onSongClick(song, trendingSongs) },
+                                onFavoriteClick = { onFavoriteClick(song) },
+                                onDownloadClick = { onYoutubeSongDownloadClick(song) },
+                                modifier = Modifier.testTag("home_yt_song_row_${song.id}")
+                              )
+                            } else {
+                              SongRow(
+                                song = song,
+                                isPlaying = isPlaying,
+                                isCurrent = currentSong?.id == song.id,
+                                reducedMotion = reducedMotion,
+                                darkTheme = darkTheme,
+                                hasLyrics = song.id in verifiedLyricsIds,
+                                rank = idx + 1,
+                                showSourceBadge = false,
+                                onCheckLyrics = onCheckLyrics,
+                                onSongClick = { onSongClick(song, trendingSongs) },
+                                onFavoriteClick = { onFavoriteClick(song) }
+                              )
+                            }
                           }
                         }
                       }
@@ -1145,6 +1114,372 @@ fun HomeScreen(
         }
       }
     }
+  }
+}
+
+@Composable
+private fun TrendingMusicHeader(
+  title: String,
+  selectedFeed: DailyFeedCategory,
+  subtitle: String,
+  actionLabel: String? = null,
+  onActionClick: (() -> Unit)? = null,
+  actionTestTag: String? = null,
+  darkTheme: Boolean,
+  reducedMotion: Boolean
+) {
+  val infiniteTransition = rememberInfiniteTransition(label = "trending_pulse")
+  val pulseAlpha by infiniteTransition.animateFloat(
+    initialValue = 0.45f,
+    targetValue = if (reducedMotion) 0.45f else 1f,
+    animationSpec = infiniteRepeatable(
+      animation = tween(1400, easing = FastOutSlowInEasing),
+      repeatMode = RepeatMode.Reverse
+    ),
+    label = "trending_badge_pulse"
+  )
+
+  Row(
+    modifier = Modifier.fillMaxWidth(),
+    horizontalArrangement = Arrangement.SpaceBetween,
+    verticalAlignment = Alignment.CenterVertically
+  ) {
+    Row(
+      modifier = Modifier
+        .weight(1f)
+        .padding(end = 10.dp),
+      verticalAlignment = Alignment.CenterVertically,
+      horizontalArrangement = Arrangement.spacedBy(12.dp)
+    ) {
+      // Animated Category Accent Badge
+      Box(
+        modifier = Modifier
+          .size(40.dp)
+          .clip(RoundedCornerShape(13.dp))
+          .background(
+            Brush.linearGradient(
+              colors = listOf(
+                AurixTealAccent.copy(alpha = if (darkTheme) 0.22f else 0.16f),
+                Color(0xFF38BDF8).copy(alpha = if (darkTheme) 0.12f else 0.08f)
+              )
+            )
+          )
+          .border(
+            width = 1.dp,
+            color = AurixTealAccent.copy(alpha = 0.28f * pulseAlpha),
+            shape = RoundedCornerShape(13.dp)
+          ),
+        contentAlignment = Alignment.Center
+      ) {
+        AnimatedContent(
+          targetState = selectedFeed,
+          transitionSpec = {
+            if (reducedMotion) {
+              fadeIn(snap()) togetherWith fadeOut(snap())
+            } else {
+              (fadeIn(tween(220)) + scaleIn(initialScale = 0.72f, animationSpec = spring(dampingRatio = Spring.DampingRatioMediumBouncy))) togetherWith
+                (fadeOut(tween(140)) + scaleOut(targetScale = 0.72f, animationSpec = tween(140)))
+            }
+          },
+          label = "trending_header_icon"
+        ) { feed ->
+          Icon(
+            imageVector = feedCategoryIcon(feed),
+            contentDescription = null,
+            tint = AurixTealAccent,
+            modifier = Modifier.size(20.dp)
+          )
+        }
+      }
+
+      Column(
+        verticalArrangement = Arrangement.spacedBy(2.dp)
+      ) {
+        Row(
+          verticalAlignment = Alignment.CenterVertically,
+          horizontalArrangement = Arrangement.spacedBy(7.dp)
+        ) {
+          Text(
+            text = title,
+            style = MaterialTheme.typography.titleMedium.copy(
+              fontWeight = FontWeight.ExtraBold,
+              fontSize = 19.sp,
+              lineHeight = 24.sp,
+              letterSpacing = (-0.3).sp
+            ),
+            color = MaterialTheme.colorScheme.onBackground,
+            maxLines = 1,
+            overflow = TextOverflow.Ellipsis
+          )
+          // Subtle live pulse dot
+          Box(
+            modifier = Modifier
+              .size(6.dp)
+              .graphicsLayer { alpha = pulseAlpha }
+              .clip(CircleShape)
+              .background(AurixTealAccent)
+          )
+        }
+
+        AnimatedContent(
+          targetState = subtitle,
+          transitionSpec = {
+            if (reducedMotion) {
+              fadeIn(snap()) togetherWith fadeOut(snap())
+            } else {
+              (fadeIn(tween(220)) + slideInVertically(tween(220)) { it / 2 }) togetherWith
+                (fadeOut(tween(150)) + slideOutVertically(tween(150)) { -it / 2 })
+            }
+          },
+          label = "trending_subtitle_anim"
+        ) { targetSubtitle ->
+          Text(
+            text = targetSubtitle,
+            style = MaterialTheme.typography.bodySmall.copy(
+              fontSize = 12.5.sp,
+              fontWeight = FontWeight.Medium
+            ),
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
+            maxLines = 1,
+            overflow = TextOverflow.Ellipsis
+          )
+        }
+      }
+    }
+
+    if (!actionLabel.isNullOrBlank() && onActionClick != null) {
+      val seeAllInteraction = remember { MutableInteractionSource() }
+      val isPressed by seeAllInteraction.collectIsPressedAsState()
+      val seeAllScale by animateFloatAsState(
+        targetValue = if (isPressed) 0.94f else 1f,
+        animationSpec = if (reducedMotion) snap() else spring(stiffness = Spring.StiffnessMediumLow),
+        label = "see_all_scale"
+      )
+      val pillBg = if (darkTheme) Color.White.copy(alpha = 0.07f) else Color.Black.copy(alpha = 0.05f)
+      val pillBorder = if (darkTheme) Color.White.copy(alpha = 0.14f) else Color.Black.copy(alpha = 0.09f)
+
+      Row(
+        verticalAlignment = Alignment.CenterVertically,
+        horizontalArrangement = Arrangement.spacedBy(3.dp),
+        modifier = Modifier
+          .graphicsLayer {
+            scaleX = seeAllScale
+            scaleY = seeAllScale
+          }
+          .heightIn(min = 34.dp)
+          .clip(CircleShape)
+          .background(pillBg)
+          .border(1.dp, pillBorder, CircleShape)
+          .clickable(
+            interactionSource = seeAllInteraction,
+            indication = null,
+            onClick = onActionClick
+          )
+          .then(if (actionTestTag != null) Modifier.testTag(actionTestTag) else Modifier)
+          .padding(start = 12.dp, end = 8.dp, top = 6.dp, bottom = 6.dp)
+      ) {
+        Text(
+          text = actionLabel,
+          style = MaterialTheme.typography.labelMedium.copy(
+            fontWeight = FontWeight.Bold,
+            fontSize = 12.sp
+          ),
+          color = AurixTealAccent
+        )
+        Icon(
+          imageVector = Icons.Rounded.ChevronRight,
+          contentDescription = null,
+          tint = AurixTealAccent,
+          modifier = Modifier.size(15.dp)
+        )
+      }
+    }
+  }
+}
+
+@Composable
+private fun TrendingCategoryFilterBar(
+  selectedFeed: DailyFeedCategory,
+  onSelectFeed: (DailyFeedCategory) -> Unit,
+  darkTheme: Boolean,
+  reducedMotion: Boolean
+) {
+  val railBg = if (darkTheme) Color(0xFF111927).copy(alpha = 0.78f) else Color.White.copy(alpha = 0.75f)
+  val railBorder = if (darkTheme) Color.White.copy(alpha = 0.08f) else Color.Black.copy(alpha = 0.06f)
+
+  Box(
+    modifier = Modifier
+      .fillMaxWidth()
+      .clip(RoundedCornerShape(18.dp))
+      .background(railBg)
+      .border(1.dp, railBorder, RoundedCornerShape(18.dp))
+      .padding(horizontal = 5.dp, vertical = 5.dp)
+  ) {
+    Row(
+      modifier = Modifier
+        .fillMaxWidth()
+        .horizontalScroll(rememberScrollState()),
+      horizontalArrangement = Arrangement.spacedBy(6.dp),
+      verticalAlignment = Alignment.CenterVertically
+    ) {
+      DailyFeedCategory.entries.forEach { category ->
+        val selected = category == selectedFeed
+        val chipInteraction = remember { MutableInteractionSource() }
+        val isPressed by chipInteraction.collectIsPressedAsState()
+
+        val chipScale by animateFloatAsState(
+          targetValue = when {
+            isPressed -> 0.94f
+            selected -> 1.0f
+            else -> 0.98f
+          },
+          animationSpec = if (reducedMotion) {
+            snap()
+          } else {
+            spring(
+              dampingRatio = Spring.DampingRatioMediumBouncy,
+              stiffness = Spring.StiffnessMedium
+            )
+          },
+          label = "chip_scale_${category.id}"
+        )
+
+        val iconScale by animateFloatAsState(
+          targetValue = if (selected) 1.12f else 1f,
+          animationSpec = if (reducedMotion) {
+            snap()
+          } else {
+            spring(
+              dampingRatio = Spring.DampingRatioMediumBouncy,
+              stiffness = Spring.StiffnessMediumLow
+            )
+          },
+          label = "chip_icon_scale_${category.id}"
+        )
+
+        val chipBg by animateColorAsState(
+          targetValue = when {
+            selected -> AurixTealAccent
+            darkTheme -> Color.White.copy(alpha = 0.04f)
+            else -> Color.Black.copy(alpha = 0.04f)
+          },
+          animationSpec = if (reducedMotion) snap() else tween(220),
+          label = "chip_bg_${category.id}"
+        )
+
+        val chipBorder by animateColorAsState(
+          targetValue = when {
+            selected -> Color.White.copy(alpha = 0.32f)
+            darkTheme -> Color.White.copy(alpha = 0.07f)
+            else -> Color.Black.copy(alpha = 0.06f)
+          },
+          animationSpec = if (reducedMotion) snap() else tween(220),
+          label = "chip_border_${category.id}"
+        )
+
+        val chipTextColor by animateColorAsState(
+          targetValue = when {
+            selected -> Color(0xFF041E1A)
+            darkTheme -> Color.White.copy(alpha = 0.86f)
+            else -> Color(0xFF1E293B)
+          },
+          animationSpec = if (reducedMotion) snap() else tween(200),
+          label = "chip_text_${category.id}"
+        )
+
+        val iconTint by animateColorAsState(
+          targetValue = if (selected) Color(0xFF041E1A) else AurixTealAccent,
+          animationSpec = if (reducedMotion) snap() else tween(200),
+          label = "chip_icon_tint_${category.id}"
+        )
+
+        val chipShape = RoundedCornerShape(13.dp)
+
+        Row(
+          verticalAlignment = Alignment.CenterVertically,
+          horizontalArrangement = Arrangement.spacedBy(6.dp),
+          modifier = Modifier
+            .graphicsLayer {
+              scaleX = chipScale
+              scaleY = chipScale
+            }
+            .heightIn(min = 36.dp)
+            .clip(chipShape)
+            .background(chipBg)
+            .border(1.dp, chipBorder, chipShape)
+            .clickable(
+              interactionSource = chipInteraction,
+              indication = null
+            ) { onSelectFeed(category) }
+            .testTag("home_feed_chip_${category.id}")
+            .padding(horizontal = 13.dp, vertical = 7.dp)
+        ) {
+          Icon(
+            imageVector = feedCategoryIcon(category),
+            contentDescription = null,
+            tint = iconTint,
+            modifier = Modifier
+              .size(14.dp)
+              .graphicsLayer {
+                scaleX = iconScale
+                scaleY = iconScale
+              }
+          )
+          Text(
+            text = feedLocalizedLabel(category),
+            style = MaterialTheme.typography.labelMedium.copy(
+              fontWeight = if (selected) FontWeight.ExtraBold else FontWeight.SemiBold,
+              fontSize = 12.5.sp,
+              lineHeight = 16.sp,
+              letterSpacing = if (selected) (-0.1).sp else 0.sp
+            ),
+            color = chipTextColor,
+            maxLines = 1
+          )
+        }
+      }
+    }
+  }
+}
+
+@Composable
+private fun TrendingStaggeredTrackItem(
+  index: Int,
+  feedKey: String,
+  songKey: String,
+  reducedMotion: Boolean,
+  content: @Composable () -> Unit
+) {
+  val animProgress = remember(feedKey, songKey) {
+    Animatable(if (reducedMotion) 1f else 0f)
+  }
+
+  LaunchedEffect(feedKey, songKey, reducedMotion) {
+    if (reducedMotion) {
+      animProgress.snapTo(1f)
+    } else {
+      animProgress.snapTo(0f)
+      delay((index.coerceAtMost(7) * 32L))
+      animProgress.animateTo(
+        targetValue = 1f,
+        animationSpec = spring(
+          dampingRatio = Spring.DampingRatioNoBouncy,
+          stiffness = Spring.StiffnessMediumLow
+        )
+      )
+    }
+  }
+
+  Box(
+    modifier = Modifier
+      .fillMaxWidth()
+      .graphicsLayer {
+        val p = animProgress.value
+        alpha = p.coerceIn(0f, 1f)
+        translationY = (1f - p) * 20f
+      }
+  ) {
+    content()
   }
 }
 
