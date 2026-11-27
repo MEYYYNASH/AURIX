@@ -86,7 +86,10 @@ object AudioOutputRouter {
     }
     callback = deviceCallback
     runCatching {
-      audioManager.registerAudioDeviceCallback(deviceCallback, null)
+      audioManager.registerAudioDeviceCallback(
+        deviceCallback,
+        android.os.Handler(android.os.Looper.getMainLooper())
+      )
     }
 
     val receiver = object : BroadcastReceiver() {

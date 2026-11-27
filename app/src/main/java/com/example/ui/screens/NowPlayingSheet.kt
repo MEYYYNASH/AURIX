@@ -717,26 +717,6 @@ fun NowPlayingSheet(
                 )
               }
 
-              IconButton(
-                onClick = {
-                  val nextEnabled = !floatingMiniLyricsEnabled
-                  onToggleFloatingMiniLyrics(nextEnabled)
-                  if (nextEnabled) {
-                    onClose()
-                  }
-                },
-                modifier = Modifier
-                  .minimumInteractiveComponentSize()
-                  .testTag("np_floating_lyrics_pip_button")
-              ) {
-                Icon(
-                  imageVector = Icons.Rounded.PictureInPictureAlt,
-                  contentDescription = stringResource(id = R.string.floating_lyrics_pip_title),
-                  tint = if (floatingMiniLyricsEnabled) c1 else Color.White.copy(alpha = 0.72f),
-                  modifier = Modifier.size(19.dp)
-                )
-              }
-
               val isExternalRoute = audioOutputInfo.route != com.example.playback.AudioOutputRoute.SPEAKER
               val outputIcon = when (audioOutputInfo.route) {
                 com.example.playback.AudioOutputRoute.BLUETOOTH -> Icons.Rounded.BluetoothAudio
@@ -765,23 +745,24 @@ fun NowPlayingSheet(
                   .testTag("np_media_output_button")
               ) {
                 Row(
-                  modifier = Modifier.padding(horizontal = 10.dp, vertical = 6.dp),
+                  modifier = Modifier.padding(horizontal = 9.dp, vertical = 6.dp),
                   verticalAlignment = Alignment.CenterVertically,
-                  horizontalArrangement = Arrangement.spacedBy(5.dp)
+                  horizontalArrangement = Arrangement.spacedBy(4.dp)
                 ) {
                   Icon(
                     imageVector = outputIcon,
                     contentDescription = stringResource(id = R.string.media_output_title),
                     tint = if (isExternalRoute) Color.White else Color.White.copy(alpha = 0.85f),
-                    modifier = Modifier.size(16.dp)
+                    modifier = Modifier.size(15.dp)
                   )
                   Text(
                     text = outputLabel,
                     style = MaterialTheme.typography.labelSmall.copy(fontWeight = FontWeight.Bold),
                     color = Color.White,
                     maxLines = 1,
+                    softWrap = false,
                     overflow = TextOverflow.Ellipsis,
-                    modifier = Modifier.widthIn(max = 98.dp)
+                    modifier = Modifier.widthIn(max = 76.dp)
                   )
                 }
               }
@@ -800,9 +781,9 @@ fun NowPlayingSheet(
                 .testTag("np_toggle_extras_button")
             ) {
               Row(
-                modifier = Modifier.padding(horizontal = 12.dp, vertical = 6.dp),
+                modifier = Modifier.padding(horizontal = 11.dp, vertical = 6.dp),
                 verticalAlignment = Alignment.CenterVertically,
-                horizontalArrangement = Arrangement.spacedBy(5.dp)
+                horizontalArrangement = Arrangement.spacedBy(4.dp)
               ) {
                 Icon(
                   imageVector = if (showControlsExtras) Icons.Rounded.Close else Icons.Rounded.KeyboardArrowUp,
@@ -817,7 +798,10 @@ fun NowPlayingSheet(
                     id = if (showControlsExtras) R.string.np_controls_hide else R.string.np_controls_show
                   ),
                   style = MaterialTheme.typography.labelSmall.copy(fontWeight = FontWeight.Bold),
-                  color = Color.White
+                  color = Color.White,
+                  maxLines = 1,
+                  softWrap = false,
+                  overflow = TextOverflow.Ellipsis
                 )
               }
             }

@@ -16,32 +16,60 @@ enum class NowPlayingWidgetStyle(
   val displayNameKm: String,
   val usesSystemDynamicColors: Boolean = false
 ) {
-  AURA("widget_style_aura", "Aura", "អូរ៉ា"),
   RING("widget_style_ring", "Ring", "រង្វង់"),
-  TYPE("widget_style_type", "Type", "អក្សរ"),
   FROST("widget_style_frost", "Frost", "កញ្ចក់"),
   LIGHT("widget_style_light", "Light", "ភ្លឺ", usesSystemDynamicColors = true),
   NIGHT("widget_style_night", "Night", "រាត្រី"),
   VINYL("widget_style_vinyl", "Vinyl", "វីនីល"),
   PIXEL("widget_style_pixel", "Pixel", "ភីកសែល"),
   PAPER("widget_style_paper", "Paper", "ក្រដាស", usesSystemDynamicColors = true),
-  FLOAT("widget_style_float", "Float", "អណ្តែត");
+  AURA("widget_style_aura", "Aurora", "អូរ៉ូរ៉ា"),
+  TYPE("widget_style_type", "Mono", "ម៉ូណូ"),
+  FLOAT("widget_style_float", "Neon", "ណេអុង");
 
   companion object {
-    const val DEFAULT_ID = "widget_style_aura"
+    const val DEFAULT_ID = "widget_style_ring"
 
     fun fromId(raw: String?): NowPlayingWidgetStyle {
-      if (raw.isNullOrBlank()) return AURA
+      if (raw.isNullOrBlank()) return RING
       val key = raw.trim().lowercase()
-      return entries.firstOrNull {
-        it.id == key || it.id.removePrefix("widget_style_") == key
-      } ?: AURA
+      return when (key) {
+        "aurora", "widget_style_aurora" -> AURA
+        "mono", "widget_style_mono" -> TYPE
+        "neon", "widget_style_neon" -> FLOAT
+        else -> entries.firstOrNull {
+          it.id == key || it.id.removePrefix("widget_style_") == key || it.displayNameEn.lowercase() == key
+        } ?: RING
+      }
     }
   }
 }
 
 /**
- * 3 responsive sizes for the resizable AURIX Now Playing widget.
+ * All 5 standard widget grid sizes for the AURIX Now Playing widget family:
+ * 1. Small 2×2 (155×155)
+ * 2. Compact 4×1 (329×72)
+ * 3. Medium 4×2 (329×155)
+ * 4. Lyrics 4×2 (329×155)
+ * 5. Large 4×4 (329×345)
+ */
+enum class NowPlayingStudioSize(
+  val id: String,
+  val labelEn: String,
+  val labelKm: String,
+  val gridSpec: String,
+  val widthDp: Int,
+  val heightDp: Int
+) {
+  SMALL("studio_size_small", "Small 2×2", "តូច 2×2", "2×2 · 155×155", 155, 155),
+  COMPACT("studio_size_compact", "Compact 4×1", "បង្រួម 4×1", "4×1 · 329×72", 329, 72),
+  MEDIUM("studio_size_medium", "Medium 4×2", "មធ្យម 4×2", "4×2 · 329×155", 329, 155),
+  LYRICS("studio_size_lyrics", "Lyrics 4×2", "ទំនុកច្រៀង 4×2", "4×2 · 329×155", 329, 155),
+  LARGE("studio_size_large", "Large 4×4", "ធំ 4×4", "4×4 · 329×345", 329, 345)
+}
+
+/**
+ * 3 responsive RemoteViews layout tiers for the resizable AURIX Now Playing home-screen widget.
  */
 enum class NowPlayingWidgetSize(
   val id: String,

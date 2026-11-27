@@ -1371,7 +1371,7 @@ class AurixViewModel(application: Application) : AndroidViewModel(application) {
     .catch { emit(emptyList()) }
     .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), emptyList())
 
-  private val _isAppInitialized = MutableStateFlow(false)
+  private val _isAppInitialized = MutableStateFlow(true)
   val isAppInitialized: StateFlow<Boolean> = _isAppInitialized
 
   private val _launchSplashDismissed = MutableStateFlow(false)
@@ -1516,10 +1516,70 @@ class AurixViewModel(application: Application) : AndroidViewModel(application) {
   }
 
   init {
+    // Resolve synchronous onboarding state and mark app initialized immediately so the UI shell never blocks on disk I/O
+    runCatching {
+      _onboardingCompleted.value = prefsManager.isOnboardingCompletedSync()
+    }
+    _isAppInitialized.value = true
+    runCatching {
+      android.os.Handler(android.os.Looper.getMainLooper()).postDelayed({
+        _isAppInitialized.value = true
+        _launchSplashDismissed.value = true
+      }, 1350L)
+    }
+
     viewModelScope.launch(Dispatchers.IO) {
       try {
-        runCatching { dao.clearAllBadLyrics() }
-        runCatching { dao.clearReportedLyricsCache() }
+        val dsOnboardingCompleted = runCatching {
+          kotlinx.coroutines.withTimeoutOrNull(1200L) { prefsManager.onboardingCompleted.first() }
+        }.getOrNull() ?: false
+        val lastSeenVersionCode = runCatching {
+          kotlinx.coroutines.withTimeoutOrNull(1200L) { prefsManager.lastSeenVersionCode.first() }
+        }.getOrNull() ?: 0L
+        val resolvedOnboardingCompleted = dsOnboardingCompleted ||
+          prefsManager.isOnboardingCompletedSync() ||
+          lastSeenVersionCode > 0L
+        if (resolvedOnboardingCompleted) {
+          prefsManager.setOnboardingCompletedSync(true)
+          if (!dsOnboardingCompleted) {
+            runCatching { prefsManager.setOnboardingCompleted(true) }
+          }
+        }
+        _onboardingCompleted.value = resolvedOnboardingCompleted
+        if (lastSeenVersionCode < BuildConfig.VERSION_CODE.toLong()) {
+          _showWhatsNewSheet.value = true
+        }
+
+        val savedLang = runCatching {
+          kotlinx.coroutines.withTimeoutOrNull(1000L) { prefsManager.language.first() }
+        }.getOrNull() ?: "en"
+        runCatching { LocaleHelper.saveLanguageSync(application, savedLang) }
+
+        runCatching {
+          _trackOverrides.value = TrackMetadataOverrideStore.loadAllSync(application)
+        }
+
+        runCatching {
+          AudioOutputRouter.start(application) { routeInfo ->
+            AudioEqualizerController.onAudioOutputRouteChanged(routeInfo)
+            val prevRoute = lastObservedAudioRoute
+            lastObservedAudioRoute = routeInfo.route
+            val connectedHeadphones = routeInfo.route == com.example.playback.AudioOutputRoute.BLUETOOTH ||
+              routeInfo.route == com.example.playback.AudioOutputRoute.HEADPHONES
+            if (
+              prevRoute != null &&
+              prevRoute == com.example.playback.AudioOutputRoute.SPEAKER &&
+              connectedHeadphones &&
+              autoPlayOnHeadphoneConnect.value &&
+              !_isPlaying.value
+            ) {
+              viewModelScope.launch(Dispatchers.Main) {
+                autoResumeOnHeadphoneConnected()
+              }
+            }
+          }
+        }
+
         val eqEnabled = runCatching { prefsManager.eqEnabled.first() }.getOrDefault(false)
         val eqPreset = runCatching { prefsManager.eqPreset.first() }.getOrDefault("flat")
         val eqBands = runCatching { prefsManager.eqBands.first() }.getOrDefault(emptyList())
@@ -1548,29 +1608,6 @@ class AurixViewModel(application: Application) : AndroidViewModel(application) {
             speakerEqPresetId = eqSpkPreset
           )
         }
-        runCatching {
-          AudioOutputRouter.start(application) { routeInfo ->
-            AudioEqualizerController.onAudioOutputRouteChanged(routeInfo)
-            val prevRoute = lastObservedAudioRoute
-            lastObservedAudioRoute = routeInfo.route
-            val connectedHeadphones = routeInfo.route == com.example.playback.AudioOutputRoute.BLUETOOTH ||
-              routeInfo.route == com.example.playback.AudioOutputRoute.HEADPHONES
-            if (
-              prevRoute != null &&
-              prevRoute == com.example.playback.AudioOutputRoute.SPEAKER &&
-              connectedHeadphones &&
-              autoPlayOnHeadphoneConnect.value &&
-              !_isPlaying.value
-            ) {
-              viewModelScope.launch(Dispatchers.Main) {
-                autoResumeOnHeadphoneConnected()
-              }
-            }
-          }
-        }
-        runCatching {
-          _trackOverrides.value = TrackMetadataOverrideStore.loadAllSync(application)
-        }
         val crossfadeSec = runCatching { prefsManager.crossfadeSeconds.first() }.getOrDefault(0)
         val crossfadeManualSkip = runCatching { prefsManager.crossfadeManualSkip.first() }.getOrDefault(true)
         val djAutoMix = runCatching { prefsManager.djAutoMixEnabled.first() }.getOrDefault(false)
@@ -1581,23 +1618,8 @@ class AurixViewModel(application: Application) : AndroidViewModel(application) {
             djAutoMixEnabled = djAutoMix
           )
         }
-        val savedLang = runCatching { prefsManager.language.first() }.getOrDefault("en")
-        runCatching { LocaleHelper.saveLanguageSync(application, savedLang) }
-        val dsOnboardingCompleted = runCatching { prefsManager.onboardingCompleted.first() }.getOrDefault(false)
-        val lastSeenVersionCode = runCatching { prefsManager.lastSeenVersionCode.first() }.getOrDefault(0L)
-        val resolvedOnboardingCompleted = dsOnboardingCompleted ||
-          prefsManager.isOnboardingCompletedSync() ||
-          lastSeenVersionCode > 0L
-        if (resolvedOnboardingCompleted) {
-          prefsManager.setOnboardingCompletedSync(true)
-          if (!dsOnboardingCompleted) {
-            runCatching { prefsManager.setOnboardingCompleted(true) }
-          }
-        }
-        _onboardingCompleted.value = resolvedOnboardingCompleted
-        if (lastSeenVersionCode < BuildConfig.VERSION_CODE.toLong()) {
-          _showWhatsNewSheet.value = true
-        }
+        runCatching { dao.clearAllBadLyrics() }
+        runCatching { dao.clearReportedLyricsCache() }
       } catch (_: Throwable) {
         // Ensure startup continues even if legacy persisted data fails to read
       } finally {

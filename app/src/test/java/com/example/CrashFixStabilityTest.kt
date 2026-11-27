@@ -12,11 +12,11 @@ import org.junit.Test
 class CrashFixStabilityTest {
 
   @Test
-  fun release247_metadataAndVersionCodeAreConsistent() {
-    assertEquals("2.4.7", BuildConfig.VERSION_NAME)
-    assertEquals(20407, BuildConfig.VERSION_CODE)
-    assertTrue("Release 2.4.7 versionCode must exceed 2.4.5 (20405)", BuildConfig.VERSION_CODE > 20405)
-    assertTrue("BuildConfig.BUILD_TIMESTAMP_MS must be non-zero so same-version installs are recognized as up-to-date", BuildConfig.BUILD_TIMESTAMP_MS >= 1795858700000L)
+  fun release248_metadataAndVersionCodeAreConsistent() {
+    assertEquals("2.4.8", BuildConfig.VERSION_NAME)
+    assertEquals(20408, BuildConfig.VERSION_CODE)
+    assertTrue("Release 2.4.8 versionCode must exceed 2.4.7 (20407)", BuildConfig.VERSION_CODE > 20407)
+    assertTrue("BuildConfig.BUILD_TIMESTAMP_MS must be non-zero so same-version installs are recognized as up-to-date", BuildConfig.BUILD_TIMESTAMP_MS >= 1795858800000L)
     assertEquals(4, com.example.ui.screens.ONBOARDING_SLIDE_COUNT)
     assertTrue(com.example.ui.screens.MINI_PLAYER_HIGH_REFRESH_OPTIMIZED)
     assertTrue(com.example.ui.screens.MINI_PLAYER_SLIDE_UP_DAMPING in 0.7f..0.95f)
@@ -1068,7 +1068,7 @@ class CrashFixStabilityTest {
 
   @Test
   fun remoteJsonUpdateChecker_granularVersioningAndTimestamps_workEndToEnd() {
-    assertEquals(20407, BuildConfig.VERSION_CODE)
+    assertEquals(20408, BuildConfig.VERSION_CODE)
     assertEquals(20301L, com.example.data.GitHubUpdater.deriveVersionCodeFromTag("v2.3.1"))
     assertEquals(20301L, com.example.data.GitHubUpdater.deriveVersionCodeFromTag("v2.3.1+20301"))
     assertEquals(20312L, com.example.data.GitHubUpdater.deriveVersionCodeFromTag("v2.3.1.2"))
@@ -1081,6 +1081,7 @@ class CrashFixStabilityTest {
     assertEquals(20404L, com.example.data.GitHubUpdater.deriveVersionCodeFromTag("v2.4.4"))
     assertEquals(20405L, com.example.data.GitHubUpdater.deriveVersionCodeFromTag("v2.4.5"))
     assertEquals(20407L, com.example.data.GitHubUpdater.deriveVersionCodeFromTag("v2.4.7"))
+    assertEquals(20408L, com.example.data.GitHubUpdater.deriveVersionCodeFromTag("v2.4.8"))
 
     val server = com.sun.net.httpserver.HttpServer.create(java.net.InetSocketAddress("127.0.0.1", 0), 0)
     val port = server.address.port
@@ -1867,18 +1868,19 @@ class CrashFixStabilityTest {
       buildTimestampMs = BuildConfig.BUILD_TIMESTAMP_MS
     )
     val currentRemoteManifest = com.example.data.RemoteVersionInfo(
-      versionName = "2.4.7",
-      versionCode = 20407L,
+      versionName = "2.4.8",
+      versionCode = 20408L,
       releaseDate = "2026-11-27",
-      apkUrl = "https://github.com/MEYYYNASH/AURIX/releases/download/v2.4.7/AURIX-v2.4.7.apk",
+      apkUrl = "https://github.com/MEYYYNASH/AURIX/releases/download/v2.4.8/AURIX-v2.4.8.apk",
       sha256 = "3e56ee90d3213e7b4c93d0c2b457e6458bab2c93d7875a00b52b83b95e66716b",
-      notes = listOf("v2.4.7"),
-      releasePageUrl = "https://github.com/MEYYYNASH/AURIX/releases/tag/v2.4.7",
-      releaseTimestampMs = 1795858700000L
+      notes = listOf("v2.4.8"),
+      releasePageUrl = "https://github.com/MEYYYNASH/AURIX/releases/tag/v2.4.8",
+      releaseTimestampMs = 1795858800000L
     )
     assertFalse(
-      "Installed v2.4.7 must NOT think an update is still needed against v2.4.7 version.json",
+      "Installed v2.4.8 must NOT think an update is still needed against v2.4.8 version.json",
       com.example.data.UpdateManager.isReleaseNewerThanInstalled(currentInstalled, currentRemoteManifest)
     )
+    assertEquals(5, com.example.widget.NowPlayingStudioSize.entries.size)
   }
 }

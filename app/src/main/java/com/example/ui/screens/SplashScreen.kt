@@ -239,14 +239,16 @@ fun AurixLaunchOverlay(
       }
     }
 
-    // Hold briefly for the entrance choreography (capped under ~2.5s), then exit as soon as init completes.
-    val minShowcaseMs = if (skipMotion) 220L else 1850L
+    // Hold briefly for the entrance choreography, then always exit cleanly (never block indefinitely).
+    val minShowcaseMs = if (skipMotion) 180L else 1150L
     delay(minShowcaseMs)
     if (!latestInitState.value) {
-      snapshotFlow { latestInitState.value }.first { it }
+      kotlinx.coroutines.withTimeoutOrNull(450L) {
+        snapshotFlow { latestInitState.value }.first { it }
+      }
     }
     exiting = true
-    delay(if (skipMotion) 140L else 280L)
+    delay(if (skipMotion) 100L else 220L)
     onDismissed()
   }
 
@@ -271,7 +273,7 @@ fun AurixLaunchOverlay(
       .clickable(
         interactionSource = noIndicationSource,
         indication = null,
-        onClick = {}
+        onClick = { onDismissed() }
       ),
     contentAlignment = Alignment.Center
   ) {

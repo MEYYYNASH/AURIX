@@ -87,6 +87,7 @@ import com.example.ui.theme.AurixFontFamilies
 import com.example.ui.theme.KhmerTypography
 import com.example.widget.AurixWidgetController
 import com.example.widget.NowPlayingThemeResolver
+import com.example.widget.NowPlayingStudioSize
 import com.example.widget.NowPlayingWidgetSize
 import com.example.widget.NowPlayingWidgetStyle
 import com.example.widget.VinylCoverPalette
@@ -123,7 +124,8 @@ fun SettingsWidgetsGlassCard(
 ) {
   val context = LocalContext.current
   var selectedClassicStyle by remember { mutableStateOf(WidgetGlassStyle.FROST_PILL) }
-  var previewSize by remember { mutableStateOf(NowPlayingWidgetSize.PLAYER) }
+  var studioSize by remember { mutableStateOf(NowPlayingStudioSize.MEDIUM) }
+  var showFullDesignMatrix by remember { mutableStateOf(false) }
   var lastToast by remember { mutableStateOf<Toast?>(null) }
 
   LaunchedEffect(Unit) {
@@ -148,17 +150,81 @@ fun SettingsWidgetsGlassCard(
 
   val displayTitle = currentSongTitle?.takeIf { it.isNotBlank() }
     ?: snapshot?.title?.takeIf { it.isNotBlank() }
-    ?: stringResource(R.string.widget_preview_title)
+    ?: "Midnight Drive"
   val displayArtist = currentSongArtist?.takeIf { it.isNotBlank() }
     ?: snapshot?.artist?.takeIf { it.isNotBlank() }
-    ?: stringResource(R.string.widget_preview_artist)
+    ?: "Nova Lane"
   val displayArtworkUrl = currentSongArtworkUrl?.takeIf { it.isNotBlank() }
     ?: snapshot?.artworkUrl.orEmpty()
+  val displayPrevLyric = "Streetlights bend across the glass"
   val displayCurrentLyric = snapshot?.currentLyricLine?.takeIf { snapshot?.hasLyrics == true && it.isNotBlank() }
-    ?: stringResource(R.string.widget_preview_lyric_current)
+    ?: "Keep the engine low and slow"
   val displayNextLyric = snapshot?.nextLyricLine?.takeIf { snapshot?.hasLyrics == true && it.isNotBlank() }
-    ?: stringResource(R.string.widget_preview_lyric_next)
+    ?: "Every mile a little closer"
   val isLiked = snapshot?.isFavorite == true
+
+  if (showFullDesignMatrix) {
+    androidx.compose.ui.window.Dialog(
+      onDismissRequest = { showFullDesignMatrix = false },
+      properties = androidx.compose.ui.window.DialogProperties(usePlatformDefaultWidth = false)
+    ) {
+      Surface(
+        modifier = Modifier.fillMaxSize(),
+        color = Color(0xFF17171A)
+      ) {
+        Column(modifier = Modifier.fillMaxSize()) {
+          Row(
+            modifier = Modifier
+              .fillMaxWidth()
+              .padding(horizontal = 16.dp, vertical = 12.dp),
+            horizontalArrangement = Arrangement.SpaceBetween,
+            verticalAlignment = Alignment.CenterVertically
+          ) {
+            Column(modifier = Modifier.weight(1f)) {
+              Text(
+                text = "AURIX Now Playing · 5 Sizes × 10 Styles",
+                style = MaterialTheme.typography.titleMedium.copy(fontWeight = FontWeight.Bold),
+                color = Color.White
+              )
+              Text(
+                text = "Small 2×2 · Compact 4×1 · Medium 4×2 · Lyrics 4×2 · Large 4×4",
+                style = MaterialTheme.typography.labelSmall,
+                color = Color(0xFF9CA3AF)
+              )
+            }
+            Surface(
+              onClick = { showFullDesignMatrix = false },
+              shape = CircleShape,
+              color = Color.White.copy(alpha = 0.12f),
+              modifier = Modifier.defaultMinSize(minHeight = 40.dp)
+            ) {
+              Box(contentAlignment = Alignment.Center, modifier = Modifier.padding(horizontal = 14.dp, vertical = 8.dp)) {
+                Text(
+                  text = if (isKhmer) "បិទ" else "Close",
+                  style = MaterialTheme.typography.labelMedium.copy(fontWeight = FontWeight.Bold),
+                  color = Color.White
+                )
+              }
+            }
+          }
+          androidx.compose.ui.viewinterop.AndroidView(
+            modifier = Modifier
+              .fillMaxWidth()
+              .weight(1f),
+            factory = { ctx ->
+              android.webkit.WebView(ctx).apply {
+                settings.javaScriptEnabled = true
+                settings.domStorageEnabled = false
+                settings.allowFileAccess = true
+                setBackgroundColor(android.graphics.Color.parseColor("#17171A"))
+                loadUrl("file:///android_asset/aurix_now_playing_widgets.html")
+              }
+            }
+          )
+        }
+      }
+    }
+  }
 
   GlassCard(darkTheme = darkTheme, cornerRadius = 24.dp, modifier = Modifier.fillMaxWidth()) {
     Column(
@@ -245,57 +311,61 @@ fun SettingsWidgetsGlassCard(
 
       HorizontalDivider(color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.08f))
 
-      // AURIX Now Playing (Resizable 3 sizes x 10 styles) Header
-      Column(verticalArrangement = Arrangement.spacedBy(2.dp)) {
-        Text(
-          text = stringResource(id = R.string.settings_widgets_np_title),
-          style = MaterialTheme.typography.titleMedium.copy(fontWeight = FontWeight.Bold, lineHeight = 24.sp),
-          color = MaterialTheme.colorScheme.onSurface
-        )
-        Text(
-          text = stringResource(id = R.string.settings_widgets_np_subtitle),
-          style = MaterialTheme.typography.bodySmall.copy(lineHeight = 18.sp),
-          color = MaterialTheme.colorScheme.onSurfaceVariant
-        )
+      // AURIX Now Playing (Resizable 5 sizes x 10 styles) Header + Full Matrix Button
+      Row(
+        modifier = Modifier.fillMaxWidth(),
+        horizontalArrangement = Arrangement.SpaceBetween,
+        verticalAlignment = Alignment.CenterVertically
+      ) {
+        Column(modifier = Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(2.dp)) {
+          Text(
+            text = stringResource(id = R.string.settings_widgets_np_title),
+            style = MaterialTheme.typography.titleMedium.copy(fontWeight = FontWeight.Bold, lineHeight = 24.sp),
+            color = MaterialTheme.colorScheme.onSurface
+          )
+          Text(
+            text = "5 Sizes (2×2, 4×1, 4×2, Lyrics, 4×4) × 10 Distinct Layouts",
+            style = MaterialTheme.typography.bodySmall.copy(lineHeight = 18.sp),
+            color = MaterialTheme.colorScheme.onSurfaceVariant
+          )
+        }
+        Spacer(modifier = Modifier.width(8.dp))
+        Surface(
+          onClick = { showFullDesignMatrix = true },
+          shape = RoundedCornerShape(14.dp),
+          color = MaterialTheme.colorScheme.primary.copy(alpha = 0.16f),
+          border = BorderStroke(1.dp, MaterialTheme.colorScheme.primary.copy(alpha = 0.45f)),
+          modifier = Modifier
+            .defaultMinSize(minHeight = 44.dp)
+            .testTag("settings_np_open_5x10_matrix")
+        ) {
+          Box(contentAlignment = Alignment.Center, modifier = Modifier.padding(horizontal = 12.dp, vertical = 8.dp)) {
+            Text(
+              text = if (isKhmer) "មើល 5×10 ទាំងអស់" else "5×10 Gallery",
+              style = MaterialTheme.typography.labelMedium.copy(fontWeight = FontWeight.Bold),
+              color = MaterialTheme.colorScheme.primary
+            )
+          }
+        }
       }
 
-      // 3-Size Segmented Tab Selector (Compact / Player / Lyrics)
-      Surface(
-        shape = RoundedCornerShape(999.dp),
-        color = if (darkTheme) Color(0xFF0E1320).copy(alpha = 0.78f) else Color(0xFFE1E8F6),
-        modifier = Modifier.fillMaxWidth()
+      // 5-Size Horizontal Selector (Small 2×2 / Compact 4×1 / Medium 4×2 / Lyrics 4×2 / Large 4×4)
+      Row(
+        modifier = Modifier
+          .fillMaxWidth()
+          .horizontalScroll(rememberScrollState()),
+        horizontalArrangement = Arrangement.spacedBy(8.dp)
       ) {
-        Row(
-          modifier = Modifier
-            .fillMaxWidth()
-            .padding(4.dp),
-          horizontalArrangement = Arrangement.spacedBy(4.dp)
-        ) {
-          NowPlayingWidgetSize.entries.forEach { sizeOption ->
-            val selected = sizeOption == previewSize
-            val sizeLabel = if (isKhmer) sizeOption.labelKm else sizeOption.labelEn
-            Surface(
-              onClick = { previewSize = sizeOption },
-              shape = RoundedCornerShape(999.dp),
-              color = if (selected) MaterialTheme.colorScheme.primary else Color.Transparent,
-              modifier = Modifier
-                .weight(1f)
-                .defaultMinSize(minHeight = 48.dp)
-                .testTag("settings_np_size_${sizeOption.id}")
-            ) {
-              Box(contentAlignment = Alignment.Center, modifier = Modifier.padding(horizontal = 8.dp, vertical = 10.dp)) {
-                Text(
-                  text = sizeLabel,
-                  style = MaterialTheme.typography.labelLarge.copy(
-                    fontWeight = if (selected) FontWeight.Bold else FontWeight.Medium
-                  ),
-                  color = if (selected) MaterialTheme.colorScheme.onPrimary else MaterialTheme.colorScheme.onSurfaceVariant,
-                  maxLines = 1,
-                  overflow = TextOverflow.Ellipsis
-                )
-              }
-            }
-          }
+        NowPlayingStudioSize.entries.forEach { sizeOption ->
+          val selected = sizeOption == studioSize
+          val sizeLabel = if (isKhmer) sizeOption.labelKm else sizeOption.labelEn
+          SettingsWidgetChip(
+            label = "$sizeLabel (${sizeOption.widthDp}×${sizeOption.heightDp})",
+            selected = selected,
+            darkTheme = darkTheme,
+            modifier = Modifier.testTag("settings_np_size_${sizeOption.id}"),
+            onClick = { studioSize = sizeOption }
+          )
         }
       }
 
@@ -313,9 +383,9 @@ fun SettingsWidgetsGlassCard(
           .padding(14.dp),
         contentAlignment = Alignment.Center
       ) {
-        NowPlayingWidgetLivePreview(
+        NowPlayingStudioLivePreview(
           style = nowPlayingWidgetStyle,
-          size = previewSize,
+          studioSize = studioSize,
           matchSystemTheme = widgetMatchSystemTheme,
           showLikeButton = widgetShowLikeButton,
           showLyrics = widgetShowLyrics,
@@ -324,6 +394,7 @@ fun SettingsWidgetsGlassCard(
           artist = displayArtist,
           artworkUrl = displayArtworkUrl,
           rawArtwork = previewBitmap,
+          prevLyric = displayPrevLyric,
           currentLyric = displayCurrentLyric,
           nextLyric = displayNextLyric,
           isPlaying = isPlaying,
@@ -491,9 +562,9 @@ private fun SettingsWidgetSwitchRow(
 }
 
 @Composable
-private fun NowPlayingWidgetLivePreview(
+private fun NowPlayingStudioLivePreview(
   style: NowPlayingWidgetStyle,
-  size: NowPlayingWidgetSize,
+  studioSize: NowPlayingStudioSize,
   matchSystemTheme: Boolean,
   showLikeButton: Boolean,
   showLyrics: Boolean,
@@ -502,6 +573,7 @@ private fun NowPlayingWidgetLivePreview(
   artist: String,
   artworkUrl: String,
   rawArtwork: Bitmap?,
+  prevLyric: String,
   currentLyric: String,
   nextLyric: String,
   isPlaying: Boolean,
@@ -530,10 +602,12 @@ private fun NowPlayingWidgetLivePreview(
   }
 
   val corner = when (style) {
-    NowPlayingWidgetStyle.PIXEL -> 8.dp
+    NowPlayingWidgetStyle.PIXEL -> 4.dp
+    NowPlayingWidgetStyle.TYPE -> 16.dp
     NowPlayingWidgetStyle.PAPER -> 18.dp
-    NowPlayingWidgetStyle.FLOAT -> 24.dp
-    else -> 28.dp
+    NowPlayingWidgetStyle.FLOAT -> 20.dp
+    NowPlayingWidgetStyle.LIGHT, NowPlayingWidgetStyle.VINYL -> 22.dp
+    else -> 24.dp
   }
   val effectiveFontFamily = when {
     style == NowPlayingWidgetStyle.PIXEL -> FontFamily.Monospace
@@ -541,20 +615,17 @@ private fun NowPlayingWidgetLivePreview(
     else -> AurixFontFamilies.AurixUiFamily
   }
   val progressFraction = if (durationMs > 0L) {
-    (positionMs.toFloat() / durationMs.toFloat()).coerceIn(0.06f, 1f)
+    (positionMs.toFloat() / durationMs.toFloat()).coerceIn(0.12f, 1f)
   } else {
-    0.38f
+    0.62f
   }
-  val effectiveSize = if (size == NowPlayingWidgetSize.LYRICS && !showLyrics) {
-    NowPlayingWidgetSize.PLAYER
+  val effectiveSize = if (studioSize == NowPlayingStudioSize.LYRICS && !showLyrics) {
+    NowPlayingStudioSize.MEDIUM
   } else {
-    size
+    studioSize
   }
-  val cardHeight = when (effectiveSize) {
-    NowPlayingWidgetSize.COMPACT -> 76.dp
-    NowPlayingWidgetSize.PLAYER -> 148.dp
-    NowPlayingWidgetSize.LYRICS -> 196.dp
-  }
+  val cardWidth = effectiveSize.widthDp.dp
+  val cardHeight = effectiveSize.heightDp.dp
 
   val baseAngle = VinylWidgetRenderer.computeVinylAngleDegrees(positionMs, isPlaying, reducedMotion)
   val vinylSpin = if (style == NowPlayingWidgetStyle.VINYL && isPlaying && !reducedMotion) {
@@ -573,287 +644,242 @@ private fun NowPlayingWidgetLivePreview(
     baseAngle
   }
 
-  val cardBgColor = Color(tokens.cardBg)
-  val secondaryBgColor = Color(tokens.cardSecondary)
-  val primaryText = Color(tokens.textPrimary)
-  val secondaryText = Color(tokens.textSecondary)
-  val accentColor = Color(tokens.accent)
-  val playBg = Color(tokens.playButtonBg)
-  val playIcon = Color(tokens.playButtonIcon)
-  val borderColor = Color(tokens.border)
+  val cardBgColor = when (style) {
+    NowPlayingWidgetStyle.VINYL -> Color(0xFFEAB32E)
+    NowPlayingWidgetStyle.RING -> Color(0xFF13131A)
+    NowPlayingWidgetStyle.PIXEL -> Color(0xFF1C202B)
+    NowPlayingWidgetStyle.TYPE -> Color(0xFF111215)
+    NowPlayingWidgetStyle.FLOAT -> Color(0xFF090812)
+    else -> Color(tokens.cardBg)
+  }
+  val primaryText = when (style) {
+    NowPlayingWidgetStyle.VINYL -> Color(0xFF161618)
+    NowPlayingWidgetStyle.LIGHT -> Color(0xFF141418)
+    NowPlayingWidgetStyle.PAPER -> Color(0xFF231F1C)
+    else -> Color(tokens.textPrimary)
+  }
+  val secondaryText = when (style) {
+    NowPlayingWidgetStyle.VINYL -> Color(0xFF4A380B)
+    NowPlayingWidgetStyle.LIGHT -> Color(0xFF71717A)
+    NowPlayingWidgetStyle.PAPER -> Color(0xFF7A7067)
+    else -> Color(tokens.textSecondary)
+  }
+  val accentColor = when (style) {
+    NowPlayingWidgetStyle.RING -> Color(0xFFF27D52)
+    NowPlayingWidgetStyle.FROST -> Color.White
+    NowPlayingWidgetStyle.LIGHT -> Color(0xFFE11D48)
+    NowPlayingWidgetStyle.NIGHT -> Color(0xFF4CE0B3)
+    NowPlayingWidgetStyle.VINYL -> Color(0xFF161618)
+    NowPlayingWidgetStyle.PIXEL -> Color(0xFFF4BD6A)
+    NowPlayingWidgetStyle.PAPER -> Color(0xFFA84A24)
+    NowPlayingWidgetStyle.AURA -> Color(0xFF5EEAD4)
+    NowPlayingWidgetStyle.TYPE -> Color(0xFFFF5A36)
+    NowPlayingWidgetStyle.FLOAT -> Color(0xFF00F0FF)
+  }
+  val playBg = when (style) {
+    NowPlayingWidgetStyle.RING -> Color(0xFFF27D52)
+    NowPlayingWidgetStyle.FROST -> Color.White
+    NowPlayingWidgetStyle.LIGHT -> Color(0xFFE11D48)
+    NowPlayingWidgetStyle.NIGHT -> Color(0xFF4CE0B3)
+    NowPlayingWidgetStyle.VINYL -> Color(0xFF161618)
+    NowPlayingWidgetStyle.PIXEL -> Color(0xFFF4BD6A)
+    NowPlayingWidgetStyle.PAPER -> Color.Transparent
+    NowPlayingWidgetStyle.AURA -> Color(0xFF5EEAD4)
+    NowPlayingWidgetStyle.TYPE -> Color(0xFFFF5A36)
+    NowPlayingWidgetStyle.FLOAT -> Color(0x2600F0FF)
+  }
+  val playIcon = when (style) {
+    NowPlayingWidgetStyle.LIGHT -> Color.White
+    NowPlayingWidgetStyle.VINYL -> Color(0xFFEAB32E)
+    NowPlayingWidgetStyle.PAPER -> Color(0xFF231F1C)
+    NowPlayingWidgetStyle.FLOAT -> Color(0xFF00F0FF)
+    else -> Color(0xFF13131A)
+  }
+  val borderColor = when (style) {
+    NowPlayingWidgetStyle.FLOAT -> Color(0xFF00F0FF)
+    NowPlayingWidgetStyle.PIXEL -> Color(0xFF353B4B)
+    else -> Color(tokens.border)
+  }
+  val trackColor = when (style) {
+    NowPlayingWidgetStyle.LIGHT -> Color(0xFFE4E4E7)
+    NowPlayingWidgetStyle.VINYL -> Color(0x33161618)
+    NowPlayingWidgetStyle.PIXEL -> Color(0xFF353B4B)
+    NowPlayingWidgetStyle.PAPER -> Color(0x2E231F1C)
+    else -> Color.White.copy(alpha = 0.20f)
+  }
 
   Box(
     modifier = Modifier
-      .fillMaxWidth()
+      .width(cardWidth)
       .height(cardHeight)
       .clip(RoundedCornerShape(corner))
       .background(
         when (style) {
+          NowPlayingWidgetStyle.FROST -> Brush.linearGradient(
+            listOf(Color(0xFF5C1F42), Color(0xFF3E1C47), Color(0xFF241634))
+          )
+          NowPlayingWidgetStyle.NIGHT -> Brush.verticalGradient(
+            listOf(Color(0xFF2CC4AA), Color(0xFF244278), Color(0xFF070910))
+          )
           NowPlayingWidgetStyle.AURA -> Brush.linearGradient(
-            listOf(cardBgColor, secondaryBgColor.copy(alpha = 0.85f), cardBgColor)
+            listOf(Color(0xFF0B1D2C), Color(0xFF143D4B), Color(0xFF251E42))
           )
           else -> Brush.linearGradient(listOf(cardBgColor, cardBgColor))
         }
       )
-      .border(1.dp, borderColor, RoundedCornerShape(corner))
+      .border(if (style == NowPlayingWidgetStyle.PIXEL || style == NowPlayingWidgetStyle.FLOAT) 1.5.dp else 1.dp, borderColor, RoundedCornerShape(corner))
       .clipToBounds()
   ) {
-    // Paper fibers + top-right soft highlight for Vinyl & Paper styles
-    if (style == NowPlayingWidgetStyle.VINYL || style == NowPlayingWidgetStyle.PAPER) {
-      Canvas(modifier = Modifier.matchParentSize()) {
-        drawRect(
-          brush = Brush.radialGradient(
-            colors = listOf(Color.White.copy(alpha = 0.45f), Color.Transparent),
-            center = Offset(this.size.width * 0.92f, this.size.height * 0.08f),
-            radius = this.size.maxDimension * 0.82f
-          )
-        )
-        var y = 0f
-        val step = 3.dp.toPx().coerceAtLeast(3f)
-        while (y < this.size.height) {
-          drawLine(
-            color = Color(0xFF785A32).copy(alpha = 0.035f),
-            start = Offset(0f, y),
-            end = Offset(this.size.width, y),
-            strokeWidth = 1f
-          )
-          y += step
-        }
-      }
-    }
-
-    // Half-visible Vinyl disc behind left edge when Vinyl style is active
+    // Clipped Vinyl record on the right/top-right edge (matching reference sheet)
     if (style == NowPlayingWidgetStyle.VINYL) {
       val discSize = when (effectiveSize) {
-        NowPlayingWidgetSize.COMPACT -> 66.dp
-        NowPlayingWidgetSize.PLAYER -> 136.dp
-        NowPlayingWidgetSize.LYRICS -> 116.dp
+        NowPlayingStudioSize.SMALL -> 108.dp
+        NowPlayingStudioSize.COMPACT -> 92.dp
+        NowPlayingStudioSize.MEDIUM, NowPlayingStudioSize.LYRICS -> 150.dp
+        NowPlayingStudioSize.LARGE -> 230.dp
       }
       SettingsVinylDiscCanvas(
         diameter = discSize,
         palette = palette,
         rotationDegrees = vinylSpin,
         modifier = Modifier
-          .align(if (effectiveSize == NowPlayingWidgetSize.LYRICS) Alignment.TopStart else Alignment.CenterStart)
+          .align(Alignment.TopEnd)
           .offset(
-            x = -(discSize / 2),
-            y = if (effectiveSize == NowPlayingWidgetSize.LYRICS) 18.dp else 0.dp
+            x = discSize * 0.24f,
+            y = if (effectiveSize == NowPlayingStudioSize.COMPACT) (-10).dp else (-18).dp
           )
           .zIndex(0f)
       )
     }
 
-    val startPadding = if (style == NowPlayingWidgetStyle.VINYL) {
-      when (effectiveSize) {
-        NowPlayingWidgetSize.COMPACT -> 44.dp
-        NowPlayingWidgetSize.PLAYER -> 78.dp
-        NowPlayingWidgetSize.LYRICS -> 68.dp
-      }
-    } else {
-      14.dp
-    }
-
-    when (effectiveSize) {
-      NowPlayingWidgetSize.COMPACT -> {
-        Row(
+    Column(modifier = Modifier.fillMaxSize().zIndex(1f)) {
+      if (style == NowPlayingWidgetStyle.PIXEL) {
+        Box(
           modifier = Modifier
-            .fillMaxSize()
-            .zIndex(1f)
-            .padding(start = startPadding, end = 12.dp, top = 10.dp, bottom = 10.dp),
-          verticalAlignment = Alignment.CenterVertically,
-          horizontalArrangement = Arrangement.spacedBy(10.dp)
+            .fillMaxWidth()
+            .height(17.dp)
+            .background(Color(0xFFF4BD6A))
+            .padding(horizontal = 8.dp),
+          contentAlignment = Alignment.CenterStart
         ) {
-          if (style != NowPlayingWidgetStyle.VINYL && style != NowPlayingWidgetStyle.TYPE) {
-            PreviewArtworkSlot(
-              style = style,
-              size = 50.dp,
-              artworkUrl = artworkUrl,
-              rawArtwork = rawArtwork,
-              progressFraction = progressFraction,
-              accentColor = accentColor,
-              trackColor = Color(tokens.progressTrack)
-            )
-          }
-          Column(modifier = Modifier.weight(1f)) {
-            Text(
-              text = title,
-              color = primaryText,
-              fontFamily = effectiveFontFamily,
-              fontWeight = FontWeight.Bold,
-              fontSize = 14.sp,
-              maxLines = 1,
-              overflow = TextOverflow.Ellipsis
-            )
-            Text(
-              text = artist,
-              color = secondaryText,
-              fontFamily = effectiveFontFamily,
-              fontSize = 11.5.sp,
-              maxLines = 1,
-              overflow = TextOverflow.Ellipsis
-            )
-          }
-          Box(
-            modifier = Modifier
-              .size(38.dp)
-              .clip(CircleShape)
-              .background(playBg),
-            contentAlignment = Alignment.Center
-          ) {
-            Icon(
-              imageVector = if (isPlaying) Icons.Rounded.Pause else Icons.Rounded.PlayArrow,
-              contentDescription = null,
-              tint = playIcon,
-              modifier = Modifier.size(20.dp)
-            )
-          }
-          Icon(
-            imageVector = Icons.Rounded.SkipNext,
-            contentDescription = null,
-            tint = primaryText,
-            modifier = Modifier.size(22.dp)
+          Text(
+            text = "NOW PLAYING",
+            color = Color(0xFF1C202B),
+            fontFamily = FontFamily.Monospace,
+            fontWeight = FontWeight.Bold,
+            fontSize = 8.5.sp,
+            letterSpacing = 1.1.sp
           )
         }
       }
 
-      NowPlayingWidgetSize.PLAYER -> {
-        Column(
-          modifier = Modifier
-            .fillMaxSize()
-            .zIndex(1f)
-            .padding(start = startPadding, end = 14.dp, top = 12.dp, bottom = 10.dp),
-          verticalArrangement = Arrangement.SpaceBetween
-        ) {
-          Row(
-            modifier = Modifier.fillMaxWidth(),
-            verticalAlignment = Alignment.CenterVertically,
-            horizontalArrangement = Arrangement.spacedBy(12.dp)
+      when (effectiveSize) {
+        NowPlayingStudioSize.SMALL -> {
+          Column(
+            modifier = Modifier
+              .fillMaxSize()
+              .padding(11.dp),
+            verticalArrangement = Arrangement.SpaceBetween,
+            horizontalAlignment = if (style == NowPlayingWidgetStyle.RING) Alignment.CenterHorizontally else Alignment.Start
           ) {
-            if (style != NowPlayingWidgetStyle.VINYL && style != NowPlayingWidgetStyle.TYPE) {
-              PreviewArtworkSlot(
-                style = style,
-                size = 56.dp,
-                artworkUrl = artworkUrl,
-                rawArtwork = rawArtwork,
-                progressFraction = progressFraction,
-                accentColor = accentColor,
-                trackColor = Color(tokens.progressTrack)
-              )
+            if (style == NowPlayingWidgetStyle.RING) {
+              Box(contentAlignment = Alignment.Center) {
+                PreviewArtworkSlot(
+                  style = style,
+                  size = 82.dp,
+                  artworkUrl = artworkUrl,
+                  rawArtwork = rawArtwork,
+                  progressFraction = progressFraction,
+                  accentColor = accentColor,
+                  trackColor = trackColor
+                )
+                StudioPlayButton(style = style, isPlaying = isPlaying, playBg = playBg, playIcon = playIcon, size = 32.dp)
+              }
+            } else {
+              Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.SpaceBetween,
+                verticalAlignment = Alignment.Top
+              ) {
+                StudioPlayButton(style = style, isPlaying = isPlaying, playBg = playBg, playIcon = playIcon, size = 32.dp)
+                if (style != NowPlayingWidgetStyle.VINYL && style != NowPlayingWidgetStyle.NIGHT && style != NowPlayingWidgetStyle.TYPE) {
+                  PreviewArtworkSlot(
+                    style = style,
+                    size = 56.dp,
+                    artworkUrl = artworkUrl,
+                    rawArtwork = rawArtwork,
+                    progressFraction = progressFraction,
+                    accentColor = accentColor,
+                    trackColor = trackColor
+                  )
+                }
+              }
             }
-            Column(modifier = Modifier.weight(1f)) {
+
+            Column(
+              modifier = Modifier.fillMaxWidth(),
+              horizontalAlignment = if (style == NowPlayingWidgetStyle.RING) Alignment.CenterHorizontally else Alignment.Start
+            ) {
               Text(
                 text = title,
                 color = primaryText,
                 fontFamily = effectiveFontFamily,
                 fontWeight = FontWeight.Bold,
-                fontSize = 15.5.sp,
+                fontSize = 12.5.sp,
                 maxLines = 1,
                 overflow = TextOverflow.Ellipsis
               )
-              Spacer(modifier = Modifier.height(2.dp))
               Text(
                 text = artist,
                 color = secondaryText,
                 fontFamily = effectiveFontFamily,
-                fontSize = 12.sp,
+                fontSize = 10.5.sp,
                 maxLines = 1,
                 overflow = TextOverflow.Ellipsis
               )
-            }
-          }
-
-          Column(verticalArrangement = Arrangement.spacedBy(3.dp)) {
-            PreviewProgressBar(
-              style = style,
-              fraction = progressFraction,
-              fillColor = Color(tokens.progressFill),
-              trackColor = Color(tokens.progressTrack)
-            )
-            if (style == NowPlayingWidgetStyle.VINYL || style == NowPlayingWidgetStyle.PAPER) {
-              Row(
-                modifier = Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.SpaceBetween
-              ) {
-                Text(
-                  text = VinylWidgetRenderer.formatTabularTime(positionMs),
-                  color = secondaryText,
-                  fontSize = 10.sp
-                )
-                Text(
-                  text = VinylWidgetRenderer.formatTabularTime(durationMs),
-                  color = secondaryText,
-                  fontSize = 10.sp
+              if (style != NowPlayingWidgetStyle.RING) {
+                Spacer(modifier = Modifier.height(5.dp))
+                PreviewProgressBar(
+                  style = style,
+                  fraction = progressFraction,
+                  fillColor = accentColor,
+                  trackColor = trackColor
                 )
               }
-            }
-          }
-
-          Row(
-            modifier = Modifier.fillMaxWidth(),
-            horizontalArrangement = Arrangement.SpaceBetween,
-            verticalAlignment = Alignment.CenterVertically
-          ) {
-            Icon(Icons.Rounded.SkipPrevious, contentDescription = null, tint = primaryText, modifier = Modifier.size(21.dp))
-            Box(
-              modifier = Modifier
-                .size(38.dp)
-                .clip(CircleShape)
-                .background(playBg),
-              contentAlignment = Alignment.Center
-            ) {
-              Icon(
-                imageVector = if (isPlaying) Icons.Rounded.Pause else Icons.Rounded.PlayArrow,
-                contentDescription = null,
-                tint = playIcon,
-                modifier = Modifier.size(20.dp)
-              )
-            }
-            Icon(Icons.Rounded.SkipNext, contentDescription = null, tint = primaryText, modifier = Modifier.size(21.dp))
-            if (showLikeButton) {
-              Icon(
-                imageVector = if (isLiked) Icons.Rounded.Favorite else Icons.Rounded.FavoriteBorder,
-                contentDescription = null,
-                tint = if (isLiked) Color(0xFFEF4444) else primaryText,
-                modifier = Modifier.size(19.dp)
-              )
-            } else {
-              Spacer(modifier = Modifier.size(19.dp))
             }
           }
         }
-      }
 
-      NowPlayingWidgetSize.LYRICS -> {
-        Column(
-          modifier = Modifier
-            .fillMaxSize()
-            .zIndex(1f)
-            .padding(start = startPadding, end = 14.dp, top = 12.dp, bottom = 12.dp),
-          verticalArrangement = Arrangement.SpaceBetween
-        ) {
+        NowPlayingStudioSize.COMPACT -> {
           Row(
-            modifier = Modifier.fillMaxWidth(),
+            modifier = Modifier
+              .fillMaxSize()
+              .padding(horizontal = 12.dp, vertical = 7.dp),
             verticalAlignment = Alignment.CenterVertically,
             horizontalArrangement = Arrangement.spacedBy(10.dp)
           ) {
-            if (style != NowPlayingWidgetStyle.VINYL && style != NowPlayingWidgetStyle.TYPE) {
+            if (style != NowPlayingWidgetStyle.VINYL && style != NowPlayingWidgetStyle.TYPE && style != NowPlayingWidgetStyle.NIGHT) {
               PreviewArtworkSlot(
                 style = style,
-                size = 38.dp,
+                size = 44.dp,
                 artworkUrl = artworkUrl,
                 rawArtwork = rawArtwork,
                 progressFraction = progressFraction,
                 accentColor = accentColor,
-                trackColor = Color(tokens.progressTrack)
+                trackColor = trackColor
               )
             }
-            Column(modifier = Modifier.weight(1f)) {
+            Column(
+              modifier = Modifier
+                .weight(1f)
+                .padding(end = if (style == NowPlayingWidgetStyle.VINYL) 48.dp else 0.dp)
+            ) {
               Text(
                 text = title,
                 color = primaryText,
                 fontFamily = effectiveFontFamily,
                 fontWeight = FontWeight.Bold,
-                fontSize = 13.5.sp,
+                fontSize = 13.sp,
                 maxLines = 1,
                 overflow = TextOverflow.Ellipsis
               )
@@ -861,81 +887,384 @@ private fun NowPlayingWidgetLivePreview(
                 text = artist,
                 color = secondaryText,
                 fontFamily = effectiveFontFamily,
+                fontSize = 10.5.sp,
+                maxLines = 1,
+                overflow = TextOverflow.Ellipsis
+              )
+              if (style != NowPlayingWidgetStyle.RING) {
+                Spacer(modifier = Modifier.height(4.dp))
+                PreviewProgressBar(
+                  style = style,
+                  fraction = progressFraction,
+                  fillColor = accentColor,
+                  trackColor = trackColor
+                )
+              }
+            }
+            StudioPlayButton(style = style, isPlaying = isPlaying, playBg = playBg, playIcon = playIcon, size = 34.dp)
+          }
+        }
+
+        NowPlayingStudioSize.MEDIUM -> {
+          if (style == NowPlayingWidgetStyle.RING) {
+            Row(
+              modifier = Modifier
+                .fillMaxSize()
+                .padding(14.dp),
+              verticalAlignment = Alignment.CenterVertically,
+              horizontalArrangement = Arrangement.spacedBy(16.dp)
+            ) {
+              PreviewArtworkSlot(
+                style = style,
+                size = 108.dp,
+                artworkUrl = artworkUrl,
+                rawArtwork = rawArtwork,
+                progressFraction = progressFraction,
+                accentColor = accentColor,
+                trackColor = trackColor
+              )
+              Column(
+                modifier = Modifier.weight(1f).fillMaxHeight(),
+                verticalArrangement = Arrangement.SpaceBetween
+              ) {
+                Column {
+                  Text(
+                    text = title,
+                    color = primaryText,
+                    fontFamily = effectiveFontFamily,
+                    fontWeight = FontWeight.Bold,
+                    fontSize = 16.sp,
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis
+                  )
+                  Text(
+                    text = artist,
+                    color = secondaryText,
+                    fontFamily = effectiveFontFamily,
+                    fontSize = 12.sp,
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis
+                  )
+                }
+                StudioTransportRow(
+                  style = style,
+                  isPlaying = isPlaying,
+                  primaryText = primaryText,
+                  playBg = playBg,
+                  playIcon = playIcon
+                )
+              }
+            }
+          } else {
+            Column(
+              modifier = Modifier
+                .fillMaxSize()
+                .padding(horizontal = 14.dp, vertical = 11.dp),
+              verticalArrangement = Arrangement.SpaceBetween
+            ) {
+              Row(
+                modifier = Modifier.fillMaxWidth(),
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.spacedBy(12.dp)
+              ) {
+                val artOnLeft = style == NowPlayingWidgetStyle.LIGHT || style == NowPlayingWidgetStyle.PIXEL || style == NowPlayingWidgetStyle.PAPER
+                if (artOnLeft) {
+                  PreviewArtworkSlot(
+                    style = style,
+                    size = 64.dp,
+                    artworkUrl = artworkUrl,
+                    rawArtwork = rawArtwork,
+                    progressFraction = progressFraction,
+                    accentColor = accentColor,
+                    trackColor = trackColor
+                  )
+                }
+                Column(modifier = Modifier.weight(1f)) {
+                  Text(
+                    text = title,
+                    color = primaryText,
+                    fontFamily = effectiveFontFamily,
+                    fontWeight = FontWeight.Bold,
+                    fontSize = if (style == NowPlayingWidgetStyle.TYPE) 20.sp else 15.5.sp,
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis
+                  )
+                  Text(
+                    text = artist,
+                    color = secondaryText,
+                    fontFamily = effectiveFontFamily,
+                    fontSize = 12.sp,
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis
+                  )
+                }
+                if (!artOnLeft && style != NowPlayingWidgetStyle.VINYL && style != NowPlayingWidgetStyle.NIGHT && style != NowPlayingWidgetStyle.TYPE) {
+                  PreviewArtworkSlot(
+                    style = style,
+                    size = 64.dp,
+                    artworkUrl = artworkUrl,
+                    rawArtwork = rawArtwork,
+                    progressFraction = progressFraction,
+                    accentColor = accentColor,
+                    trackColor = trackColor
+                  )
+                }
+              }
+
+              PreviewProgressBar(
+                style = style,
+                fraction = progressFraction,
+                fillColor = accentColor,
+                trackColor = trackColor
+              )
+
+              StudioTransportRow(
+                style = style,
+                isPlaying = isPlaying,
+                primaryText = primaryText,
+                playBg = playBg,
+                playIcon = playIcon
+              )
+            }
+          }
+        }
+
+        NowPlayingStudioSize.LYRICS -> {
+          Column(
+            modifier = Modifier
+              .fillMaxSize()
+              .padding(horizontal = 14.dp, vertical = 10.dp),
+            verticalArrangement = Arrangement.SpaceBetween
+          ) {
+            Row(
+              modifier = Modifier.fillMaxWidth(),
+              horizontalArrangement = Arrangement.SpaceBetween,
+              verticalAlignment = Alignment.CenterVertically
+            ) {
+              Text(
+                text = "$title · $artist",
+                color = secondaryText,
+                fontFamily = effectiveFontFamily,
+                fontWeight = FontWeight.SemiBold,
                 fontSize = 11.sp,
+                maxLines = 1,
+                overflow = TextOverflow.Ellipsis,
+                modifier = Modifier.weight(1f)
+              )
+              StudioPlayButton(style = style, isPlaying = isPlaying, playBg = playBg, playIcon = playIcon, size = 26.dp)
+            }
+
+            Column(
+              modifier = Modifier.fillMaxWidth(),
+              verticalArrangement = Arrangement.spacedBy(3.dp),
+              horizontalAlignment = if (style == NowPlayingWidgetStyle.RING) Alignment.CenterHorizontally else Alignment.Start
+            ) {
+              Text(
+                text = prevLyric,
+                color = secondaryText.copy(alpha = 0.55f),
+                fontFamily = effectiveFontFamily,
+                fontSize = 11.5.sp,
+                maxLines = 1,
+                overflow = TextOverflow.Ellipsis
+              )
+              when (style) {
+                NowPlayingWidgetStyle.VINYL -> {
+                  Box(
+                    modifier = Modifier
+                      .clip(RoundedCornerShape(6.dp))
+                      .background(Color(0xFF161618))
+                      .padding(horizontal = 8.dp, vertical = 2.dp)
+                  ) {
+                    Text(
+                      text = currentLyric,
+                      color = Color(0xFFEAB32E),
+                      fontFamily = effectiveFontFamily,
+                      fontWeight = FontWeight.Bold,
+                      fontSize = 13.sp,
+                      maxLines = 1,
+                      overflow = TextOverflow.Ellipsis
+                    )
+                  }
+                }
+                NowPlayingWidgetStyle.LIGHT -> {
+                  Box(
+                    modifier = Modifier
+                      .background(Color(0xFFFECDD3), RoundedCornerShape(4.dp))
+                      .padding(horizontal = 6.dp, vertical = 1.dp)
+                  ) {
+                    Text(
+                      text = currentLyric,
+                      color = Color(0xFF141418),
+                      fontFamily = effectiveFontFamily,
+                      fontWeight = FontWeight.Bold,
+                      fontSize = 13.sp,
+                      maxLines = 1,
+                      overflow = TextOverflow.Ellipsis
+                    )
+                  }
+                }
+                else -> {
+                  val displayCurr = if (style == NowPlayingWidgetStyle.PIXEL) "> $currentLyric" else currentLyric
+                  val currColor = when (style) {
+                    NowPlayingWidgetStyle.RING,
+                    NowPlayingWidgetStyle.NIGHT,
+                    NowPlayingWidgetStyle.PIXEL,
+                    NowPlayingWidgetStyle.PAPER,
+                    NowPlayingWidgetStyle.AURA,
+                    NowPlayingWidgetStyle.FLOAT -> accentColor
+                    else -> primaryText
+                  }
+                  Text(
+                    text = displayCurr,
+                    color = currColor,
+                    fontFamily = effectiveFontFamily,
+                    fontWeight = FontWeight.Bold,
+                    fontSize = 13.5.sp,
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis
+                  )
+                }
+              }
+              Text(
+                text = nextLyric,
+                color = secondaryText.copy(alpha = 0.55f),
+                fontFamily = effectiveFontFamily,
+                fontSize = 11.5.sp,
                 maxLines = 1,
                 overflow = TextOverflow.Ellipsis
               )
             }
-            if (showLikeButton) {
-              Icon(
-                imageVector = if (isLiked) Icons.Rounded.Favorite else Icons.Rounded.FavoriteBorder,
-                contentDescription = null,
-                tint = if (isLiked) Color(0xFFEF4444) else secondaryText,
-                modifier = Modifier.size(18.dp)
-              )
-            }
-          }
 
-          Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
-            Text(
-              text = currentLyric,
-              color = primaryText,
-              fontFamily = effectiveFontFamily,
-              fontWeight = FontWeight.Bold,
-              fontSize = 16.sp,
-              lineHeight = 23.sp,
-              maxLines = 2,
-              overflow = TextOverflow.Ellipsis
-            )
-            Text(
-              text = nextLyric,
-              color = secondaryText,
-              fontFamily = effectiveFontFamily,
-              fontSize = 12.5.sp,
-              lineHeight = 18.sp,
-              maxLines = 1,
-              overflow = TextOverflow.Ellipsis
-            )
-          }
-
-          Row(
-            modifier = Modifier.fillMaxWidth(),
-            verticalAlignment = Alignment.CenterVertically,
-            horizontalArrangement = Arrangement.spacedBy(12.dp)
-          ) {
-            Box(modifier = Modifier.weight(1f)) {
+            if (style != NowPlayingWidgetStyle.RING) {
               PreviewProgressBar(
                 style = style,
                 fraction = progressFraction,
-                fillColor = Color(tokens.progressFill),
-                trackColor = Color(tokens.progressTrack)
+                fillColor = accentColor,
+                trackColor = trackColor
+              )
+            } else {
+              Spacer(modifier = Modifier.height(2.dp))
+            }
+          }
+        }
+
+        NowPlayingStudioSize.LARGE -> {
+          Column(
+            modifier = Modifier
+              .fillMaxSize()
+              .padding(18.dp),
+            verticalArrangement = Arrangement.SpaceBetween,
+            horizontalAlignment = Alignment.CenterHorizontally
+          ) {
+            if (style != NowPlayingWidgetStyle.VINYL && style != NowPlayingWidgetStyle.NIGHT && style != NowPlayingWidgetStyle.TYPE) {
+              PreviewArtworkSlot(
+                style = style,
+                size = 166.dp,
+                artworkUrl = artworkUrl,
+                rawArtwork = rawArtwork,
+                progressFraction = progressFraction,
+                accentColor = accentColor,
+                trackColor = trackColor
+              )
+            } else {
+              Spacer(modifier = Modifier.height(110.dp))
+            }
+
+            Column(
+              modifier = Modifier.fillMaxWidth(),
+              horizontalAlignment = if (style == NowPlayingWidgetStyle.RING) Alignment.CenterHorizontally else Alignment.Start
+            ) {
+              Text(
+                text = title,
+                color = primaryText,
+                fontFamily = effectiveFontFamily,
+                fontWeight = FontWeight.ExtraBold,
+                fontSize = if (style == NowPlayingWidgetStyle.TYPE) 30.sp else 19.sp,
+                maxLines = 1,
+                overflow = TextOverflow.Ellipsis
+              )
+              Text(
+                text = artist,
+                color = secondaryText,
+                fontFamily = effectiveFontFamily,
+                fontSize = 13.sp,
+                maxLines = 1,
+                overflow = TextOverflow.Ellipsis
               )
             }
-            Row(
-              horizontalArrangement = Arrangement.spacedBy(10.dp),
-              verticalAlignment = Alignment.CenterVertically
-            ) {
-              Icon(Icons.Rounded.SkipPrevious, contentDescription = null, tint = primaryText, modifier = Modifier.size(19.dp))
-              Box(
-                modifier = Modifier
-                  .size(32.dp)
-                  .clip(CircleShape)
-                  .background(playBg),
-                contentAlignment = Alignment.Center
-              ) {
-                Icon(
-                  imageVector = if (isPlaying) Icons.Rounded.Pause else Icons.Rounded.PlayArrow,
-                  contentDescription = null,
-                  tint = playIcon,
-                  modifier = Modifier.size(18.dp)
-                )
-              }
-              Icon(Icons.Rounded.SkipNext, contentDescription = null, tint = primaryText, modifier = Modifier.size(19.dp))
+
+            if (style != NowPlayingWidgetStyle.RING) {
+              PreviewProgressBar(
+                style = style,
+                fraction = progressFraction,
+                fillColor = accentColor,
+                trackColor = trackColor
+              )
             }
+
+            StudioTransportRow(
+              style = style,
+              isPlaying = isPlaying,
+              primaryText = primaryText,
+              playBg = playBg,
+              playIcon = playIcon
+            )
           }
         }
       }
     }
+  }
+}
+
+@Composable
+private fun StudioPlayButton(
+  style: NowPlayingWidgetStyle,
+  isPlaying: Boolean,
+  playBg: Color,
+  playIcon: Color,
+  size: Dp
+) {
+  val shape = if (style == NowPlayingWidgetStyle.PIXEL) RoundedCornerShape(0.dp) else CircleShape
+  Box(
+    modifier = Modifier
+      .size(size)
+      .clip(shape)
+      .background(playBg)
+      .then(
+        if (style == NowPlayingWidgetStyle.PAPER) {
+          Modifier.border(1.5.dp, Color(0xFF231F1C), shape)
+        } else if (style == NowPlayingWidgetStyle.FLOAT) {
+          Modifier.border(1.5.dp, Color(0xFF00F0FF), shape)
+        } else {
+          Modifier
+        }
+      ),
+    contentAlignment = Alignment.Center
+  ) {
+    Icon(
+      imageVector = if (isPlaying) Icons.Rounded.Pause else Icons.Rounded.PlayArrow,
+      contentDescription = null,
+      tint = playIcon,
+      modifier = Modifier.size(size * 0.52f)
+    )
+  }
+}
+
+@Composable
+private fun StudioTransportRow(
+  style: NowPlayingWidgetStyle,
+  isPlaying: Boolean,
+  primaryText: Color,
+  playBg: Color,
+  playIcon: Color
+) {
+  Row(
+    verticalAlignment = Alignment.CenterVertically,
+    horizontalArrangement = Arrangement.spacedBy(14.dp)
+  ) {
+    Icon(Icons.Rounded.SkipPrevious, contentDescription = null, tint = primaryText, modifier = Modifier.size(20.dp))
+    StudioPlayButton(style = style, isPlaying = isPlaying, playBg = playBg, playIcon = playIcon, size = 36.dp)
+    Icon(Icons.Rounded.SkipNext, contentDescription = null, tint = primaryText, modifier = Modifier.size(20.dp))
   }
 }
 

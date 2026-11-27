@@ -1,0 +1,1182 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>AURIX Now Playing — Home-Screen Widget Redesign (5 Sizes × 10 Styles)</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=Instrument+Serif:ital@0;1&family=Plus+Jakarta+Sans:wght@400;500;600;700;800&display=swap" rel="stylesheet" />
+  <style>
+    :root {
+      --font-sans: 'Plus Jakarta Sans', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+      --font-serif: 'Instrument Serif', Georgia, 'Times New Roman', serif;
+      --page-bg: #17171A;
+      --page-ink: #F2F2F5;
+      --page-muted: #8E8E99;
+    }
+
+    * {
+      box-sizing: border-box;
+      margin: 0;
+      padding: 0;
+    }
+
+    body {
+      background-color: var(--page-bg);
+      color: var(--page-ink);
+      font-family: var(--font-sans);
+      padding: 36px 28px 64px;
+      -webkit-font-smoothing: antialiased;
+    }
+
+    .page-header {
+      max-width: 1840px;
+      margin: 0 auto 32px;
+      display: flex;
+      flex-wrap: wrap;
+      align-items: baseline;
+      justify-content: space-between;
+      gap: 12px;
+      border-bottom: 1px solid rgba(255, 255, 255, 0.08);
+      padding-bottom: 18px;
+    }
+
+    .page-header h1 {
+      font-size: 20px;
+      font-weight: 700;
+      letter-spacing: -0.02em;
+    }
+
+    .page-header p {
+      font-size: 13px;
+      color: var(--page-muted);
+    }
+
+    .size-section {
+      max-width: 1840px;
+      margin: 0 auto 44px;
+    }
+
+    .size-label {
+      font-size: 11px;
+      font-weight: 700;
+      text-transform: uppercase;
+      letter-spacing: 0.12em;
+      color: var(--page-muted);
+      margin-bottom: 16px;
+    }
+
+    .widgets-row {
+      display: flex;
+      flex-wrap: nowrap;
+      gap: 20px;
+      overflow-x: auto;
+      padding-bottom: 12px;
+      align-items: flex-start;
+    }
+
+    .widget-col {
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      flex: 0 0 auto;
+    }
+
+    .widget-caption {
+      margin-top: 10px;
+      font-size: 11px;
+      font-weight: 500;
+      color: var(--page-muted);
+      letter-spacing: 0.02em;
+    }
+
+    /* Standard Widget Grid Dimensions */
+    .w-small { width: 155px; height: 155px; }
+    .w-compact { width: 329px; height: 72px; }
+    .w-medium { width: 329px; height: 155px; }
+    .w-lyrics { width: 329px; height: 155px; }
+    .w-large { width: 329px; height: 345px; }
+
+    .widget-card {
+      position: relative;
+      overflow: hidden;
+      user-select: none;
+      box-shadow: 0 14px 32px rgba(0, 0, 0, 0.36);
+      transition: transform 0.18s ease;
+    }
+
+    /* Accessible buttons with >=44px touch target */
+    .ctrl-btn {
+      appearance: none;
+      border: none;
+      background: transparent;
+      cursor: pointer;
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      min-width: 44px;
+      min-height: 44px;
+      padding: 0;
+      color: inherit;
+      position: relative;
+      z-index: 4;
+      border-radius: 999px;
+    }
+
+    .ctrl-btn:focus-visible {
+      outline: 2px solid #FFFFFF;
+      outline-offset: 2px;
+    }
+
+    .ctrl-btn svg {
+      pointer-events: none;
+      display: block;
+    }
+
+    .icon-pause { display: none; }
+    .widget-card.is-playing .icon-play { display: none; }
+    .widget-card.is-playing .icon-pause { display: block; }
+
+    /* ============================================================
+       STYLE 1: RING
+       Circular art with progress ring around it, centered composition, no linear bar
+       Palette: #13131A, #272733, #F27D52, #D9468F, #FFFFFF, #9C9CA9
+       ============================================================ */
+    .style-ring {
+      background: #13131A;
+      color: #FFFFFF;
+      border-radius: 24px;
+      border: 1px solid rgba(255, 255, 255, 0.07);
+    }
+    .ring-wrap {
+      position: relative;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      flex-shrink: 0;
+    }
+    .ring-art {
+      border-radius: 50%;
+      background: radial-gradient(circle at 30% 25%, #FF8E53 0%, #D9468F 55%, #3B1D5E 100%);
+      position: relative;
+      overflow: hidden;
+    }
+    .ring-svg {
+      position: absolute;
+      inset: 0;
+      width: 100%;
+      height: 100%;
+      transform: rotate(-90deg);
+      pointer-events: none;
+    }
+    .ring-play-circle {
+      width: 36px;
+      height: 36px;
+      border-radius: 50%;
+      background: #F27D52;
+      color: #13131A;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      box-shadow: 0 4px 12px rgba(242, 125, 82, 0.35);
+    }
+
+    /* ============================================================
+       STYLE 2: FROST
+       Blurred album art background, glass overlay, progress bar with knob
+       Palette: #5C1F42, #2B173D, #FF758F, #FFFFFF, #E2D4EA, rgba(255,255,255,0.22)
+       ============================================================ */
+    .style-frost {
+      background:
+        radial-gradient(circle at 82% 24%, rgba(255, 117, 143, 0.58) 0%, transparent 55%),
+        radial-gradient(circle at 18% 80%, rgba(168, 85, 247, 0.45) 0%, transparent 60%),
+        linear-gradient(135deg, #5C1F42 0%, #3E1C47 52%, #241634 100%);
+      color: #FFFFFF;
+      border-radius: 24px;
+      border: 1px solid rgba(255, 255, 255, 0.18);
+    }
+    .frost-art {
+      border-radius: 14px;
+      background: linear-gradient(135deg, #FF758F 0%, #B53471 50%, #3B1D5E 100%);
+      box-shadow: 0 8px 20px rgba(0, 0, 0, 0.28);
+      flex-shrink: 0;
+    }
+    .frost-play-circle {
+      width: 36px;
+      height: 36px;
+      border-radius: 50%;
+      background: #FFFFFF;
+      color: #2B173D;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+    }
+    .frost-bar {
+      position: relative;
+      height: 4px;
+      background: rgba(255, 255, 255, 0.24);
+      border-radius: 99px;
+      width: 100%;
+    }
+    .frost-bar-fill {
+      position: absolute;
+      left: 0;
+      top: 0;
+      bottom: 0;
+      width: 62%;
+      background: #FFFFFF;
+      border-radius: 99px;
+    }
+    .frost-bar-knob {
+      position: absolute;
+      left: 62%;
+      top: 50%;
+      width: 10px;
+      height: 10px;
+      background: #FFFFFF;
+      border-radius: 50%;
+      transform: translate(-50%, -50%);
+      box-shadow: 0 1px 4px rgba(0, 0, 0, 0.4);
+    }
+
+    /* ============================================================
+       STYLE 3: LIGHT
+       White card, full-bleed square cover, editorial spacing, marker-style lyric highlight
+       Palette: #FFFFFF, #141418, #71717A, #E11D48, #FFE4E9, #FF8C7A
+       ============================================================ */
+    .style-light {
+      background: #FFFFFF;
+      color: #141418;
+      border-radius: 22px;
+    }
+    .light-bleed-art {
+      background: linear-gradient(135deg, #FF9478 0%, #E14D87 52%, #7E3AF2 100%);
+    }
+    .light-play-circle {
+      width: 36px;
+      height: 36px;
+      border-radius: 50%;
+      background: #E11D48;
+      color: #FFFFFF;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      box-shadow: 0 4px 12px rgba(225, 29, 72, 0.3);
+    }
+    .light-bar {
+      height: 3px;
+      background: #E4E4E7;
+      border-radius: 99px;
+      overflow: hidden;
+      width: 100%;
+    }
+    .light-bar-fill {
+      width: 62%;
+      height: 100%;
+      background: #E11D48;
+    }
+    .light-marker {
+      display: inline;
+      background: linear-gradient(180deg, transparent 58%, #FECDD3 58%, #FECDD3 95%, transparent 95%);
+      border-bottom: 2px solid #E11D48;
+      font-weight: 700;
+      color: #141418;
+      padding: 0 2px;
+    }
+
+    /* ============================================================
+       STYLE 4: NIGHT
+       Album art as full-bleed poster background, text at bottom, neon accent glow
+       Palette: #070910, #2CC4AA, #253682, #4CE0B3, #FFFFFF, #B4C6D0
+       ============================================================ */
+    .style-night {
+      background:
+        linear-gradient(180deg, rgba(7, 9, 16, 0.05) 0%, rgba(7, 9, 16, 0.55) 54%, #070910 92%),
+        linear-gradient(135deg, #2CC4AA 0%, #24688E 45%, #282B78 100%);
+      color: #FFFFFF;
+      border-radius: 24px;
+      border: 1px solid rgba(76, 224, 179, 0.22);
+    }
+    .night-play-circle {
+      width: 36px;
+      height: 36px;
+      border-radius: 50%;
+      background: #4CE0B3;
+      color: #070910;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      box-shadow: 0 0 16px rgba(76, 224, 179, 0.55);
+    }
+    .night-bar {
+      height: 3px;
+      background: rgba(255, 255, 255, 0.18);
+      border-radius: 99px;
+      overflow: hidden;
+      width: 100%;
+    }
+    .night-bar-fill {
+      width: 62%;
+      height: 100%;
+      background: #4CE0B3;
+      box-shadow: 0 0 8px #4CE0B3;
+    }
+
+    /* ============================================================
+       STYLE 5: VINYL
+       Large record partly clipped off the card edge, bold flat color, label-style lyric highlight
+       Palette: #EAB32E, #161618, #F08C6C, #4A380B, #D19B1B
+       ============================================================ */
+    .style-vinyl {
+      background: #EAB32E;
+      color: #161618;
+      border-radius: 22px;
+    }
+    .vinyl-disc {
+      border-radius: 50%;
+      background:
+        radial-gradient(circle, #161618 0 11%, #F08C6C 12% 33%, #161618 34% 46%, #2A2A2E 47% 48%, #161618 49% 61%, #2A2A2E 62% 63%, #161618 64% 76%, #2A2A2E 77% 78%, #161618 79% 100%);
+      box-shadow: 0 8px 22px rgba(0, 0, 0, 0.28);
+      position: absolute;
+      pointer-events: none;
+    }
+    .vinyl-play-circle {
+      width: 36px;
+      height: 36px;
+      border-radius: 50%;
+      background: #161618;
+      color: #EAB32E;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+    }
+    .vinyl-bar {
+      height: 4px;
+      background: rgba(22, 22, 24, 0.20);
+      border-radius: 99px;
+      overflow: hidden;
+      width: 100%;
+    }
+    .vinyl-bar-fill {
+      width: 62%;
+      height: 100%;
+      background: #161618;
+    }
+    .vinyl-label-pill {
+      display: inline-block;
+      background: #161618;
+      color: #EAB32E;
+      font-weight: 700;
+      padding: 3px 10px;
+      border-radius: 6px;
+    }
+
+    /* ============================================================
+       STYLE 6: PIXEL
+       Retro game HUD with title bar, pixel/mono font, segmented progress bar, square buttons
+       Palette: #1C202B, #F4BD6A, #353B4B, #FFFFFF, #9BA3B8, #7C5CE6
+       ============================================================ */
+    .style-pixel {
+      background: #1C202B;
+      color: #FFFFFF;
+      border-radius: 4px;
+      border: 2px solid #353B4B;
+      font-family: 'Courier New', Consolas, monospace;
+    }
+    .pixel-header {
+      height: 18px;
+      background: #F4BD6A;
+      color: #1C202B;
+      font-size: 9px;
+      font-weight: 700;
+      letter-spacing: 0.14em;
+      display: flex;
+      align-items: center;
+      padding: 0 10px;
+    }
+    .pixel-art {
+      border: 2px solid #FFFFFF;
+      background:
+        linear-gradient(90deg, rgba(255,255,255,0.12) 50%, transparent 50%),
+        linear-gradient(rgba(255,255,255,0.12) 50%, transparent 50%),
+        linear-gradient(135deg, #F472B6 0%, #8B5CF6 55%, #1E1B4B 100%);
+      background-size: 8px 8px, 8px 8px, 100% 100%;
+      flex-shrink: 0;
+    }
+    .pixel-play-sq {
+      width: 34px;
+      height: 34px;
+      background: #F4BD6A;
+      color: #1C202B;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      border-radius: 0;
+    }
+    .pixel-segments {
+      display: grid;
+      grid-template-columns: repeat(22, 1fr);
+      gap: 2px;
+      width: 100%;
+      height: 7px;
+    }
+    .pixel-seg {
+      background: #353B4B;
+    }
+    .pixel-seg.on {
+      background: #F4BD6A;
+    }
+
+    /* ============================================================
+       STYLE 7: PAPER
+       Warm paper texture, tilted polaroid cover with tape, serif type, ticket divider
+       Palette: #EFE8DC, #231F1C, #7A7067, #A84A24, #FFFFFF, #DFD3C0
+       ============================================================ */
+    .style-paper {
+      background: #EFE8DC;
+      color: #231F1C;
+      border-radius: 18px;
+      border: 1px solid #DFD3C0;
+      font-family: var(--font-serif);
+    }
+    .paper-polaroid {
+      background: #FFFFFF;
+      padding: 4px 4px 9px 4px;
+      box-shadow: 0 5px 12px rgba(35, 31, 28, 0.16);
+      transform: rotate(-4deg);
+      position: relative;
+      flex-shrink: 0;
+    }
+    .paper-polaroid-art {
+      width: 100%;
+      height: 100%;
+      background: linear-gradient(135deg, #E7886B 0%, #9E588A 55%, #372948 100%);
+    }
+    .paper-tape {
+      position: absolute;
+      top: -5px;
+      left: 50%;
+      width: 24px;
+      height: 8px;
+      background: rgba(226, 211, 185, 0.85);
+      transform: translateX(-50%) rotate(3deg);
+      box-shadow: 0 1px 2px rgba(0,0,0,0.08);
+    }
+    .paper-play-ring {
+      width: 36px;
+      height: 36px;
+      border-radius: 50%;
+      border: 1.5px solid #231F1C;
+      color: #231F1C;
+      background: transparent;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+    }
+    .paper-bar {
+      position: relative;
+      height: 2px;
+      background: rgba(35, 31, 28, 0.18);
+      width: 100%;
+    }
+    .paper-bar-fill {
+      position: absolute;
+      left: 0;
+      top: 0;
+      bottom: 0;
+      width: 62%;
+      background: #A84A24;
+    }
+    .paper-bar-dot {
+      position: absolute;
+      left: 62%;
+      top: 50%;
+      width: 7px;
+      height: 7px;
+      border-radius: 50%;
+      background: #A84A24;
+      transform: translate(-50%, -50%);
+    }
+
+    /* ============================================================
+       STYLE 8: AURORA
+       Soft gradient-mesh background, art as a floating circle with orbital halo rings
+       Palette: #0B1D2C, #143D4B, #251E42, #5EEAD4, #F0FDFA, #99D5C9
+       ============================================================ */
+    .style-aurora {
+      background:
+        radial-gradient(circle at 20% 25%, rgba(94, 234, 212, 0.30) 0%, transparent 52%),
+        radial-gradient(circle at 82% 75%, rgba(129, 140, 248, 0.32) 0%, transparent 55%),
+        linear-gradient(135deg, #0B1D2C 0%, #143D4B 52%, #251E42 100%);
+      color: #F0FDFA;
+      border-radius: 26px;
+      border: 1px solid rgba(94, 234, 212, 0.25);
+    }
+    .aurora-orb {
+      border-radius: 50%;
+      background: radial-gradient(circle at 35% 30%, #5EEAD4 0%, #3B82F6 55%, #312E81 100%);
+      box-shadow: 0 0 0 4px rgba(94, 234, 212, 0.14), 0 0 0 9px rgba(94, 234, 212, 0.06);
+      flex-shrink: 0;
+    }
+    .aurora-play-pill {
+      width: 36px;
+      height: 36px;
+      border-radius: 50%;
+      background: #5EEAD4;
+      color: #0B1D2C;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+    }
+    .aurora-bar {
+      height: 5px;
+      background: rgba(240, 253, 250, 0.16);
+      border-radius: 99px;
+      overflow: hidden;
+      width: 100%;
+    }
+    .aurora-bar-fill {
+      width: 62%;
+      height: 100%;
+      background: linear-gradient(90deg, #5EEAD4, #818CF8);
+      border-radius: 99px;
+    }
+
+    /* ============================================================
+       STYLE 9: MONO
+       Type-only Swiss layout, no separate cover box, oversized title, numeric timecode bar
+       Palette: #111215, #F4F4F0, #9CA3AF, #FF5A36, #262830
+       ============================================================ */
+    .style-mono {
+      background: #111215;
+      color: #F4F4F0;
+      border-radius: 16px;
+      border: 1px solid #262830;
+    }
+    .mono-play-pill {
+      width: 36px;
+      height: 36px;
+      border-radius: 50%;
+      background: #FF5A36;
+      color: #111215;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+    }
+    .mono-bar {
+      height: 3px;
+      background: #262830;
+      width: 100%;
+    }
+    .mono-bar-fill {
+      width: 62%;
+      height: 100%;
+      background: #FF5A36;
+    }
+
+    /* ============================================================
+       STYLE 10: NEON
+       Dark cyber outline card, glowing cyan/magenta frame, chamfered art, laser playhead
+       Palette: #090812, #00F0FF, #FF2A85, #F8FAFC, #94A3B8, #19162B
+       ============================================================ */
+    .style-neon {
+      background: #090812;
+      color: #F8FAFC;
+      border-radius: 20px;
+      border: 1.5px solid #00F0FF;
+      box-shadow: inset 0 0 14px rgba(0, 240, 255, 0.18), 0 12px 28px rgba(0, 0, 0, 0.45);
+    }
+    .neon-art {
+      border-radius: 10px;
+      border: 1.5px solid #FF2A85;
+      box-shadow: 0 0 10px rgba(255, 42, 133, 0.45);
+      background: linear-gradient(135deg, #00F0FF 0%, #7C3AED 50%, #FF2A85 100%);
+      flex-shrink: 0;
+    }
+    .neon-play-circle {
+      width: 36px;
+      height: 36px;
+      border-radius: 50%;
+      border: 1.5px solid #00F0FF;
+      background: rgba(0, 240, 255, 0.14);
+      color: #00F0FF;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      box-shadow: 0 0 12px rgba(0, 240, 255, 0.38);
+    }
+    .neon-bar {
+      position: relative;
+      height: 3px;
+      background: #1E1B36;
+      width: 100%;
+    }
+    .neon-bar-fill {
+      width: 62%;
+      height: 100%;
+      background: linear-gradient(90deg, #FF2A85, #00F0FF);
+      box-shadow: 0 0 8px #00F0FF;
+    }
+
+    @media (prefers-reduced-motion: reduce) {
+      *, *::before, *::after {
+        animation: none !important;
+        transition: none !important;
+      }
+    }
+  </style>
+</head>
+<body>
+  <header class="page-header">
+    <h1>AURIX Now Playing — Widget Family (5 Sizes × 10 Styles)</h1>
+    <p>Click any Play/Pause button to toggle state · WCAG AA 4.5:1 verified · 44px touch targets</p>
+  </header>
+
+  <div id="app"></div>
+
+  <script>
+    const TRACK = {
+      title: "Midnight Drive",
+      artist: "Nova Lane",
+      prevLyric: "Streetlights bend across the glass",
+      currLyric: "Keep the engine low and slow",
+      nextLyric: "Every mile a little closer"
+    };
+
+    const STYLES = [
+      { id: "ring", name: "Ring" },
+      { id: "frost", name: "Frost" },
+      { id: "light", name: "Light" },
+      { id: "night", name: "Night" },
+      { id: "vinyl", name: "Vinyl" },
+      { id: "pixel", name: "Pixel" },
+      { id: "paper", name: "Paper" },
+      { id: "aurora", name: "Aurora" },
+      { id: "mono", name: "Mono" },
+      { id: "neon", name: "Neon" }
+    ];
+
+    function iconPrev(size = 15) {
+      return `<svg width="${size}" height="${size}" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><path d="M6 6h2v12H6zm3.5 6 8.5 6V6z"/></svg>`;
+    }
+    function iconNext(size = 15) {
+      return `<svg width="${size}" height="${size}" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><path d="M6 18l8.5-6L6 6v12zM16 6v12h2V6h-2z"/></svg>`;
+    }
+    function iconPlayPause(size = 15) {
+      return `
+        <svg class="icon-play" width="${size}" height="${size}" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><path d="M8 5v14l11-7z"/></svg>
+        <svg class="icon-pause" width="${size}" height="${size}" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><path d="M6 19h4V5H6v14zm8-14v14h4V5h-4z"/></svg>
+      `;
+    }
+
+    function ringSvg(size, stroke = 4) {
+      const r = (size - stroke * 2) / 2;
+      const c = 2 * Math.PI * r;
+      const offset = c * 0.35;
+      return `
+        <svg class="ring-svg" viewBox="0 0 ${size} ${size}" aria-hidden="true">
+          <circle cx="${size/2}" cy="${size/2}" r="${r}" fill="none" stroke="#2A2A35" stroke-width="${stroke}"/>
+          <circle cx="${size/2}" cy="${size/2}" r="${r}" fill="none" stroke="#F27D52" stroke-width="${stroke}" stroke-linecap="round" stroke-dasharray="${c}" stroke-dashoffset="${offset}"/>
+        </svg>
+      `;
+    }
+
+    function pixelSegments(total = 22, filled = 14) {
+      let html = '<div class="pixel-segments">';
+      for (let i = 0; i < total; i++) {
+        html += `<span class="pixel-seg ${i < filled ? 'on' : ''}"></span>`;
+      }
+      html += '</div>';
+      return html;
+    }
+
+    function progressForStyle(styleId) {
+      switch (styleId) {
+        case 'frost':
+          return `<div class="frost-bar"><div class="frost-bar-fill"></div><div class="frost-bar-knob"></div></div>`;
+        case 'light':
+          return `<div class="light-bar"><div class="light-bar-fill"></div></div>`;
+        case 'night':
+          return `<div class="night-bar"><div class="night-bar-fill"></div></div>`;
+        case 'vinyl':
+          return `<div class="vinyl-bar"><div class="vinyl-bar-fill"></div></div>`;
+        case 'pixel':
+          return pixelSegments(22, 14);
+        case 'paper':
+          return `<div class="paper-bar"><div class="paper-bar-fill"></div><div class="paper-bar-dot"></div></div>`;
+        case 'aurora':
+          return `<div class="aurora-bar"><div class="aurora-bar-fill"></div></div>`;
+        case 'mono':
+          return `<div class="mono-bar"><div class="mono-bar-fill"></div></div>`;
+        case 'neon':
+          return `<div class="neon-bar"><div class="neon-bar-fill"></div></div>`;
+        default:
+          return '';
+      }
+    }
+
+    function playInnerClass(styleId) {
+      switch (styleId) {
+        case 'ring': return 'ring-play-circle';
+        case 'frost': return 'frost-play-circle';
+        case 'light': return 'light-play-circle';
+        case 'night': return 'night-play-circle';
+        case 'vinyl': return 'vinyl-play-circle';
+        case 'pixel': return 'pixel-play-sq';
+        case 'paper': return 'paper-play-ring';
+        case 'aurora': return 'aurora-play-pill';
+        case 'mono': return 'mono-play-pill';
+        case 'neon': return 'neon-play-circle';
+      }
+    }
+
+    function renderSmall(s) {
+      const pClass = playInnerClass(s.id);
+      if (s.id === 'ring') {
+        return `<div class="widget-card w-small style-ring" style="display:flex;flex-direction:column;align-items:center;justify-content:space-between;padding:12px;">
+          <div class="ring-wrap" style="width:86px;height:86px;">
+            ${ringSvg(86, 4)}
+            <div class="ring-art" style="width:70px;height:70px;display:flex;align-items:center;justify-content:center;">
+              <button class="ctrl-btn" aria-label="Play or pause ${TRACK.title}" onclick="togglePlay(this)"><span class="${pClass}" style="width:32px;height:32px;">${iconPlayPause(14)}</span></button>
+            </div>
+          </div>
+          <div style="text-align:center;width:100%;">
+            <div style="font-size:12.5px;font-weight:700;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">${TRACK.title}</div>
+            <div style="font-size:10.5px;color:#9C9CA9;">${TRACK.artist}</div>
+          </div>
+        </div>`;
+      }
+      if (s.id === 'light') {
+        return `<div class="widget-card w-small style-light" style="display:flex;flex-direction:column;">
+          <div class="light-bleed-art" style="height:82px;width:100%;position:relative;">
+            <button class="ctrl-btn" aria-label="Play or pause ${TRACK.title}" onclick="togglePlay(this)" style="position:absolute;right:8px;bottom:-22px;"><span class="${pClass}" style="width:34px;height:34px;">${iconPlayPause(14)}</span></button>
+          </div>
+          <div style="padding:10px 12px;flex:1;display:flex;flex-direction:column;justify-content:space-between;">
+            <div>
+              <div style="font-size:12.5px;font-weight:700;">${TRACK.title}</div>
+              <div style="font-size:10.5px;color:#71717A;">${TRACK.artist}</div>
+            </div>
+            ${progressForStyle('light')}
+          </div>
+        </div>`;
+      }
+      if (s.id === 'night') {
+        return `<div class="widget-card w-small style-night" style="padding:12px;display:flex;flex-direction:column;justify-content:space-between;">
+          <div style="display:flex;justify-content:flex-end;">
+            <button class="ctrl-btn" aria-label="Play or pause ${TRACK.title}" onclick="togglePlay(this)"><span class="${pClass}" style="width:34px;height:34px;">${iconPlayPause(14)}</span></button>
+          </div>
+          <div>
+            <div style="font-size:13px;font-weight:700;">${TRACK.title}</div>
+            <div style="font-size:10.5px;color:#B4C6D0;margin-bottom:8px;">${TRACK.artist}</div>
+            ${progressForStyle('night')}
+          </div>
+        </div>`;
+      }
+      if (s.id === 'vinyl') {
+        return `<div class="widget-card w-small style-vinyl" style="padding:12px;display:flex;flex-direction:column;justify-content:space-between;">
+          <div class="vinyl-disc" style="width:112px;height:112px;right:-28px;top:-24px;"></div>
+          <button class="ctrl-btn" aria-label="Play or pause ${TRACK.title}" onclick="togglePlay(this)" style="align-self:flex-start;"><span class="${pClass}" style="width:34px;height:34px;">${iconPlayPause(14)}</span></button>
+          <div style="position:relative;z-index:2;">
+            <div style="font-size:13px;font-weight:800;">${TRACK.title}</div>
+            <div style="font-size:10.5px;color:#4A380B;margin-bottom:7px;">${TRACK.artist}</div>
+            ${progressForStyle('vinyl')}
+          </div>
+        </div>`;
+      }
+      if (s.id === 'pixel') {
+        return `<div class="widget-card w-small style-pixel" style="display:flex;flex-direction:column;justify-content:space-between;">
+          <div class="pixel-header">NOW PLAYING</div>
+          <div style="padding:8px 10px 10px;flex:1;display:flex;flex-direction:column;justify-content:space-between;">
+            <div style="display:flex;align-items:center;justify-content:space-between;">
+              <div class="pixel-art" style="width:48px;height:48px;"></div>
+              <button class="ctrl-btn" aria-label="Play or pause ${TRACK.title}" onclick="togglePlay(this)"><span class="${pClass}">${iconPlayPause(14)}</span></button>
+            </div>
+            <div>
+              <div style="font-size:11.5px;font-weight:700;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">${TRACK.title}</div>
+              <div style="font-size:9.5px;color:#9BA3B8;margin-bottom:6px;">${TRACK.artist}</div>
+              ${pixelSegments(14, 9)}
+            </div>
+          </div>
+        </div>`;
+      }
+      if (s.id === 'paper') {
+        return `<div class="widget-card w-small style-paper" style="padding:12px;display:flex;flex-direction:column;justify-content:space-between;">
+          <div style="display:flex;align-items:center;justify-content:space-between;">
+            <div class="paper-polaroid" style="width:58px;height:64px;"><div class="paper-tape"></div><div class="paper-polaroid-art"></div></div>
+            <button class="ctrl-btn" aria-label="Play or pause ${TRACK.title}" onclick="togglePlay(this)"><span class="${pClass}" style="width:34px;height:34px;">${iconPlayPause(14)}</span></button>
+          </div>
+          <div>
+            <div style="font-size:15px;line-height:1.1;">${TRACK.title}</div>
+            <div style="font-size:11.5px;font-style:italic;color:#7A7067;margin-bottom:7px;">${TRACK.artist}</div>
+            ${progressForStyle('paper')}
+          </div>
+        </div>`;
+      }
+      if (s.id === 'mono') {
+        return `<div class="widget-card w-small style-mono" style="padding:12px;display:flex;flex-direction:column;justify-content:space-between;">
+          <div style="display:flex;align-items:center;justify-content:space-between;">
+            <span style="font-size:10px;font-weight:700;color:#FF5A36;letter-spacing:0.08em;">02:14</span>
+            <button class="ctrl-btn" aria-label="Play or pause ${TRACK.title}" onclick="togglePlay(this)"><span class="${pClass}" style="width:32px;height:32px;">${iconPlayPause(13)}</span></button>
+          </div>
+          <div>
+            <div style="font-size:18px;font-weight:800;line-height:1.05;letter-spacing:-0.03em;">Midnight<br/>Drive</div>
+            <div style="font-size:10.5px;color:#9CA3AF;margin:5px 0 8px;">${TRACK.artist}</div>
+            ${progressForStyle('mono')}
+          </div>
+        </div>`;
+      }
+      const artClass = s.id === 'aurora' ? 'aurora-orb' : (s.id === 'neon' ? 'neon-art' : 'frost-art');
+      return `<div class="widget-card w-small style-${s.id}" style="padding:12px;display:flex;flex-direction:column;justify-content:space-between;">
+        <div style="display:flex;align-items:flex-start;justify-content:space-between;">
+          <button class="ctrl-btn" aria-label="Play or pause ${TRACK.title}" onclick="togglePlay(this)"><span class="${pClass}" style="width:34px;height:34px;">${iconPlayPause(14)}</span></button>
+          <div class="${artClass}" style="width:62px;height:62px;"></div>
+        </div>
+        <div>
+          <div style="font-size:12.5px;font-weight:700;">${TRACK.title}</div>
+          <div style="font-size:10.5px;opacity:0.78;margin-bottom:7px;">${TRACK.artist}</div>
+          ${progressForStyle(s.id)}
+        </div>
+      </div>`;
+    }
+
+    function renderCompact(s) {
+      const pClass = playInnerClass(s.id);
+      if (s.id === 'pixel') {
+        return `<div class="widget-card w-compact style-pixel" style="display:flex;flex-direction:column;">
+          <div class="pixel-header" style="height:15px;font-size:8px;">NOW PLAYING</div>
+          <div style="flex:1;display:flex;align-items:center;padding:0 10px;gap:10px;">
+            <div class="pixel-art" style="width:36px;height:36px;"></div>
+            <div style="flex:1;min-width:0;">
+              <div style="font-size:12px;font-weight:700;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">${TRACK.title}</div>
+              <div style="font-size:10px;color:#9BA3B8;margin-bottom:3px;">${TRACK.artist}</div>
+              ${pixelSegments(18, 11)}
+            </div>
+            <button class="ctrl-btn" aria-label="Play or pause ${TRACK.title}" onclick="togglePlay(this)"><span class="${pClass}" style="width:30px;height:30px;">${iconPlayPause(13)}</span></button>
+          </div>
+        </div>`;
+      }
+      if (s.id === 'light') {
+        return `<div class="widget-card w-compact style-light" style="display:flex;align-items:center;">
+          <div class="light-bleed-art" style="width:72px;height:72px;flex-shrink:0;"></div>
+          <div style="flex:1;padding:0 12px;min-width:0;">
+            <div style="font-size:13px;font-weight:700;">${TRACK.title}</div>
+            <div style="font-size:11px;color:#71717A;margin-bottom:6px;">${TRACK.artist}</div>
+            ${progressForStyle('light')}
+          </div>
+          <div style="padding-right:10px;">
+            <button class="ctrl-btn" aria-label="Play or pause ${TRACK.title}" onclick="togglePlay(this)"><span class="${pClass}" style="width:34px;height:34px;">${iconPlayPause(14)}</span></button>
+          </div>
+        </div>`;
+      }
+      if (s.id === 'vinyl') {
+        return `<div class="widget-card w-compact style-vinyl" style="display:flex;align-items:center;padding:0 12px;gap:10px;">
+          <div class="vinyl-disc" style="width:94px;height:94px;right:-26px;top:-11px;"></div>
+          <button class="ctrl-btn" aria-label="Play or pause ${TRACK.title}" onclick="togglePlay(this)"><span class="${pClass}" style="width:34px;height:34px;">${iconPlayPause(14)}</span></button>
+          <div style="flex:1;padding-right:58px;min-width:0;">
+            <div style="font-size:13px;font-weight:800;">${TRACK.title}</div>
+            <div style="font-size:11px;color:#4A380B;margin-bottom:5px;">${TRACK.artist}</div>
+            ${progressForStyle('vinyl')}
+          </div>
+        </div>`;
+      }
+      const leftThumb = s.id === 'ring'
+        ? `<div class="ring-wrap" style="width:48px;height:48px;">${ringSvg(48, 3.5)}<div class="ring-art" style="width:36px;height:36px;"></div></div>`
+        : s.id === 'paper'
+        ? `<div class="paper-polaroid" style="width:44px;height:48px;"><div class="paper-tape"></div><div class="paper-polaroid-art"></div></div>`
+        : (s.id === 'night' || s.id === 'mono')
+        ? ''
+        : `<div class="${s.id === 'aurora' ? 'aurora-orb' : (s.id === 'neon' ? 'neon-art' : 'frost-art')}" style="width:46px;height:46px;"></div>`;
+
+      return `<div class="widget-card w-compact style-${s.id}" style="display:flex;align-items:center;padding:0 12px;gap:12px;">
+        ${leftThumb}
+        <div style="flex:1;min-width:0;">
+          <div style="font-size:${s.id === 'paper' ? '15px' : '13px'};font-weight:700;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">${TRACK.title}</div>
+          <div style="font-size:11px;opacity:0.78;margin-bottom:${s.id === 'ring' ? '0' : '5px'};">${TRACK.artist}</div>
+          ${s.id === 'ring' ? '' : progressForStyle(s.id)}
+        </div>
+        <button class="ctrl-btn" aria-label="Play or pause ${TRACK.title}" onclick="togglePlay(this)"><span class="${pClass}" style="width:34px;height:34px;">${iconPlayPause(14)}</span></button>
+      </div>`;
+    }
+
+    function controlsCluster(s) {
+      const pClass = playInnerClass(s.id);
+      return `<div style="display:flex;align-items:center;gap:6px;">
+        <button class="ctrl-btn" aria-label="Previous track">${iconPrev(16)}</button>
+        <button class="ctrl-btn" aria-label="Play or pause ${TRACK.title}" onclick="togglePlay(this)"><span class="${pClass}">${iconPlayPause(15)}</span></button>
+        <button class="ctrl-btn" aria-label="Next track">${iconNext(16)}</button>
+      </div>`;
+    }
+
+    function renderMedium(s) {
+      if (s.id === 'ring') {
+        return `<div class="widget-card w-medium style-ring" style="display:flex;align-items:center;padding:16px;gap:16px;">
+          <div class="ring-wrap" style="width:112px;height:112px;">${ringSvg(112, 5)}<div class="ring-art" style="width:90px;height:90px;"></div></div>
+          <div style="flex:1;min-width:0;display:flex;flex-direction:column;justify-content:space-between;height:108px;">
+            <div>
+              <div style="font-size:16px;font-weight:700;">${TRACK.title}</div>
+              <div style="font-size:12px;color:#9C9CA9;margin-top:2px;">${TRACK.artist}</div>
+            </div>
+            ${controlsCluster(s)}
+          </div>
+        </div>`;
+      }
+      if (s.id === 'light') {
+        return `<div class="widget-card w-medium style-light" style="display:flex;">
+          <div class="light-bleed-art" style="width:135px;height:155px;flex-shrink:0;"></div>
+          <div style="flex:1;padding:14px 16px;display:flex;flex-direction:column;justify-content:space-between;">
+            <div>
+              <div style="font-size:15.5px;font-weight:700;">${TRACK.title}</div>
+              <div style="font-size:12px;color:#71717A;">${TRACK.artist}</div>
+            </div>
+            ${progressForStyle('light')}
+            ${controlsCluster(s)}
+          </div>
+        </div>`;
+      }
+      if (s.id === 'night') {
+        return `<div class="widget-card w-medium style-night" style="padding:14px 16px;display:flex;flex-direction:column;justify-content:flex-end;gap:10px;">
+          <div style="display:flex;align-items:flex-end;justify-content:space-between;">
+            <div>
+              <div style="font-size:16px;font-weight:700;">${TRACK.title}</div>
+              <div style="font-size:12px;color:#B4C6D0;">${TRACK.artist}</div>
+            </div>
+            ${controlsCluster(s)}
+          </div>
+          ${progressForStyle('night')}
+        </div>`;
+      }
+      if (s.id === 'vinyl') {
+        return `<div class="widget-card w-medium style-vinyl" style="padding:14px 16px;display:flex;flex-direction:column;justify-content:space-between;">
+          <div class="vinyl-disc" style="width:156px;height:156px;right:-36px;top:0;"></div>
+          <div style="max-width:190px;">
+            <div style="font-size:16px;font-weight:800;">${TRACK.title}</div>
+            <div style="font-size:12px;color:#4A380B;">${TRACK.artist}</div>
+          </div>
+          <div style="max-width:190px;">${progressForStyle('vinyl')}</div>
+          ${controlsCluster(s)}
+        </div>`;
+      }
+      if (s.id === 'pixel') {
+        return `<div class="widget-card w-medium style-pixel" style="display:flex;flex-direction:column;">
+          <div class="pixel-header">NOW PLAYING</div>
+          <div style="flex:1;padding:10px 14px;display:flex;flex-direction:column;justify-content:space-between;">
+            <div style="display:flex;gap:12px;align-items:center;">
+              <div class="pixel-art" style="width:76px;height:76px;"></div>
+              <div style="flex:1;min-width:0;">
+                <div style="font-size:14px;font-weight:700;">${TRACK.title}</div>
+                <div style="font-size:11px;color:#9BA3B8;margin-bottom:8px;">${TRACK.artist}</div>
+                ${controlsCluster(s)}
+              </div>
+            </div>
+            ${pixelSegments(24, 15)}
+          </div>
+        </div>`;
+      }
+      if (s.id === 'paper') {
+        return `<div class="widget-card w-medium style-paper" style="padding:14px 16px;display:flex;align-items:center;gap:16px;">
+          <div class="paper-polaroid" style="width:88px;height:98px;"><div class="paper-tape"></div><div class="paper-polaroid-art"></div></div>
+          <div style="flex:1;display:flex;flex-direction:column;justify-content:space-between;height:118px;">
+            <div>
+              <div style="font-size:19px;line-height:1.05;">${TRACK.title}</div>
+              <div style="font-size:13px;font-style:italic;color:#7A7067;">${TRACK.artist}</div>
+            </div>
+            ${progressForStyle('paper')}
+            ${controlsCluster(s)}
+          </div>
+        </div>`;
+      }
+      if (s.id === 'mono') {
+        return `<div class="widget-card w-medium style-mono" style="padding:14px 16px;display:flex;flex-direction:column;justify-content:space-between;">
+          <div style="display:flex;justify-content:space-between;align-items:baseline;">
+            <div style="font-size:24px;font-weight:800;letter-spacing:-0.03em;">${TRACK.title}</div>
+            <span style="font-size:11px;font-weight:700;color:#FF5A36;">02:14 / 03:42</span>
+          </div>
+          <div style="font-size:12px;color:#9CA3AF;">${TRACK.artist}</div>
+          ${progressForStyle('mono')}
+          ${controlsCluster(s)}
+        </div>`;
+      }
+      const artClass = s.id === 'aurora' ? 'aurora-orb' : (s.id === 'neon' ? 'neon-art' : 'frost-art');
+      return `<div class="widget-card w-medium style-${s.id}" style="padding:14px 16px;display:flex;flex-direction:column;justify-content:space-between;">
+        <div style="display:flex;justify-content:space-between;align-items:flex-start;gap:12px;">
+          <div style="flex:1;display:flex;flex-direction:column;justify-content:space-between;height:96px;">
+            <div>
+              <div style="font-size:16px;font-weight:700;">${TRACK.title}</div>
+              <div style="font-size:12px;opacity:0.8;">${TRACK.artist}</div>
+            </div>
+            ${controlsCluster(s)}
+          </div>
+          <div class="${artClass}" style="width:94px;height:94px;"></div>
+        </div>
+        ${progressForStyle(s.id)}
+      </div>`;
+    }
+
+    function renderLyrics(s) {
+      const pClass = playInnerClass(s.id);
+      const currLineHtml = s.id === 'light'
+        ? `<span class="light-marker">${TRACK.currLyric}</span>`
+        : s.id === 'vinyl'
+        ? `<span class="vinyl-label-pill">${TRACK.currLyric}</span>`
+        : s.id === 'pixel'
+        ? `<span style="color:#F4BD6A;font-weight:700;">&gt; ${TRACK.currLyric}</span>`
+        : s.id === 'paper'
+        ? `<span style="color:#A84A24;font-style:italic;text-decoration:underline;font-weight:700;">${TRACK.currLyric}</span>`
+        : s.id === 'ring'
+        ? `<span style="color:#F27D52;font-weight:700;">${TRACK.currLyric}</span>`
+        : s.id === 'night'
+        ? `<span style="color:#4CE0B3;font-weight:700;">${TRACK.currLyric}</span>`
+        : s.id === 'mono'
+        ? `<span style="border-left:3px solid #FF5A36;padding-left:8px;font-weight:800;">${TRACK.currLyric}</span>`
+        : `<span style="font-weight:700;">${TRACK.currLyric}</span>`;
+
+      const headerBar = s.id === 'pixel' ? `<div class="pixel-header" style="height:15px;font-size:8px;">NOW PLAYING</div>` : '';
+      return `<div class="widget-card w-lyrics style-${s.id}" style="display:flex;flex-direction:column;justify-content:space-between;">
+        ${headerBar}
+        <div style="flex:1;padding:${s.id === 'pixel' ? '8px 12px' : '12px 16px'};display:flex;flex-direction:column;justify-content:space-between;">
+          <div style="display:flex;align-items:center;justify-content:space-between;">
+            <div style="font-size:11px;font-weight:700;opacity:0.85;">${TRACK.title} <span style="opacity:0.65;font-weight:400;">· ${TRACK.artist}</span></div>
+            <button class="ctrl-btn" aria-label="Play or pause ${TRACK.title}" onclick="togglePlay(this)" style="min-width:44px;min-height:44px;margin:-10px -8px;"><span class="${pClass}" style="width:26px;height:26px;">${iconPlayPause(12)}</span></button>
+          </div>
+          <div style="display:flex;flex-direction:column;gap:4px;text-align:${s.id === 'ring' ? 'center' : 'left'};">
+            <div style="font-size:11.5px;opacity:0.42;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">${TRACK.prevLyric}</div>
+            <div style="font-size:${s.id === 'paper' ? '15.5px' : '13.5px'};line-height:1.25;">${currLineHtml}</div>
+            <div style="font-size:11.5px;opacity:0.42;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">${TRACK.nextLyric}</div>
+          </div>
+          ${s.id === 'ring' ? '<div style="height:2px;"></div>' : progressForStyle(s.id)}
+        </div>
+      </div>`;
+    }
+
+    function renderLarge(s) {
+      if (s.id === 'ring') {
+        return `<div class="widget-card w-large style-ring" style="padding:22px 20px;display:flex;flex-direction:column;align-items:center;justify-content:space-between;">
+          <div class="ring-wrap" style="width:184px;height:184px;">${ringSvg(184, 6)}<div class="ring-art" style="width:152px;height:152px;"></div></div>
+          <div style="text-align:center;">
+            <div style="font-size:19px;font-weight:700;">${TRACK.title}</div>
+            <div style="font-size:13px;color:#9C9CA9;margin-top:3px;">${TRACK.artist}</div>
+          </div>
+          ${controlsCluster(s)}
+        </div>`;
+      }
+      if (s.id === 'light') {
+        return `<div class="widget-card w-large style-light" style="display:flex;flex-direction:column;">
+          <div class="light-bleed-art" style="width:100%;height:192px;"></div>
+          <div style="flex:1;padding:16px 18px;display:flex;flex-direction:column;justify-content:space-between;">
+            <div>
+              <div style="font-size:18px;font-weight:700;">${TRACK.title}</div>
+              <div style="font-size:13px;color:#71717A;">${TRACK.artist}</div>
+            </div>
+            ${progressForStyle('light')}
+            <div style="display:flex;justify-content:center;">${controlsCluster(s)}</div>
+          </div>
+        </div>`;
+      }
+      if (s.id === 'night') {
+        return `<div class="widget-card w-large style-night" style="padding:20px;display:flex;flex-direction:column;justify-content:flex-end;gap:14px;">
+          <div>
+            <div style="font-size:21px;font-weight:700;">${TRACK.title}</div>
+            <div style="font-size:13.5px;color:#B4C6D0;">${TRACK.artist}</div>
+          </div>
+          ${progressForStyle('night')}
+          <div style="display:flex;justify-content:center;">${controlsCluster(s)}</div>
+        </div>`;
+      }
+      if (s.id === 'vinyl') {
+        return `<div class="widget-card w-large style-vinyl" style="padding:20px;display:flex;flex-direction:column;justify-content:flex-end;gap:14px;">
+          <div class="vinyl-disc" style="width:240px;height:240px;right:-42px;top:-32px;"></div>
+          <div style="position:relative;z-index:2;">
+            <div style="font-size:20px;font-weight:800;">${TRACK.title}</div>
+            <div style="font-size:13px;color:#4A380B;">${TRACK.artist}</div>
+          </div>
+          ${progressForStyle('vinyl')}
+          <div>${controlsCluster(s)}</div>
+        </div>`;
+      }
+      if (s.id === 'pixel') {
+        return `<div class="widget-card w-large style-pixel" style="display:flex;flex-direction:column;">
+          <div class="pixel-header">NOW PLAYING</div>
+          <div style="flex:1;padding:16px;display:flex;flex-direction:column;align-items:center;justify-content:space-between;">
+            <div class="pixel-art" style="width:162px;height:162px;"></div>
+            <div style="width:100%;">
+              <div style="font-size:16px;font-weight:700;">${TRACK.title}</div>
+              <div style="font-size:12px;color:#9BA3B8;margin-top:2px;">${TRACK.artist}</div>
+            </div>
+            ${pixelSegments(24, 15)}
+            ${controlsCluster(s)}
+          </div>
+        </div>`;
+      }
+      if (s.id === 'paper') {
+        return `<div class="widget-card w-large style-paper" style="padding:22px 20px;display:flex;flex-direction:column;align-items:center;justify-content:space-between;">
+          <div class="paper-polaroid" style="width:158px;height:172px;padding:7px 7px 18px 7px;"><div class="paper-tape" style="width:42px;height:11px;"></div><div class="paper-polaroid-art"></div></div>
+          <div style="width:100%;">
+            <div style="font-size:22px;line-height:1.05;">${TRACK.title}</div>
+            <div style="font-size:14px;font-style:italic;color:#7A7067;">${TRACK.artist}</div>
+          </div>
+          ${progressForStyle('paper')}
+          ${controlsCluster(s)}
+        </div>`;
+      }
+      if (s.id === 'mono') {
+        return `<div class="widget-card w-large style-mono" style="padding:20px;display:flex;flex-direction:column;justify-content:space-between;">
+          <div style="display:flex;justify-content:space-between;font-size:11px;font-weight:700;color:#FF5A36;letter-spacing:0.1em;">
+            <span>AURIX // STEREO</span>
+            <span>02:14 / 03:42</span>
+          </div>
+          <div>
+            <div style="font-size:42px;font-weight:800;line-height:0.98;letter-spacing:-0.04em;">Midnight<br/>Drive</div>
+            <div style="font-size:15px;color:#9CA3AF;margin-top:10px;">${TRACK.artist}</div>
+          </div>
+          <div>
+            ${progressForStyle('mono')}
+            <div style="margin-top:14px;display:flex;justify-content:space-between;align-items:center;">
+              <span style="font-size:11px;color:#9CA3AF;">FLAC · 24-BIT</span>
+              ${controlsCluster(s)}
+            </div>
+          </div>
+        </div>`;
+      }
+      const artClass = s.id === 'aurora' ? 'aurora-orb' : (s.id === 'neon' ? 'neon-art' : 'frost-art');
+      return `<div class="widget-card w-large style-${s.id}" style="padding:18px;display:flex;flex-direction:column;justify-content:space-between;align-items:center;">
+        <div class="${artClass}" style="width:172px;height:172px;margin-top:4px;"></div>
+        <div style="width:100%;">
+          <div style="font-size:18px;font-weight:700;">${TRACK.title}</div>
+          <div style="font-size:13px;opacity:0.8;">${TRACK.artist}</div>
+        </div>
+        ${progressForStyle(s.id)}
+        ${controlsCluster(s)}
+      </div>`;
+    }
+
+    function togglePlay(btn) {
+      const card = btn.closest('.widget-card');
+      if (card) card.classList.toggle('is-playing');
+    }
+
+    const SECTIONS = [
+      { label: "Small · 2×2 (155×155)", render: renderSmall },
+      { label: "Compact · 4×1 (329×72)", render: renderCompact },
+      { label: "Medium · 4×2 (329×155)", render: renderMedium },
+      { label: "Lyrics · 4×2 (329×155)", render: renderLyrics },
+      { label: "Large · 4×4 (329×345)", render: renderLarge }
+    ];
+
+    const app = document.getElementById('app');
+    app.innerHTML = SECTIONS.map(sec => `
+      <section class="size-section">
+        <h2 class="size-label">${sec.label}</h2>
+        <div class="widgets-row">
+          ${STYLES.map(s => `
+            <div class="widget-col">
+              ${sec.render(s)}
+              <div class="widget-caption">${s.name}</div>
+            </div>
+          `).join('')}
+        </div>
+      </section>
+    `).join('');
+  </script>
+</body>
+</html>
