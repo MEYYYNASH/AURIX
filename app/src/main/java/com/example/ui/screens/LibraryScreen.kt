@@ -51,6 +51,7 @@ import androidx.compose.material.icons.rounded.Album
 import androidx.compose.material.icons.rounded.AutoAwesome
 import androidx.compose.material.icons.rounded.Bolt
 import androidx.compose.material.icons.rounded.Category
+import androidx.compose.material.icons.rounded.CleaningServices
 import androidx.compose.material.icons.rounded.Close
 import androidx.compose.material.icons.rounded.DeleteOutline
 import androidx.compose.material.icons.rounded.DeleteSweep
@@ -112,6 +113,8 @@ import androidx.compose.ui.unit.sp
 import androidx.compose.ui.util.lerp
 import coil.compose.AsyncImage
 import com.example.R
+import com.example.data.LibraryCleanerEngine
+import com.example.data.LibraryScanReport
 import com.example.model.APP_ICON_ARTWORK
 import com.example.model.AlbumInfo
 import com.example.model.Song
@@ -211,6 +214,9 @@ fun LibraryScreen(
   onRecordRecentSearch: (String) -> Unit = {},
   onRemoveRecentSearch: (String) -> Unit = {},
   onClearRecentSearches: () -> Unit = {},
+  autoLibraryCleanerEnabled: Boolean = true,
+  onToggleAutoLibraryCleaner: (Boolean) -> Unit = {},
+  onRunLibraryCleaner: (LibraryScanReport) -> Unit = {},
   onSongClick: (Song) -> Unit,
   onFavoriteClick: (Song) -> Unit
 ) {
@@ -236,6 +242,7 @@ fun LibraryScreen(
   var pendingPhotoSongId by remember { mutableStateOf<String?>(null) }
   var songPendingDelete by remember { mutableStateOf<Song?>(null) }
   var showCreateAlbumDialog by remember { mutableStateOf(false) }
+  var showLibraryCleanerSheet by remember { mutableStateOf(false) }
   var createBackdropFactor by remember { mutableFloatStateOf(0f) }
   var flyingCoverPayload by remember { mutableStateOf<FlyingAlbumCoverPayload?>(null) }
   var pulsingAlbumId by remember { mutableStateOf<String?>(null) }
@@ -388,6 +395,55 @@ fun LibraryScreen(
 
         when {
           selectedTab == 0 -> {
+            val quickReport = remember(localSongs) {
+              LibraryCleanerEngine.scanLibrary(localSongs)
+            }
+            val issueCount = quickReport.missingFileTracks.size + quickReport.duplicateTracks.size
+            Surface(
+              onClick = { showLibraryCleanerSheet = true },
+              shape = CircleShape,
+              color = if (quickReport.hasIssues) {
+                MaterialTheme.colorScheme.primary.copy(alpha = 0.16f)
+              } else if (darkTheme) {
+                Color.White.copy(alpha = 0.08f)
+              } else {
+                Color(0xFF94A3B8).copy(alpha = 0.16f)
+              },
+              border = BorderStroke(
+                0.9.dp,
+                if (quickReport.hasIssues) {
+                  MaterialTheme.colorScheme.primary.copy(alpha = 0.55f)
+                } else if (darkTheme) {
+                  Color.White.copy(alpha = 0.14f)
+                } else {
+                  Color(0xFF64748B).copy(alpha = 0.16f)
+                }
+              ),
+              modifier = Modifier
+                .height(38.dp)
+                .testTag("library_cleaner_button")
+            ) {
+              Row(
+                modifier = Modifier.padding(horizontal = 11.dp),
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.spacedBy(4.dp)
+              ) {
+                Icon(
+                  imageVector = Icons.Rounded.CleaningServices,
+                  contentDescription = stringResource(id = R.string.library_cleaner_title),
+                  tint = if (quickReport.hasIssues) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurface,
+                  modifier = Modifier.size(16.dp)
+                )
+                if (issueCount > 0) {
+                  Text(
+                    text = issueCount.toString(),
+                    style = MaterialTheme.typography.labelSmall.copy(fontWeight = FontWeight.ExtraBold),
+                    color = MaterialTheme.colorScheme.primary
+                  )
+                }
+              }
+            }
+
             Surface(
               onClick = { audioLauncher.launch(arrayOf("audio/*")) },
               shape = CircleShape,
@@ -1531,6 +1587,19 @@ fun LibraryScreen(
       onDismiss = { albumPendingAddSongs = null },
       onAddSongs = { chosen -> onAddSongsToAlbum(targetAlbum, chosen) },
       onImportAudioFiles = { uris -> onImportAudioToAlbum(uris, targetAlbum) }
+    )
+  }
+
+  if (showLibraryCleanerSheet) {
+    LibraryCleanerSheet(
+      localSongs = localSongs,
+      autoCleanEnabled = autoLibraryCleanerEnabled,
+      accentColor = MaterialTheme.colorScheme.primary,
+      onToggleAutoClean = onToggleAutoLibraryCleaner,
+      onRunCleanNow = { report: LibraryScanReport ->
+        onRunLibraryCleaner(report)
+      },
+      onDismiss = { showLibraryCleanerSheet = false }
     )
   }
 }

@@ -131,6 +131,11 @@ class PreferencesManager(private val context: Context) {
     val DOWNLOAD_WIFI_ONLY = booleanPreferencesKey("download_wifi_only")
     val DOWNLOAD_STORAGE_CAP_MB = intPreferencesKey("download_storage_cap_mb")
 
+    // Smart Headphone Auto-Play, Floating Mini Lyrics & Library Cleaner (v2.4.7)
+    val AUTO_PLAY_ON_HEADPHONE_CONNECT = booleanPreferencesKey("auto_play_on_headphone_connect")
+    val FLOATING_MINI_LYRICS_ENABLED = booleanPreferencesKey("floating_mini_lyrics_enabled")
+    val AUTO_LIBRARY_CLEANER_ENABLED = booleanPreferencesKey("auto_library_cleaner_enabled")
+
     fun decodeRecentSearches(raw: String?): List<String> {
       if (raw.isNullOrBlank()) return emptyList()
       return raw.split(RECENT_SEARCH_DELIMITER)
@@ -265,6 +270,15 @@ class PreferencesManager(private val context: Context) {
   }
   val djAutoMixEnabled: Flow<Boolean> = safeDataFlow.map { prefs ->
     prefs[DJ_AUTO_MIX_ENABLED] ?: false
+  }
+  val autoPlayOnHeadphoneConnect: Flow<Boolean> = safeDataFlow.map { prefs ->
+    prefs[AUTO_PLAY_ON_HEADPHONE_CONNECT] ?: false
+  }
+  val floatingMiniLyricsEnabled: Flow<Boolean> = safeDataFlow.map { prefs ->
+    prefs[FLOATING_MINI_LYRICS_ENABLED] ?: false
+  }
+  val autoLibraryCleanerEnabled: Flow<Boolean> = safeDataFlow.map { prefs ->
+    prefs[AUTO_LIBRARY_CLEANER_ENABLED] ?: true
   }
 
   val widgetCustomizerConfig: Flow<com.example.widget.WidgetCustomizerConfig> = safeDataFlow.map { prefs ->
@@ -619,5 +633,17 @@ class PreferencesManager(private val context: Context) {
 
   suspend fun setDownloadStorageCapMb(capMb: Int) {
     context.dataStore.edit { prefs -> prefs[DOWNLOAD_STORAGE_CAP_MB] = capMb.coerceAtLeast(0) }
+  }
+
+  suspend fun setAutoPlayOnHeadphoneConnect(enabled: Boolean) {
+    context.dataStore.edit { prefs -> prefs[AUTO_PLAY_ON_HEADPHONE_CONNECT] = enabled }
+  }
+
+  suspend fun setFloatingMiniLyricsEnabled(enabled: Boolean) {
+    context.dataStore.edit { prefs -> prefs[FLOATING_MINI_LYRICS_ENABLED] = enabled }
+  }
+
+  suspend fun setAutoLibraryCleanerEnabled(enabled: Boolean) {
+    context.dataStore.edit { prefs -> prefs[AUTO_LIBRARY_CLEANER_ENABLED] = enabled }
   }
 }

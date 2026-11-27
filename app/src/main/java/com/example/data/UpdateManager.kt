@@ -180,6 +180,7 @@ class UpdateManager(
     private val SHA256_HEX_REGEX = Regex("^[a-f0-9]{64}$")
 
     val CURRENT_RELEASE_NOTES = listOf(
+      "AURIX v2.4.7 — Auto-Play on Bluetooth/Wired Connect, Floating Mini Lyrics (PiP Pill), 10s Animated Video Lyric Exporter (MP4), Smart Library Cleaner & Post-Update Fix: Added optional Auto-Play on Bluetooth & Wired (ខ្សែ) headphone connection in Media Output; introduced a draggable in-app Floating Mini Lyrics (PiP Pill) overlay with live karaoke fill while browsing Home, Search, or Library; added a 10-second Animated Lyric & Spinning Vinyl Video Clip Exporter (1080p H.264 MP4) alongside PNG Story posters; added the Auto Duplicate & Missing-File Smart Library Cleaner with startup hygiene check; and fixed post-update same-version timestamp detection so installed releases immediately show Up to Date (EN + ខ្មែរ)",
       "AURIX v2.4.5 — Media3 Lockscreen & Notification Controls, Bluetooth & Wired Headphones Media Output + Dynamic Island Live Capsule: Integrated full Media3 MediaLibrarySession lockscreen and notification controls (play, pause, wrap-around previous/next track skip, seek bar, and Media Output quick action without unlocking); added real-time Bluetooth & wired headphones (3.5mm / USB-C ខ្សែ) output detection showing connected headphone names on the Mini-Player, Now Playing pill, Media Output Switcher sheet, and status notifications with per-route Auto-EQ; and introduced the morphing AURIX Dynamic Island top capsule for headphone connections, live song/playlist downloads, and app updates (EN + ខ្មែរ)",
       "AURIX v2.4.4 — 5 Flagship Upgrades (Shareable Lyric Stories, Audio Pro Suite, Offline Playlist Downloads & Track Editor, Monthly Recap Story, Settings Search & Driving Mode): Added 9:16 Story & 4:5 Feed Lyric Poster export with new Liquid Glass and Vinyl themes (EN + ខ្មែរ); launched Audio Pro Suite with zero-permission Bluetooth/Headphones/Speaker auto-EQ switching, Loudness Normalization across local & YouTube streams, and a 15-second smooth ease-out Sleep Timer fade-out + Bedside Standby sleep control; added One-Tap Download All on playlists & mixes with Wi-Fi-only toggle, offline storage cap, and a Local Track Info & Cover Art Editor; introduced the 4-slide Monthly AURIX Recap Story with 1080x1920 PNG sharing in Insights; and added live bilingual Settings Search, Quick Launch shortcuts, and high-contrast full-screen Driving Mode",
       "3D Onboarding Orbi App Icons, Cleaner First-Page Onboarding & Smooth Dark-Glass Transition (v2.4.3): Applied the 3D onboarding Orbi design to the default AURIX launcher icon, all 5 selectable Orbi App Icons (Classic, Midnight, Ember, AMOLED, Pearl — keeping all existing icon roles, functions, and sizes), splash screen, and widget icon; redesigned Slide 1 into a cleaner floating 3D Orbi hero with a sleek Liquid Glass pill search bar, required favourite song pick to unlock Next (Skip removed), auto-save to Love with one-tap un-love, and synced LRCLIB lyrics preview; replaced the onboarding finish flash with a silky dark-glass 3D Orbi handoff into the full music app; fixed onboarding to show only on first open",
@@ -1485,6 +1486,12 @@ class UpdateManager(
     try {
       awaitingPermissionReturn = false
       awaitingInstallReturn = true
+      val latestRel = _uiState.value.latestRelease
+      val targetCode = if (pendingTargetVersionCode > 0L) pendingTargetVersionCode else (latestRel?.versionCode ?: 0L)
+      val targetReleaseTs = maxOf(latestRel?.releaseTimestampMs ?: 0L, System.currentTimeMillis())
+      if (targetCode > 0L) {
+        GitHubUpdater.recordInstalledReleaseTimestamp(context, targetCode, targetReleaseTs)
+      }
       val uri = FileProvider.getUriForFile(context, "${context.packageName}.fileprovider", file)
       val intent = Intent(Intent.ACTION_VIEW).apply {
         setDataAndType(uri, "application/vnd.android.package-archive")
@@ -1582,6 +1589,30 @@ class UpdateManager(
         }
         return
       }
+    }
+
+    val currentRel = _uiState.value.latestRelease
+    if (currentRel != null && !isReleaseNewerThanInstalled(refreshedInstalled, currentRel)) {
+      awaitingInstallReturn = false
+      clearPartialFiles(keepFinalApk = false)
+      _uiState.update {
+        it.copy(
+          stage = UpdateStage.UpToDate,
+          installed = refreshedInstalled,
+          subtitleMessage = "You're running the latest AURIX release",
+          statusMessage = "You are on the latest version (v${refreshedInstalled.versionName})",
+          progress = 0f,
+          downloadedBytes = 0L,
+          totalBytes = 0L,
+          speedBytesPerSec = 0L,
+          isPaused = false,
+          canResumePartial = false,
+          isValidatedReady = false,
+          validatedApkPath = null,
+          errorMessage = null
+        )
+      }
+      return
     }
 
     if (awaitingInstallReturn) {

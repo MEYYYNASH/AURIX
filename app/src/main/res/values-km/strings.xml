@@ -965,4 +965,26 @@
     <string name="island_update_downloading">កំពុងអាប់ដេត AURIX · %1$d%%</string>
     <string name="island_update_verifying">កំពុងផ្ទៀងផ្ទាត់ · %1$s</string>
     <string name="island_update_ready_install">ចុចដើម្បីដំឡើង · %1$s</string>
+
+    <!-- v2.4.7: Auto-Play on Headphone Connect, Floating Mini Lyrics PiP, Animated Video Clip & Library Cleaner -->
+    <string name="media_output_auto_play_title">ចាក់ភ្លេងស្វ័យប្រវត្តិពេលភ្ជាប់កាស</string>
+    <string name="media_output_auto_play_sub">ចាក់បន្តបទចុងក្រោយភ្លាមៗពេលដោតកាសខ្សែ ឬភ្ជាប់កាសប៊្លូធូស</string>
+    <string name="floating_lyrics_pip_title">ទំនុកច្រៀងអណ្តែតតូច (PiP Pill)</string>
+    <string name="floating_lyrics_pip_sub">បង្ហាញទំនុកច្រៀងខារ៉ាអូខេ ១ បន្ទាត់ដែលអាចអូសបានពេលរុករកក្នុងកម្មវិធី</string>
+    <string name="floating_lyrics_pip_short">ទំនុកអណ្តែត</string>
+    <string name="floating_lyrics_no_lyrics">ភ្លេងសុទ្ធ · %1$s</string>
+    <string name="share_video_clip_button">វីដេអូ 10 វិនាទី (MP4)</string>
+    <string name="share_video_clip_saving">កំពុងបង្កើតវីដេអូ · %1$d%%</string>
+    <string name="share_video_clip_saved">បានរក្សាទុកវីដេអូទំនុកច្រៀង 10 វិនាទីទៅក្នុងវិចិត្រសាល</string>
+    <string name="library_cleaner_button">សម្អាតបណ្ណាល័យ</string>
+    <string name="library_cleaner_title">សម្អាតបណ្ណាល័យឆ្លាតវៃ</string>
+    <string name="library_cleaner_subtitle">ស្វែងរកបទស្ទួន និងឯកសារដែលបាត់ដោយស្វ័យប្រវត្តិ</string>
+    <string name="library_cleaner_auto_title">សម្អាតស្វ័យប្រវត្តិពេលបើកកម្មវិធី</string>
+    <string name="library_cleaner_auto_sub">លុបបញ្ជីឯកសារដែលបាត់ និងបទស្ទួនដោយស្វ័យប្រវត្តិ</string>
+    <string name="library_cleaner_missing_label">ឯកសារបាត់</string>
+    <string name="library_cleaner_duplicates_label">បទស្ទួន</string>
+    <string name="library_cleaner_reclaim_label">ទំហំអាចសន្សំ</string>
+    <string name="library_cleaner_clean_now">សម្អាតបណ្ណាល័យឥឡូវនេះ (%1$d)</string>
+    <string name="library_cleaner_all_clean">បណ្ណាល័យរបស់អ្នកស្អាតល្អ — គ្មានបទស្ទួន ឬឯកសារបាត់ទេ</string>
+    <string name="library_cleaner_done_toast">បានសម្អាតបទស្ទួន %1$d និងឯកសារបាត់ %2$d</string>
 </resources>

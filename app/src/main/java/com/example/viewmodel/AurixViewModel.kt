@@ -300,6 +300,14 @@ class AurixViewModel(application: Application) : AndroidViewModel(application) {
     .stateIn(viewModelScope, SharingStarted.Eagerly, true)
   val widgetShowLyrics: StateFlow<Boolean> = prefsManager.widgetShowLyrics
     .stateIn(viewModelScope, SharingStarted.Eagerly, true)
+  val autoPlayOnHeadphoneConnect: StateFlow<Boolean> = prefsManager.autoPlayOnHeadphoneConnect
+    .stateIn(viewModelScope, SharingStarted.Eagerly, false)
+  val floatingMiniLyricsEnabled: StateFlow<Boolean> = prefsManager.floatingMiniLyricsEnabled
+    .stateIn(viewModelScope, SharingStarted.Eagerly, false)
+  val autoLibraryCleanerEnabled: StateFlow<Boolean> = prefsManager.autoLibraryCleanerEnabled
+    .stateIn(viewModelScope, SharingStarted.Eagerly, true)
+  @Volatile
+  private var lastObservedAudioRoute: com.example.playback.AudioOutputRoute? = null
   val spectrumBars: StateFlow<FloatArray> = AudioSpectrumBus.bars
 
   // Search-Only Mode & YouTube Analyze/Download States
@@ -1543,6 +1551,21 @@ class AurixViewModel(application: Application) : AndroidViewModel(application) {
         runCatching {
           AudioOutputRouter.start(application) { routeInfo ->
             AudioEqualizerController.onAudioOutputRouteChanged(routeInfo)
+            val prevRoute = lastObservedAudioRoute
+            lastObservedAudioRoute = routeInfo.route
+            val connectedHeadphones = routeInfo.route == com.example.playback.AudioOutputRoute.BLUETOOTH ||
+              routeInfo.route == com.example.playback.AudioOutputRoute.HEADPHONES
+            if (
+              prevRoute != null &&
+              prevRoute == com.example.playback.AudioOutputRoute.SPEAKER &&
+              connectedHeadphones &&
+              autoPlayOnHeadphoneConnect.value &&
+              !_isPlaying.value
+            ) {
+              viewModelScope.launch(Dispatchers.Main) {
+                autoResumeOnHeadphoneConnected()
+              }
+            }
           }
         }
         runCatching {
@@ -1579,6 +1602,16 @@ class AurixViewModel(application: Application) : AndroidViewModel(application) {
         // Ensure startup continues even if legacy persisted data fails to read
       } finally {
         _isAppInitialized.value = true
+      }
+    }
+    viewModelScope.launch(Dispatchers.IO) {
+      runCatching {
+        val autoCleanOn = kotlinx.coroutines.withTimeoutOrNull(1500L) {
+          prefsManager.autoLibraryCleanerEnabled.first()
+        } ?: true
+        if (autoCleanOn) {
+          runStartupAutoLibraryClean()
+        }
       }
     }
     observeDjTransitionMetrics()
@@ -5832,6 +5865,91 @@ class AurixViewModel(application: Application) : AndroidViewModel(application) {
   }
   fun setGithubOwner(owner: String) { safeLaunch(notifyUser = false) { prefsManager.setGithubOwner(owner) } }
   fun setGithubRepo(repo: String) { safeLaunch(notifyUser = false) { prefsManager.setGithubRepo(repo) } }
+
+  fun setAutoPlayOnHeadphoneConnect(enabled: Boolean) {
+    safeLaunch(notifyUser = false) {
+      prefsManager.setAutoPlayOnHeadphoneConnect(enabled)
+    }
+  }
+
+  fun setFloatingMiniLyricsEnabled(enabled: Boolean) {
+    safeLaunch(notifyUser = false) {
+      prefsManager.setFloatingMiniLyricsEnabled(enabled)
+    }
+  }
+
+  fun setAutoLibraryCleanerEnabled(enabled: Boolean) {
+    safeLaunch(notifyUser = false) {
+      prefsManager.setAutoLibraryCleanerEnabled(enabled)
+    }
+  }
+
+  private fun autoResumeOnHeadphoneConnected() {
+    if (_isPlaying.value) return
+    val current = _rawCurrentSong.value
+    if (current != null && mediaController != null) {
+      togglePlayPause()
+      return
+    }
+    val fallbackQueue = when {
+      recentlyPlayed.value.isNotEmpty() -> recentlyPlayed.value
+      localSongs.value.isNotEmpty() -> localSongs.value
+      favorites.value.isNotEmpty() -> favorites.value
+      featuredTracks.value.isNotEmpty() -> featuredTracks.value
+      else -> emptyList()
+    }
+    val targetSong = current ?: fallbackQueue.firstOrNull() ?: return
+    playSong(targetSong, fallbackQueue.ifEmpty { listOf(targetSong) })
+  }
+
+  private suspend fun runStartupAutoLibraryClean() {
+    kotlinx.coroutines.delay(1200L)
+    val currentLocal = localSongs.value
+    if (currentLocal.isEmpty()) return
+    val report = com.example.data.LibraryCleanerEngine.scanLibrary(currentLocal)
+    if (report.missingFileTracks.isNotEmpty()) {
+      report.missingFileTracks.forEach { missingSong ->
+        runCatching {
+          dao.deleteLocalSong(missingSong.id)
+          dao.deleteAlbumTracksForSong(missingSong.id)
+        }
+      }
+    }
+  }
+
+  fun cleanLibraryFromReport(report: com.example.data.LibraryScanReport) {
+    if (!report.hasIssues) return
+    val appContext = localizedAppContext()
+    val targets = (report.missingFileTracks + report.duplicateTracks).distinctBy { it.id }
+    if (targets.isEmpty()) return
+    viewModelScope.launch {
+      withContext(Dispatchers.IO) {
+        targets.forEach { song ->
+          runCatching {
+            SongDownloader.deleteAppManagedFileIfOwned(appContext, song.streamUrl)
+            SongDownloader.deleteAppManagedFileIfOwned(appContext, song.artworkUrl)
+            dao.deleteLocalSong(song.id)
+            dao.deleteAlbumTracksForSong(song.id)
+            dao.deleteLyricOffset(song.id)
+          }
+        }
+      }
+      val removedIds = targets.map { it.id }.toSet()
+      _localDeletedOrAddedIds.value = _localDeletedOrAddedIds.value - removedIds
+      _queue.value = _queue.value.filterNot { it.id in removedIds }
+      runCatching {
+        Toast.makeText(
+          appContext,
+          appContext.getString(
+            R.string.library_cleaner_done_toast,
+            report.duplicateTracks.size,
+            report.missingFileTracks.size
+          ),
+          Toast.LENGTH_SHORT
+        ).show()
+      }
+    }
+  }
 
   override fun onCleared() {
     val flush = playSessionTracker.clearSession()

@@ -248,7 +248,7 @@ fun AurixDynamicIslandOverlay(
     when {
       updateUiState.stage == UpdateStage.Downloading || updateUiState.stage == UpdateStage.Verifying -> {
         DynamicIslandVisualState.AppUpdateProgress(
-          tag = rel?.tagName ?: "v2.4.5",
+          tag = rel?.tagName ?: "v2.4.7",
           stage = updateUiState.stage,
           progressFraction = updateUiState.progress.coerceIn(0f, 1f),
           speedLabel = if (updateUiState.speedBytesPerSec > 0L) {

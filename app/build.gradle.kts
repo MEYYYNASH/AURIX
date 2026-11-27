@@ -17,10 +17,10 @@ android {
     applicationId = "com.aurix.music"
     minSdk = 24
     targetSdk = 36
-    versionCode = 20405
-    versionName = "2.4.5"
+    versionCode = 20407
+    versionName = "2.4.7"
     buildConfigField("String", "RELEASE_DATE", "\"2026-11-27\"")
-    val buildTimestampMs = System.getenv("AURIX_BUILD_TIMESTAMP_MS")?.toLongOrNull() ?: 0L
+    val buildTimestampMs = System.getenv("AURIX_BUILD_TIMESTAMP_MS")?.toLongOrNull() ?: 1795858700000L
     buildConfigField("long", "BUILD_TIMESTAMP_MS", "${buildTimestampMs}L")
 
     testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"

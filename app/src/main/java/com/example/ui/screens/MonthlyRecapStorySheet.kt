@@ -906,7 +906,7 @@ object MonthlyRecapCardExporter {
       typeface = titleTypeface
       letterSpacing = 0.14f
     }
-    canvas.drawText("AURIX MUSIC · v2.4.5", 140f, h - 225f, footPaint)
+    canvas.drawText("AURIX MUSIC · v2.4.7", 140f, h - 225f, footPaint)
 
     // Accent bar on bottom-left
     val barPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {

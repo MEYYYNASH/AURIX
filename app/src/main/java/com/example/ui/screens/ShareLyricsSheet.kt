@@ -66,6 +66,11 @@ import com.example.share.ShareCardMode
 import com.example.share.ShareCardRenderer
 import com.example.share.ShareGradientTheme
 import com.example.share.ShareLyricsCard
+import androidx.compose.material.icons.rounded.Movie
+import androidx.compose.material.icons.rounded.VideoFile
+import androidx.compose.ui.res.stringResource
+import com.example.R
+import com.example.share.AnimatedLyricVideoExporter
 import com.example.share.SharePaletteExtractor
 import com.example.share.SharePaletteSwatches
 import com.example.share.ShareThemeStyle
@@ -278,6 +283,8 @@ fun ShareLyricsSheet(
 
   var isSharing by remember { mutableStateOf(false) }
   var isSaving by remember { mutableStateOf(false) }
+  var isExportingVideo by remember { mutableStateOf(false) }
+  var videoExportProgress by remember { mutableFloatStateOf(0f) }
 
   ModalBottomSheet(
     onDismissRequest = onDismiss,
@@ -710,7 +717,116 @@ fun ShareLyricsSheet(
         Spacer(modifier = Modifier.height(12.dp))
 
         // 4. PINNED BOTTOM ACTIONS:
-        // Large "Share" button (accent filled) + square 56dp icon-only "Save to gallery" button
+        // Row A: 10-second Animated Lyric / Vinyl Video Clip (MP4) Share + Save to Gallery
+        val anyExportBusy = isSharing || isSaving || isExportingVideo
+        val videoSavedToast = stringResource(id = R.string.share_video_clip_saved)
+        Row(
+          modifier = Modifier.fillMaxWidth(),
+          horizontalArrangement = Arrangement.spacedBy(10.dp),
+          verticalAlignment = Alignment.CenterVertically
+        ) {
+          OutlinedButton(
+            onClick = {
+              if (anyExportBusy) return@OutlinedButton
+              isExportingVideo = true
+              videoExportProgress = 0f
+              coroutineScope.launch {
+                val result = AnimatedLyricVideoExporter.shareAnimatedVideoClip(
+                  context = context,
+                  data = shareCardData,
+                  lyricsAnimationStyle = lyricsAnimationStyle,
+                  onProgress = { p -> videoExportProgress = p }
+                )
+                isExportingVideo = false
+                result.onFailure {
+                  Toast.makeText(context, "Could not encode video clip", Toast.LENGTH_SHORT).show()
+                }
+              }
+            },
+            enabled = !anyExportBusy,
+            shape = RoundedCornerShape(16.dp),
+            border = BorderStroke(1.2.dp, MaterialTheme.colorScheme.primary.copy(alpha = 0.68f)),
+            colors = ButtonDefaults.outlinedButtonColors(
+              containerColor = MaterialTheme.colorScheme.primary.copy(alpha = 0.12f),
+              contentColor = MaterialTheme.colorScheme.onSurface
+            ),
+            modifier = Modifier
+              .weight(1f)
+              .height(48.dp)
+              .testTag("share_animated_video_button")
+          ) {
+            if (isExportingVideo) {
+              CircularProgressIndicator(
+                color = MaterialTheme.colorScheme.primary,
+                strokeWidth = 2.2.dp,
+                modifier = Modifier.size(18.dp)
+              )
+              Spacer(modifier = Modifier.width(8.dp))
+              Text(
+                text = stringResource(id = R.string.share_video_clip_saving, (videoExportProgress * 100).toInt()),
+                style = MaterialTheme.typography.labelLarge.copy(fontWeight = FontWeight.Bold),
+                maxLines = 1,
+                overflow = TextOverflow.Ellipsis
+              )
+            } else {
+              Icon(
+                imageVector = Icons.Rounded.Movie,
+                contentDescription = null,
+                tint = MaterialTheme.colorScheme.primary,
+                modifier = Modifier.size(18.dp)
+              )
+              Spacer(modifier = Modifier.width(7.dp))
+              Text(
+                text = stringResource(id = R.string.share_video_clip_button),
+                style = MaterialTheme.typography.labelLarge.copy(fontWeight = FontWeight.ExtraBold),
+                maxLines = 1,
+                overflow = TextOverflow.Ellipsis
+              )
+            }
+          }
+
+          Surface(
+            onClick = {
+              if (anyExportBusy) return@Surface
+              isExportingVideo = true
+              videoExportProgress = 0f
+              coroutineScope.launch {
+                val result = AnimatedLyricVideoExporter.saveAnimatedVideoClipToGallery(
+                  context = context,
+                  data = shareCardData,
+                  lyricsAnimationStyle = lyricsAnimationStyle,
+                  onProgress = { p -> videoExportProgress = p }
+                )
+                isExportingVideo = false
+                result.onSuccess {
+                  Toast.makeText(context, videoSavedToast, Toast.LENGTH_SHORT).show()
+                }.onFailure {
+                  Toast.makeText(context, "Failed to save MP4 clip", Toast.LENGTH_SHORT).show()
+                }
+              }
+            },
+            enabled = !anyExportBusy,
+            shape = RoundedCornerShape(16.dp),
+            color = MaterialTheme.colorScheme.primary.copy(alpha = 0.14f),
+            border = BorderStroke(1.dp, MaterialTheme.colorScheme.primary.copy(alpha = 0.48f)),
+            modifier = Modifier
+              .size(48.dp)
+              .testTag("save_animated_video_gallery_button")
+          ) {
+            Box(contentAlignment = Alignment.Center) {
+              Icon(
+                imageVector = Icons.Rounded.VideoFile,
+                contentDescription = "Save 10s MP4 clip to gallery",
+                tint = MaterialTheme.colorScheme.primary,
+                modifier = Modifier.size(20.dp)
+              )
+            }
+          }
+        }
+
+        Spacer(modifier = Modifier.height(8.dp))
+
+        // Row B: Large "Share" PNG button (accent filled) + square 56dp icon-only "Save to gallery" button
         Row(
           modifier = Modifier.fillMaxWidth(),
           horizontalArrangement = Arrangement.spacedBy(12.dp),
@@ -718,7 +834,7 @@ fun ShareLyricsSheet(
         ) {
           Button(
             onClick = {
-              if (isSharing || isSaving) return@Button
+              if (anyExportBusy) return@Button
               isSharing = true
               coroutineScope.launch {
                 val result = ShareCardExporter.shareCardImage(context, shareCardData)
@@ -728,7 +844,7 @@ fun ShareLyricsSheet(
                 }
               }
             },
-            enabled = !isSharing && !isSaving,
+            enabled = !anyExportBusy,
             shape = RoundedCornerShape(18.dp),
             colors = ButtonDefaults.buttonColors(
               containerColor = MaterialTheme.colorScheme.primary,
@@ -736,7 +852,7 @@ fun ShareLyricsSheet(
             ),
             modifier = Modifier
               .weight(1f)
-              .height(56.dp)
+              .height(54.dp)
               .testTag("share_card_submit_button")
           ) {
             if (isSharing) {
@@ -761,10 +877,10 @@ fun ShareLyricsSheet(
             }
           }
 
-          // Square 56dp icon-only "Save to gallery" button
+          // Square 54dp icon-only "Save to gallery" button
           Surface(
             onClick = {
-              if (isSaving || isSharing) return@Surface
+              if (anyExportBusy) return@Surface
               isSaving = true
               coroutineScope.launch {
                 val result = ShareCardExporter.saveCardToGallery(context, shareCardData)
@@ -776,12 +892,12 @@ fun ShareLyricsSheet(
                 }
               }
             },
-            enabled = !isSaving && !isSharing,
+            enabled = !anyExportBusy,
             shape = RoundedCornerShape(18.dp),
             color = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.85f),
             border = BorderStroke(1.dp, MaterialTheme.colorScheme.onSurface.copy(alpha = 0.14f)),
             modifier = Modifier
-              .size(56.dp)
+              .size(54.dp)
               .testTag("save_card_gallery_button")
           ) {
             Box(contentAlignment = Alignment.Center) {

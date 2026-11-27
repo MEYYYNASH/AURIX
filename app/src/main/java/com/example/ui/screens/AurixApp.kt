@@ -501,6 +501,9 @@ private fun AurixMainShell(
   val widgetMatchSystemTheme by viewModel.widgetMatchSystemTheme.collectAsStateWithLifecycle()
   val widgetShowLikeButton by viewModel.widgetShowLikeButton.collectAsStateWithLifecycle()
   val widgetShowLyrics by viewModel.widgetShowLyrics.collectAsStateWithLifecycle()
+  val autoPlayOnHeadphoneConnect by viewModel.autoPlayOnHeadphoneConnect.collectAsStateWithLifecycle()
+  val floatingMiniLyricsEnabled by viewModel.floatingMiniLyricsEnabled.collectAsStateWithLifecycle()
+  val autoLibraryCleanerEnabled by viewModel.autoLibraryCleanerEnabled.collectAsStateWithLifecycle()
   val activeStandbyClockStyle = remember(standbyClockStyleId) { StandbyClockStyle.fromId(standbyClockStyleId) }
   val activeStandbyMood = remember(standbyMoodId) { StandbyColorMood.fromId(standbyMoodId) }
   val activeStandbyLayout = remember(standbyLayoutId) { StandbyLayout.fromId(standbyLayoutId) }
@@ -1462,6 +1465,9 @@ private fun AurixMainShell(
               onRecordRecentSearch = { viewModel.recordLibraryRecentSearch(it) },
               onRemoveRecentSearch = { viewModel.removeLibraryRecentSearch(it) },
               onClearRecentSearches = { viewModel.clearLibraryRecentSearches() },
+              autoLibraryCleanerEnabled = autoLibraryCleanerEnabled,
+              onToggleAutoLibraryCleaner = { viewModel.setAutoLibraryCleanerEnabled(it) },
+              onRunLibraryCleaner = { viewModel.cleanLibraryFromReport(it) },
               onSongClick = { song ->
                 val listQueue = when (libraryTab) {
                   0 -> localSongs
@@ -1873,9 +1879,43 @@ private fun AurixMainShell(
             orbiBeatEnergy = nowPlayingBeatEnergy,
             onOpenOrbiCompanion = { showOrbiCompanionSheet = true },
             widgetCustomizerConfig = widgetCustomizerConfig,
-            khmerLyricsFont = khmerLyricsFont
+            khmerLyricsFont = khmerLyricsFont,
+            autoPlayOnHeadphoneConnect = autoPlayOnHeadphoneConnect,
+            onToggleAutoPlayOnHeadphoneConnect = { viewModel.setAutoPlayOnHeadphoneConnect(it) },
+            floatingMiniLyricsEnabled = floatingMiniLyricsEnabled,
+            onToggleFloatingMiniLyrics = { viewModel.setFloatingMiniLyricsEnabled(it) }
           )
         }
+      }
+
+      // Floating Mini Lyrics Overlay (In-App PiP Pill) while browsing Home, Search, Library, Album, or Insights
+      if (
+        launchSplashDismissed &&
+        floatingMiniLyricsEnabled &&
+        currentSong != null &&
+        !isNowPlayingOpen &&
+        !showAmbientStandby &&
+        !showMonthlyRecapStory &&
+        !showDrivingMode
+      ) {
+        FloatingMiniLyricsOverlay(
+          visible = true,
+          song = currentSong,
+          isPlaying = isPlaying,
+          positionFlow = viewModel.currentPosition,
+          lyricsResult = lyrics,
+          lyricOffsetMs = lyricOffsetMs,
+          khmerLyricsFont = khmerLyricsFont,
+          accentColor = MaterialTheme.colorScheme.primary,
+          reducedMotion = reducedMotion,
+          onOpenFullLyrics = {
+            nowPlayingInitialShowLyrics = true
+            nowPlayingOpenViewTrigger++
+            showNowPlaying = true
+          },
+          onTogglePlayPause = { viewModel.togglePlayPause() },
+          onClosePip = { viewModel.setFloatingMiniLyricsEnabled(false) }
+        )
       }
 
       // AURIX Dynamic Island Live Capsule (Bluetooth/Wired Headphones, Song Downloads & App Updates)
@@ -1911,7 +1951,11 @@ private fun AurixMainShell(
           onToggleAutoRouteEq = { viewModel.setAutoSwitchBluetoothEq(it) },
           onSelectRoutePreset = { route, preset -> viewModel.setEqRoutePreset(route, preset) },
           onOpenEqualizer = { showEqualizerFromIsland = true },
-          onDismiss = { showMediaOutputSheet = false }
+          onDismiss = { showMediaOutputSheet = false },
+          autoPlayOnConnect = autoPlayOnHeadphoneConnect,
+          onToggleAutoPlayOnConnect = { viewModel.setAutoPlayOnHeadphoneConnect(it) },
+          floatingMiniLyricsEnabled = floatingMiniLyricsEnabled,
+          onToggleFloatingMiniLyrics = { viewModel.setFloatingMiniLyricsEnabled(it) }
         )
       }
 

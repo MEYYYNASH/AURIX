@@ -165,7 +165,11 @@ fun NowPlayingSheet(
   orbiBeatEnergy: Float = 0f,
   onOpenOrbiCompanion: () -> Unit = {},
   widgetCustomizerConfig: com.example.widget.WidgetCustomizerConfig = com.example.widget.WidgetCustomizerConfig.DEFAULT,
-  khmerLyricsFont: com.example.ui.theme.KhmerLyricsFont = com.example.ui.theme.KhmerLyricsFont.KANTUMRUY_PRO
+  khmerLyricsFont: com.example.ui.theme.KhmerLyricsFont = com.example.ui.theme.KhmerLyricsFont.KANTUMRUY_PRO,
+  autoPlayOnHeadphoneConnect: Boolean = false,
+  onToggleAutoPlayOnHeadphoneConnect: (Boolean) -> Unit = {},
+  floatingMiniLyricsEnabled: Boolean = false,
+  onToggleFloatingMiniLyrics: (Boolean) -> Unit = {}
 ) {
   BackHandler { onClose() }
   LaunchedEffect(song.id) {
@@ -713,6 +717,26 @@ fun NowPlayingSheet(
                 )
               }
 
+              IconButton(
+                onClick = {
+                  val nextEnabled = !floatingMiniLyricsEnabled
+                  onToggleFloatingMiniLyrics(nextEnabled)
+                  if (nextEnabled) {
+                    onClose()
+                  }
+                },
+                modifier = Modifier
+                  .minimumInteractiveComponentSize()
+                  .testTag("np_floating_lyrics_pip_button")
+              ) {
+                Icon(
+                  imageVector = Icons.Rounded.PictureInPictureAlt,
+                  contentDescription = stringResource(id = R.string.floating_lyrics_pip_title),
+                  tint = if (floatingMiniLyricsEnabled) c1 else Color.White.copy(alpha = 0.72f),
+                  modifier = Modifier.size(19.dp)
+                )
+              }
+
               val isExternalRoute = audioOutputInfo.route != com.example.playback.AudioOutputRoute.SPEAKER
               val outputIcon = when (audioOutputInfo.route) {
                 com.example.playback.AudioOutputRoute.BLUETOOTH -> Icons.Rounded.BluetoothAudio
@@ -1018,7 +1042,11 @@ fun NowPlayingSheet(
         onToggleAutoRouteEq = onToggleAutoBtEq,
         onSelectRoutePreset = onSelectRoutePreset,
         onOpenEqualizer = { showEqualizer = true },
-        onDismiss = { showMediaOutput = false }
+        onDismiss = { showMediaOutput = false },
+        autoPlayOnConnect = autoPlayOnHeadphoneConnect,
+        onToggleAutoPlayOnConnect = onToggleAutoPlayOnHeadphoneConnect,
+        floatingMiniLyricsEnabled = floatingMiniLyricsEnabled,
+        onToggleFloatingMiniLyrics = onToggleFloatingMiniLyrics
       )
     }
 

@@ -108,6 +108,26 @@ object GitHubUpdater {
     .followSslRedirects(true)
     .build()
 
+  private const val INSTALLED_META_PREFS = "aurix_installed_release_meta"
+
+  fun recordInstalledReleaseTimestamp(context: Context, versionCode: Long, releaseTimestampMs: Long) {
+    if (versionCode <= 0L || releaseTimestampMs <= 0L) return
+    runCatching {
+      context.getSharedPreferences(INSTALLED_META_PREFS, Context.MODE_PRIVATE)
+        .edit()
+        .putLong("ts_$versionCode", releaseTimestampMs)
+        .apply()
+    }
+  }
+
+  fun getRecordedReleaseTimestamp(context: Context, versionCode: Long): Long {
+    if (versionCode <= 0L) return 0L
+    return runCatching {
+      context.getSharedPreferences(INSTALLED_META_PREFS, Context.MODE_PRIVATE)
+        .getLong("ts_$versionCode", 0L)
+    }.getOrDefault(0L)
+  }
+
   fun getInstalledAppInfo(context: Context): InstalledAppInfo {
     val pm = context.packageManager
     val pkgName = context.packageName
@@ -116,20 +136,25 @@ object GitHubUpdater {
       val vCode = if (info != null) PackageInfoCompat.getLongVersionCode(info) else BuildConfig.VERSION_CODE.toLong()
       val vName = info?.versionName?.takeIf { it.isNotBlank() } ?: BuildConfig.VERSION_NAME
       val certs = extractSigningSha256Set(info)
+      val pkgLastUpdateMs = info?.lastUpdateTime?.coerceAtLeast(0L) ?: 0L
+      val recordedReleaseTs = getRecordedReleaseTimestamp(context, vCode)
+      val effectiveBuildTs = maxOf(BuildConfig.BUILD_TIMESTAMP_MS, pkgLastUpdateMs, recordedReleaseTs)
       InstalledAppInfo(
         packageName = pkgName,
         versionName = vName,
         versionCode = vCode,
         signingSha256Set = certs,
-        buildTimestampMs = BuildConfig.BUILD_TIMESTAMP_MS
+        buildTimestampMs = effectiveBuildTs
       )
     } catch (_: Exception) {
+      val vCode = BuildConfig.VERSION_CODE.toLong()
+      val recordedReleaseTs = getRecordedReleaseTimestamp(context, vCode)
       InstalledAppInfo(
         packageName = pkgName,
         versionName = BuildConfig.VERSION_NAME,
-        versionCode = BuildConfig.VERSION_CODE.toLong(),
+        versionCode = vCode,
         signingSha256Set = emptySet(),
-        buildTimestampMs = BuildConfig.BUILD_TIMESTAMP_MS
+        buildTimestampMs = maxOf(BuildConfig.BUILD_TIMESTAMP_MS, recordedReleaseTs)
       )
     }
   }

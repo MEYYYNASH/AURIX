@@ -47,7 +47,11 @@ fun MediaOutputSheet(
   onToggleAutoRouteEq: (Boolean) -> Unit,
   onSelectRoutePreset: (AudioOutputRoute, EqPreset) -> Unit,
   onOpenEqualizer: () -> Unit,
-  onDismiss: () -> Unit
+  onDismiss: () -> Unit,
+  autoPlayOnConnect: Boolean = false,
+  onToggleAutoPlayOnConnect: (Boolean) -> Unit = {},
+  floatingMiniLyricsEnabled: Boolean = false,
+  onToggleFloatingMiniLyrics: (Boolean) -> Unit = {}
 ) {
   val context = LocalContext.current
   val surfaceColor = MaterialTheme.colorScheme.surface
@@ -409,6 +413,95 @@ fun MediaOutputSheet(
                   )
                 }
               }
+            }
+          }
+        }
+
+        // Smart Playback & Floating Mini Lyrics Automation Card
+        Surface(
+          shape = RoundedCornerShape(18.dp),
+          color = Color.White.copy(alpha = 0.07f),
+          border = BorderStroke(1.dp, Color.White.copy(alpha = 0.14f)),
+          modifier = Modifier.fillMaxWidth()
+        ) {
+          Column(
+            modifier = Modifier
+              .fillMaxWidth()
+              .padding(horizontal = 14.dp, vertical = 12.dp),
+            verticalArrangement = Arrangement.spacedBy(10.dp)
+          ) {
+            Row(
+              modifier = Modifier.fillMaxWidth(),
+              verticalAlignment = Alignment.CenterVertically,
+              horizontalArrangement = Arrangement.SpaceBetween
+            ) {
+              Row(
+                modifier = Modifier.weight(1f),
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.spacedBy(10.dp)
+              ) {
+                Icon(
+                  imageVector = Icons.Rounded.Headphones,
+                  contentDescription = null,
+                  tint = accentColor,
+                  modifier = Modifier.size(19.dp)
+                )
+                Column(modifier = Modifier.weight(1f)) {
+                  Text(
+                    text = stringResource(id = R.string.media_output_auto_play_title),
+                    style = MaterialTheme.typography.bodyMedium.copy(fontWeight = FontWeight.Bold),
+                    color = Color.White
+                  )
+                  Text(
+                    text = stringResource(id = R.string.media_output_auto_play_sub),
+                    style = MaterialTheme.typography.labelSmall,
+                    color = Color.White.copy(alpha = 0.68f)
+                  )
+                }
+              }
+              Switch(
+                checked = autoPlayOnConnect,
+                onCheckedChange = onToggleAutoPlayOnConnect,
+                modifier = Modifier.testTag("media_output_auto_play_switch")
+              )
+            }
+
+            HorizontalDivider(color = Color.White.copy(alpha = 0.09f))
+
+            Row(
+              modifier = Modifier.fillMaxWidth(),
+              verticalAlignment = Alignment.CenterVertically,
+              horizontalArrangement = Arrangement.SpaceBetween
+            ) {
+              Row(
+                modifier = Modifier.weight(1f),
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.spacedBy(10.dp)
+              ) {
+                Icon(
+                  imageVector = Icons.Rounded.Lyrics,
+                  contentDescription = null,
+                  tint = accentColor,
+                  modifier = Modifier.size(19.dp)
+                )
+                Column(modifier = Modifier.weight(1f)) {
+                  Text(
+                    text = stringResource(id = R.string.floating_lyrics_pip_title),
+                    style = MaterialTheme.typography.bodyMedium.copy(fontWeight = FontWeight.Bold),
+                    color = Color.White
+                  )
+                  Text(
+                    text = stringResource(id = R.string.floating_lyrics_pip_sub),
+                    style = MaterialTheme.typography.labelSmall,
+                    color = Color.White.copy(alpha = 0.68f)
+                  )
+                }
+              }
+              Switch(
+                checked = floatingMiniLyricsEnabled,
+                onCheckedChange = onToggleFloatingMiniLyrics,
+                modifier = Modifier.testTag("media_output_floating_lyrics_switch")
+              )
             }
           }
         }

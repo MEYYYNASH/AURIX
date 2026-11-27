@@ -1068,4 +1068,26 @@
     <string name="island_update_downloading">Updating AURIX · %1$d%%</string>
     <string name="island_update_verifying">Verifying Update · %1$s</string>
     <string name="island_update_ready_install">Tap to Install · %1$s</string>
+
+    <!-- v2.4.7: Auto-Play on Headphone Connect, Floating Mini Lyrics PiP, Animated Video Clip & Library Cleaner -->
+    <string name="media_output_auto_play_title">Auto-Play on Headphone Connect</string>
+    <string name="media_output_auto_play_sub">Automatically resume music when Bluetooth or wired headphones connect</string>
+    <string name="floating_lyrics_pip_title">Floating Mini Lyrics (PiP Pill)</string>
+    <string name="floating_lyrics_pip_sub">Draggable 1-line karaoke lyric pill while browsing AURIX</string>
+    <string name="floating_lyrics_pip_short">Mini Lyrics</string>
+    <string name="floating_lyrics_no_lyrics">Instrumental · %1$s</string>
+    <string name="share_video_clip_button">10s Video Clip (MP4)</string>
+    <string name="share_video_clip_saving">Encoding 10s Clip · %1$d%%</string>
+    <string name="share_video_clip_saved">Saved 10s Lyric Video Clip to Gallery</string>
+    <string name="library_cleaner_button">Smart Cleaner</string>
+    <string name="library_cleaner_title">Library Cleaner</string>
+    <string name="library_cleaner_subtitle">Auto-detect duplicate tracks &amp; missing local files</string>
+    <string name="library_cleaner_auto_title">Auto-Clean on Startup</string>
+    <string name="library_cleaner_auto_sub">Automatically remove broken file links &amp; duplicate entries</string>
+    <string name="library_cleaner_missing_label">Missing Files</string>
+    <string name="library_cleaner_duplicates_label">Duplicates</string>
+    <string name="library_cleaner_reclaim_label">Space to Free</string>
+    <string name="library_cleaner_clean_now">Clean Library Now (%1$d)</string>
+    <string name="library_cleaner_all_clean">Your library is spotless — 0 duplicates or missing files</string>
+    <string name="library_cleaner_done_toast">Cleaned %1$d duplicates &amp; %2$d missing files</string>
 </resources>

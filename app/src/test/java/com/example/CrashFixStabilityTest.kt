@@ -12,10 +12,11 @@ import org.junit.Test
 class CrashFixStabilityTest {
 
   @Test
-  fun release245_metadataAndVersionCodeAreConsistent() {
-    assertEquals("2.4.5", BuildConfig.VERSION_NAME)
-    assertEquals(20405, BuildConfig.VERSION_CODE)
-    assertTrue("Release 2.4.5 versionCode must exceed 2.4.4 (20404)", BuildConfig.VERSION_CODE > 20404)
+  fun release247_metadataAndVersionCodeAreConsistent() {
+    assertEquals("2.4.7", BuildConfig.VERSION_NAME)
+    assertEquals(20407, BuildConfig.VERSION_CODE)
+    assertTrue("Release 2.4.7 versionCode must exceed 2.4.5 (20405)", BuildConfig.VERSION_CODE > 20405)
+    assertTrue("BuildConfig.BUILD_TIMESTAMP_MS must be non-zero so same-version installs are recognized as up-to-date", BuildConfig.BUILD_TIMESTAMP_MS >= 1795858700000L)
     assertEquals(4, com.example.ui.screens.ONBOARDING_SLIDE_COUNT)
     assertTrue(com.example.ui.screens.MINI_PLAYER_HIGH_REFRESH_OPTIMIZED)
     assertTrue(com.example.ui.screens.MINI_PLAYER_SLIDE_UP_DAMPING in 0.7f..0.95f)
@@ -1067,7 +1068,7 @@ class CrashFixStabilityTest {
 
   @Test
   fun remoteJsonUpdateChecker_granularVersioningAndTimestamps_workEndToEnd() {
-    assertEquals(20405, BuildConfig.VERSION_CODE)
+    assertEquals(20407, BuildConfig.VERSION_CODE)
     assertEquals(20301L, com.example.data.GitHubUpdater.deriveVersionCodeFromTag("v2.3.1"))
     assertEquals(20301L, com.example.data.GitHubUpdater.deriveVersionCodeFromTag("v2.3.1+20301"))
     assertEquals(20312L, com.example.data.GitHubUpdater.deriveVersionCodeFromTag("v2.3.1.2"))
@@ -1079,15 +1080,16 @@ class CrashFixStabilityTest {
     assertEquals(20403L, com.example.data.GitHubUpdater.deriveVersionCodeFromTag("v2.4.3"))
     assertEquals(20404L, com.example.data.GitHubUpdater.deriveVersionCodeFromTag("v2.4.4"))
     assertEquals(20405L, com.example.data.GitHubUpdater.deriveVersionCodeFromTag("v2.4.5"))
+    assertEquals(20407L, com.example.data.GitHubUpdater.deriveVersionCodeFromTag("v2.4.7"))
 
     val server = com.sun.net.httpserver.HttpServer.create(java.net.InetSocketAddress("127.0.0.1", 0), 0)
     val port = server.address.port
     server.createContext("/version.json") { exchange ->
       val body = """
         {
-          "versionName": "2.4.5.1",
+          "versionName": "2.4.7.1",
           "publishedAt": "2026-11-27T22:15:30Z",
-          "apkUrl": "http://127.0.0.1:$port/AURIX-v2.4.5.1.apk",
+          "apkUrl": "http://127.0.0.1:$port/AURIX-v2.4.7.1.apk",
           "sha256": "0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef",
           "notes": ["Granular 4-segment hotfix release"]
         }
@@ -1111,8 +1113,8 @@ class CrashFixStabilityTest {
       val derivedCode = com.example.data.GitHubUpdater.deriveVersionCodeFromTag(versionName)
       val parsedTs = com.example.data.GitHubUpdater.parseIsoTimestampMs(publishedAt)
 
-      assertEquals("2.4.5.1", versionName)
-      assertEquals(20451L, derivedCode)
+      assertEquals("2.4.7.1", versionName)
+      assertEquals(20471L, derivedCode)
       assertTrue(parsedTs > 0L)
 
       val remote = com.example.data.RemoteVersionInfo(
@@ -1787,5 +1789,96 @@ class CrashFixStabilityTest {
     assertTrue("MediaOutputSheet.kt must exist", mediaOutputSheetFile.exists())
     val islandSrc = dynamicIslandFile.readText()
     assertTrue("Dynamic Island must handle AudioRouteConnected, SongDownloading, and AppUpdateProgress", islandSrc.contains("AudioRouteConnected") && islandSrc.contains("SongDownloading") && islandSrc.contains("AppUpdateProgress"))
+
+    // 7. Release 2.4.7: Auto-Play on Headphone Connect, Floating Mini Lyrics Overlay, 10s Animated Video Exporter, Smart Library Cleaner, and OTA Post-Update Fix
+    assertEquals("auto_play_on_headphone_connect", com.example.data.PreferencesManager.AUTO_PLAY_ON_HEADPHONE_CONNECT.name)
+    assertEquals("floating_mini_lyrics_enabled", com.example.data.PreferencesManager.FLOATING_MINI_LYRICS_ENABLED.name)
+    assertEquals("auto_library_cleaner_enabled", com.example.data.PreferencesManager.AUTO_LIBRARY_CLEANER_ENABLED.name)
+
+    // Verify FloatingMiniLyricsOverlay snapshot logic
+    val syncedTestLyrics = com.example.model.LyricsResult(
+      synced = listOf(
+        com.example.model.LyricLine(1000L, "បទចម្រៀងទីមួយ"),
+        com.example.model.LyricLine(5000L, "Second lyric line")
+      ),
+      plain = "បទចម្រៀងទីមួយ\nSecond lyric line",
+      matchedTitle = "Test",
+      matchedArtist = "Artist"
+    )
+    val snap = com.example.ui.screens.resolveFloatingLyricSnapshot(
+      song = sampleSong,
+      lyricsResult = syncedTestLyrics,
+      positionMs = 3000L,
+      lyricOffsetMs = 0L,
+      instrumentalLabel = "No lyrics"
+    )
+    assertTrue(snap.hasLyrics)
+    assertEquals("បទចម្រៀងទីមួយ", snap.activeLine)
+    assertEquals("Second lyric line", snap.subLabel)
+    assertEquals(0.5f, snap.lineProgressFraction, 0.05f)
+
+    // Verify LibraryCleanerEngine duplicate & missing file detection
+    val tempAudio = java.io.File.createTempFile("aurix_valid_", ".m4a").apply {
+      writeBytes(ByteArray(2048))
+      deleteOnExit()
+    }
+    val validTrack1 = Song(
+      id = "local_1",
+      title = "Champa Battambang (Official Audio)",
+      artist = "Sinn Sisamouth",
+      artworkUrl = "",
+      durationSeconds = 210,
+      streamUrl = tempAudio.toURI().toString(),
+      source = "Local"
+    )
+    val dupTrack2 = Song(
+      id = "local_2",
+      title = "Champa Battambang",
+      artist = "Sinn Sisamouth",
+      artworkUrl = "",
+      durationSeconds = 211,
+      streamUrl = tempAudio.toURI().toString(),
+      source = "Downloaded"
+    )
+    val missingTrack3 = Song(
+      id = "local_missing_3",
+      title = "Deleted Offline Track",
+      artist = "Ros Sereysothea",
+      artworkUrl = "",
+      durationSeconds = 180,
+      streamUrl = "file:///non_existent_path/aurix_deleted_track_99999.m4a",
+      source = "Downloaded"
+    )
+    val scanReport = com.example.data.LibraryCleanerEngine.scanLibrary(
+      listOf(validTrack1, dupTrack2, missingTrack3)
+    )
+    assertTrue(scanReport.hasIssues)
+    assertEquals(1, scanReport.missingFileTracks.size)
+    assertEquals("local_missing_3", scanReport.missingFileTracks.first().id)
+    assertEquals(1, scanReport.duplicateGroups.size)
+    assertEquals(1, scanReport.duplicateTracks.size)
+
+    // Verify AnimatedLyricVideoExporter & OTA Same-Version Up-To-Date check
+    assertEquals(10, com.example.share.AnimatedLyricVideoExporter.CLIP_DURATION_SECONDS)
+    assertEquals(240, com.example.share.AnimatedLyricVideoExporter.TOTAL_FRAMES)
+    val currentInstalled = com.example.data.InstalledAppInfo(
+      versionName = BuildConfig.VERSION_NAME,
+      versionCode = BuildConfig.VERSION_CODE.toLong(),
+      buildTimestampMs = BuildConfig.BUILD_TIMESTAMP_MS
+    )
+    val currentRemoteManifest = com.example.data.RemoteVersionInfo(
+      versionName = "2.4.7",
+      versionCode = 20407L,
+      releaseDate = "2026-11-27",
+      apkUrl = "https://github.com/MEYYYNASH/AURIX/releases/download/v2.4.7/AURIX-v2.4.7.apk",
+      sha256 = "3e56ee90d3213e7b4c93d0c2b457e6458bab2c93d7875a00b52b83b95e66716b",
+      notes = listOf("v2.4.7"),
+      releasePageUrl = "https://github.com/MEYYYNASH/AURIX/releases/tag/v2.4.7",
+      releaseTimestampMs = 1795858700000L
+    )
+    assertFalse(
+      "Installed v2.4.7 must NOT think an update is still needed against v2.4.7 version.json",
+      com.example.data.UpdateManager.isReleaseNewerThanInstalled(currentInstalled, currentRemoteManifest)
+    )
   }
 }
