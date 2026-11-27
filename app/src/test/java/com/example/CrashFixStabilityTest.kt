@@ -12,10 +12,10 @@ import org.junit.Test
 class CrashFixStabilityTest {
 
   @Test
-  fun release244_metadataAndVersionCodeAreConsistent() {
-    assertEquals("2.4.4", BuildConfig.VERSION_NAME)
-    assertEquals(20404, BuildConfig.VERSION_CODE)
-    assertTrue("Release 2.4.4 versionCode must exceed 2.4.3 (20403)", BuildConfig.VERSION_CODE > 20403)
+  fun release245_metadataAndVersionCodeAreConsistent() {
+    assertEquals("2.4.5", BuildConfig.VERSION_NAME)
+    assertEquals(20405, BuildConfig.VERSION_CODE)
+    assertTrue("Release 2.4.5 versionCode must exceed 2.4.4 (20404)", BuildConfig.VERSION_CODE > 20404)
     assertEquals(4, com.example.ui.screens.ONBOARDING_SLIDE_COUNT)
     assertTrue(com.example.ui.screens.MINI_PLAYER_HIGH_REFRESH_OPTIMIZED)
     assertTrue(com.example.ui.screens.MINI_PLAYER_SLIDE_UP_DAMPING in 0.7f..0.95f)
@@ -1067,7 +1067,7 @@ class CrashFixStabilityTest {
 
   @Test
   fun remoteJsonUpdateChecker_granularVersioningAndTimestamps_workEndToEnd() {
-    assertEquals(20404, BuildConfig.VERSION_CODE)
+    assertEquals(20405, BuildConfig.VERSION_CODE)
     assertEquals(20301L, com.example.data.GitHubUpdater.deriveVersionCodeFromTag("v2.3.1"))
     assertEquals(20301L, com.example.data.GitHubUpdater.deriveVersionCodeFromTag("v2.3.1+20301"))
     assertEquals(20312L, com.example.data.GitHubUpdater.deriveVersionCodeFromTag("v2.3.1.2"))
@@ -1078,15 +1078,16 @@ class CrashFixStabilityTest {
     assertEquals(20402L, com.example.data.GitHubUpdater.deriveVersionCodeFromTag("v2.4.2"))
     assertEquals(20403L, com.example.data.GitHubUpdater.deriveVersionCodeFromTag("v2.4.3"))
     assertEquals(20404L, com.example.data.GitHubUpdater.deriveVersionCodeFromTag("v2.4.4"))
+    assertEquals(20405L, com.example.data.GitHubUpdater.deriveVersionCodeFromTag("v2.4.5"))
 
     val server = com.sun.net.httpserver.HttpServer.create(java.net.InetSocketAddress("127.0.0.1", 0), 0)
     val port = server.address.port
     server.createContext("/version.json") { exchange ->
       val body = """
         {
-          "versionName": "2.4.4.1",
+          "versionName": "2.4.5.1",
           "publishedAt": "2026-11-27T22:15:30Z",
-          "apkUrl": "http://127.0.0.1:$port/AURIX-v2.4.4.1.apk",
+          "apkUrl": "http://127.0.0.1:$port/AURIX-v2.4.5.1.apk",
           "sha256": "0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef",
           "notes": ["Granular 4-segment hotfix release"]
         }
@@ -1110,8 +1111,8 @@ class CrashFixStabilityTest {
       val derivedCode = com.example.data.GitHubUpdater.deriveVersionCodeFromTag(versionName)
       val parsedTs = com.example.data.GitHubUpdater.parseIsoTimestampMs(publishedAt)
 
-      assertEquals("2.4.4.1", versionName)
-      assertEquals(20441L, derivedCode)
+      assertEquals("2.4.5.1", versionName)
+      assertEquals(20451L, derivedCode)
       assertTrue(parsedTs > 0L)
 
       val remote = com.example.data.RemoteVersionInfo(
@@ -1767,5 +1768,24 @@ class CrashFixStabilityTest {
     assertTrue("SettingsScreen must include live search bar", settingsSrc.contains("settings_search_input"))
     assertTrue("DrivingModeScreen must keep screen awake and support BackHandler", drivingSrc.contains("FLAG_KEEP_SCREEN_ON") && drivingSrc.contains("BackHandler"))
     assertFalse("Must NOT declare BLUETOOTH_CONNECT permission", manifestSrc.contains("BLUETOOTH_CONNECT"))
+
+    // 6. Release 2.4.5: Media3 Session lockscreen controls, Bluetooth & wired headphones output, and Dynamic Island
+    assertTrue("AndroidManifest must declare MEDIA_BUTTON intent action on PlaybackService", manifestSrc.contains("android.intent.action.MEDIA_BUTTON"))
+    val playbackServiceSrc = java.io.File(projectRoot, "src/main/java/com/example/playback/PlaybackService.kt").readText()
+    assertTrue("PlaybackService must wrap player in buildSessionForwardingPlayer for lockscreen skip/play/pause", playbackServiceSrc.contains("buildSessionForwardingPlayer"))
+    assertTrue("PlaybackService must configure DefaultMediaNotificationProvider", playbackServiceSrc.contains("DefaultMediaNotificationProvider"))
+    assertTrue("PlaybackService must expose CUSTOM_COMMAND_MEDIA_OUTPUT in media notification", playbackServiceSrc.contains("CUSTOM_COMMAND_MEDIA_OUTPUT"))
+
+    val routerSrc = java.io.File(projectRoot, "src/main/java/com/example/playback/AudioOutputRouter.kt").readText()
+    assertTrue("AudioOutputRouter must handle wired headset plug broadcasts", routerSrc.contains("ACTION_HEADSET_PLUG"))
+    assertTrue("AudioOutputRouter must handle Bluetooth A2DP connection state changes", routerSrc.contains("android.bluetooth.a2dp.profile.action.CONNECTION_STATE_CHANGED"))
+    assertTrue("AudioOutputRouter must launch system media output switcher", routerSrc.contains("launchSystemMediaOutputSwitcher"))
+
+    val dynamicIslandFile = java.io.File(projectRoot, "src/main/java/com/example/ui/screens/AurixDynamicIsland.kt")
+    val mediaOutputSheetFile = java.io.File(projectRoot, "src/main/java/com/example/ui/screens/MediaOutputSheet.kt")
+    assertTrue("AurixDynamicIsland.kt must exist", dynamicIslandFile.exists())
+    assertTrue("MediaOutputSheet.kt must exist", mediaOutputSheetFile.exists())
+    val islandSrc = dynamicIslandFile.readText()
+    assertTrue("Dynamic Island must handle AudioRouteConnected, SongDownloading, and AppUpdateProgress", islandSrc.contains("AudioRouteConnected") && islandSrc.contains("SongDownloading") && islandSrc.contains("AppUpdateProgress"))
   }
 }

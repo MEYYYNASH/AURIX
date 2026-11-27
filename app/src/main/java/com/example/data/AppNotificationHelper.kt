@@ -18,10 +18,12 @@ import com.example.R
 object AppNotificationHelper {
   const val CHANNEL_UPDATE_RELEASES = "aurix_update_releases"
   const val CHANNEL_BACKGROUND_DOWNLOADS = "aurix_background_downloads"
+  const val CHANNEL_AUDIO_DEVICES = "aurix_audio_devices"
 
   const val NOTIF_ID_UPDATE_AVAILABLE = 4001
   const val NOTIF_ID_BACKGROUND_DOWNLOAD = 4002
   const val NOTIF_ID_UPDATE_STATUS = 4003
+  const val NOTIF_ID_AUDIO_DEVICE = 4004
 
   const val EXTRA_OPEN_SCREEN = "aurix_open_screen"
   const val EXTRA_UPDATE_ACTION = "aurix_update_action"
@@ -64,8 +66,18 @@ object AppNotificationHelper {
       setShowBadge(false)
     }
 
+    val audioDevicesChannel = NotificationChannel(
+      CHANNEL_AUDIO_DEVICES,
+      context.getString(R.string.audio_pro_title),
+      NotificationManager.IMPORTANCE_LOW
+    ).apply {
+      description = context.getString(R.string.audio_pro_auto_bt_sub)
+      setShowBadge(false)
+    }
+
     manager.createNotificationChannel(updatesChannel)
     manager.createNotificationChannel(downloadsChannel)
+    manager.createNotificationChannel(audioDevicesChannel)
   }
 
   fun canPostNotifications(context: Context): Boolean {
@@ -455,6 +467,46 @@ object AppNotificationHelper {
 
     runCatching {
       NotificationManagerCompat.from(context).notify(notifId, notification)
+    }
+  }
+
+  fun notifyAudioDeviceConnected(
+    context: Context,
+    deviceName: String,
+    routeLabel: String,
+    eqPresetLabel: String = ""
+  ) {
+    ensureChannels(context)
+    if (!canPostNotifications(context)) return
+
+    val openPlayerIntent = mainActivityPendingIntent(
+      context = context,
+      requestCode = 4125,
+      openScreen = SCREEN_NOW_PLAYING_PLAYER
+    )
+    val displayTitle = deviceName.ifBlank { routeLabel }
+    val subtitle = buildString {
+      append(routeLabel)
+      if (eqPresetLabel.isNotBlank()) {
+        append(" · EQ: ")
+        append(eqPresetLabel)
+      }
+    }
+
+    val notification = NotificationCompat.Builder(context, CHANNEL_AUDIO_DEVICES)
+      .setSmallIcon(R.drawable.ic_stat_aurix)
+      .setContentTitle(displayTitle)
+      .setContentText(subtitle)
+      .setContentIntent(openPlayerIntent)
+      .setAutoCancel(true)
+      .setOnlyAlertOnce(true)
+      .setSilent(true)
+      .setTimeoutAfter(8_000L)
+      .setPriority(NotificationCompat.PRIORITY_LOW)
+      .build()
+
+    runCatching {
+      NotificationManagerCompat.from(context).notify(NOTIF_ID_AUDIO_DEVICE, notification)
     }
   }
 }

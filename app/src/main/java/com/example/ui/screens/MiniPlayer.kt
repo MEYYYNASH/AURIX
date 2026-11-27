@@ -71,6 +71,7 @@ fun MiniPlayer(
   reducedMotion: Boolean = false,
   isExpandingToFullPlayer: Boolean = false,
   hasLyrics: Boolean = false,
+  audioOutputInfo: com.example.playback.AudioOutputRouteInfo = com.example.playback.AudioOutputRouteInfo(),
   onCheckLyrics: ((Song) -> Unit)? = null,
   onPlayPauseClick: () -> Unit,
   onFavoriteClick: () -> Unit,
@@ -403,12 +404,23 @@ fun MiniPlayer(
                 modifier = Modifier.padding(start = 2.dp)
               )
             }
+            val routeSubtitle = when (audioOutputInfo.route) {
+              com.example.playback.AudioOutputRoute.BLUETOOTH -> {
+                val btName = audioOutputInfo.deviceName.ifBlank { "Bluetooth" }
+                "${song.artist} · $btName"
+              }
+              com.example.playback.AudioOutputRoute.HEADPHONES -> {
+                val hpName = audioOutputInfo.deviceName.ifBlank { "Wired" }
+                "${song.artist} · $hpName"
+              }
+              com.example.playback.AudioOutputRoute.SPEAKER -> song.artist
+            }
             Text(
-              text = song.artist,
+              text = routeSubtitle,
               style = MaterialTheme.typography.bodySmall,
               maxLines = 1,
               overflow = TextOverflow.Ellipsis,
-              color = secondaryTextColor
+              color = if (audioOutputInfo.route != com.example.playback.AudioOutputRoute.SPEAKER) accentColor else secondaryTextColor
             )
           }
         }

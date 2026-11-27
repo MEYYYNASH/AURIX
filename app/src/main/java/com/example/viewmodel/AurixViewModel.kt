@@ -1334,6 +1334,7 @@ class AurixViewModel(application: Application) : AndroidViewModel(application) {
 
   val equalizerState: StateFlow<EqualizerUiState> = AudioEqualizerController.state
   val audioOutputInfo: StateFlow<AudioOutputRouteInfo> = AudioOutputRouter.outputInfo
+  val connectedAudioDevices: StateFlow<List<com.example.playback.AudioOutputDeviceItem>> = AudioOutputRouter.connectedDevices
   val crossfadeSettings: StateFlow<CrossfadeSettings> = CrossfadeController.state
 
   val sleepTimerFadeOut: StateFlow<Boolean> = prefsManager.sleepTimerFadeOut

@@ -1048,4 +1048,24 @@
     <string name="settings_quick_audio_pro">Audio Pro</string>
     <string name="settings_quick_downloads">Offline</string>
     <string name="settings_quick_recap">Recap</string>
+
+    <!-- Media Output Switcher & Dynamic Island Live Capsule -->
+    <string name="media_output_title">Media Output</string>
+    <string name="media_output_subtitle">Active audio device &amp; connected outputs</string>
+    <string name="media_output_active_badge">ACTIVE</string>
+    <string name="media_output_switch_system">Switch Output Device</string>
+    <string name="media_output_bluetooth_settings">Bluetooth Settings</string>
+    <string name="media_output_wired_headphones">Wired Headphones</string>
+    <string name="media_output_bluetooth_headphones">Bluetooth Headphones</string>
+    <string name="media_output_phone_speaker">Phone Speaker</string>
+    <string name="media_output_auto_eq_pill">Auto-EQ · %1$s</string>
+    <string name="island_connected_title">Connected · %1$s</string>
+    <string name="island_output_switched">Playing on %1$s</string>
+    <string name="island_downloading_song">Downloading · %1$s</string>
+    <string name="island_downloading_multi">Downloading %1$d songs · %2$d%%</string>
+    <string name="island_download_saved">Saved Offline · %1$s</string>
+    <string name="island_update_available">Update Ready · %1$s</string>
+    <string name="island_update_downloading">Updating AURIX · %1$d%%</string>
+    <string name="island_update_verifying">Verifying Update · %1$s</string>
+    <string name="island_update_ready_install">Tap to Install · %1$s</string>
 </resources>

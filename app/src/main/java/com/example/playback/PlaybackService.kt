@@ -4,10 +4,12 @@ import android.app.PendingIntent
 import android.content.Context
 import android.content.Intent
 import android.media.MediaCodec
+import android.os.Bundle
 import android.os.SystemClock
 import androidx.annotation.OptIn
 import androidx.media3.common.AudioAttributes
 import androidx.media3.common.C
+import androidx.media3.common.ForwardingPlayer
 import androidx.media3.common.MediaItem
 import androidx.media3.common.PlaybackException
 import androidx.media3.common.Player
@@ -20,11 +22,15 @@ import androidx.media3.exoplayer.ExoPlayer
 import androidx.media3.exoplayer.audio.AudioSink
 import androidx.media3.exoplayer.audio.DefaultAudioSink
 import androidx.media3.exoplayer.source.DefaultMediaSourceFactory
+import androidx.media3.session.CommandButton
 import androidx.media3.session.DefaultMediaNotificationProvider
 import androidx.media3.session.MediaSession
 import androidx.media3.session.MediaSessionService
+import androidx.media3.session.SessionCommand
+import androidx.media3.session.SessionResult
 import com.example.MainActivity
 import com.example.R
+import com.example.data.AppNotificationHelper
 import com.example.data.AurixDatabase
 import com.example.data.FavoriteSongEntity
 import com.example.data.StreamHeaderRegistry
@@ -34,6 +40,8 @@ import com.example.model.LyricLine
 import com.example.model.LyricsResult
 import com.example.model.Song
 import com.example.widget.AurixWidgetController
+import com.google.common.util.concurrent.Futures
+import com.google.common.util.concurrent.ListenableFuture
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
@@ -118,6 +126,78 @@ class PlaybackService : MediaSessionService() {
         }
       }
       .build()
+  }
+
+  /**
+   * Wraps the primary ExoPlayer so lockscreen & notification transport buttons
+   * (Previous, Play/Pause, Next, Seek) always remain enabled and responsive
+   * without unlocking the device—even at the first/last track of a queue.
+   */
+  @OptIn(UnstableApi::class)
+  private fun buildSessionForwardingPlayer(delegate: ExoPlayer): ForwardingPlayer {
+    return object : ForwardingPlayer(delegate) {
+      override fun getAvailableCommands(): Player.Commands {
+        return super.getAvailableCommands()
+          .buildUpon()
+          .add(Player.COMMAND_PLAY_PAUSE)
+          .add(Player.COMMAND_SEEK_TO_PREVIOUS)
+          .add(Player.COMMAND_SEEK_TO_PREVIOUS_MEDIA_ITEM)
+          .add(Player.COMMAND_SEEK_TO_NEXT)
+          .add(Player.COMMAND_SEEK_TO_NEXT_MEDIA_ITEM)
+          .add(Player.COMMAND_SEEK_IN_CURRENT_MEDIA_ITEM)
+          .build()
+      }
+
+      override fun isCommandAvailable(command: Int): Boolean {
+        return when (command) {
+          Player.COMMAND_PLAY_PAUSE,
+          Player.COMMAND_SEEK_TO_PREVIOUS,
+          Player.COMMAND_SEEK_TO_PREVIOUS_MEDIA_ITEM,
+          Player.COMMAND_SEEK_TO_NEXT,
+          Player.COMMAND_SEEK_TO_NEXT_MEDIA_ITEM,
+          Player.COMMAND_SEEK_IN_CURRENT_MEDIA_ITEM -> true
+          else -> super.isCommandAvailable(command)
+        }
+      }
+
+      override fun seekToNext() {
+        runCatching {
+          if (delegate.hasNextMediaItem()) {
+            delegate.seekToNextMediaItem()
+          } else if (delegate.mediaItemCount > 0) {
+            delegate.seekTo(0, 0L)
+          }
+          if (delegate.playbackState == Player.STATE_IDLE && delegate.mediaItemCount > 0) {
+            delegate.prepare()
+          }
+          delegate.play()
+        }
+      }
+
+      override fun seekToNextMediaItem() {
+        seekToNext()
+      }
+
+      override fun seekToPrevious() {
+        runCatching {
+          if (delegate.currentPosition > 3000L) {
+            delegate.seekTo(0L)
+          } else if (delegate.hasPreviousMediaItem()) {
+            delegate.seekToPreviousMediaItem()
+          } else if (delegate.mediaItemCount > 0) {
+            delegate.seekTo((delegate.mediaItemCount - 1).coerceAtLeast(0), 0L)
+          }
+          if (delegate.playbackState == Player.STATE_IDLE && delegate.mediaItemCount > 0) {
+            delegate.prepare()
+          }
+          delegate.play()
+        }
+      }
+
+      override fun seekToPreviousMediaItem() {
+        seekToPrevious()
+      }
+    }
   }
 
   @OptIn(UnstableApi::class)
@@ -266,6 +346,7 @@ class PlaybackService : MediaSessionService() {
     runCatching {
       val launchIntent = Intent(this, MainActivity::class.java).apply {
         flags = Intent.FLAG_ACTIVITY_SINGLE_TOP or Intent.FLAG_ACTIVITY_CLEAR_TOP
+        putExtra(AppNotificationHelper.EXTRA_OPEN_SCREEN, AppNotificationHelper.SCREEN_NOW_PLAYING_PLAYER)
       }
       val sessionActivityPendingIntent = PendingIntent.getActivity(
         this,
@@ -275,14 +356,63 @@ class PlaybackService : MediaSessionService() {
       )
 
       val notificationProvider = DefaultMediaNotificationProvider.Builder(this)
+        .setChannelId(CHANNEL_MEDIA_PLAYBACK)
+        .setChannelName(R.string.app_name)
         .build()
         .apply {
           setSmallIcon(R.drawable.ic_stat_aurix)
         }
       setMediaNotificationProvider(notificationProvider)
 
-      mediaSession = MediaSession.Builder(this, player)
+      val openOutputCmd = SessionCommand(CUSTOM_COMMAND_MEDIA_OUTPUT, Bundle.EMPTY)
+      val mediaOutputButton = CommandButton.Builder()
+        .setDisplayName(getString(R.string.audio_pro_title))
+        .setIconResId(R.drawable.ic_stat_aurix)
+        .setSessionCommand(openOutputCmd)
+        .build()
+
+      val sessionPlayer = buildSessionForwardingPlayer(player)
+      mediaSession = MediaSession.Builder(this, sessionPlayer)
         .setSessionActivity(sessionActivityPendingIntent)
+        .setCustomLayout(listOf(mediaOutputButton))
+        .setCallback(object : MediaSession.Callback {
+          override fun onConnect(
+            session: MediaSession,
+            controller: MediaSession.ControllerInfo
+          ): MediaSession.ConnectionResult {
+            val sessionCommands = MediaSession.ConnectionResult.DEFAULT_SESSION_COMMANDS
+              .buildUpon()
+              .add(openOutputCmd)
+              .build()
+            val playerCommands = MediaSession.ConnectionResult.DEFAULT_PLAYER_COMMANDS
+              .buildUpon()
+              .add(Player.COMMAND_PLAY_PAUSE)
+              .add(Player.COMMAND_SEEK_TO_PREVIOUS)
+              .add(Player.COMMAND_SEEK_TO_PREVIOUS_MEDIA_ITEM)
+              .add(Player.COMMAND_SEEK_TO_NEXT)
+              .add(Player.COMMAND_SEEK_TO_NEXT_MEDIA_ITEM)
+              .add(Player.COMMAND_SEEK_IN_CURRENT_MEDIA_ITEM)
+              .build()
+            return MediaSession.ConnectionResult.AcceptedResultBuilder(session)
+              .setAvailableSessionCommands(sessionCommands)
+              .setAvailablePlayerCommands(playerCommands)
+              .setCustomLayout(listOf(mediaOutputButton))
+              .build()
+          }
+
+          override fun onCustomCommand(
+            session: MediaSession,
+            controller: MediaSession.ControllerInfo,
+            customCommand: SessionCommand,
+            args: Bundle
+          ): ListenableFuture<SessionResult> {
+            if (customCommand.customAction == CUSTOM_COMMAND_MEDIA_OUTPUT) {
+              AudioOutputRouter.launchSystemMediaOutputSwitcher(this@PlaybackService)
+              return Futures.immediateFuture(SessionResult(SessionResult.RESULT_SUCCESS))
+            }
+            return super.onCustomCommand(session, controller, customCommand, args)
+          }
+        })
         .build()
     }
 
@@ -782,8 +912,10 @@ class PlaybackService : MediaSessionService() {
     super.onDestroy()
   }
 
-  private companion object {
-    const val MAX_CODEC_RECOVERY_ATTEMPTS = 2
-    const val CODEC_RECOVERY_DELAY_MS = 200L
+  companion object {
+    const val CHANNEL_MEDIA_PLAYBACK = "aurix_media_playback"
+    const val CUSTOM_COMMAND_MEDIA_OUTPUT = "com.example.aurix.COMMAND_MEDIA_OUTPUT"
+    private const val MAX_CODEC_RECOVERY_ATTEMPTS = 2
+    private const val CODEC_RECOVERY_DELAY_MS = 200L
   }
 }

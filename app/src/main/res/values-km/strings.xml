@@ -945,4 +945,24 @@
     <string name="settings_quick_audio_pro">Audio Pro</string>
     <string name="settings_quick_downloads">ទាញយក</string>
     <string name="settings_quick_recap">សង្ខេប</string>
+
+    <!-- Media Output Switcher & Dynamic Island Live Capsule -->
+    <string name="media_output_title">ឧបករណ៍បញ្ចេញសំឡេង</string>
+    <string name="media_output_subtitle">ឧបករណ៍សំឡេងកំពុងប្រើ និងកាសដែលបានភ្ជាប់</string>
+    <string name="media_output_active_badge">កំពុងភ្ជាប់</string>
+    <string name="media_output_switch_system">ប្ដូរឧបករណ៍សំឡេង</string>
+    <string name="media_output_bluetooth_settings">ការកំណត់ប៊្លូធូស</string>
+    <string name="media_output_wired_headphones">កាសខ្សែ</string>
+    <string name="media_output_bluetooth_headphones">កាសប៊្លូធូស</string>
+    <string name="media_output_phone_speaker">ឧបករណ៍បំពងសំឡេងទូរស័ព្ទ</string>
+    <string name="media_output_auto_eq_pill">EQ ស្វ័យប្រវត្តិ · %1$s</string>
+    <string name="island_connected_title">បានភ្ជាប់ · %1$s</string>
+    <string name="island_output_switched">កំពុងចាក់តាម %1$s</string>
+    <string name="island_downloading_song">កំពុងទាញយក · %1$s</string>
+    <string name="island_downloading_multi">កំពុងទាញយក %1$d បទ · %2$d%%</string>
+    <string name="island_download_saved">រក្សាទុករួចរាល់ · %1$s</string>
+    <string name="island_update_available">មានកំណែថ្មី · %1$s</string>
+    <string name="island_update_downloading">កំពុងអាប់ដេត AURIX · %1$d%%</string>
+    <string name="island_update_verifying">កំពុងផ្ទៀងផ្ទាត់ · %1$s</string>
+    <string name="island_update_ready_install">ចុចដើម្បីដំឡើង · %1$s</string>
 </resources>

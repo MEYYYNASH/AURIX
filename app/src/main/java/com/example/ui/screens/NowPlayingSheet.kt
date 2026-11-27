@@ -115,6 +115,8 @@ fun NowPlayingSheet(
   onRetryLyrics: () -> Unit = {},
   hasLyrics: Boolean = false,
   equalizerState: EqualizerUiState = EqualizerUiState(),
+  audioOutputInfo: com.example.playback.AudioOutputRouteInfo = com.example.playback.AudioOutputRouteInfo(),
+  connectedAudioDevices: List<com.example.playback.AudioOutputDeviceItem> = emptyList(),
   onToggleEqualizer: (Boolean) -> Unit = {},
   onSelectEqPreset: (EqPreset) -> Unit = {},
   onEqBandLevelChanged: (Int, Int) -> Unit = { _, _ -> },
@@ -179,6 +181,7 @@ fun NowPlayingSheet(
   var showDetails by remember { mutableStateOf(false) }
   var showShareLyrics by remember { mutableStateOf(false) }
   var showEqualizer by remember { mutableStateOf(false) }
+  var showMediaOutput by remember { mutableStateOf(false) }
   var showQueue by remember { mutableStateOf(false) }
   var showSleepSpeed by remember { mutableStateOf(false) }
   var showControlsExtras by rememberSaveable { mutableStateOf(false) }
@@ -658,7 +661,7 @@ fun NowPlayingSheet(
 
           Spacer(modifier = Modifier.height(6.dp))
 
-          // Controls Utility Header: Art Blur Toggle + Beat Visualizer Toggle + Open/Close Feature Dock Toggle
+          // Controls Utility Header: Art Blur Toggle + Beat Visualizer Toggle + Media Output Pill + Open/Close Feature Dock Toggle
           Row(
             modifier = Modifier.fillMaxWidth(),
             horizontalArrangement = Arrangement.SpaceBetween,
@@ -708,6 +711,55 @@ fun NowPlayingSheet(
                   tint = Color.White.copy(alpha = 0.85f),
                   modifier = Modifier.size(20.dp)
                 )
+              }
+
+              val isExternalRoute = audioOutputInfo.route != com.example.playback.AudioOutputRoute.SPEAKER
+              val outputIcon = when (audioOutputInfo.route) {
+                com.example.playback.AudioOutputRoute.BLUETOOTH -> Icons.Rounded.BluetoothAudio
+                com.example.playback.AudioOutputRoute.HEADPHONES -> Icons.Rounded.Headphones
+                com.example.playback.AudioOutputRoute.SPEAKER -> Icons.Rounded.SpeakerGroup
+              }
+              val outputLabel = when (audioOutputInfo.route) {
+                com.example.playback.AudioOutputRoute.BLUETOOTH ->
+                  audioOutputInfo.deviceName.ifBlank { stringResource(id = R.string.audio_route_bluetooth) }
+                com.example.playback.AudioOutputRoute.HEADPHONES ->
+                  audioOutputInfo.deviceName.ifBlank { stringResource(id = R.string.media_output_wired_headphones) }
+                com.example.playback.AudioOutputRoute.SPEAKER ->
+                  stringResource(id = R.string.audio_route_speaker)
+              }
+
+              Surface(
+                onClick = { showMediaOutput = true },
+                shape = CircleShape,
+                color = if (isExternalRoute) c1.copy(alpha = 0.26f) else Color.White.copy(alpha = 0.10f),
+                border = BorderStroke(
+                  1.dp,
+                  if (isExternalRoute) c1.copy(alpha = 0.78f) else Color.White.copy(alpha = 0.18f)
+                ),
+                modifier = Modifier
+                  .minimumInteractiveComponentSize()
+                  .testTag("np_media_output_button")
+              ) {
+                Row(
+                  modifier = Modifier.padding(horizontal = 10.dp, vertical = 6.dp),
+                  verticalAlignment = Alignment.CenterVertically,
+                  horizontalArrangement = Arrangement.spacedBy(5.dp)
+                ) {
+                  Icon(
+                    imageVector = outputIcon,
+                    contentDescription = stringResource(id = R.string.media_output_title),
+                    tint = if (isExternalRoute) Color.White else Color.White.copy(alpha = 0.85f),
+                    modifier = Modifier.size(16.dp)
+                  )
+                  Text(
+                    text = outputLabel,
+                    style = MaterialTheme.typography.labelSmall.copy(fontWeight = FontWeight.Bold),
+                    color = Color.White,
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis,
+                    modifier = Modifier.widthIn(max = 98.dp)
+                  )
+                }
               }
             }
 
@@ -954,6 +1006,19 @@ fun NowPlayingSheet(
         onToggleAutoBtEq = onToggleAutoBtEq,
         onSelectRoutePreset = onSelectRoutePreset,
         onDismiss = { showEqualizer = false }
+      )
+    }
+
+    if (showMediaOutput) {
+      MediaOutputSheet(
+        outputInfo = audioOutputInfo,
+        connectedDevices = connectedAudioDevices,
+        equalizerState = equalizerState,
+        accentColor = c1,
+        onToggleAutoRouteEq = onToggleAutoBtEq,
+        onSelectRoutePreset = onSelectRoutePreset,
+        onOpenEqualizer = { showEqualizer = true },
+        onDismiss = { showMediaOutput = false }
       )
     }
 

@@ -472,9 +472,12 @@ private fun AurixMainShell(
   var showAmbientStandby by remember { mutableStateOf(false) }
   var showMonthlyRecapStory by remember { mutableStateOf(false) }
   var showDrivingMode by remember { mutableStateOf(false) }
+  var showMediaOutputSheet by remember { mutableStateOf(false) }
+  var showEqualizerFromIsland by remember { mutableStateOf(false) }
   var editingTrackInfoSong by remember { mutableStateOf<com.example.model.Song?>(null) }
   val monthlyRecap by viewModel.monthlyRecap.collectAsStateWithLifecycle()
   val audioOutputInfo by viewModel.audioOutputInfo.collectAsStateWithLifecycle()
+  val connectedAudioDevices by viewModel.connectedAudioDevices.collectAsStateWithLifecycle()
   val sleepTimerFadeOut by viewModel.sleepTimerFadeOut.collectAsStateWithLifecycle()
   val downloadWifiOnly by viewModel.downloadWifiOnly.collectAsStateWithLifecycle()
   val downloadStorageCapMb by viewModel.downloadStorageCapMb.collectAsStateWithLifecycle()
@@ -1690,6 +1693,7 @@ private fun AurixMainShell(
                   reducedMotion = reducedMotion,
                   isExpandingToFullPlayer = isNowPlayingOpen,
                   hasLyrics = miniSong?.id?.let { it in verifiedLyricsIds } == true,
+                  audioOutputInfo = audioOutputInfo,
                   onCheckLyrics = { viewModel.ensureLyricsVerified(it) },
                   onPlayPauseClick = { viewModel.togglePlayPause() },
                   onFavoriteClick = { miniSong?.let { viewModel.toggleFavorite(it) } },
@@ -1803,6 +1807,8 @@ private fun AurixMainShell(
             onRetryLyrics = { viewModel.retryLyrics() },
             hasLyrics = song.id in verifiedLyricsIds,
             equalizerState = equalizerState,
+            audioOutputInfo = audioOutputInfo,
+            connectedAudioDevices = connectedAudioDevices,
             onToggleEqualizer = { viewModel.setEqualizerEnabled(it) },
             onSelectEqPreset = { viewModel.selectEqualizerPreset(it) },
             onEqBandLevelChanged = { idx, level -> viewModel.setEqualizerBandLevel(idx, level) },
@@ -1870,6 +1876,60 @@ private fun AurixMainShell(
             khmerLyricsFont = khmerLyricsFont
           )
         }
+      }
+
+      // AURIX Dynamic Island Live Capsule (Bluetooth/Wired Headphones, Song Downloads & App Updates)
+      if (launchSplashDismissed && !showAmbientStandby && !showMonthlyRecapStory && !showDrivingMode) {
+        AurixDynamicIslandOverlay(
+          audioOutputInfo = audioOutputInfo,
+          equalizerState = equalizerState,
+          downloadQueueItems = downloadQueueItems,
+          updateUiState = updateUiState,
+          isPlaying = isPlaying,
+          accentColor = MaterialTheme.colorScheme.primary,
+          reducedMotion = reducedMotion,
+          onOpenMediaOutput = { showMediaOutputSheet = true },
+          onOpenDownloadQueue = { showDownloadQueueSheet = true },
+          onOpenUpdateSettings = {
+            if (updateUiState.isValidatedReady) {
+              viewModel.installDownloadedApk(context)
+            } else {
+              showNowPlaying = false
+              currentScreen = Screen.Settings
+            }
+          },
+          modifier = Modifier.align(Alignment.TopCenter)
+        )
+      }
+
+      if (showMediaOutputSheet) {
+        MediaOutputSheet(
+          outputInfo = audioOutputInfo,
+          connectedDevices = connectedAudioDevices,
+          equalizerState = equalizerState,
+          accentColor = MaterialTheme.colorScheme.primary,
+          onToggleAutoRouteEq = { viewModel.setAutoSwitchBluetoothEq(it) },
+          onSelectRoutePreset = { route, preset -> viewModel.setEqRoutePreset(route, preset) },
+          onOpenEqualizer = { showEqualizerFromIsland = true },
+          onDismiss = { showMediaOutputSheet = false }
+        )
+      }
+
+      if (showEqualizerFromIsland) {
+        EqualizerSheet(
+          state = equalizerState,
+          onToggleEnabled = { viewModel.setEqualizerEnabled(it) },
+          onSelectPreset = { viewModel.selectEqualizerPreset(it) },
+          onBandLevelChanged = { idx, level -> viewModel.setEqualizerBandLevel(idx, level) },
+          onBassBoostChanged = { viewModel.setBassBoostStrength(it) },
+          onVirtualizerChanged = { viewModel.setVirtualizerStrength(it) },
+          onToggleLoudnessNorm = { viewModel.setLoudnessNormEnabled(it) },
+          onLoudnessTargetGainChanged = { viewModel.setLoudnessTargetGainMb(it) },
+          onToggleAutoBtEq = { viewModel.setAutoSwitchBluetoothEq(it) },
+          onSelectRoutePreset = { route, preset -> viewModel.setEqRoutePreset(route, preset) },
+          onReset = { viewModel.resetEqualizer() },
+          onDismiss = { showEqualizerFromIsland = false }
+        )
       }
 
       if (showOrbiCompanionSheet) {
