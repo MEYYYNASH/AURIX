@@ -2,9 +2,9 @@
   "versionName": "2.4.8",
   "versionCode": 20408,
   "releaseDate": "2026-11-27",
-  "releaseTimestampMs": 1795775698000,
+  "releaseTimestampMs": 1795777390000,
   "apkUrl": "https://github.com/MEYYYNASH/AURIX/releases/download/v2.4.8/AURIX-v2.4.8.apk",
-  "sha256": "a3373398ff7919a8e4f81d845fca649ba01aa01f39187e2b37e9f87fb664bf7b",
+  "sha256": "f93f85e5d51f99b35ca6c17148421e62c92c65d18e241b12d936c962393fe381",
   "mandatory": false,
   "notes": [
     "Interactive Liquid Glass Onboarding, Procedural Demo Audio & Bilingual EN/KM Experience (v2.4.8): Rebuilt the first-launch onboarding into a 4-slide, swipeable 120Hz dark liquid-glass intro with Sora & Noto Sans Khmer typography, live YouTube + local phone search preview, karaoke-filled synced lyrics with an opt-in procedural synth/audio engine, live Accent Color & Backdrop personalizer wired directly to app settings, animated Orbi mascot orb, and a circular gradient AURIX finish reveal",
